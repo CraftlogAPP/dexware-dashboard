@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
-import { useOrg } from '../OrgContext';
+import { useOrg } from '../../components/OrgContext';
 import {
   fetchOperationMeta,
   fetchOperations,

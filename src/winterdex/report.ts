@@ -2,12 +2,12 @@
 // Ausgabe über das Druck-Dialogfeld des Browsers (dort „Als PDF speichern").
 
 import { fmtDate, fmtDateTime, fmtTime, gpsLabel } from '../lib/format';
+import type { Org } from '../lib/orgApi';
 import { gritLabel, weatherLabel } from './labels';
 import {
   ACTION_LABELS,
   LEGAL_BASIS,
   type OperationWithPhotos,
-  type Org,
   type Property,
 } from './types';
 

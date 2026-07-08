@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
-import { useOrg } from '../OrgContext';
+import { useOrg } from '../../components/OrgContext';
 import { fetchOperationsForReport, fetchProperties } from '../api';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';

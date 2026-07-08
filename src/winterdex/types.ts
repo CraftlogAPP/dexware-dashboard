@@ -1,14 +1,7 @@
 // Domain-Typen des WinterDex-Supabase-Schemas (Spiegel von mobile/src/types.ts)
+// Org/Role/Member sind suite-weit identisch und leben in src/lib/orgApi.ts.
 
-export interface Org {
-  id: string;
-  name: string;
-  land: 'DE' | 'AT' | 'CH';
-  address: string | null;
-  created_at: string;
-}
-
-export type Role = 'owner' | 'worker';
+import type { Org } from '../lib/orgApi';
 
 export interface DutyTimes {
   mo_fr?: string;
@@ -78,14 +71,6 @@ export interface Operation {
 
 export interface OperationWithPhotos extends Operation {
   photo_urls: string[];
-}
-
-export interface Member {
-  membership_id: string;
-  user_id: string;
-  email: string;
-  role: Role;
-  joined_at: string;
 }
 
 export const ACTION_LABELS: Record<OperationAction, string> = {
