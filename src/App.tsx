@@ -25,6 +25,9 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   craftdex: lazy(() =>
     import('./craftdex/CraftdexArea').then((m) => ({ default: m.CraftdexArea })),
   ),
+  tourdex: lazy(() =>
+    import('./tourdex/TourdexArea').then((m) => ({ default: m.TourdexArea })),
+  ),
 };
 
 const loading = (
