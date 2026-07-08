@@ -29,6 +29,11 @@ Kachel pro App, dahinter pro App ein Dashboard auf das jeweilige Supabase-Projek
   Kontrollbuch-PDF. **Wichtig:** `inspection.photo_urls`, `defect.photo_urls`/
   `resolution_photo_urls` und `equipment.photo_url` enthalten Base64 — Listen
   laden diese Spalten nie (siehe Spaltenlisten in `src/spieldex/api.ts`).
+- **RegalDex** (`src/regaldex/`): dritter Dashboard-Bereich, gleiches Muster —
+  Lager mit Regal-Inventar (Fach-/Feldlasten), Inspektionen (Sichtkontrolle 7 T /
+  Experteninspektion 365 T) mit DIN-EN-15635-Checkliste, Schäden im
+  Ampelverfahren (Grün/Orange/Rot), Prüfbericht-PDF. Base64-Foto-Spalten wie
+  bei SpielDex nie in Listen laden.
 - **BaumDex** verlinkt als Kachel auf das bestehende Portal
   (`https://baumdex-portal.vercel.app`).
 
@@ -51,8 +56,7 @@ npm run preview
 
 ## Nächste Ausbaustufen
 
-1. Weitere Apps als Registry-Eintrag + Bereich (RegalDex hat ein Live-Backend
-   `vzxqbdadtzjolppzfqxx.supabase.co` und teilt das Muster; LeiterDex hat noch
-   kein Supabase-Projekt).
+1. Weitere Apps als Registry-Eintrag + Bereich (LeiterDex teilt das Muster,
+   hat aber noch kein Supabase-Projekt — erst Backend anlegen).
 2. Pro-Gating des Dashboards (RevenueCat/`app_metadata.pro`/Suite-Backend).
 3. Optional echtes Suite-SSO (erst sinnvoll, wenn das Bundle zieht).

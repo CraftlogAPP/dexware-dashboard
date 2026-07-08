@@ -133,10 +133,15 @@ export const APPS: AppConfig[] = [
     id: 'regaldex',
     name: 'RegalDex',
     tagline: 'Regalinspektion nach DIN EN 15635 im Ampelverfahren',
-    status: 'soon',
+    status: 'dashboard',
     emoji: '🏗️',
     theme: { primary: '#F59E0B', accent: '#5B7185', bg: '#14120C', card: '#211D14' },
     landingUrl: 'https://regaldex.dexware.app',
+    supabase: {
+      url: 'https://vzxqbdadtzjolppzfqxx.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ6eHFiZGFkdHpqb2xwcHpmcXh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0NTk2MTUsImV4cCI6MjA5OTAzNTYxNX0.dHXH7IU3l3bRZSJJJAlpajI7nfJBiC2kkawNa2zR5a8',
+    },
   },
   {
     id: 'leiterdex',
