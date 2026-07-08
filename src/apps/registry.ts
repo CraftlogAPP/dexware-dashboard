@@ -135,10 +135,15 @@ export const APPS: AppConfig[] = [
     id: 'kfzdex',
     name: 'KfzDex',
     tagline: 'UVV-Prüfung & Führerscheinkontrolle mit Fristen-Ampel',
-    status: 'soon',
+    status: 'dashboard',
     emoji: '🚛',
     theme: { primary: '#F97316', accent: '#FDBA74', bg: '#0C1017', card: '#171D28' },
     landingUrl: 'https://kfzdex.dexware.app',
+    supabase: {
+      url: 'https://xjfkxrtvrpxwbqqozmar.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhqZmt4cnR2cnB4d2JxcW96bWFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwOTkzNzgsImV4cCI6MjA5ODY3NTM3OH0.5NUPdSEhJg15vYKdLu8mRONVzbwLO4PrVxy47e41fBg',
+    },
   },
   {
     id: 'spieldex',

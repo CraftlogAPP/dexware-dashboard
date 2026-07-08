@@ -31,6 +31,9 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   dokudex: lazy(() =>
     import('./dokudex/DokudexArea').then((m) => ({ default: m.DokudexArea })),
   ),
+  kfzdex: lazy(() =>
+    import('./kfzdex/KfzdexArea').then((m) => ({ default: m.KfzdexArea })),
+  ),
 };
 
 const loading = (
