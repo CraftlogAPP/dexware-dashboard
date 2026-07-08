@@ -22,6 +22,9 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   schutzdex: lazy(() =>
     import('./schutzdex/SchutzdexArea').then((m) => ({ default: m.SchutzdexArea })),
   ),
+  craftdex: lazy(() =>
+    import('./craftdex/CraftdexArea').then((m) => ({ default: m.CraftdexArea })),
+  ),
 };
 
 const loading = (
