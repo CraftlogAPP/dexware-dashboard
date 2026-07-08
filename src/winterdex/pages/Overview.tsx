@@ -1,13 +1,22 @@
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../OrgContext';
-import { fetchOperations, fetchProperties } from '../api';
+import {
+  fetchOperationMeta,
+  fetchOperations,
+  fetchProperties,
+  type OpMeta,
+} from '../api';
 import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
-import { fmtDateTime, weatherLabel } from '../../lib/format';
+import { fmtDateTime } from '../../lib/format';
+import { lastOpByProperty, propertyNameMap, weatherLabel } from '../labels';
 import type { Operation, Property } from '../types';
 
 interface OverviewData {
   properties: Property[];
+  /** schmale Metadaten (bis 2000 jüngste Einsätze) für KPIs + Fälligkeit */
+  meta: OpMeta[];
+  /** die 10 jüngsten Einsätze in voller Breite für die Tabelle */
   recentOps: Operation[];
 }
 
@@ -16,11 +25,12 @@ export function Overview() {
   const { data: orgCtx } = useOrg();
 
   const state = useAsync<OverviewData>(async () => {
-    const [properties, recentOps] = await Promise.all([
+    const [properties, meta, recentOps] = await Promise.all([
       fetchProperties(client),
-      fetchOperations(client, { limit: 200 }),
+      fetchOperationMeta(client, { limit: 2000 }),
+      fetchOperations(client, { limit: 10 }),
     ]);
-    return { properties, recentOps };
+    return { properties, meta, recentOps };
   }, [client]);
 
   return (
@@ -33,22 +43,20 @@ export function Overview() {
       )}
 
       <LoadGuard state={state}>
-        {({ properties, recentOps }) => {
+        {({ properties, meta, recentOps }) => {
           const activeProps = properties.filter((p) => p.active);
+          const names = propertyNameMap(properties);
           const now = Date.now();
           const dayMs = 24 * 60 * 60 * 1000;
-          const ops7 = recentOps.filter(
-            (o) => !o.canceled && now - new Date(o.started_at).getTime() <= 7 * dayMs,
+          const valid = meta.filter((o) => !o.canceled);
+          const ops7 = valid.filter(
+            (o) => now - new Date(o.started_at).getTime() <= 7 * dayMs,
           );
           const ops24 = ops7.filter(
             (o) => now - new Date(o.started_at).getTime() <= dayMs,
           );
 
-          const lastByProp = new Map<string, Operation>();
-          for (const op of recentOps) {
-            if (op.canceled) continue;
-            if (!lastByProp.has(op.property_id)) lastByProp.set(op.property_id, op);
-          }
+          const lastByProp = lastOpByProperty(meta);
           const staleProps = activeProps.filter((p) => {
             const last = lastByProp.get(p.id);
             return !last || now - new Date(last.started_at).getTime() > 2 * dayMs;
@@ -83,7 +91,7 @@ export function Overview() {
                 <>
                   <div className="section-head">
                     <h2>Lange nicht dokumentiert</h2>
-                    <Link to="../objekte" className="small">
+                    <Link to="objekte" className="small">
                       Alle Objekte →
                     </Link>
                   </div>
@@ -102,7 +110,7 @@ export function Overview() {
                           return (
                             <tr key={p.id}>
                               <td>
-                                <Link to={`../objekte/${p.id}`}>{p.name}</Link>
+                                <Link to={`objekte/${p.id}`}>{p.name}</Link>
                               </td>
                               <td className="wrap muted">{p.address}</td>
                               <td>
@@ -123,7 +131,7 @@ export function Overview() {
 
               <div className="section-head">
                 <h2>Letzte Einsätze</h2>
-                <Link to="../einsaetze" className="small">
+                <Link to="einsaetze" className="small">
                   Alle Einsätze →
                 </Link>
               </div>
@@ -145,17 +153,14 @@ export function Overview() {
                       </tr>
                     </thead>
                     <tbody>
-                      {recentOps.slice(0, 10).map((op) => (
+                      {recentOps.map((op) => (
                         <tr key={op.id}>
                           <td>
-                            <Link to={`../einsaetze/${op.id}`}>
+                            <Link to={`einsaetze/${op.id}`}>
                               {fmtDateTime(op.started_at)}
                             </Link>
                           </td>
-                          <td className="wrap">
-                            {properties.find((p) => p.id === op.property_id)?.name ??
-                              '—'}
-                          </td>
+                          <td className="wrap">{names.get(op.property_id) ?? '—'}</td>
                           <td>
                             <ActionBadge action={op.action} canceled={op.canceled} />
                           </td>

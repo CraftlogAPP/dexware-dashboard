@@ -1,7 +1,7 @@
-import { Link, NavLink, Outlet, Route, Routes } from 'react-router-dom';
+import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import type { AppConfig } from '../apps/registry';
-import { AppAuthProvider, useAppAuth } from '../auth/AppAuthContext';
-import { LoginScreen } from '../auth/LoginScreen';
+import { AppArea } from '../components/AppArea';
+import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgProvider, useOrg } from './OrgContext';
 import { Overview } from './pages/Overview';
 import { Properties } from './pages/Properties';
@@ -12,67 +12,17 @@ import { Team } from './pages/Team';
 import { Report } from './pages/Report';
 
 export function WinterdexArea({ app }: { app: AppConfig }) {
-  const style = {
-    '--app-primary': app.theme.primary,
-    '--app-accent': app.theme.accent,
-    '--app-bg': app.theme.bg,
-    '--app-card': app.theme.card,
-  } as React.CSSProperties;
-
   return (
-    <div className="app-scope" style={style}>
-      <AppAuthProvider app={app}>
-        <Gate app={app} />
-      </AppAuthProvider>
-    </div>
-  );
-}
-
-function Gate({ app }: { app: AppConfig }) {
-  const { session, loading } = useAppAuth();
-
-  return (
-    <>
-      <header className="site-header">
-        <Link className="brand" to="/">
-          dex<span>ware</span>
-        </Link>
-        <span className="app-chip">
-          {app.emoji} <b>{app.name}</b> Dashboard
-        </span>
-        <div className="spacer" />
-        <HeaderUser />
-      </header>
-
-      {loading ? (
-        <div className="empty">
-          <span className="spinner" />
-        </div>
-      ) : session ? (
-        <OrgProvider>
-          <OrgGate />
-        </OrgProvider>
-      ) : (
-        <LoginScreen />
-      )}
-    </>
-  );
-}
-
-function HeaderUser() {
-  const { session, signOut } = useAppAuth();
-  if (!session) return null;
-  return (
-    <span className="row" style={{ gap: 10 }}>
-      <span className="muted small">{session.user.email}</span>
-      <button className="btn ghost small" onClick={() => void signOut()}>
-        Abmelden
-      </button>
-    </span>
+    <AppArea app={app}>
+      <OrgProvider>
+        <OrgGate />
+      </OrgProvider>
+    </AppArea>
   );
 }
 
 function OrgGate() {
+  const { app } = useAppAuth();
   const { data, loading, error, reload } = useOrg();
 
   if (loading) {
@@ -96,8 +46,8 @@ function OrgGate() {
     return (
       <div className="page">
         <div className="info-box">
-          Dieses Konto gehört noch zu keinem Betrieb. Lege den Betrieb zuerst in der
-          WinterDex-App am Handy an (oder tritt per Einladungscode bei) — danach steht
+          Dieses Konto gehört noch zu keinem Betrieb. Lege den Betrieb zuerst in der{' '}
+          {app.name}-App am Handy an (oder tritt per Einladungscode bei) — danach steht
           das Dashboard hier bereit.
         </div>
       </div>
@@ -120,18 +70,22 @@ function OrgGate() {
 }
 
 function Shell() {
+  const { app } = useAppAuth();
   const { data } = useOrg();
+  // Absolute Pfade: Die Shell rendert in einer pathless Layout-Route unter einer
+  // Splat-Route — relative NavLinks würden sich dort an die aktuelle URL anhängen.
+  const base = `/app/${app.id}`;
 
   return (
     <div className="app-shell">
       <nav className="app-nav">
-        <NavLink to="." end>
+        <NavLink to={base} end>
           📊 Übersicht
         </NavLink>
-        <NavLink to="objekte">🏠 Objekte</NavLink>
-        <NavLink to="einsaetze">🧹 Einsätze</NavLink>
-        <NavLink to="team">👥 Team</NavLink>
-        <NavLink to="bericht">📄 Nachweis-PDF</NavLink>
+        <NavLink to={`${base}/objekte`}>🏠 Objekte</NavLink>
+        <NavLink to={`${base}/einsaetze`}>🧹 Einsätze</NavLink>
+        <NavLink to={`${base}/team`}>👥 Team</NavLink>
+        <NavLink to={`${base}/bericht`}>📄 Nachweis-PDF</NavLink>
         <div className="nav-footer">
           {data && (
             <>

@@ -1,54 +1,27 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useAppAuth } from '../auth/AppAuthContext';
+import { useAsync, type AsyncState } from '../components/ui';
 import { fetchOrgContext, type OrgContext as OrgCtxData } from './api';
 
-interface OrgState {
-  data: OrgCtxData | null;
-  loading: boolean;
-  error: string | null;
-  reload: () => void;
-}
+type OrgState = AsyncState<OrgCtxData | null>;
 
 const Ctx = createContext<OrgState | null>(null);
 
 export function OrgProvider({ children }: { children: ReactNode }) {
   const { client, session } = useAppAuth();
-  const [data, setData] = useState<OrgCtxData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
-
-  const reload = useCallback(() => setTick((t) => t + 1), []);
-
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    setError(null);
-    fetchOrgContext(client)
-      .then((ctx) => {
-        if (mounted) setData(ctx);
-      })
-      .catch((e) => {
-        if (mounted) setError(e instanceof Error ? e.message : String(e));
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [client, session?.user.id, tick]);
-
-  return (
-    <Ctx.Provider value={{ data, loading, error, reload }}>{children}</Ctx.Provider>
+  const { data, loading, error, reload } = useAsync(
+    () => fetchOrgContext(client),
+    [client, session?.user.id],
   );
+
+  // Stabile Context-Identität, damit useOrg-Consumer nicht bei jedem
+  // Provider-Render (z. B. Auth-Events) neu rendern.
+  const value = useMemo<OrgState>(
+    () => ({ data, loading, error, reload }),
+    [data, loading, error, reload],
+  );
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useOrg(): OrgState {

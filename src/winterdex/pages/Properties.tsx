@@ -1,29 +1,25 @@
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
-import { fetchOperations, fetchProperties } from '../api';
-import { LoadGuard, useAsync } from '../../components/ui';
+import { fetchOperationMeta, fetchProperties, type OpMeta } from '../api';
+import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { fmtDateTime } from '../../lib/format';
-import type { DutyTimes, Operation, Property } from '../types';
+import { lastOpByProperty } from '../labels';
+import type { DutyTimes, Property } from '../types';
 
 interface Data {
   properties: Property[];
-  lastByProp: Map<string, Operation>;
+  lastByProp: Map<string, OpMeta>;
 }
 
 export function Properties() {
   const { client } = useAppAuth();
 
   const state = useAsync<Data>(async () => {
-    const [properties, ops] = await Promise.all([
+    const [properties, meta] = await Promise.all([
       fetchProperties(client),
-      fetchOperations(client, { limit: 500 }),
+      fetchOperationMeta(client, { limit: 2000 }),
     ]);
-    const lastByProp = new Map<string, Operation>();
-    for (const op of ops) {
-      if (op.canceled) continue;
-      if (!lastByProp.has(op.property_id)) lastByProp.set(op.property_id, op);
-    }
-    return { properties, lastByProp };
+    return { properties, lastByProp: lastOpByProperty(meta) };
   }, [client]);
 
   return (
@@ -64,11 +60,7 @@ export function Properties() {
                         <td className="muted small">{dutyLabel(p.duty_times)}</td>
                         <td>{last ? fmtDateTime(last.started_at) : '—'}</td>
                         <td>
-                          {p.active ? (
-                            <span className="badge green">aktiv</span>
-                          ) : (
-                            <span className="badge">pausiert</span>
-                          )}
+                          <StatusBadge active={p.active} />
                         </td>
                       </tr>
                     );

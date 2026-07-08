@@ -1,13 +1,14 @@
 import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
-import { fetchOperations, fetchProperties } from '../api';
-import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
-import { fmtDateTime, gpsLabel, weatherLabel } from '../../lib/format';
+import { fetchOperations, fetchProperty } from '../api';
+import { ActionBadge, LoadGuard, StatusBadge, useAsync } from '../../components/ui';
+import { fmtDateTime, gpsLabel } from '../../lib/format';
+import { gritLabel, weatherLabel } from '../labels';
 import type { Operation, Property } from '../types';
 import { dutyLabel } from './Properties';
 
 interface Data {
-  property: Property | undefined;
+  property: Property | null;
   ops: Operation[];
 }
 
@@ -16,11 +17,11 @@ export function PropertyDetail() {
   const { client } = useAppAuth();
 
   const state = useAsync<Data>(async () => {
-    const [properties, ops] = await Promise.all([
-      fetchProperties(client),
+    const [property, ops] = await Promise.all([
+      fetchProperty(client, id!),
       fetchOperations(client, { propertyId: id, limit: 300 }),
     ]);
-    return { property: properties.find((p) => p.id === id), ops };
+    return { property, ops };
   }, [client, id]);
 
   return (
@@ -32,15 +33,11 @@ export function PropertyDetail() {
         return (
           <>
             <p className="small" style={{ marginBottom: 4 }}>
-              <Link to="..">← Alle Objekte</Link>
+              <Link to="../objekte">← Alle Objekte</Link>
             </p>
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <h1 style={{ marginBottom: 0 }}>{property.name}</h1>
-              {property.active ? (
-                <span className="badge green">aktiv</span>
-              ) : (
-                <span className="badge">pausiert</span>
-              )}
+              <StatusBadge active={property.active} />
             </div>
             <p className="muted">{property.address}</p>
 
@@ -72,7 +69,9 @@ export function PropertyDetail() {
             </div>
 
             {ops.length === 0 ? (
-              <div className="card empty">Für dieses Objekt ist noch kein Einsatz dokumentiert.</div>
+              <div className="card empty">
+                Für dieses Objekt ist noch kein Einsatz dokumentiert.
+              </div>
             ) : (
               <div className="table-wrap">
                 <table>
@@ -98,9 +97,7 @@ export function PropertyDetail() {
                           <ActionBadge action={op.action} canceled={op.canceled} />
                         </td>
                         <td className="muted">
-                          {op.grit_material
-                            ? `${op.grit_material}${op.grit_amount ? ` (${op.grit_amount})` : ''}`
-                            : '—'}
+                          {gritLabel(op.grit_material, op.grit_amount)}
                         </td>
                         <td className="muted">{weatherLabel(op.weather)}</td>
                         <td className="muted mono small">
