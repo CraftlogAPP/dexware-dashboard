@@ -55,10 +55,15 @@ export const APPS: AppConfig[] = [
     id: 'dokudex',
     name: 'DokuDex',
     tagline: 'Dokumente sicher archivieren & jederzeit wiederfinden',
-    status: 'soon',
+    status: 'dashboard',
     emoji: '📄',
     theme: { primary: '#4F9EF8', accent: '#0EA5E9', bg: '#0F1420', card: '#171F30' },
     landingUrl: 'https://dokudex.dexware.app',
+    supabase: {
+      url: 'https://vzofqnhhwfmmsqsjcyhi.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ6b2Zxbmhod2ZtbXNxc2pjeWhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2ODYzODIsImV4cCI6MjA5NjI2MjM4Mn0.fAaSWvzdRTU4AdlEOJGFUa_dfMgK6nbm0_SoCzneIR0',
+    },
   },
   {
     id: 'tourdex',

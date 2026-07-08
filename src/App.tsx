@@ -28,6 +28,9 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   tourdex: lazy(() =>
     import('./tourdex/TourdexArea').then((m) => ({ default: m.TourdexArea })),
   ),
+  dokudex: lazy(() =>
+    import('./dokudex/DokudexArea').then((m) => ({ default: m.DokudexArea })),
+  ),
 };
 
 const loading = (
