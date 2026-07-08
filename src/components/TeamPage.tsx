@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { useAppAuth } from '../../auth/AppAuthContext';
-import { useOrg } from '../OrgContext';
-import { createInvite, fetchMembers } from '../api';
-import { LoadGuard, useAsync } from '../../components/ui';
-import { fmtDate } from '../../lib/format';
-import type { Member } from '../types';
+import { useAppAuth } from '../auth/AppAuthContext';
+import { useOrg } from './OrgContext';
+import { createInvite, fetchMembers, type Member } from '../lib/orgApi';
+import { LoadGuard, useAsync } from './ui';
+import { fmtDate } from '../lib/format';
 
-export function Team() {
-  const { client } = useAppAuth();
+/** Team-Seite — Mitgliederliste + Beitrittscode; identisch in allen Dex-Apps. */
+export function TeamPage() {
+  const { app, client } = useAppAuth();
   const { data: orgCtx } = useOrg();
   const isOwner = orgCtx?.role === 'owner';
 
@@ -45,7 +45,7 @@ export function Team() {
     <>
       <h1>Team</h1>
       <p className="muted" style={{ marginTop: -6 }}>
-        Inhaber verwalten den Betrieb, Mitarbeiter dokumentieren Einsätze in der App.
+        Inhaber verwalten den Betrieb, Mitarbeiter dokumentieren in der App.
       </p>
 
       {isOwner && (
@@ -55,12 +55,16 @@ export function Team() {
           </div>
           <p className="muted small">
             Erzeuge einen Beitrittscode (7 Tage gültig, einmal einlösbar). Dein
-            Mitarbeiter registriert sich in der WinterDex-App und gibt den Code dort
+            Mitarbeiter registriert sich in der {app.name}-App und gibt den Code dort
             unter „Team beitreten" ein.
           </p>
           {inviteError && <div className="error-box">{inviteError}</div>}
           <div className="row">
-            <button className="btn" onClick={() => void onCreateInvite()} disabled={inviteBusy}>
+            <button
+              className="btn"
+              onClick={() => void onCreateInvite()}
+              disabled={inviteBusy}
+            >
               {inviteBusy ? 'Erzeuge Code …' : 'Neuen Beitrittscode erzeugen'}
             </button>
             {inviteCode && (
