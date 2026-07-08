@@ -44,6 +44,12 @@ Kachel pro App, dahinter pro App ein Dashboard auf das jeweilige Supabase-Projek
   Datensätze ohne Konten. Eigener Org-Fetcher `fetchOwnerOrgContext` via
   `<OrgProvider fetch={…}>`. Seiten: Mitarbeiter, Unterweisungen, Zuweisungen
   (mit Überfälligkeits-Logik), prüffeste Nachweise.
+- **CraftDex** (`src/craftdex/`): Single-User-Modell ohne Org/Team — der
+  Cloud-Sync legt jedes Projekt als jsonb-Blob in `projects.data` ab
+  (inkl. Base64-Fotos!). Listen selektieren nur skalare JSON-Felder
+  (`data->>title`, `data->loggedHours`, …), der volle Blob wird nur im
+  Detail geladen. Seiten: Übersicht (Termine, abzurechnen), Aufträge, Detail
+  mit Schritten/Material/Kosten/Fotos.
 - **BaumDex** verlinkt als Kachel auf das bestehende Portal
   (`https://baumdex-portal.vercel.app`).
 

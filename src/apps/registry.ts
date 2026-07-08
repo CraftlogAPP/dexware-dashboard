@@ -41,10 +41,15 @@ export const APPS: AppConfig[] = [
     id: 'craftdex',
     name: 'CraftDex',
     tagline: 'Aufträge, Zeiterfassung & Doku für Handwerksbetriebe',
-    status: 'soon',
+    status: 'dashboard',
     emoji: '🛠️',
     theme: { primary: '#E8C97A', accent: '#F59E0B', bg: '#1C1A14', card: '#26231A' },
     landingUrl: 'https://craftdex.dexware.app',
+    supabase: {
+      url: 'https://hxwnpgnipukomxcuayjl.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4d25wZ25pcHVrb214Y3VheWpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2ODU3ODAsImV4cCI6MjA5NjI2MTc4MH0.WQIZfcgrrB4qovyBtBWMrZf1iy-PbHwqSejqKHGXGbg',
+    },
   },
   {
     id: 'dokudex',
