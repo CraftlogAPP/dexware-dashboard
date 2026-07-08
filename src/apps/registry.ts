@@ -64,10 +64,15 @@ export const APPS: AppConfig[] = [
     id: 'tourdex',
     name: 'TourDex',
     tagline: 'Automatisches, finanzamt-konformes Fahrtenbuch',
-    status: 'soon',
+    status: 'dashboard',
     emoji: '🧭',
     theme: { primary: '#60A5FA', accent: '#2563EB', bg: '#0F1923', card: '#182534' },
     landingUrl: 'https://tourdex.dexware.app',
+    supabase: {
+      url: 'https://uwchhdhdbjgixdqjtvhr.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3Y2hoZGhkYmpnaXhkcWp0dmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2ODc2MjAsImV4cCI6MjA5NjI2MzYyMH0.S0iRyVRawOXlfl2BBCE-j2BpcjRk1klMtIYkl1Vl0os',
+    },
   },
   {
     id: 'baumdex',
