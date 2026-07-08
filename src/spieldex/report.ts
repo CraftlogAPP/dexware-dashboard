@@ -71,7 +71,7 @@ function photoAppendix(
         i.canceled ? ' (STORNIERT)' : ''
       }</h3>
       <div class="photos">
-        ${i.photo_urls.map((src, n) => `<img src="${src}" alt="Beweisfoto ${n + 1}">`).join('')}
+        ${i.photo_urls.map((src, n) => `<img src="${esc(src)}" alt="Beweisfoto ${n + 1}">`).join('')}
       </div>
     </div>`);
   }
@@ -81,7 +81,7 @@ function photoAppendix(
     blocks.push(`<div class="photo-group">
       <h3>Mangel: ${esc(d.title)} (${fmtDateTime(d.created_at)})</h3>
       <div class="photos">
-        ${photos.map((src, n) => `<img src="${src}" alt="Mangelfoto ${n + 1}">`).join('')}
+        ${photos.map((src, n) => `<img src="${esc(src)}" alt="Mangelfoto ${n + 1}">`).join('')}
       </div>
     </div>`);
   }

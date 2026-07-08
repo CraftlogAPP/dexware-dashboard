@@ -56,7 +56,7 @@ export function buildReportHtml(
           op.canceled ? ' (STORNIERT)' : ''
         }</h3>
         <div class="photos">
-          ${op.photo_urls.map((src, i) => `<img src="${src}" alt="Beweisfoto ${i + 1}">`).join('')}
+          ${op.photo_urls.map((src, i) => `<img src="${esc(src)}" alt="Beweisfoto ${i + 1}">`).join('')}
         </div>
       </div>`,
     )
