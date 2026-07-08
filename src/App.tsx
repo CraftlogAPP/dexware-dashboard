@@ -4,6 +4,8 @@ import { Home } from './pages/Home';
 import { WinterdexArea } from './winterdex/WinterdexArea';
 import { SpieldexArea } from './spieldex/SpieldexArea';
 import { RegaldexArea } from './regaldex/RegaldexArea';
+import { PruefdexArea } from './pruefdex/PruefdexArea';
+import { SchutzdexArea } from './schutzdex/SchutzdexArea';
 import { APPS, type AppConfig } from './apps/registry';
 
 // Dashboard-Bereiche je App — neue App: Registry-Eintrag + Zeile hier.
@@ -11,6 +13,8 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   winterdex: WinterdexArea,
   spieldex: SpieldexArea,
   regaldex: RegaldexArea,
+  pruefdex: PruefdexArea,
+  schutzdex: SchutzdexArea,
 };
 
 export default function App() {

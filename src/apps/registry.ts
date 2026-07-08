@@ -78,19 +78,29 @@ export const APPS: AppConfig[] = [
     id: 'schutzdex',
     name: 'SchutzDex',
     tagline: 'Arbeitsschutz-Unterweisung mit prüffestem Nachweis',
-    status: 'soon',
+    status: 'dashboard',
     emoji: '🦺',
     theme: { primary: '#22C55E', accent: '#2563EB', bg: '#0B1220', card: '#141E31' },
     landingUrl: 'https://schutzdex.dexware.app',
+    supabase: {
+      url: 'https://fdeuotsktshxtkobkpay.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkZXVvdHNrdHNoeHRrb2JrcGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzMDgyNjEsImV4cCI6MjA5Nzg4NDI2MX0.ojenzJIONPgpf2v-flWM4_ELbioiL_68LNR3SDFuPI4',
+    },
   },
   {
     id: 'pruefdex',
     name: 'PrüfDex',
     tagline: 'DGUV-V3-Geräteprüfung mobil & prüffest',
-    status: 'soon',
+    status: 'dashboard',
     emoji: '🔌',
     theme: { primary: '#7DA7F9', accent: '#1D4ED8', bg: '#0D1526', card: '#162038' },
     landingUrl: 'https://pruefdex.dexware.app',
+    supabase: {
+      url: 'https://rwiqqppaiqnepsraeeaa.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3aXFxcHBhaXFuZXBzcmFlZWFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MTMwODgsImV4cCI6MjA5ODA4OTA4OH0.CaJ344hTNxmMWQ5aEt1Q8lIM_QWduJ95rwc6WgXPUwM',
+    },
   },
   {
     id: 'winterdex',

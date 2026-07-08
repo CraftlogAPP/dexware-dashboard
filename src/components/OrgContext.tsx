@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { useAsync, type AsyncState } from './ui';
 import { fetchOrgContext, type OrgContextData } from '../lib/orgApi';
@@ -7,12 +8,22 @@ type OrgState = AsyncState<OrgContextData | null>;
 
 const Ctx = createContext<OrgState | null>(null);
 
-/** Lädt Betrieb + Rolle des eingeloggten Users — identisches Modell in allen Dex-Apps. */
-export function OrgProvider({ children }: { children: ReactNode }) {
+/**
+ * Lädt Betrieb + Rolle des eingeloggten Users. Standard ist das
+ * membership-Modell (fetchOrgContext); Apps mit anderem Mandanten-Modell
+ * (z. B. SchutzDex mit owner_user_id) geben ihren eigenen Fetcher mit.
+ */
+export function OrgProvider({
+  children,
+  fetch = fetchOrgContext,
+}: {
+  children: ReactNode;
+  fetch?: (sb: SupabaseClient) => Promise<OrgContextData | null>;
+}) {
   const { client, session } = useAppAuth();
   const { data, loading, error, reload } = useAsync(
-    () => fetchOrgContext(client),
-    [client, session?.user.id],
+    () => fetch(client),
+    [client, session?.user.id, fetch],
   );
 
   // Stabile Context-Identität, damit useOrg-Consumer nicht bei jedem

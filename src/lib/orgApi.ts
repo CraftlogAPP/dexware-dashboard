@@ -11,7 +11,7 @@ export interface Org {
   created_at: string;
 }
 
-export type Role = 'owner' | 'worker';
+export type Role = 'owner' | 'worker' | 'inspector';
 
 export interface OrgContextData {
   org: Org;
@@ -30,7 +30,11 @@ export function fail(msg: string, error: { message: string } | null): never {
   throw new Error(`${msg}${error ? `: ${error.message}` : ''}`);
 }
 
-/** Org + eigene Rolle des eingeloggten Users (Modell: 1 User = 1 Betrieb). */
+/**
+ * Org + eigene Rolle des eingeloggten Users (Modell: 1 User = 1 Betrieb).
+ * select('*') statt fester Spaltenliste: die org-Tabellen der Apps sind
+ * ähnlich, aber nicht identisch (z. B. hat PrüfDex kein `land`).
+ */
 export async function fetchOrgContext(
   sb: SupabaseClient,
 ): Promise<OrgContextData | null> {
@@ -48,12 +52,35 @@ export async function fetchOrgContext(
 
   const { data: org, error: oErr } = await sb
     .from('org')
-    .select('id, name, land, address, created_at')
+    .select('*')
     .eq('id', ms[0].org_id)
     .single();
   if (oErr) fail('Betrieb konnte nicht geladen werden', oErr);
 
   return { org: org as Org, role: ms[0].role as Role };
+}
+
+/**
+ * Org-Kontext für Apps OHNE membership-Tabelle (z. B. SchutzDex):
+ * dort gehört die org direkt dem Auth-User (owner_user_id), Rolle ist
+ * immer 'owner'.
+ */
+export async function fetchOwnerOrgContext(
+  sb: SupabaseClient,
+): Promise<OrgContextData | null> {
+  const { data: auth } = await sb.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return null;
+
+  const { data, error } = await sb
+    .from('org')
+    .select('*')
+    .eq('owner_user_id', uid)
+    .limit(1);
+  if (error) fail('Betrieb konnte nicht geladen werden', error);
+  if (!data || data.length === 0) return null;
+
+  return { org: data[0] as Org, role: 'owner' };
 }
 
 export async function fetchMembers(sb: SupabaseClient): Promise<Member[]> {
