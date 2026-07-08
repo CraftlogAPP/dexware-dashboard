@@ -403,13 +403,6 @@ th {
 tbody tr:last-child td {
   border-bottom: none;
 }
-tbody tr.clickable {
-  cursor: pointer;
-}
-tbody tr.clickable:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
 /* ---------- Formulare, Buttons ---------- */
 label.field {
   display: block;

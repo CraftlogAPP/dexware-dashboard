@@ -1,4 +1,4 @@
-import type { WeatherSnapshot } from '../winterdex/types';
+// App-neutrale Formatierungs-Helfer (keine Domain-Imports).
 
 const dateFmt = new Intl.DateTimeFormat('de-DE', {
   day: '2-digit',
@@ -28,20 +28,9 @@ export function fmtTime(iso: string | null | undefined): string {
 
 const num = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
 
-/** Kompakte Wetterzeile, gleiche Logik wie mobile lib/weather.ts */
-export function weatherLabel(w: WeatherSnapshot | null | undefined): string {
-  if (!w) return '—';
-  const parts: string[] = [];
-  if (typeof w.temp_c === 'number') parts.push(`${num.format(w.temp_c)} °C`);
-  if (typeof w.snowfall_cm === 'number' && w.snowfall_cm > 0) {
-    parts.push(`Schneefall ${num.format(w.snowfall_cm)} cm`);
-  } else if (typeof w.precip_mm === 'number' && w.precip_mm > 0) {
-    parts.push(`Niederschlag ${num.format(w.precip_mm)} mm`);
-  }
-  if (typeof w.wind_kmh === 'number' && w.wind_kmh >= 20) {
-    parts.push(`Wind ${num.format(w.wind_kmh)} km/h`);
-  }
-  return parts.length ? parts.join(' · ') : '—';
+/** Zahl im de-DE-Format, max. 1 Nachkommastelle — überall dieselbe Rundung. */
+export function fmtNum(n: number | null | undefined): string {
+  return typeof n === 'number' ? num.format(n) : '—';
 }
 
 export function gpsLabel(
@@ -60,4 +49,14 @@ export function toInputDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/**
+ * 'yyyy-mm-dd' aus <input type="date"> als LOKALE Mitternacht parsen.
+ * new Date('yyyy-mm-dd') wäre UTC-Mitternacht — in DE 01:00/02:00 lokal,
+ * wodurch Einsätze zwischen 00:00 und 02:00 aus Filtern fallen würden.
+ */
+export function parseLocalDate(input: string): Date {
+  const [y, m, d] = input.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }

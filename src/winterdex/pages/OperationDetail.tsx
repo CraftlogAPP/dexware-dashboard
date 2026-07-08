@@ -1,13 +1,14 @@
 import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
-import { fetchOperationWithPhotos, fetchProperties } from '../api';
+import { fetchOperationWithPhotos, fetchProperty } from '../api';
 import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
-import { fmtDateTime, fmtTime, gpsLabel } from '../../lib/format';
+import { fmtDateTime, fmtNum, fmtTime, gpsLabel } from '../../lib/format';
+import { gritLabel } from '../labels';
 import type { OperationWithPhotos, Property } from '../types';
 
 interface Data {
   op: OperationWithPhotos;
-  property: Property | undefined;
+  property: Property | null;
 }
 
 export function OperationDetail() {
@@ -15,11 +16,9 @@ export function OperationDetail() {
   const { client } = useAppAuth();
 
   const state = useAsync<Data>(async () => {
-    const [op, properties] = await Promise.all([
-      fetchOperationWithPhotos(client, id!),
-      fetchProperties(client),
-    ]);
-    return { op, property: properties.find((p) => p.id === op.property_id) };
+    const op = await fetchOperationWithPhotos(client, id!);
+    const property = await fetchProperty(client, op.property_id);
+    return { op, property };
   }, [client, id]);
 
   return (
@@ -29,7 +28,7 @@ export function OperationDetail() {
         return (
           <>
             <p className="small" style={{ marginBottom: 4 }}>
-              <Link to="..">← Alle Einsätze</Link>
+              <Link to="../einsaetze">← Alle Einsätze</Link>
             </p>
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <h1 style={{ marginBottom: 0 }}>Einsatz · {fmtDateTime(op.started_at)}</h1>
@@ -61,11 +60,7 @@ export function OperationDetail() {
               </div>
               <div className="card">
                 <div className="kpi-label">Streumittel</div>
-                <div>
-                  {op.grit_material
-                    ? `${op.grit_material}${op.grit_amount ? ` — ${op.grit_amount}` : ''}`
-                    : '—'}
-                </div>
+                <div>{gritLabel(op.grit_material, op.grit_amount)}</div>
               </div>
               <div className="card">
                 <div className="kpi-label">GPS-Stempel</div>
@@ -97,46 +92,43 @@ export function OperationDetail() {
                 <div className="kpi">
                   <div className="kpi-label">Temperatur</div>
                   <div className="kpi-value">
-                    {typeof w.temp_c === 'number' ? `${w.temp_c.toLocaleString('de-DE')} °C` : '—'}
+                    {typeof w.temp_c === 'number' ? `${fmtNum(w.temp_c)} °C` : '—'}
                   </div>
                   {typeof w.apparent_c === 'number' && (
-                    <div className="kpi-sub">
-                      gefühlt {w.apparent_c.toLocaleString('de-DE')} °C
-                    </div>
+                    <div className="kpi-sub">gefühlt {fmtNum(w.apparent_c)} °C</div>
+                  )}
+                  {typeof w.today_min_c === 'number' && (
+                    <div className="kpi-sub">Tagestief {fmtNum(w.today_min_c)} °C</div>
                   )}
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Schneefall</div>
                   <div className="kpi-value">
                     {typeof w.snowfall_cm === 'number'
-                      ? `${w.snowfall_cm.toLocaleString('de-DE')} cm`
+                      ? `${fmtNum(w.snowfall_cm)} cm`
                       : '—'}
                   </div>
                   {typeof w.today_snowfall_cm === 'number' && (
                     <div className="kpi-sub">
-                      heute gesamt {w.today_snowfall_cm.toLocaleString('de-DE')} cm
+                      heute gesamt {fmtNum(w.today_snowfall_cm)} cm
                     </div>
                   )}
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Niederschlag</div>
                   <div className="kpi-value">
-                    {typeof w.precip_mm === 'number'
-                      ? `${w.precip_mm.toLocaleString('de-DE')} mm`
-                      : '—'}
+                    {typeof w.precip_mm === 'number' ? `${fmtNum(w.precip_mm)} mm` : '—'}
                   </div>
-                  {typeof w.today_min_c === 'number' && (
+                  {typeof w.today_precip_mm === 'number' && (
                     <div className="kpi-sub">
-                      Tagestief {w.today_min_c.toLocaleString('de-DE')} °C
+                      heute gesamt {fmtNum(w.today_precip_mm)} mm
                     </div>
                   )}
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Wind</div>
                   <div className="kpi-value">
-                    {typeof w.wind_kmh === 'number'
-                      ? `${w.wind_kmh.toLocaleString('de-DE')} km/h`
-                      : '—'}
+                    {typeof w.wind_kmh === 'number' ? `${fmtNum(w.wind_kmh)} km/h` : '—'}
                   </div>
                   <div className="kpi-sub">Quelle: {w.source ?? 'open-meteo'}</div>
                 </div>

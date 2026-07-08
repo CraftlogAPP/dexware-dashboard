@@ -3,13 +3,9 @@ import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { fetchOperations, fetchProperties } from '../api';
 import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
-import { fmtDateTime, toInputDate, weatherLabel } from '../../lib/format';
-import type { Operation, Property } from '../types';
-
-interface Data {
-  properties: Property[];
-  ops: Operation[];
-}
+import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
+import { gritLabel, propertyNameMap, weatherLabel } from '../labels';
+import type { Operation } from '../types';
 
 export function Operations() {
   const { client } = useAppAuth();
@@ -21,17 +17,18 @@ export function Operations() {
   });
   const [to, setTo] = useState(() => toInputDate(new Date()));
 
-  const state = useAsync<Data>(async () => {
-    const [properties, ops] = await Promise.all([
-      fetchProperties(client),
+  // Objektliste ändert sich durch Filter nicht — einmal laden, nicht pro Filterwechsel.
+  const propsState = useAsync(() => fetchProperties(client), [client]);
+
+  const opsState = useAsync<Operation[]>(
+    () =>
       fetchOperations(client, {
         propertyId: propertyId || undefined,
-        from: from ? new Date(from) : undefined,
-        to: to ? new Date(to) : undefined,
+        from: from ? parseLocalDate(from) : undefined,
+        to: to ? parseLocalDate(to) : undefined,
       }),
-    ]);
-    return { properties, ops };
-  }, [client, propertyId, from, to]);
+    [client, propertyId, from, to],
+  );
 
   return (
     <>
@@ -47,7 +44,7 @@ export function Operations() {
             Objekt
             <select value={propertyId} onChange={(e) => setPropertyId(e.target.value)}>
               <option value="">Alle Objekte</option>
-              {(state.data?.properties ?? []).map((p) => (
+              {(propsState.data ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
@@ -65,9 +62,10 @@ export function Operations() {
         </div>
       </div>
 
-      <LoadGuard state={state}>
-        {({ properties, ops }) =>
-          ops.length === 0 ? (
+      <LoadGuard state={opsState}>
+        {(ops) => {
+          const names = propertyNameMap(propsState.data ?? []);
+          return ops.length === 0 ? (
             <div className="card empty">Keine Einsätze im gewählten Zeitraum.</div>
           ) : (
             <>
@@ -90,16 +88,12 @@ export function Operations() {
                         <td>
                           <Link to={op.id}>{fmtDateTime(op.started_at)}</Link>
                         </td>
-                        <td className="wrap">
-                          {properties.find((p) => p.id === op.property_id)?.name ?? '—'}
-                        </td>
+                        <td className="wrap">{names.get(op.property_id) ?? '—'}</td>
                         <td>
                           <ActionBadge action={op.action} canceled={op.canceled} />
                         </td>
                         <td className="muted">
-                          {op.grit_material
-                            ? `${op.grit_material}${op.grit_amount ? ` (${op.grit_amount})` : ''}`
-                            : '—'}
+                          {gritLabel(op.grit_material, op.grit_amount)}
                         </td>
                         <td className="muted">{weatherLabel(op.weather)}</td>
                         <td className="muted">{op.performer_name ?? '—'}</td>
@@ -109,8 +103,8 @@ export function Operations() {
                 </table>
               </div>
             </>
-          )
-        }
+          );
+        }}
       </LoadGuard>
     </>
   );

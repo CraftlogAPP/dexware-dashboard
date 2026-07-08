@@ -4,7 +4,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../OrgContext';
 import { fetchOperationsForReport, fetchProperties } from '../api';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { fmtDate, toInputDate } from '../../lib/format';
+import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
 import { buildReportHtml, openReportWindow } from '../report';
 import type { Property } from '../types';
 
@@ -32,8 +32,8 @@ export function Report() {
     setBusy(true);
     setError(null);
     try {
-      const fromDate = new Date(from);
-      const toDate = new Date(to);
+      const fromDate = parseLocalDate(from);
+      const toDate = parseLocalDate(to);
       const ops = await fetchOperationsForReport(client, propertyId, fromDate, toDate);
       const periodLabel = `${fmtDate(fromDate.toISOString())} – ${fmtDate(toDate.toISOString())}`;
       const html = buildReportHtml(orgCtx.org, property, ops, periodLabel);

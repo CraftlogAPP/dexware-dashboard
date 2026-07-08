@@ -45,6 +45,20 @@ export async function fetchOrgContext(sb: SupabaseClient): Promise<OrgContext | 
   return { org: org as Org, role: ms[0].role as Role };
 }
 
+/** Einzelnes Objekt per Primärschlüssel — statt alle zu laden und zu filtern. */
+export async function fetchProperty(
+  sb: SupabaseClient,
+  id: string,
+): Promise<Property | null> {
+  const { data, error } = await sb
+    .from('property')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) fail('Objekt konnte nicht geladen werden', error);
+  return data as Property | null;
+}
+
 export async function fetchProperties(sb: SupabaseClient): Promise<Property[]> {
   const { data, error } = await sb
     .from('property')
@@ -83,6 +97,29 @@ export async function fetchOperations(
   const { data, error } = await q;
   if (error) fail('Einsätze konnten nicht geladen werden', error);
   return (data ?? []) as Operation[];
+}
+
+/** Minimale Einsatz-Metadaten für KPIs/„letzter Einsatz"-Logik (schmale Spalten, hohes Limit). */
+export interface OpMeta {
+  id: string;
+  property_id: string;
+  started_at: string;
+  canceled: boolean;
+}
+
+export async function fetchOperationMeta(
+  sb: SupabaseClient,
+  opts: { from?: Date; limit?: number } = {},
+): Promise<OpMeta[]> {
+  let q = sb
+    .from('operation')
+    .select('id, property_id, started_at, canceled')
+    .order('started_at', { ascending: false })
+    .limit(opts.limit ?? 2000);
+  if (opts.from) q = q.gte('started_at', opts.from.toISOString());
+  const { data, error } = await q;
+  if (error) fail('Einsatz-Daten konnten nicht geladen werden', error);
+  return (data ?? []) as OpMeta[];
 }
 
 /** Einzelner Einsatz inkl. Beweisfotos (Base64-Daten-URIs). */

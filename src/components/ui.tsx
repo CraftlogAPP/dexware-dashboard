@@ -1,4 +1,10 @@
-import { useEffect, useState, type DependencyList, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type DependencyList,
+  type ReactNode,
+} from 'react';
 import type { OperationAction } from '../winterdex/types';
 import { ACTION_LABELS } from '../winterdex/types';
 
@@ -36,7 +42,8 @@ export function useAsync<T>(fn: () => Promise<T>, deps: DependencyList): AsyncSt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
 
-  return { data, loading, error, reload: () => setTick((t) => t + 1) };
+  const reload = useCallback(() => setTick((t) => t + 1), []);
+  return { data, loading, error, reload };
 }
 
 export function LoadGuard<T>({
@@ -73,6 +80,14 @@ const ACTION_BADGE_CLASS: Record<OperationAction, string> = {
   cleared_gritted: 'badge green',
   checked_no_action: 'badge',
 };
+
+export function StatusBadge({ active }: { active: boolean }) {
+  return active ? (
+    <span className="badge green">aktiv</span>
+  ) : (
+    <span className="badge">pausiert</span>
+  );
+}
 
 export function ActionBadge({
   action,

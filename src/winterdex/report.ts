@@ -1,7 +1,8 @@
 // Nachweis-PDF (Kontrollbuch) — HTML-Aufbau nach dem Muster von mobile/src/pdf/report.ts,
 // Ausgabe über das Druck-Dialogfeld des Browsers (dort „Als PDF speichern").
 
-import { fmtDate, fmtDateTime, fmtTime, gpsLabel, weatherLabel } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtTime, gpsLabel } from '../lib/format';
+import { gritLabel, weatherLabel } from './labels';
 import {
   ACTION_LABELS,
   LEGAL_BASIS,
@@ -31,9 +32,7 @@ export function buildReportHtml(
             op.cancel_reason ? `— ${esc(op.cancel_reason)}` : ''
           }`
         : esc(ACTION_LABELS[op.action]);
-      const grit = op.grit_material
-        ? `${esc(op.grit_material)}${op.grit_amount ? ` (${esc(op.grit_amount)})` : ''}`
-        : '—';
+      const grit = esc(gritLabel(op.grit_material, op.grit_amount));
       const time = `${fmtDate(op.started_at)}<br>${fmtTime(op.started_at)}${
         op.ended_at ? ` – ${fmtTime(op.ended_at)}` : ''
       }`;
@@ -92,7 +91,13 @@ export function buildReportHtml(
   <div class="meta"><b>${esc(org.name)}</b>${org.address ? ` · ${esc(org.address)}` : ''}</div>
   <div class="meta">Objekt: <b>${esc(property.name)}</b> · ${esc(property.address)}</div>
   ${property.customer_name ? `<div class="meta">Auftraggeber: ${esc(property.customer_name)}</div>` : ''}
-  <div class="meta">Zeitraum: ${esc(periodLabel)} · Einsätze: ${ops.length}</div>
+  <div class="meta">Zeitraum: ${esc(periodLabel)} · Einsätze: ${
+    ops.filter((o) => !o.canceled).length
+  }${
+    ops.some((o) => o.canceled)
+      ? ` (zzgl. ${ops.filter((o) => o.canceled).length} stornierte Einträge, gekennzeichnet)`
+      : ''
+  }</div>
   <div class="legal">${esc(LEGAL_BASIS[org.land])}</div>
 
   <table>
@@ -127,9 +132,22 @@ export function openReportWindow(html: string): boolean {
   win.document.open();
   win.document.write(html);
   win.document.close();
-  // Druckdialog erst nach dem Rendern der (Base64-)Bilder anstoßen.
-  win.addEventListener('load', () => {
-    setTimeout(() => win.print(), 300);
-  });
+  // Nicht nur aufs load-Event verlassen — je nach Browser hat es nach
+  // document.close() bereits gefeuert und der Listener käme zu spät.
+  const printOnce = (() => {
+    let done = false;
+    return () => {
+      if (done || win.closed) return;
+      done = true;
+      // kurze Pause, damit eingebettete Base64-Fotos gerendert sind
+      setTimeout(() => win.print(), 300);
+    };
+  })();
+  if (win.document.readyState === 'complete') {
+    printOnce();
+  } else {
+    win.addEventListener('load', printOnce);
+    setTimeout(printOnce, 1500); // Fallback, falls load nie feuert
+  }
   return true;
 }
