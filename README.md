@@ -34,6 +34,16 @@ Kachel pro App, dahinter pro App ein Dashboard auf das jeweilige Supabase-Projek
   Experteninspektion 365 T) mit DIN-EN-15635-Checkliste, Schäden im
   Ampelverfahren (Grün/Orange/Rot), Prüfbericht-PDF. Base64-Foto-Spalten wie
   bei SpielDex nie in Listen laden.
+- **PrüfDex** (`src/pruefdex/`): Kunden/Standorte, Geräte mit
+  Prüffristen-Ampel (überfällig/bald fällig/ok), DGUV-V3-Prüfungen mit
+  Sichtprüfung + Messwert-Bewertung nach VDE 0701-0702, Prüflisten-PDF je
+  Kunde. **Kein** Team-Bereich (App hat kein Invite-System); org hat kein
+  `land` — `fetchOrgContext` lädt deshalb `select('*')`.
+- **SchutzDex** (`src/schutzdex/`): anderes Mandanten-Modell — org gehört dem
+  Auth-User direkt (`owner_user_id`, kein membership), Mitarbeiter sind
+  Datensätze ohne Konten. Eigener Org-Fetcher `fetchOwnerOrgContext` via
+  `<OrgProvider fetch={…}>`. Seiten: Mitarbeiter, Unterweisungen, Zuweisungen
+  (mit Überfälligkeits-Logik), prüffeste Nachweise.
 - **BaumDex** verlinkt als Kachel auf das bestehende Portal
   (`https://baumdex-portal.vercel.app`).
 
