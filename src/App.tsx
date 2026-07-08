@@ -3,12 +3,14 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Home } from './pages/Home';
 import { WinterdexArea } from './winterdex/WinterdexArea';
 import { SpieldexArea } from './spieldex/SpieldexArea';
+import { RegaldexArea } from './regaldex/RegaldexArea';
 import { APPS, type AppConfig } from './apps/registry';
 
 // Dashboard-Bereiche je App — neue App: Registry-Eintrag + Zeile hier.
 const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   winterdex: WinterdexArea,
   spieldex: SpieldexArea,
+  regaldex: RegaldexArea,
 };
 
 export default function App() {
