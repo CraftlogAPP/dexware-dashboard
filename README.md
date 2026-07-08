@@ -22,6 +22,13 @@ Kachel pro App, dahinter pro App ein Dashboard auf das jeweilige Supabase-Projek
   (Beitrittscodes per RPC), Nachweis-PDF über den Browser-Druckdialog.
   **Wichtig:** `operation.photo_urls` enthält Base64-Fotos — Listen laden diese
   Spalte nie (siehe `OPERATION_COLS` in `src/winterdex/api.ts`), nur Detail/Bericht.
+- **SpielDex** (`src/spieldex/`): zweiter Dashboard-Bereich nach dem WinterDex-
+  Muster — Übersicht mit Fälligkeits-Ampel (visuell 7 T / operativ 90 T /
+  Hauptinspektion 365 T), Spielplätze mit Geräte-Inventar, Kontrollen mit
+  DIN-EN-1176-7-Checkliste, Mängel mit Schweregrad und Behebungs-Vermerk,
+  Kontrollbuch-PDF. **Wichtig:** `inspection.photo_urls`, `defect.photo_urls`/
+  `resolution_photo_urls` und `equipment.photo_url` enthalten Base64 — Listen
+  laden diese Spalten nie (siehe Spaltenlisten in `src/spieldex/api.ts`).
 - **BaumDex** verlinkt als Kachel auf das bestehende Portal
   (`https://baumdex-portal.vercel.app`).
 
@@ -44,7 +51,8 @@ npm run preview
 
 ## Nächste Ausbaustufen
 
-1. Weitere Apps als Registry-Eintrag + Bereich (SpielDex/RegalDex/LeiterDex teilen
-   das WinterDex-Muster: Inventar + append-only-Kontrollen + Team + PDF).
+1. Weitere Apps als Registry-Eintrag + Bereich (RegalDex hat ein Live-Backend
+   `vzxqbdadtzjolppzfqxx.supabase.co` und teilt das Muster; LeiterDex hat noch
+   kein Supabase-Projekt).
 2. Pro-Gating des Dashboards (RevenueCat/`app_metadata.pro`/Suite-Backend).
 3. Optional echtes Suite-SSO (erst sinnvoll, wenn das Bundle zieht).
