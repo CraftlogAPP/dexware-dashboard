@@ -119,10 +119,15 @@ export const APPS: AppConfig[] = [
     id: 'spieldex',
     name: 'SpielDex',
     tagline: 'Spielplatzkontrolle nach DIN EN 1176 mit PDF-Kontrollbuch',
-    status: 'soon',
+    status: 'dashboard',
     emoji: '🎠',
     theme: { primary: '#FF7A6E', accent: '#2DD4BF', bg: '#12191E', card: '#1B2730' },
     landingUrl: 'https://spieldex.dexware.app',
+    supabase: {
+      url: 'https://ycstxklzqfapgtgoomxw.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc3R4a2x6cWZhcGd0Z29vbXh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNzc0NTQsImV4cCI6MjA5ODk1MzQ1NH0.20eJ1TpnjSi8N6c0oDVnmVCoZPvwQ8JuvwWJ0jHGN_A',
+    },
   },
   {
     id: 'regaldex',

@@ -5,7 +5,8 @@ import { useOrg } from '../../components/OrgContext';
 import { fetchOperationsForReport, fetchProperties } from '../api';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { buildReportHtml, openReportWindow } from '../report';
+import { openReportWindow } from '../../lib/print';
+import { buildReportHtml } from '../report';
 import type { Property } from '../types';
 
 export function Report() {
