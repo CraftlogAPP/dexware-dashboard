@@ -23,7 +23,8 @@ export function Home() {
           </h1>
           <p>
             Das Web-Dashboard zur dexware-Suite: Objekte, Kontrollen und Fristen deiner
-            Apps am großen Bildschirm — gleiche Zugangsdaten, gleiche Daten, live.
+            Apps am großen Bildschirm — gleiche Daten, live. Anmeldung mit deinem
+            App-Konto: per Google oder E-Mail + Passwort.
           </p>
         </section>
 

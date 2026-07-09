@@ -16,7 +16,10 @@ export function getClient(app: AppConfig): SupabaseClient {
         storageKey: `dexware-dash-${app.id}`,
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false,
+        // OAuth-Rückkehr (Google): ?code=… wird beim Laden des App-Bereichs
+        // gegen eine Session getauscht. PKCE, Verifier liegt im storageKey-Namespace.
+        detectSessionInUrl: true,
+        flowType: 'pkce',
       },
     });
     clients.set(app.id, client);
