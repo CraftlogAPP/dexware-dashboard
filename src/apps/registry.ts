@@ -188,6 +188,11 @@ export function getApp(id: string): AppConfig | undefined {
   return APPS.find((a) => a.id === id);
 }
 
+/** Echtes App-Icon (public/icons/<id>.png, 128 px) — für alle 11 Apps vorhanden. */
+export function appIcon(id: string): string {
+  return `/icons/${id}.png`;
+}
+
 /** Sortierung für den Entry-Screen: nutzbare Dashboards zuerst. */
 export const STATUS_ORDER: Record<AppStatus, number> = {
   dashboard: 0,

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { appIcon } from '../apps/registry';
 import { useAppAuth } from './AppAuthContext';
 
 type Mode = 'login' | 'reset-request' | 'reset-code';
@@ -81,7 +82,9 @@ export function LoginScreen() {
   return (
     <div className="auth-wrap">
       <div className="auth-card">
-        <div className="auth-logo">{app.emoji}</div>
+        <div className="auth-logo">
+          <img src={appIcon(app.id)} alt={`${app.name}-Icon`} />
+        </div>
         <h2>{app.name} Dashboard</h2>
         <p className="auth-sub">
           Melde dich mit deinem bestehenden {app.name}-Konto an — per Google oder mit
