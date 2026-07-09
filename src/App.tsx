@@ -16,6 +16,9 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   regaldex: lazy(() =>
     import('./regaldex/RegaldexArea').then((m) => ({ default: m.RegaldexArea })),
   ),
+  leiterdex: lazy(() =>
+    import('./leiterdex/LeiterdexArea').then((m) => ({ default: m.LeiterdexArea })),
+  ),
   pruefdex: lazy(() =>
     import('./pruefdex/PruefdexArea').then((m) => ({ default: m.PruefdexArea })),
   ),
