@@ -119,7 +119,7 @@ export async function addInspection(
   sb: SupabaseClient,
   orgId: string,
   input: InspectionInput,
-): Promise<void> {
+): Promise<string | null> {
   const { error } = await sb.from('inspection').insert({
     id: crypto.randomUUID(),
     org_id: orgId,
@@ -128,10 +128,14 @@ export async function addInspection(
     created_at: new Date().toISOString(),
   });
   if (error) fail('Prüfung konnte nicht gespeichert werden', error);
-  await sb
+  const { error: upError } = await sb
     .from('device')
     .update({ next_due_date: input.next_due_date })
     .eq('id', input.device_id);
+  // Prüfung ist schon gespeichert — Throw hieße Dialog offen + Duplikat bei Retry.
+  return upError
+    ? `Die Prüfung wurde gespeichert, aber die Prüffrist am Gerät konnte nicht aktualisiert werden (${upError.message}). Bitte nicht erneut speichern.`
+    : null;
 }
 
 export interface InspectionFilter {

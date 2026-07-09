@@ -1,12 +1,16 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
+import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDateTime, gpsLabel } from '../../lib/format';
 import {
   fetchDefects,
   fetchEquipment,
   fetchInspections,
   fetchPlayground,
+  saveEquipment,
 } from '../api';
 import { DefectStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, equipmentNameMap } from '../labels';
@@ -22,6 +26,8 @@ interface Data {
 export function PlaygroundDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
+  const { data: org } = useOrg();
+  const [editingEq, setEditingEq] = useState<Equipment | 'new' | null>(null);
 
   const state = useAsync<Data>(async () => {
     const [playground, equipment, inspections, defects] = await Promise.all([
@@ -32,6 +38,25 @@ export function PlaygroundDetail() {
     ]);
     return { playground, equipment, inspections, defects };
   }, [client, id]);
+
+  async function onSaveEq(v: FormValues) {
+    if (!org || !id) throw new Error('Kein Betrieb geladen');
+    await saveEquipment(
+      client,
+      org.org.id,
+      {
+        playground_id: id,
+        name: s(v.name),
+        category: s(v.category),
+        manufacturer: orNull(v.manufacturer),
+        install_year: orNull(v.install_year),
+        notes: orNull(v.notes),
+        retired: v.retired === true,
+      },
+      editingEq === 'new' ? undefined : (editingEq ?? undefined),
+    );
+    state.reload();
+  }
 
   return (
     <LoadGuard state={state}>
@@ -76,6 +101,9 @@ export function PlaygroundDetail() {
 
             <div className="section-head">
               <h2>Geräte-Inventar ({equipment.length})</h2>
+              <button className="btn small" onClick={() => setEditingEq('new')}>
+                ＋ Gerät anlegen
+              </button>
             </div>
             {equipment.length === 0 ? (
               <div className="card empty">Noch keine Spielgeräte erfasst.</div>
@@ -89,6 +117,7 @@ export function PlaygroundDetail() {
                       <th>Hersteller</th>
                       <th>Baujahr</th>
                       <th>Status</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -105,11 +134,51 @@ export function PlaygroundDetail() {
                             <span className="badge green">in Betrieb</span>
                           )}
                         </td>
+                        <td>
+                          <button
+                            className="btn ghost small"
+                            onClick={() => setEditingEq(e)}
+                          >
+                            Bearbeiten
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {editingEq && (
+              <FormDialog
+                title={
+                  editingEq === 'new'
+                    ? 'Spielgerät anlegen'
+                    : `${editingEq.name} bearbeiten`
+                }
+                onClose={() => setEditingEq(null)}
+                onSave={onSaveEq}
+                fields={[
+                  { key: 'name', label: 'Gerät', required: true, placeholder: 'z. B. Schaukel Nest' },
+                  { key: 'category', label: 'Kategorie', required: true, placeholder: 'z. B. Schaukel, Rutsche, Klettergerüst' },
+                  { key: 'manufacturer', label: 'Hersteller' },
+                  { key: 'install_year', label: 'Baujahr / Aufstelljahr', placeholder: 'z. B. 2018' },
+                  { key: 'notes', label: 'Notizen', kind: 'textarea' },
+                  { key: 'retired', label: 'Abgebaut (außer Betrieb)', kind: 'checkbox' },
+                ]}
+                initial={
+                  editingEq === 'new'
+                    ? {}
+                    : {
+                        name: editingEq.name,
+                        category: editingEq.category,
+                        manufacturer: editingEq.manufacturer ?? '',
+                        install_year: editingEq.install_year ?? '',
+                        notes: editingEq.notes ?? '',
+                        retired: editingEq.retired,
+                      }
+                }
+              />
             )}
 
             {defects.length > 0 && (

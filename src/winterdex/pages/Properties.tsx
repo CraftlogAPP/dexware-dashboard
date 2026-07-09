@@ -43,6 +43,7 @@ export function Properties() {
         customer_name: orNull(v.customer_name),
         customer_contact: orNull(v.customer_contact),
         areas: orNull(v.areas),
+        duty_times: { mo_fr: s(v.duty_mo_fr), sa: s(v.duty_sa), so: s(v.duty_so) },
         notes: orNull(v.notes),
         active: v.active === true,
       },
@@ -126,6 +127,9 @@ export function Properties() {
             { key: 'customer_name', label: 'Auftraggeber' },
             { key: 'customer_contact', label: 'Auftraggeber-Kontakt' },
             { key: 'areas', label: 'Flächen', hint: 'z. B. Gehweg, Parkplatz, Zufahrt' },
+            { key: 'duty_mo_fr', label: 'Pflichtzeiten Mo–Fr', placeholder: 'z. B. 6–22 Uhr' },
+            { key: 'duty_sa', label: 'Pflichtzeiten Samstag', placeholder: 'z. B. 7–22 Uhr' },
+            { key: 'duty_so', label: 'Pflichtzeiten Sonn-/Feiertag', placeholder: 'z. B. 8–22 Uhr' },
             { key: 'notes', label: 'Notizen', kind: 'textarea' },
             { key: 'active', label: 'Aktiv (wird im Winterdienst berücksichtigt)', kind: 'checkbox' },
           ]}
@@ -138,6 +142,9 @@ export function Properties() {
                   customer_name: editing.customer_name ?? '',
                   customer_contact: editing.customer_contact ?? '',
                   areas: editing.areas ?? '',
+                  duty_mo_fr: editing.duty_times?.mo_fr ?? '',
+                  duty_sa: editing.duty_times?.sa ?? '',
+                  duty_so: editing.duty_times?.so ?? '',
                   notes: editing.notes ?? '',
                   active: editing.active,
                 }

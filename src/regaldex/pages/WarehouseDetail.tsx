@@ -1,8 +1,17 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
+import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDateTime, gpsLabel } from '../../lib/format';
-import { fetchDamages, fetchInspections, fetchRacks, fetchWarehouse } from '../api';
+import {
+  fetchDamages,
+  fetchInspections,
+  fetchRacks,
+  fetchWarehouse,
+  saveRack,
+} from '../api';
 import { DamageStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, loadLabel, rackNameMap } from '../labels';
 import type { Damage, Inspection, Rack, Warehouse } from '../types';
@@ -17,6 +26,8 @@ interface Data {
 export function WarehouseDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
+  const { data: org } = useOrg();
+  const [editingRack, setEditingRack] = useState<Rack | 'new' | null>(null);
 
   const state = useAsync<Data>(async () => {
     const [warehouse, racks, inspections, damages] = await Promise.all([
@@ -27,6 +38,27 @@ export function WarehouseDetail() {
     ]);
     return { warehouse, racks, inspections, damages };
   }, [client, id]);
+
+  async function onSaveRack(v: FormValues) {
+    if (!org || !id) throw new Error('Kein Betrieb geladen');
+    await saveRack(
+      client,
+      org.org.id,
+      {
+        warehouse_id: id,
+        name: s(v.name),
+        category: s(v.category),
+        manufacturer: orNull(v.manufacturer),
+        install_year: orNull(v.install_year),
+        bay_load_kg: orNull(v.bay_load_kg),
+        field_load_kg: orNull(v.field_load_kg),
+        notes: orNull(v.notes),
+        retired: v.retired === true,
+      },
+      editingRack === 'new' ? undefined : (editingRack ?? undefined),
+    );
+    state.reload();
+  }
 
   return (
     <LoadGuard state={state}>
@@ -71,6 +103,9 @@ export function WarehouseDetail() {
 
             <div className="section-head">
               <h2>Regal-Inventar ({racks.length})</h2>
+              <button className="btn small" onClick={() => setEditingRack('new')}>
+                ＋ Regalzeile anlegen
+              </button>
             </div>
             {racks.length === 0 ? (
               <div className="card empty">Noch keine Regalzeilen erfasst.</div>
@@ -85,6 +120,7 @@ export function WarehouseDetail() {
                       <th>Baujahr</th>
                       <th>Traglasten</th>
                       <th>Status</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -104,11 +140,55 @@ export function WarehouseDetail() {
                             <span className="badge green">in Betrieb</span>
                           )}
                         </td>
+                        <td>
+                          <button
+                            className="btn ghost small"
+                            onClick={() => setEditingRack(r)}
+                          >
+                            Bearbeiten
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {editingRack && (
+              <FormDialog
+                title={
+                  editingRack === 'new'
+                    ? 'Regalzeile anlegen'
+                    : `${editingRack.name} bearbeiten`
+                }
+                onClose={() => setEditingRack(null)}
+                onSave={onSaveRack}
+                fields={[
+                  { key: 'name', label: 'Regalzeile', required: true, placeholder: 'z. B. Zeile A1' },
+                  { key: 'category', label: 'Kategorie', required: true, placeholder: 'z. B. Palettenregal, Fachbodenregal' },
+                  { key: 'manufacturer', label: 'Hersteller' },
+                  { key: 'install_year', label: 'Baujahr / Aufstelljahr', placeholder: 'z. B. 2020' },
+                  { key: 'bay_load_kg', label: 'Fachlast (kg)', placeholder: 'z. B. 1000' },
+                  { key: 'field_load_kg', label: 'Feldlast (kg)', placeholder: 'z. B. 8000' },
+                  { key: 'notes', label: 'Notizen', kind: 'textarea' },
+                  { key: 'retired', label: 'Abgebaut (außer Betrieb)', kind: 'checkbox' },
+                ]}
+                initial={
+                  editingRack === 'new'
+                    ? {}
+                    : {
+                        name: editingRack.name,
+                        category: editingRack.category,
+                        manufacturer: editingRack.manufacturer ?? '',
+                        install_year: editingRack.install_year ?? '',
+                        bay_load_kg: editingRack.bay_load_kg ?? '',
+                        field_load_kg: editingRack.field_load_kg ?? '',
+                        notes: editingRack.notes ?? '',
+                        retired: editingRack.retired,
+                      }
+                }
+              />
             )}
 
             {damages.length > 0 && (

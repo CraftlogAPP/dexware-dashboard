@@ -154,15 +154,20 @@ export async function addUvvInspection(
     defects: string | null;
     checklist: Record<string, boolean>;
   },
-): Promise<void> {
+): Promise<string | null> {
   const { error } = await sb.from('uvv_inspection').insert({ org_id: orgId, ...input });
   if (error) fail('UVV-Prüfung konnte nicht gespeichert werden', error);
-  if (input.result === 'bestanden') {
-    await sb
-      .from('vehicle')
-      .update({ last_uvv: input.date, updated_at: new Date().toISOString() })
-      .eq('id', input.vehicle_id);
-  }
+  if (input.result !== 'bestanden') return null;
+  // Bestandene Prüfung startet die 12-Monats-Frist neu (wie die App).
+  const { error: upError } = await sb
+    .from('vehicle')
+    .update({ last_uvv: input.date, updated_at: new Date().toISOString() })
+    .eq('id', input.vehicle_id);
+  // Die Prüfung ist zu diesem Zeitpunkt schon gespeichert — ein Throw hielte
+  // den Dialog offen und ein erneutes Speichern legte ein Duplikat an.
+  return upError
+    ? `Die Prüfung wurde gespeichert, aber die UVV-Frist am Fahrzeug konnte nicht aktualisiert werden (${upError.message}). Bitte nicht erneut speichern.`
+    : null;
 }
 
 /** Führerscheinkontrolle erfassen + letzte Kontrolle am Fahrer fortschreiben. */
@@ -170,15 +175,19 @@ export async function addLicenseCheck(
   sb: SupabaseClient,
   orgId: string,
   input: { driver_id: string; date: string; checked_by: string },
-): Promise<void> {
+): Promise<string | null> {
   const { error } = await sb
     .from('license_check')
     .insert({ org_id: orgId, ...input, photo_uri: null });
   if (error) fail('Führerscheinkontrolle konnte nicht gespeichert werden', error);
-  await sb
+  const { error: upError } = await sb
     .from('driver')
     .update({ last_check: input.date, updated_at: new Date().toISOString() })
     .eq('id', input.driver_id);
+  // Kontrolle ist schon gespeichert — Throw hieße Dialog offen + Duplikat bei Retry.
+  return upError
+    ? `Die Kontrolle wurde gespeichert, aber das Kontrolldatum am Fahrer konnte nicht aktualisiert werden (${upError.message}). Bitte nicht erneut speichern.`
+    : null;
 }
 
 export async function fetchLicenseChecks(

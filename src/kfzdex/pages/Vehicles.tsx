@@ -39,7 +39,7 @@ export function Vehicles() {
     if (!org || !inspecting) throw new Error('Kein Betrieb geladen');
     const checklist: Record<string, boolean> = {};
     for (const item of CHECK_ITEMS) checklist[item.id] = v[`chk_${item.id}`] === true;
-    await addUvvInspection(client, org.org.id, {
+    const warning = await addUvvInspection(client, org.org.id, {
       vehicle_id: inspecting.id,
       date: s(v.date),
       inspector: s(v.inspector),
@@ -48,6 +48,7 @@ export function Vehicles() {
       checklist,
     });
     state.reload();
+    if (warning) alert(warning);
   }
 
   return (

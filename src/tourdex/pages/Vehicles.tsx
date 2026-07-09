@@ -3,7 +3,12 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDate, fmtNum } from '../../lib/format';
-import { fetchTripSummaries, fetchVehicles, saveVehicle } from '../api';
+import {
+  fetchTripSummaries,
+  fetchVehicles,
+  saveVehicle,
+  setDefaultVehicle,
+} from '../api';
 import {
   VEHICLE_TYPE_LABELS,
   type TripSummary,
@@ -14,6 +19,7 @@ import {
 export function Vehicles() {
   const { client, session } = useAppAuth();
   const [editing, setEditing] = useState<Vehicle | 'new' | null>(null);
+  const [settingDefault, setSettingDefault] = useState(false);
 
   const state = useAsync<{ vehicles: Vehicle[]; trips: TripSummary[] }>(
     async () => {
@@ -41,6 +47,19 @@ export function Vehicles() {
       editing === 'new' ? undefined : (editing ?? undefined),
     );
     state.reload();
+  }
+
+  async function onSetDefault(vehicles: Vehicle[], id: string) {
+    setSettingDefault(true);
+    try {
+      await setDefaultVehicle(client, vehicles, id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSettingDefault(false);
+      // Auch nach Fehler neu laden — ein Teil der Patches kann durch sein.
+      state.reload();
+    }
   }
 
   return (
@@ -109,9 +128,20 @@ export function Vehicles() {
                         </td>
                         <td className="muted">{fmtDate(v.createdAt)}</td>
                         <td>
-                          <button className="btn ghost small" onClick={() => setEditing(v)}>
-                            Bearbeiten
-                          </button>
+                          <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                            <button className="btn ghost small" onClick={() => setEditing(v)}>
+                              Bearbeiten
+                            </button>
+                            {!v.isDefault && (
+                              <button
+                                className="btn ghost small"
+                                disabled={settingDefault}
+                                onClick={() => onSetDefault(vehicles, v.id)}
+                              >
+                                Als Standard
+                              </button>
+                            )}
+                          </span>
                         </td>
                       </tr>
                     );

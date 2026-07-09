@@ -90,6 +90,34 @@ export async function saveWarehouse(
   if (error) fail('Lager konnte nicht gespeichert werden', error);
 }
 
+export interface RackInput {
+  warehouse_id: string;
+  name: string;
+  category: string;
+  manufacturer: string | null;
+  install_year: string | null;
+  bay_load_kg: string | null;
+  field_load_kg: string | null;
+  notes: string | null;
+  retired: boolean;
+}
+
+/** Regalzeile anlegen/ändern — Upsert wie app-seitiges saveRack (photo_url bleibt unangetastet). */
+export async function saveRack(
+  sb: SupabaseClient,
+  orgId: string,
+  input: RackInput,
+  existing?: Rack,
+): Promise<void> {
+  const { error } = await sb.from('rack').upsert({
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    ...input,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  });
+  if (error) fail('Regalzeile konnte nicht gespeichert werden', error);
+}
+
 export interface InspectionInput {
   warehouse_id: string;
   type: InspectionType;

@@ -35,12 +35,13 @@ export function Drivers() {
 
   async function onCheck(v: FormValues) {
     if (!org || !checking) throw new Error('Kein Betrieb geladen');
-    await addLicenseCheck(client, org.org.id, {
+    const warning = await addLicenseCheck(client, org.org.id, {
       driver_id: checking.id,
       date: s(v.date),
       checked_by: s(v.checked_by),
     });
     state.reload();
+    if (warning) alert(warning);
   }
 
   return (

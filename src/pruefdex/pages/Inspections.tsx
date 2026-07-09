@@ -62,7 +62,7 @@ export function Inspections() {
     }
     const checks: Record<string, boolean> = {};
     for (const c of VISUAL_CHECKS) checks[c.key] = v[`vc_${c.key}`] === true;
-    await addInspection(client, org.org.id, {
+    const warning = await addInspection(client, org.org.id, {
       device_id: deviceIdSel,
       inspected_at: inspectedAt,
       inspector_name: orNull(v.inspector_name),
@@ -76,6 +76,7 @@ export function Inspections() {
     });
     inspState.reload();
     devState.reload();
+    if (warning) alert(warning);
   }
 
   return (

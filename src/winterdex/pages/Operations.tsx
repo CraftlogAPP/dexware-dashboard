@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
-import { addOperation, fetchOperations, fetchProperties } from '../api';
+import { addOperation, cancelOperation, fetchOperations, fetchProperties } from '../api';
 import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
 import {
   FormDialog,
@@ -20,6 +20,7 @@ export function Operations() {
   const { client, session } = useAppAuth();
   const { data: org } = useOrg();
   const [adding, setAdding] = useState(false);
+  const [canceling, setCanceling] = useState<Operation | null>(null);
   const [propertyId, setPropertyId] = useState('');
   const [from, setFrom] = useState(() => {
     const d = new Date();
@@ -55,6 +56,12 @@ export function Operations() {
       notes: orNull(v.notes),
       performer_name: orNull(v.performer_name),
     });
+    opsState.reload();
+  }
+
+  async function onCancel(v: FormValues) {
+    if (!canceling) throw new Error('Kein Einsatz gewählt');
+    await cancelOperation(client, canceling.id, s(v.reason));
     opsState.reload();
   }
 
@@ -149,6 +156,7 @@ export function Operations() {
                       <th>Streumittel</th>
                       <th>Wetter (archiviert)</th>
                       <th>Dokumentiert von</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -166,6 +174,16 @@ export function Operations() {
                         </td>
                         <td className="muted">{weatherLabel(op.weather)}</td>
                         <td className="muted">{op.performer_name ?? '—'}</td>
+                        <td>
+                          {!op.canceled && (
+                            <button
+                              className="btn ghost small"
+                              onClick={() => setCanceling(op)}
+                            >
+                              Stornieren
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -175,6 +193,24 @@ export function Operations() {
           );
         }}
       </LoadGuard>
+
+      {canceling && (
+        <FormDialog
+          title={`Einsatz stornieren — ${fmtDateTime(canceling.started_at)}`}
+          submitLabel="Stornieren"
+          onClose={() => setCanceling(null)}
+          onSave={onCancel}
+          fields={[
+            {
+              key: 'reason',
+              label: 'Storno-Grund',
+              kind: 'textarea',
+              required: true,
+              hint: 'Der Einsatz bleibt im Protokoll sichtbar und wird nur gekennzeichnet',
+            },
+          ]}
+        />
+      )}
     </>
   );
 }
