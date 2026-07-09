@@ -191,10 +191,16 @@ export const APPS: AppConfig[] = [
     id: 'leiterdex',
     name: 'LeiterDex',
     tagline: 'Leitern- & Tritte-Prüfung nach BetrSichV / DGUV 208-016',
-    status: 'soon',
+    status: 'dashboard',
     emoji: '🪜',
-    theme: { primary: '#5B8DF7', accent: '#64748B', bg: '#10141B', card: '#1A2029' },
+    theme: { primary: '#60A5FA', accent: '#64748B', bg: '#141A22', card: '#1B2733' },
     landingUrl: 'https://leiterdex.dexware.app',
+    revenueCat: 'goog_vTdzyRKXPUnpDufpvAdJPpBFdhS',
+    supabase: {
+      url: 'https://nluocglurpymdhhzfxjd.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sdW9jZ2x1cnB5bWRoaHpmeGpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MDgyNzEsImV4cCI6MjA5OTE4NDI3MX0.1m1IfBeSDOy7vODufezJ2p0_RhL2iaFMSRrxZN2SCds',
+    },
   },
 ];
 
