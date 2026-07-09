@@ -8,14 +8,18 @@ export function Home() {
 
   return (
     <>
-      <header className="site-header">
+      <header className="site-header home">
+        <a
+          className="badge home-link"
+          href="https://dexware.app"
+          target="_blank"
+          rel="noreferrer"
+        >
+          dexware.app ↗
+        </a>
         <div className="brand">
           dex<span>ware</span> Dashboard
         </div>
-        <div className="spacer" />
-        <a className="badge" href="https://dexware.app" target="_blank" rel="noreferrer">
-          dexware.app ↗
-        </a>
       </header>
 
       <main className="page">
