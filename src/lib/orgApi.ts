@@ -89,6 +89,25 @@ export async function fetchMembers(sb: SupabaseClient): Promise<Member[]> {
   return (data ?? []) as Member[];
 }
 
+/** Owner: Mitglied aus dem Betrieb entfernen (RPC wie die App, remove_member). */
+export async function removeMember(
+  sb: SupabaseClient,
+  membershipId: string,
+): Promise<void> {
+  const { error } = await sb.rpc('remove_member', { p_membership: membershipId });
+  if (error) fail('Mitglied konnte nicht entfernt werden', error);
+}
+
+/** Betriebsdaten ändern — Name + Land, wie app-seitiges saveSettings. */
+export async function updateOrg(
+  sb: SupabaseClient,
+  orgId: string,
+  input: { name: string; land: Org['land'] },
+): Promise<void> {
+  const { error } = await sb.from('org').update(input).eq('id', orgId);
+  if (error) fail('Betrieb konnte nicht gespeichert werden', error);
+}
+
 /** Owner: 7 Tage gültigen Beitrittscode erzeugen (Präfix je App, z. B. WD-/SD-/RD-). */
 export async function createInvite(sb: SupabaseClient): Promise<string> {
   const { data, error } = await sb.rpc('create_invite');

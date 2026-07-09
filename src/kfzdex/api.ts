@@ -113,6 +113,12 @@ export async function updateVehicle(
   if (error) fail('Fahrzeug konnte nicht gespeichert werden', error);
 }
 
+/** Fahrzeug löschen — wie die App; UVV-Prüfungen hängen per FK-Cascade dran. */
+export async function deleteVehicle(sb: SupabaseClient, id: string): Promise<void> {
+  const { error } = await sb.from('vehicle').delete().eq('id', id);
+  if (error) fail('Fahrzeug konnte nicht gelöscht werden', error);
+}
+
 export interface DriverInput {
   name: string;
   license_classes: string | null;
@@ -140,6 +146,12 @@ export async function updateDriver(
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) fail('Fahrer konnte nicht gespeichert werden', error);
+}
+
+/** Fahrer löschen — wie die App; Führerscheinkontrollen hängen per FK-Cascade dran. */
+export async function deleteDriver(sb: SupabaseClient, id: string): Promise<void> {
+  const { error } = await sb.from('driver').delete().eq('id', id);
+  if (error) fail('Fahrer konnte nicht gelöscht werden', error);
 }
 
 /** UVV-Prüfung erfassen + letzte UVV am Fahrzeug fortschreiben (wie die App). */

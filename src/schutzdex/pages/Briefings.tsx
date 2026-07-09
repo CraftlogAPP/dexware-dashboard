@@ -1,7 +1,12 @@
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate } from '../../lib/format';
-import { fetchAssignments, fetchBriefings } from '../api';
+import {
+  countBriefingCompletions,
+  deleteBriefing,
+  fetchAssignments,
+  fetchBriefings,
+} from '../api';
 import type { Assignment, Briefing } from '../types';
 
 interface Data {
@@ -19,6 +24,26 @@ export function Briefings() {
     ]);
     return { briefings, assignments };
   }, [client]);
+
+  async function onDelete(b: Briefing) {
+    try {
+      const n = await countBriefingCompletions(client, b.id);
+      const note =
+        n > 0
+          ? `${n} ${n === 1 ? 'Nachweis verweist' : 'Nachweise verweisen'} darauf — sie bleiben erhalten, verlieren aber den Bezug. `
+          : '';
+      if (
+        !window.confirm(
+          `Unterweisung „${b.titel}" wirklich löschen? ${note}Zugehörige Zuweisungen werden mitgelöscht.`,
+        )
+      )
+        return;
+      await deleteBriefing(client, b.id);
+      state.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   return (
     <>
@@ -44,6 +69,7 @@ export function Briefings() {
                     <th>Quelle</th>
                     <th>Zuweisungen</th>
                     <th>Erstellt</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -80,6 +106,11 @@ export function Briefings() {
                           )}
                         </td>
                         <td className="muted">{fmtDate(b.created_at)}</td>
+                        <td>
+                          <button className="btn ghost small" onClick={() => onDelete(b)}>
+                            Löschen
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}

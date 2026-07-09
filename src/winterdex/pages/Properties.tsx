@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
-import { useOrg } from '../../components/OrgContext';
 import {
   fetchOperationMeta,
   fetchProperties,
-  saveProperty,
   type OpMeta,
 } from '../api';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
-import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
 import { lastOpByProperty } from '../labels';
+import { PropertyDialog } from '../dialogs';
 import type { DutyTimes, Property } from '../types';
 
 interface Data {
@@ -21,7 +19,6 @@ interface Data {
 
 export function Properties() {
   const { client } = useAppAuth();
-  const { data: org } = useOrg();
   const [editing, setEditing] = useState<Property | 'new' | null>(null);
 
   const state = useAsync<Data>(async () => {
@@ -31,26 +28,6 @@ export function Properties() {
     ]);
     return { properties, lastByProp: lastOpByProperty(meta) };
   }, [client]);
-
-  async function onSave(v: FormValues) {
-    if (!org) throw new Error('Kein Betrieb geladen');
-    await saveProperty(
-      client,
-      org.org.id,
-      {
-        name: s(v.name),
-        address: s(v.address),
-        customer_name: orNull(v.customer_name),
-        customer_contact: orNull(v.customer_contact),
-        areas: orNull(v.areas),
-        duty_times: { mo_fr: s(v.duty_mo_fr), sa: s(v.duty_sa), so: s(v.duty_so) },
-        notes: orNull(v.notes),
-        active: v.active === true,
-      },
-      editing === 'new' ? undefined : (editing ?? undefined),
-    );
-    state.reload();
-  }
 
   return (
     <>
@@ -117,38 +94,13 @@ export function Properties() {
       </LoadGuard>
 
       {editing && (
-        <FormDialog
-          title={editing === 'new' ? 'Objekt anlegen' : `${editing.name} bearbeiten`}
+        <PropertyDialog
+          property={editing}
           onClose={() => setEditing(null)}
-          onSave={onSave}
-          fields={[
-            { key: 'name', label: 'Name', required: true },
-            { key: 'address', label: 'Adresse', required: true },
-            { key: 'customer_name', label: 'Auftraggeber' },
-            { key: 'customer_contact', label: 'Auftraggeber-Kontakt' },
-            { key: 'areas', label: 'Flächen', hint: 'z. B. Gehweg, Parkplatz, Zufahrt' },
-            { key: 'duty_mo_fr', label: 'Pflichtzeiten Mo–Fr', placeholder: 'z. B. 6–22 Uhr' },
-            { key: 'duty_sa', label: 'Pflichtzeiten Samstag', placeholder: 'z. B. 7–22 Uhr' },
-            { key: 'duty_so', label: 'Pflichtzeiten Sonn-/Feiertag', placeholder: 'z. B. 8–22 Uhr' },
-            { key: 'notes', label: 'Notizen', kind: 'textarea' },
-            { key: 'active', label: 'Aktiv (wird im Winterdienst berücksichtigt)', kind: 'checkbox' },
-          ]}
-          initial={
-            editing === 'new'
-              ? { active: true }
-              : {
-                  name: editing.name,
-                  address: editing.address,
-                  customer_name: editing.customer_name ?? '',
-                  customer_contact: editing.customer_contact ?? '',
-                  areas: editing.areas ?? '',
-                  duty_mo_fr: editing.duty_times?.mo_fr ?? '',
-                  duty_sa: editing.duty_times?.sa ?? '',
-                  duty_so: editing.duty_times?.so ?? '',
-                  notes: editing.notes ?? '',
-                  active: editing.active,
-                }
-          }
+          onSaved={() => {
+            setEditing(null);
+            state.reload();
+          }}
         />
       )}
     </>

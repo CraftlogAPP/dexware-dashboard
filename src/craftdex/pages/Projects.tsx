@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { FormDialog, num, orNull, s, type FormValues } from '../../components/form';
-import { fmtDate, fmtNum, parseLocalDate, toInputDate } from '../../lib/format';
-import { fetchProjectSummaries, insertProject, updateProjectHead } from '../api';
+import { fmtDate, fmtNum } from '../../lib/format';
+import { fetchProject, fetchProjectSummaries, softDeleteProject } from '../api';
+import { ProjectDialog, type ProjectHead } from '../dialogs';
 import { ProjectStatusBadge } from '../badges';
 import {
   CATEGORY_LABELS,
@@ -19,29 +19,47 @@ export function Projects() {
   const { client, session } = useAppAuth();
   const [status, setStatus] = useState<'' | ProjectStatus>('');
   const [category, setCategory] = useState('');
-  const [editing, setEditing] = useState<ProjectSummary | 'new' | null>(null);
+  const [editing, setEditing] = useState<ProjectHead | 'new' | null>(null);
 
   const state = useAsync<ProjectSummary[]>(
     () => fetchProjectSummaries(client),
     [client],
   );
 
-  async function onSave(v: FormValues) {
-    if (!session) throw new Error('Nicht angemeldet');
-    const deadline = orNull(v.deadline);
-    const input = {
-      title: s(v.title),
-      category: s(v.category),
-      status: s(v.status) as ProjectStatus,
-      description: orNull(v.description) ?? undefined,
-      estimatedHours: num(v.estimatedHours),
-      budget: num(v.budget),
-      customerName: orNull(v.customerName) ?? undefined,
-      deadlineMs: deadline ? parseLocalDate(deadline).getTime() : null,
-    };
-    if (editing === 'new') await insertProject(client, session.user.id, input);
-    else if (editing) await updateProjectHead(client, editing.id, input);
-    state.reload();
+  async function onEdit(p: ProjectSummary) {
+    // Die Listen-Zeile lädt die Beschreibung nicht mit — für den Dialog den
+    // vollen Blob holen, sonst würde die Beschreibung leer überschrieben.
+    try {
+      const full = await fetchProject(client, p.id);
+      setEditing({
+        id: p.id,
+        title: full?.title ?? p.title ?? '',
+        category: full?.category ?? p.category,
+        status: full?.status ?? p.status,
+        customerName: full?.customer?.name ?? p.customer_name,
+        estimatedHours: full?.estimatedHours ?? p.estimated_hours,
+        budget: full?.budget ?? p.budget,
+        deadlineMs: full?.deadline?.date ?? p.deadline_ms,
+        description: full?.description ?? null,
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function onDelete(p: ProjectSummary) {
+    if (
+      !window.confirm(
+        `Auftrag „${p.title ?? 'ohne Titel'}" wirklich löschen? Der Auftrag wird auch in der App gelöscht.`,
+      )
+    )
+      return;
+    try {
+      await softDeleteProject(client, p.id);
+      state.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
   }
 
   return (
@@ -140,9 +158,14 @@ export function Projects() {
                             : '—'}
                         </td>
                         <td>
-                          <button className="btn ghost small" onClick={() => setEditing(p)}>
-                            Bearbeiten
-                          </button>
+                          <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                            <button className="btn ghost small" onClick={() => void onEdit(p)}>
+                              Bearbeiten
+                            </button>
+                            <button className="btn ghost small" onClick={() => onDelete(p)}>
+                              Löschen
+                            </button>
+                          </span>
                         </td>
                       </tr>
                     ))}
@@ -155,59 +178,15 @@ export function Projects() {
       </LoadGuard>
 
       {editing && (
-        <FormDialog
-          title={
-            editing === 'new'
-              ? 'Auftrag anlegen'
-              : `${editing.title ?? 'Auftrag'} bearbeiten`
-          }
+        <ProjectDialog
+          client={client}
+          userId={session?.user.id}
+          editing={editing}
           onClose={() => setEditing(null)}
-          onSave={onSave}
-          fields={[
-            { key: 'title', label: 'Auftrag', required: true },
-            {
-              key: 'category',
-              label: 'Kategorie',
-              kind: 'select',
-              required: true,
-              options: Object.entries(CATEGORY_LABELS).map(([id, label]) => ({
-                value: id,
-                label,
-              })),
-            },
-            {
-              key: 'status',
-              label: 'Status',
-              kind: 'select',
-              required: true,
-              options: (Object.keys(STATUS_LABELS) as ProjectStatus[]).map((st) => ({
-                value: st,
-                label: STATUS_LABELS[st],
-              })),
-            },
-            { key: 'customerName', label: 'Kunde' },
-            { key: 'estimatedHours', label: 'Geschätzte Stunden', kind: 'number' },
-            { key: 'budget', label: 'Budget (€)', kind: 'number' },
-            { key: 'deadline', label: 'Termin', kind: 'date' },
-            { key: 'description', label: 'Beschreibung', kind: 'textarea' },
-          ]}
-          initial={
-            editing === 'new'
-              ? { category: 'handwerk', status: 'quote' }
-              : {
-                  title: editing.title ?? '',
-                  category: editing.category ?? 'handwerk',
-                  status: editing.status ?? 'quote',
-                  customerName: editing.customer_name ?? '',
-                  estimatedHours:
-                    editing.estimated_hours != null ? String(editing.estimated_hours) : '',
-                  budget: editing.budget != null ? String(editing.budget) : '',
-                  deadline:
-                    editing.deadline_ms != null
-                      ? toInputDate(new Date(editing.deadline_ms))
-                      : '',
-                }
-          }
+          onSaved={() => {
+            setEditing(null);
+            state.reload();
+          }}
         />
       )}
     </>

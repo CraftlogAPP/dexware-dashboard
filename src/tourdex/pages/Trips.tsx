@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { FormDialog, s, type FormValues } from '../../components/form';
 import { fmtDate, fmtNum, fmtTime } from '../../lib/format';
-import { fetchTripSummaries, fetchVehicles, updateTrip } from '../api';
+import { deleteTrip, fetchTripSummaries, fetchVehicles } from '../api';
+import { TripDialog, type TripFormInitial } from '../dialogs';
 import { CategoryBadge, ConfirmedBadge } from '../badges';
 import {
   CATEGORY_LABELS,
@@ -13,12 +13,29 @@ import {
   type Vehicle,
 } from '../types';
 
+/** TripSummary → Vorbelegung für den Fahrt-Dialog. */
+function toInitial(t: TripSummary): TripFormInitial {
+  return {
+    id: t.id,
+    vehicleId: t.vehicle_id ?? '',
+    startAddress: t.start_address ?? '',
+    endAddress: t.end_address ?? '',
+    startTime: t.start_time ?? '',
+    endTime: t.end_time ?? '',
+    distanceKm: t.distance_km,
+    category: t.category ?? 'business',
+    purpose: t.purpose ?? '',
+    confirmed: t.confirmed === true,
+  };
+}
+
 export function Trips() {
-  const { client } = useAppAuth();
+  const { client, session } = useAppAuth();
   const [category, setCategory] = useState<'' | TripCategory>('');
   const [vehicleId, setVehicleId] = useState('');
   const [status, setStatus] = useState<'' | 'confirmed' | 'unconfirmed'>('');
-  const [editing, setEditing] = useState<TripSummary | null>(null);
+  const [dialog, setDialog] = useState<TripSummary | 'new' | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const state = useAsync<{ trips: TripSummary[]; vehicles: Vehicle[] }>(
     async () => {
@@ -31,23 +48,39 @@ export function Trips() {
     [client],
   );
 
-  async function onSave(v: FormValues) {
-    if (!editing) throw new Error('Keine Fahrt gewählt');
-    const purpose = s(v.purpose);
-    await updateTrip(client, editing.id, {
-      category: s(v.category) as TripCategory,
-      purpose: purpose || undefined,
-      confirmed: v.confirmed === true,
-    });
-    state.reload();
+  async function onDelete(t: TripSummary) {
+    if (!session) return;
+    if (
+      !window.confirm(
+        `Fahrt vom ${fmtDate(t.start_time)} wirklich löschen? Sie wird beim nächsten Sync auch aus der App entfernt.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteTrip(client, session.user.id, t.id);
+      state.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
     <>
-      <h1>Fahrten</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Fahrten</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setDialog('new')}>
+          ＋ Fahrt nachtragen
+        </button>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Alle erfassten Fahrten mit Strecke, Kategorie und Status — hier
-        klassifizieren und bestätigen, erfasst wird in der App.
+        klassifizieren, bestätigen, nachtragen und bearbeiten. Automatisch
+        erfasst wird in der App.
       </p>
 
       <LoadGuard state={state}>
@@ -162,12 +195,21 @@ export function Trips() {
                               <ConfirmedBadge confirmed={t.confirmed} />
                             </td>
                             <td>
-                              <button
-                                className="btn ghost small"
-                                onClick={() => setEditing(t)}
-                              >
-                                Bearbeiten
-                              </button>
+                              <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                                <button
+                                  className="btn ghost small"
+                                  onClick={() => setDialog(t)}
+                                >
+                                  Bearbeiten
+                                </button>
+                                <button
+                                  className="btn ghost small"
+                                  disabled={deleting}
+                                  onClick={() => onDelete(t)}
+                                >
+                                  Löschen
+                                </button>
+                              </span>
                             </td>
                           </tr>
                         ))}
@@ -181,33 +223,16 @@ export function Trips() {
         }}
       </LoadGuard>
 
-      {editing && (
-        <FormDialog
-          title={`Fahrt bearbeiten — ${fmtDate(editing.start_time)}, ${fmtTime(editing.start_time)}`}
-          onClose={() => setEditing(null)}
-          onSave={onSave}
-          fields={[
-            {
-              key: 'category',
-              label: 'Kategorie',
-              kind: 'select',
-              required: true,
-              options: (Object.keys(CATEGORY_LABELS) as TripCategory[]).map((c) => ({
-                value: c,
-                label: CATEGORY_LABELS[c],
-              })),
-            },
-            { key: 'purpose', label: 'Zweck', placeholder: 'z. B. Kundentermin Fa. Muster' },
-            {
-              key: 'confirmed',
-              label: 'Bestätigt (fürs Fahrtenbuch freigegeben)',
-              kind: 'checkbox',
-            },
-          ]}
-          initial={{
-            category: editing.category ?? 'business',
-            purpose: editing.purpose ?? '',
-            confirmed: editing.confirmed === true,
+      {dialog && session && state.data && (
+        <TripDialog
+          client={client}
+          userId={session.user.id}
+          vehicles={state.data.vehicles}
+          existing={dialog === 'new' ? null : toInitial(dialog)}
+          onClose={() => setDialog(null)}
+          onSaved={() => {
+            setDialog(null);
+            state.reload();
           }}
         />
       )}

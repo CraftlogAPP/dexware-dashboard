@@ -1,6 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fail } from '../lib/orgApi';
-import type { ProjectData, ProjectStatus, ProjectSummary } from './types';
+import type {
+  MaterialCost,
+  ProjectData,
+  ProjectStatus,
+  ProjectSummary,
+} from './types';
+
+// ID-Schema exakt wie die App (ProjectsContext.tsx uid()).
+function uid(prefix = ''): string {
+  return prefix + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
 
 // Listen-Select: NUR skalare Felder aus dem data-jsonb — der volle Blob
 // enthält Base64-Fotos (photoBase64 am Projekt und an jedem Schritt).
@@ -47,10 +57,14 @@ export interface ProjectHeadInput {
   deadlineMs: number | null;
 }
 
-export async function updateProjectHead(
+// Gemeinsamer Read-Modify-Write auf dem data-Blob: lädt das Projekt, wendet fn
+// auf den Blob an und setzt data.updatedAt (epoch ms) + updated_at (ISO) hoch,
+// damit der App-Merge ("neueste Änderung gewinnt") die Dashboard-Änderung
+// übernimmt. Schritte/Material/Kosten/Fotos außerhalb von fn bleiben erhalten.
+async function mutateProject(
   sb: SupabaseClient,
   id: string,
-  input: ProjectHeadInput,
+  fn: (prev: ProjectData) => ProjectData,
 ): Promise<void> {
   const { data, error } = await sb
     .from('projects')
@@ -59,8 +73,20 @@ export async function updateProjectHead(
     .single();
   if (error) fail('Auftrag konnte nicht geladen werden', error);
   const now = Date.now();
-  const prev = data!.data as ProjectData;
-  const merged: ProjectData = {
+  const merged: ProjectData = { ...fn(data!.data as ProjectData), updatedAt: now };
+  const { error: upError } = await sb
+    .from('projects')
+    .update({ data: merged, updated_at: new Date(now).toISOString() })
+    .eq('id', id);
+  if (upError) fail('Auftrag konnte nicht gespeichert werden', upError);
+}
+
+export async function updateProjectHead(
+  sb: SupabaseClient,
+  id: string,
+  input: ProjectHeadInput,
+): Promise<void> {
+  await mutateProject(sb, id, (prev) => ({
     ...prev,
     title: input.title,
     category: input.category,
@@ -72,13 +98,111 @@ export async function updateProjectHead(
     customer: input.customerName
       ? { ...prev.customer, name: input.customerName }
       : prev.customer,
-    updatedAt: now,
-  };
-  const { error: upError } = await sb
+  }));
+}
+
+// ── Blob-Mutationen (Schritte/Material/Kosten/Stunden) — Format wie App ──
+// Feld-Shapes exakt wie ProjectsContext.tsx: Schritt {id,title,done},
+// Material {id,name,amount?,done}, Kosten {id,name,price}.
+
+export async function addStep(
+  sb: SupabaseClient,
+  projectId: string,
+  title: string,
+): Promise<void> {
+  await mutateProject(sb, projectId, (p) => ({
+    ...p,
+    steps: [...(p.steps ?? []), { id: uid('s_'), title: title.trim(), done: false }],
+  }));
+}
+
+export async function toggleStep(
+  sb: SupabaseClient,
+  projectId: string,
+  stepId: string,
+  done: boolean,
+): Promise<void> {
+  await mutateProject(sb, projectId, (p) => ({
+    ...p,
+    steps: (p.steps ?? []).map((s) => (s.id === stepId ? { ...s, done } : s)),
+  }));
+}
+
+export async function addMaterial(
+  sb: SupabaseClient,
+  projectId: string,
+  name: string,
+  amount?: string,
+): Promise<void> {
+  await mutateProject(sb, projectId, (p) => ({
+    ...p,
+    materials: [
+      ...(p.materials ?? []),
+      { id: uid('m_'), name: name.trim(), amount: amount?.trim() || undefined, done: false },
+    ],
+  }));
+}
+
+export async function toggleMaterial(
+  sb: SupabaseClient,
+  projectId: string,
+  materialId: string,
+  done: boolean,
+): Promise<void> {
+  await mutateProject(sb, projectId, (p) => ({
+    ...p,
+    materials: (p.materials ?? []).map((m) =>
+      m.id === materialId ? { ...m, done } : m,
+    ),
+  }));
+}
+
+export async function addCost(
+  sb: SupabaseClient,
+  projectId: string,
+  name: string,
+  price: number,
+): Promise<void> {
+  await mutateProject(sb, projectId, (p) => ({
+    ...p,
+    costs: [...(p.costs ?? []), { id: uid('c_'), name: name.trim(), price } as MaterialCost],
+  }));
+}
+
+export async function removeCost(
+  sb: SupabaseClient,
+  projectId: string,
+  costId: string,
+): Promise<void> {
+  await mutateProject(sb, projectId, (p) => ({
+    ...p,
+    costs: (p.costs ?? []).filter((c) => c.id !== costId),
+  }));
+}
+
+/** Erfasste Stunden absolut setzen — auf 0,5 gerundet, ≥0 (wie App logHours). */
+export async function setLoggedHours(
+  sb: SupabaseClient,
+  projectId: string,
+  hours: number,
+): Promise<void> {
+  const rounded = Math.max(0, Math.round(hours * 2) / 2);
+  await mutateProject(sb, projectId, (p) => ({ ...p, loggedHours: rounded }));
+}
+
+/**
+ * Auftrag soft-löschen — deleted=true + updated_at, data bleibt erhalten
+ * (wie sync.ts softDeleteProjects). Die Cloud-Löschung gewinnt beim App-Merge.
+ */
+export async function softDeleteProject(
+  sb: SupabaseClient,
+  projectId: string,
+): Promise<void> {
+  const { error } = await sb
     .from('projects')
-    .update({ data: merged, updated_at: new Date(now).toISOString() })
-    .eq('id', id);
-  if (upError) fail('Auftrag konnte nicht gespeichert werden', upError);
+    .update({ deleted: true, updated_at: new Date().toISOString() })
+    .eq('id', projectId);
+  if (error) fail('Auftrag konnte nicht gelöscht werden', error);
 }
 
 /** Neuen Auftrag anlegen — minimaler Blob, die App normalisiert defensiv. */

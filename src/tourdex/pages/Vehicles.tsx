@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { FormDialog, orNull, s, type FormValues } from '../../components/form';
+import { FormDialog, num, orNull, s, type FormValues } from '../../components/form';
 import { fmtDate, fmtNum } from '../../lib/format';
 import {
   fetchTripSummaries,
@@ -43,6 +43,7 @@ export function Vehicles() {
         model: orNull(v.model) ?? undefined,
         licensePlate: orNull(v.licensePlate) ?? undefined,
         type: s(v.type) as VehicleType,
+        initialOdometerKm: num(v.initialOdometerKm) ?? undefined,
       },
       editing === 'new' ? undefined : (editing ?? undefined),
     );
@@ -173,6 +174,12 @@ export function Vehicles() {
             { key: 'licensePlate', label: 'Kennzeichen' },
             { key: 'make', label: 'Marke' },
             { key: 'model', label: 'Modell' },
+            {
+              key: 'initialOdometerKm',
+              label: 'km-Stand initial',
+              kind: 'number',
+              hint: 'Kilometerstand beim Anlegen des Fahrzeugs (optional)',
+            },
           ]}
           initial={
             editing === 'new'
@@ -183,6 +190,10 @@ export function Vehicles() {
                   licensePlate: editing.licensePlate ?? '',
                   make: editing.make ?? '',
                   model: editing.model ?? '',
+                  initialOdometerKm:
+                    editing.initialOdometerKm != null
+                      ? String(editing.initialOdometerKm)
+                      : '',
                 }
           }
         />

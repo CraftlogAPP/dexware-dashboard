@@ -60,6 +60,40 @@ export async function updateMember(
   if (error) fail('Mitarbeiter konnte nicht gespeichert werden', error);
 }
 
+/**
+ * Mitarbeiter löschen — wie die App (deleteMember). Bestehende Nachweise bleiben
+ * erhalten (completion.member_id ist FK „on delete set null", signed_name bleibt);
+ * offene Zuweisungen werden per Cascade (assignment.member_id) mitgelöscht.
+ */
+export async function deleteMember(sb: SupabaseClient, id: string): Promise<void> {
+  const { error } = await sb.from('member').delete().eq('id', id);
+  if (error) fail('Mitarbeiter konnte nicht gelöscht werden', error);
+}
+
+/** Anzahl der Nachweise, die auf diese Unterweisung verweisen — für die
+ * Lösch-Warnung (wie die App, countBriefingCompletions). */
+export async function countBriefingCompletions(
+  sb: SupabaseClient,
+  briefingId: string,
+): Promise<number> {
+  const { count, error } = await sb
+    .from('completion')
+    .select('id', { count: 'exact', head: true })
+    .eq('briefing_id', briefingId);
+  if (error) fail('Anzahl der Nachweise konnte nicht ermittelt werden', error);
+  return count ?? 0;
+}
+
+/**
+ * Unterweisung löschen — wie die App (deleteBriefing). Bestehende Nachweise
+ * bleiben erhalten (completion.briefing_id ist FK „on delete set null");
+ * Zuweisungen werden per Cascade (assignment.briefing_id) mitgelöscht.
+ */
+export async function deleteBriefing(sb: SupabaseClient, id: string): Promise<void> {
+  const { error } = await sb.from('briefing').delete().eq('id', id);
+  if (error) fail('Unterweisung konnte nicht gelöscht werden', error);
+}
+
 export interface AssignmentInput {
   briefing_id: string;
   member_id: string;

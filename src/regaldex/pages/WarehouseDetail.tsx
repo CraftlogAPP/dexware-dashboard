@@ -14,6 +14,7 @@ import {
 } from '../api';
 import { DamageStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, loadLabel, rackNameMap } from '../labels';
+import { WarehouseDialog } from '../dialogs';
 import type { Damage, Inspection, Rack, Warehouse } from '../types';
 
 interface Data {
@@ -28,6 +29,7 @@ export function WarehouseDetail() {
   const { client } = useAppAuth();
   const { data: org } = useOrg();
   const [editingRack, setEditingRack] = useState<Rack | 'new' | null>(null);
+  const [editingWh, setEditingWh] = useState(false);
 
   const state = useAsync<Data>(async () => {
     const [warehouse, racks, inspections, damages] = await Promise.all([
@@ -74,10 +76,26 @@ export function WarehouseDetail() {
               <Link to="../lager">← Alle Lager</Link>
             </p>
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h1 style={{ marginBottom: 0 }}>{warehouse.name}</h1>
+              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <h1 style={{ marginBottom: 0 }}>{warehouse.name}</h1>
+                <button className="btn ghost small" onClick={() => setEditingWh(true)}>
+                  Lager bearbeiten
+                </button>
+              </div>
               <StatusBadge active={warehouse.active} />
             </div>
             <p className="muted">{warehouse.address}</p>
+
+            {editingWh && (
+              <WarehouseDialog
+                warehouse={warehouse}
+                onClose={() => setEditingWh(false)}
+                onSaved={() => {
+                  setEditingWh(false);
+                  state.reload();
+                }}
+              />
+            )}
 
             <div className="kpi-grid">
               <div className="card">

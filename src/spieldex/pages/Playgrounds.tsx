@@ -1,18 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
-import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
-import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
 import {
   fetchDefects,
   fetchInspectionMeta,
   fetchPlaygrounds,
-  savePlayground,
   type InspMeta,
 } from '../api';
 import { lastInspectionByPlayground } from '../labels';
+import { PlaygroundDialog } from '../dialogs';
 import type { Defect, Playground } from '../types';
 
 interface Data {
@@ -23,7 +21,6 @@ interface Data {
 
 export function Playgrounds() {
   const { client } = useAppAuth();
-  const { data: org } = useOrg();
   const [editing, setEditing] = useState<Playground | 'new' | null>(null);
 
   const state = useAsync<Data>(async () => {
@@ -34,24 +31,6 @@ export function Playgrounds() {
     ]);
     return { playgrounds, lastByPg: lastInspectionByPlayground(meta), openDefects };
   }, [client]);
-
-  async function onSave(v: FormValues) {
-    if (!org) throw new Error('Kein Betrieb geladen');
-    await savePlayground(
-      client,
-      org.org.id,
-      {
-        name: s(v.name),
-        address: s(v.address),
-        operator_name: orNull(v.operator_name),
-        operator_contact: orNull(v.operator_contact),
-        notes: orNull(v.notes),
-        active: v.active === true,
-      },
-      editing === 'new' ? undefined : (editing ?? undefined),
-    );
-    state.reload();
-  }
 
   return (
     <>
@@ -126,30 +105,13 @@ export function Playgrounds() {
       </LoadGuard>
 
       {editing && (
-        <FormDialog
-          title={editing === 'new' ? 'Spielplatz anlegen' : `${editing.name} bearbeiten`}
+        <PlaygroundDialog
+          playground={editing}
           onClose={() => setEditing(null)}
-          onSave={onSave}
-          fields={[
-            { key: 'name', label: 'Name', required: true },
-            { key: 'address', label: 'Adresse', required: true },
-            { key: 'operator_name', label: 'Betreiber' },
-            { key: 'operator_contact', label: 'Betreiber-Kontakt' },
-            { key: 'notes', label: 'Notizen', kind: 'textarea' },
-            { key: 'active', label: 'Aktiv (wird kontrolliert)', kind: 'checkbox' },
-          ]}
-          initial={
-            editing === 'new'
-              ? { active: true }
-              : {
-                  name: editing.name,
-                  address: editing.address,
-                  operator_name: editing.operator_name ?? '',
-                  operator_contact: editing.operator_contact ?? '',
-                  notes: editing.notes ?? '',
-                  active: editing.active,
-                }
-          }
+          onSaved={() => {
+            setEditing(null);
+            state.reload();
+          }}
         />
       )}
     </>

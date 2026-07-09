@@ -4,7 +4,12 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { FormDialog, s, type FormValues } from '../../components/form';
 import { fmtDate } from '../../lib/format';
-import { fetchDocumentSummaries, fetchProjects, saveProject } from '../api';
+import {
+  deleteProject,
+  fetchDocumentSummaries,
+  fetchProjects,
+  saveProject,
+} from '../api';
 import type { DocumentSummary, Project } from '../types';
 
 export function Projects() {
@@ -31,6 +36,22 @@ export function Projects() {
       editing === 'new' ? undefined : (editing ?? undefined),
     );
     state.reload();
+  }
+
+  async function onDelete(p: Project, memberDocs: DocumentSummary[]) {
+    if (!session) return;
+    if (
+      !window.confirm(
+        `Projekt „${p.name}" wirklich löschen? Die zugeordneten Dokumente bleiben erhalten, verlieren aber die Projekt-Zuordnung.`,
+      )
+    )
+      return;
+    try {
+      await deleteProject(client, session.user.id, p, memberDocs);
+      state.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
   }
 
   return (
@@ -66,7 +87,8 @@ export function Projects() {
                   </thead>
                   <tbody>
                     {projects.map((p) => {
-                      const count = docs.filter((d) => d.project_id === p.id).length;
+                      const memberDocs = docs.filter((d) => d.project_id === p.id);
+                      const count = memberDocs.length;
                       return (
                         <tr key={p.id}>
                           <td>{p.name}</td>
@@ -79,12 +101,20 @@ export function Projects() {
                           </td>
                           <td className="muted">{fmtDate(p.createdAt)}</td>
                           <td>
-                            <button
-                              className="btn ghost small"
-                              onClick={() => setEditing(p)}
-                            >
-                              Umbenennen
-                            </button>
+                            <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                              <button
+                                className="btn ghost small"
+                                onClick={() => setEditing(p)}
+                              >
+                                Umbenennen
+                              </button>
+                              <button
+                                className="btn ghost small"
+                                onClick={() => onDelete(p, memberDocs)}
+                              >
+                                Löschen
+                              </button>
+                            </span>
                           </td>
                         </tr>
                       );

@@ -1,8 +1,11 @@
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate } from '../../lib/format';
-import { fetchDevice, fetchInspectionWithPhotos } from '../api';
+import { deleteInspection, fetchDevice, fetchInspectionWithPhotos } from '../api';
+import { InspectionDialog } from '../dialogs';
 import { ResultBadge } from '../badges';
 import { evaluateMeasurement, skLabel, type MeasureEval } from '../labels';
 import {
@@ -27,12 +30,32 @@ const EVAL_BADGE: Record<MeasureEval, { className: string; label: string } | nul
 export function InspectionDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
+  const { data: org } = useOrg();
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
 
   const state = useAsync<Data>(async () => {
     const inspection = await fetchInspectionWithPhotos(client, id!);
     const device = await fetchDevice(client, inspection.device_id);
     return { inspection, device };
   }, [client, id]);
+
+  async function onDelete(i: InspectionWithPhotos) {
+    if (
+      !window.confirm(
+        `Prüfung vom ${fmtDate(i.inspected_at)} wirklich löschen? Die Prüffrist des Geräts wird aus der neuesten verbleibenden Prüfung neu berechnet.`,
+      )
+    )
+      return;
+    try {
+      const warning = await deleteInspection(client, i.id, i.device_id);
+      if (warning) alert(warning);
+      // Datensatz ist weg — zurück zur Prüfungsliste.
+      navigate('../pruefungen');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   return (
     <LoadGuard state={state}>
@@ -64,6 +87,29 @@ export function InspectionDetail() {
                   }`
                 : ''}
             </p>
+
+            <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+              <button className="btn ghost small" onClick={() => setEditing(true)}>
+                Bearbeiten
+              </button>
+              <button className="btn ghost small" onClick={() => onDelete(i)}>
+                Löschen
+              </button>
+            </div>
+
+            {editing && org && (
+              <InspectionDialog
+                client={client}
+                orgId={org.org.id}
+                devices={device ? [device] : []}
+                inspection={i}
+                onClose={() => setEditing(false)}
+                onSaved={(warning) => {
+                  state.reload();
+                  if (warning) alert(warning);
+                }}
+              />
+            )}
 
             <div className="kpi-grid">
               <div className="card">

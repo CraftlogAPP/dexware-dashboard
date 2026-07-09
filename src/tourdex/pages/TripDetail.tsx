@@ -1,14 +1,35 @@
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, fmtDateTime, fmtNum, gpsLabel } from '../../lib/format';
-import { fetchTrip, fetchVehicles } from '../api';
+import { deleteTrip, fetchTrip, fetchVehicles } from '../api';
+import { TripDialog, type TripFormInitial } from '../dialogs';
 import { CategoryBadge, ConfirmedBadge } from '../badges';
 import { CATEGORY_LABELS, type TripData, type Vehicle } from '../types';
 
+/** TripData → Vorbelegung für den Fahrt-Dialog. */
+function toInitial(t: TripData): TripFormInitial {
+  return {
+    id: t.id,
+    vehicleId: t.vehicleId,
+    startAddress: t.start.address ?? '',
+    endAddress: t.end.address ?? '',
+    startTime: t.startTime,
+    endTime: t.endTime,
+    distanceKm: t.distanceKm,
+    category: t.category,
+    purpose: t.purpose ?? '',
+    confirmed: t.confirmed,
+  };
+}
+
 export function TripDetail() {
   const { id } = useParams<{ id: string }>();
-  const { client } = useAppAuth();
+  const { client, session } = useAppAuth();
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const state = useAsync<{ trip: TripData | null; vehicles: Vehicle[] }>(
     async () => {
@@ -20,6 +41,25 @@ export function TripDetail() {
     },
     [client, id],
   );
+
+  async function onDelete(t: TripData) {
+    if (!session) return;
+    if (
+      !window.confirm(
+        'Diese Fahrt wirklich löschen? Sie wird beim nächsten Sync auch aus der App entfernt.',
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteTrip(client, session.user.id, t.id);
+      navigate('../fahrten');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+      setDeleting(false);
+    }
+  }
 
   return (
     <LoadGuard state={state}>
@@ -47,6 +87,19 @@ export function TripDetail() {
               {fmtDateTime(t.startTime)} – {fmtDateTime(t.endTime)}
               {t.manual ? ' · manuell erfasst' : ' · GPS-erfasst'}
             </p>
+
+            <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+              <button className="btn ghost small" onClick={() => setEditing(true)}>
+                Bearbeiten
+              </button>
+              <button
+                className="btn ghost small"
+                disabled={deleting}
+                onClick={() => onDelete(t)}
+              >
+                Löschen
+              </button>
+            </div>
 
             <div className="kpi-grid">
               <div className="card">
@@ -136,6 +189,20 @@ export function TripDetail() {
                   )}
                 </div>
               </div>
+            )}
+
+            {editing && session && (
+              <TripDialog
+                client={client}
+                userId={session.user.id}
+                vehicles={vehicles}
+                existing={toInitial(t)}
+                onClose={() => setEditing(false)}
+                onSaved={() => {
+                  setEditing(false);
+                  state.reload();
+                }}
+              />
             )}
           </>
         );
