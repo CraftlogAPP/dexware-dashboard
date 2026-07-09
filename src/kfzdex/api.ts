@@ -82,6 +82,105 @@ export async function fetchUvvInspections(
   return (data ?? []) as UvvInspection[];
 }
 
+// ── Schreiben (Format identisch zur Mobile-App, src/lib/queries.ts) ─────────
+
+export interface VehicleInput {
+  plate: string;
+  name: string | null;
+  type: Vehicle['type'];
+  first_registration: string | null;
+  last_uvv: string | null;
+}
+
+export async function insertVehicle(
+  sb: SupabaseClient,
+  orgId: string,
+  input: VehicleInput,
+): Promise<void> {
+  const { error } = await sb.from('vehicle').insert({ org_id: orgId, ...input });
+  if (error) fail('Fahrzeug konnte nicht angelegt werden', error);
+}
+
+export async function updateVehicle(
+  sb: SupabaseClient,
+  id: string,
+  input: VehicleInput,
+): Promise<void> {
+  const { error } = await sb
+    .from('vehicle')
+    .update({ ...input, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) fail('Fahrzeug konnte nicht gespeichert werden', error);
+}
+
+export interface DriverInput {
+  name: string;
+  license_classes: string | null;
+  check_interval_months: number;
+  last_check: string | null;
+  active: boolean;
+}
+
+export async function insertDriver(
+  sb: SupabaseClient,
+  orgId: string,
+  input: DriverInput,
+): Promise<void> {
+  const { error } = await sb.from('driver').insert({ org_id: orgId, ...input });
+  if (error) fail('Fahrer konnte nicht angelegt werden', error);
+}
+
+export async function updateDriver(
+  sb: SupabaseClient,
+  id: string,
+  input: DriverInput,
+): Promise<void> {
+  const { error } = await sb
+    .from('driver')
+    .update({ ...input, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) fail('Fahrer konnte nicht gespeichert werden', error);
+}
+
+/** UVV-Prüfung erfassen + letzte UVV am Fahrzeug fortschreiben (wie die App). */
+export async function addUvvInspection(
+  sb: SupabaseClient,
+  orgId: string,
+  input: {
+    vehicle_id: string;
+    date: string;
+    inspector: string;
+    result: UvvInspection['result'];
+    defects: string | null;
+    checklist: Record<string, boolean>;
+  },
+): Promise<void> {
+  const { error } = await sb.from('uvv_inspection').insert({ org_id: orgId, ...input });
+  if (error) fail('UVV-Prüfung konnte nicht gespeichert werden', error);
+  if (input.result === 'bestanden') {
+    await sb
+      .from('vehicle')
+      .update({ last_uvv: input.date, updated_at: new Date().toISOString() })
+      .eq('id', input.vehicle_id);
+  }
+}
+
+/** Führerscheinkontrolle erfassen + letzte Kontrolle am Fahrer fortschreiben. */
+export async function addLicenseCheck(
+  sb: SupabaseClient,
+  orgId: string,
+  input: { driver_id: string; date: string; checked_by: string },
+): Promise<void> {
+  const { error } = await sb
+    .from('license_check')
+    .insert({ org_id: orgId, ...input, photo_uri: null });
+  if (error) fail('Führerscheinkontrolle konnte nicht gespeichert werden', error);
+  await sb
+    .from('driver')
+    .update({ last_check: input.date, updated_at: new Date().toISOString() })
+    .eq('id', input.driver_id);
+}
+
 export async function fetchLicenseChecks(
   sb: SupabaseClient,
   filter: { driverId?: string; limit?: number } = {},

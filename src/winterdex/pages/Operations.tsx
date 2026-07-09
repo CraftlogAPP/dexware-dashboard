@@ -1,14 +1,25 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
-import { fetchOperations, fetchProperties } from '../api';
+import { useOrg } from '../../components/OrgContext';
+import { addOperation, fetchOperations, fetchProperties } from '../api';
 import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
+import {
+  FormDialog,
+  isoFromLocal,
+  localFromIso,
+  orNull,
+  s,
+  type FormValues,
+} from '../../components/form';
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
 import { gritLabel, propertyNameMap, weatherLabel } from '../labels';
-import type { Operation } from '../types';
+import { ACTION_LABELS, type Operation, type OperationAction } from '../types';
 
 export function Operations() {
-  const { client } = useAppAuth();
+  const { client, session } = useAppAuth();
+  const { data: org } = useOrg();
+  const [adding, setAdding] = useState(false);
   const [propertyId, setPropertyId] = useState('');
   const [from, setFrom] = useState(() => {
     const d = new Date();
@@ -30,13 +41,71 @@ export function Operations() {
     [client, propertyId, from, to],
   );
 
+  async function onAdd(v: FormValues) {
+    if (!org || !session) throw new Error('Kein Betrieb geladen');
+    const started = isoFromLocal(v.started_at);
+    if (!started) throw new Error('Bitte einen gültigen Zeitpunkt angeben');
+    await addOperation(client, org.org.id, session.user.id, {
+      property_id: s(v.property_id),
+      started_at: started,
+      ended_at: isoFromLocal(v.ended_at),
+      action: s(v.action) as OperationAction,
+      grit_material: orNull(v.grit_material),
+      grit_amount: orNull(v.grit_amount),
+      notes: orNull(v.notes),
+      performer_name: orNull(v.performer_name),
+    });
+    opsState.reload();
+  }
+
   return (
     <>
-      <h1>Einsätze</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Einsätze</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setAdding(true)}>
+          ＋ Einsatz nachtragen
+        </button>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Append-only-Protokoll — jeder Eintrag bleibt unveränderlich, Stornos sind
         gekennzeichnet.
       </p>
+
+      {adding && (
+        <FormDialog
+          title="Einsatz nachtragen"
+          submitLabel="Einsatz speichern"
+          onClose={() => setAdding(false)}
+          onSave={onAdd}
+          fields={[
+            {
+              key: 'property_id',
+              label: 'Objekt',
+              kind: 'select',
+              required: true,
+              options: (propsState.data ?? []).map((p) => ({ value: p.id, label: p.name })),
+            },
+            { key: 'started_at', label: 'Beginn', kind: 'datetime', required: true },
+            { key: 'ended_at', label: 'Ende', kind: 'datetime' },
+            {
+              key: 'action',
+              label: 'Maßnahme',
+              kind: 'select',
+              required: true,
+              options: (Object.keys(ACTION_LABELS) as OperationAction[]).map((a) => ({
+                value: a,
+                label: ACTION_LABELS[a],
+              })),
+            },
+            { key: 'grit_material', label: 'Streumittel', placeholder: 'z. B. Splitt, Salz' },
+            { key: 'grit_amount', label: 'Streumenge', placeholder: 'z. B. 20 kg' },
+            { key: 'performer_name', label: 'Durchgeführt von' },
+            { key: 'notes', label: 'Notizen', kind: 'textarea' },
+          ]}
+          initial={{ started_at: localFromIso(new Date().toISOString()) }}
+        />
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="row">

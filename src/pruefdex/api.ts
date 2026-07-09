@@ -49,6 +49,91 @@ export async function fetchDevices(
   return (data ?? []) as Device[];
 }
 
+// ── Schreiben (Format identisch zur Mobile-App, supabaseRepository.ts) ──────
+
+export interface CustomerInput {
+  name: string;
+  address: string | null;
+  contact: string | null;
+}
+
+/** Kunde anlegen/ändern — Upsert wie app-seitiges saveCustomer. */
+export async function saveCustomer(
+  sb: SupabaseClient,
+  orgId: string,
+  input: CustomerInput,
+  existing?: Customer,
+): Promise<void> {
+  const { error } = await sb.from('customer').upsert({
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    name: input.name,
+    address: input.address,
+    contact: input.contact,
+  });
+  if (error) fail('Kunde konnte nicht gespeichert werden', error);
+}
+
+export interface DeviceInput {
+  customer_id: string | null;
+  qr_code: string | null;
+  name: string;
+  device_type: string | null;
+  manufacturer: string | null;
+  serial_number: string | null;
+  protection_class: Device['protection_class'];
+  location_note: string | null;
+  interval_months: number;
+  next_due_date: string | null;
+}
+
+/** Gerät anlegen/ändern — Upsert wie app-seitiges saveDevice (photo_url bleibt unangetastet). */
+export async function saveDevice(
+  sb: SupabaseClient,
+  orgId: string,
+  input: DeviceInput,
+  existing?: Device,
+): Promise<void> {
+  const { error } = await sb.from('device').upsert({
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    ...input,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  });
+  if (error) fail('Gerät konnte nicht gespeichert werden', error);
+}
+
+export interface InspectionInput {
+  device_id: string;
+  inspected_at: string;
+  inspector_name: string | null;
+  visual_checks: Record<string, boolean>;
+  measurements: Record<string, string>;
+  result: InspectionResult;
+  next_due_date: string | null;
+  notes: string | null;
+}
+
+/** Prüfung erfassen + nächste Frist am Gerät fortschreiben (wie die App). */
+export async function addInspection(
+  sb: SupabaseClient,
+  orgId: string,
+  input: InspectionInput,
+): Promise<void> {
+  const { error } = await sb.from('inspection').insert({
+    id: crypto.randomUUID(),
+    org_id: orgId,
+    ...input,
+    photo_urls: [],
+    created_at: new Date().toISOString(),
+  });
+  if (error) fail('Prüfung konnte nicht gespeichert werden', error);
+  await sb
+    .from('device')
+    .update({ next_due_date: input.next_due_date })
+    .eq('id', input.device_id);
+}
+
 export interface InspectionFilter {
   deviceId?: string;
   result?: InspectionResult;

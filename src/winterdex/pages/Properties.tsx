@@ -1,7 +1,15 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
-import { fetchOperationMeta, fetchProperties, type OpMeta } from '../api';
+import { useOrg } from '../../components/OrgContext';
+import {
+  fetchOperationMeta,
+  fetchProperties,
+  saveProperty,
+  type OpMeta,
+} from '../api';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
+import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
 import { lastOpByProperty } from '../labels';
 import type { DutyTimes, Property } from '../types';
@@ -13,6 +21,8 @@ interface Data {
 
 export function Properties() {
   const { client } = useAppAuth();
+  const { data: org } = useOrg();
+  const [editing, setEditing] = useState<Property | 'new' | null>(null);
 
   const state = useAsync<Data>(async () => {
     const [properties, meta] = await Promise.all([
@@ -22,12 +32,36 @@ export function Properties() {
     return { properties, lastByProp: lastOpByProperty(meta) };
   }, [client]);
 
+  async function onSave(v: FormValues) {
+    if (!org) throw new Error('Kein Betrieb geladen');
+    await saveProperty(
+      client,
+      org.org.id,
+      {
+        name: s(v.name),
+        address: s(v.address),
+        customer_name: orNull(v.customer_name),
+        customer_contact: orNull(v.customer_contact),
+        areas: orNull(v.areas),
+        notes: orNull(v.notes),
+        active: v.active === true,
+      },
+      editing === 'new' ? undefined : (editing ?? undefined),
+    );
+    state.reload();
+  }
+
   return (
     <>
-      <h1>Objekte</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Objekte</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setEditing('new')}>
+          ＋ Objekt anlegen
+        </button>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
-        Alle Liegenschaften mit Pflichtzeiten und letztem Einsatz. Anlegen und
-        Bearbeiten läuft in der App.
+        Alle Liegenschaften mit Pflichtzeiten und letztem Einsatz.
       </p>
 
       <LoadGuard state={state}>
@@ -45,6 +79,7 @@ export function Properties() {
                     <th>Pflichtzeiten</th>
                     <th>Letzter Einsatz</th>
                     <th>Status</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -62,6 +97,14 @@ export function Properties() {
                         <td>
                           <StatusBadge active={p.active} />
                         </td>
+                        <td>
+                          <button
+                            className="btn ghost small"
+                            onClick={() => setEditing(p)}
+                          >
+                            Bearbeiten
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -71,6 +114,36 @@ export function Properties() {
           )
         }
       </LoadGuard>
+
+      {editing && (
+        <FormDialog
+          title={editing === 'new' ? 'Objekt anlegen' : `${editing.name} bearbeiten`}
+          onClose={() => setEditing(null)}
+          onSave={onSave}
+          fields={[
+            { key: 'name', label: 'Name', required: true },
+            { key: 'address', label: 'Adresse', required: true },
+            { key: 'customer_name', label: 'Auftraggeber' },
+            { key: 'customer_contact', label: 'Auftraggeber-Kontakt' },
+            { key: 'areas', label: 'Flächen', hint: 'z. B. Gehweg, Parkplatz, Zufahrt' },
+            { key: 'notes', label: 'Notizen', kind: 'textarea' },
+            { key: 'active', label: 'Aktiv (wird im Winterdienst berücksichtigt)', kind: 'checkbox' },
+          ]}
+          initial={
+            editing === 'new'
+              ? { active: true }
+              : {
+                  name: editing.name,
+                  address: editing.address,
+                  customer_name: editing.customer_name ?? '',
+                  customer_contact: editing.customer_contact ?? '',
+                  areas: editing.areas ?? '',
+                  notes: editing.notes ?? '',
+                  active: editing.active,
+                }
+          }
+        />
+      )}
     </>
   );
 }

@@ -1,17 +1,33 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
-import { fetchDefects, fetchEquipment, fetchPlaygrounds } from '../api';
+import {
+  addDefect,
+  fetchDefects,
+  fetchEquipment,
+  fetchPlaygrounds,
+  resolveDefect,
+} from '../api';
 import { DefectStatusBadge, SeverityBadge } from '../badges';
 import { equipmentNameMap, playgroundNameMap } from '../labels';
-import type { Defect, DefectStatus } from '../types';
+import {
+  SEVERITY_LABELS,
+  type Defect,
+  type DefectSeverity,
+  type DefectStatus,
+} from '../types';
 
 export function Defects() {
-  const { client } = useAppAuth();
+  const { client, session } = useAppAuth();
+  const { data: org } = useOrg();
   const [playgroundId, setPlaygroundId] = useState('');
   const [status, setStatus] = useState<'' | DefectStatus>('open');
+  const [adding, setAdding] = useState(false);
+  const [resolving, setResolving] = useState<Defect | null>(null);
 
   // Stammdaten für Namens-Auflösung — einmal laden, nicht pro Filterwechsel.
   const baseState = useAsync(async () => {
@@ -31,12 +47,38 @@ export function Defects() {
     [client, playgroundId, status],
   );
 
+  async function onAdd(v: FormValues) {
+    if (!org || !session) throw new Error('Kein Betrieb geladen');
+    await addDefect(client, org.org.id, session.user.id, {
+      playground_id: s(v.playground_id),
+      equipment_id: orNull(v.equipment_id),
+      title: s(v.title),
+      description: orNull(v.description),
+      severity: s(v.severity) as DefectSeverity,
+      equipment_blocked: v.equipment_blocked === true,
+      reporter_name: orNull(v.reporter_name),
+    });
+    defectsState.reload();
+  }
+
+  async function onResolve(v: FormValues) {
+    if (!resolving) throw new Error('Kein Mangel gewählt');
+    await resolveDefect(client, resolving.id, s(v.note), s(v.resolver_name));
+    defectsState.reload();
+  }
+
   return (
     <>
-      <h1>Mängel</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Mängel</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setAdding(true)}>
+          ＋ Mangel melden
+        </button>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Gemeldete Mängel mit Schweregrad und Behebungs-Vermerk — Behebung läuft
-        additiv über die App, nichts wird gelöscht.
+        additiv, nichts wird gelöscht.
       </p>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -88,6 +130,7 @@ export function Defects() {
                       <th>Ort / Gerät</th>
                       <th>Schweregrad</th>
                       <th>Status</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -133,6 +176,16 @@ export function Defects() {
                             </div>
                           )}
                         </td>
+                        <td>
+                          {d.status === 'open' && (
+                            <button
+                              className="btn ghost small"
+                              onClick={() => setResolving(d)}
+                            >
+                              Beheben
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -142,6 +195,69 @@ export function Defects() {
           );
         }}
       </LoadGuard>
+
+      {adding && (
+        <FormDialog
+          title="Mangel melden"
+          submitLabel="Mangel speichern"
+          onClose={() => setAdding(false)}
+          onSave={onAdd}
+          fields={[
+            {
+              key: 'playground_id',
+              label: 'Spielplatz',
+              kind: 'select',
+              required: true,
+              options: (baseState.data?.playgrounds ?? []).map((p) => ({
+                value: p.id,
+                label: p.name,
+              })),
+            },
+            {
+              key: 'equipment_id',
+              label: 'Gerät (optional)',
+              kind: 'select',
+              hint: 'Leer lassen für „Fläche allgemein" — Gerät muss zum gewählten Spielplatz gehören',
+              options: (baseState.data?.equipment ?? [])
+                .filter((e) => !e.retired)
+                .map((e) => {
+                  const pg = baseState.data?.playgrounds.find(
+                    (p) => p.id === e.playground_id,
+                  );
+                  return { value: e.id, label: `${pg?.name ?? '?'} — ${e.name}` };
+                }),
+            },
+            { key: 'title', label: 'Mangel', required: true, placeholder: 'z. B. Schaukelkette verschlissen' },
+            { key: 'description', label: 'Beschreibung', kind: 'textarea' },
+            {
+              key: 'severity',
+              label: 'Schweregrad',
+              kind: 'select',
+              required: true,
+              options: (Object.keys(SEVERITY_LABELS) as DefectSeverity[]).map((sv) => ({
+                value: sv,
+                label: SEVERITY_LABELS[sv],
+              })),
+            },
+            { key: 'equipment_blocked', label: 'Gerät gesperrt', kind: 'checkbox' },
+            { key: 'reporter_name', label: 'Gemeldet von' },
+          ]}
+          initial={{ severity: 'medium' }}
+        />
+      )}
+
+      {resolving && (
+        <FormDialog
+          title={`Mangel beheben — ${resolving.title}`}
+          submitLabel="Als behoben markieren"
+          onClose={() => setResolving(null)}
+          onSave={onResolve}
+          fields={[
+            { key: 'note', label: 'Behebungs-Vermerk', kind: 'textarea', required: true },
+            { key: 'resolver_name', label: 'Behoben von', required: true },
+          ]}
+        />
+      )}
     </>
   );
 }

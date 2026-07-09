@@ -1,6 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fail } from '../lib/orgApi';
-import type { SavedPlace, TripData, TripSummary, Vehicle } from './types';
+import type {
+  SavedPlace,
+  TripCategory,
+  TripData,
+  TripSummary,
+  Vehicle,
+} from './types';
 
 // Alles liegt in EINER Tabelle sync_items (RLS: jeder sieht nur die eigenen
 // Zeilen). Fahrten-Listen selektieren NUR skalare Felder aus dem data-jsonb —
@@ -69,6 +75,106 @@ export async function fetchTrip(
   if (error) fail('Fahrt konnte nicht geladen werden', error);
   if (!data || data.deleted) return null;
   return data.data as TripData;
+}
+
+// ── Schreiben (Sync-Format wie mobile services/sync.ts) ─────────────────────
+// Read-Modify-Write auf dem data-Blob: nur die editierbaren Felder werden
+// ersetzt, GPS-Pfad & Co. bleiben erhalten. updated_at wird hochgesetzt, damit
+// der App-Merge („remote wins beim Pull") die Änderung übernimmt.
+
+async function patchSyncItem(
+  sb: SupabaseClient,
+  collection: 'trips' | 'vehicles' | 'places',
+  id: string,
+  patch: Record<string, unknown>,
+  errorMsg: string,
+): Promise<void> {
+  const { data, error } = await sb
+    .from('sync_items')
+    .select('data')
+    .eq('collection', collection)
+    .eq('item_id', id)
+    .single();
+  if (error) fail(errorMsg, error);
+  const merged: Record<string, unknown> = { ...(data!.data as object) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) delete merged[k];
+    else merged[k] = v;
+  }
+  const { error: upError } = await sb
+    .from('sync_items')
+    .update({ data: merged, updated_at: new Date().toISOString() })
+    .eq('collection', collection)
+    .eq('item_id', id);
+  if (upError) fail(errorMsg, upError);
+}
+
+/** Fahrt klassifizieren/bestätigen — Kernfelder des Fahrtenbuchs. */
+export async function updateTrip(
+  sb: SupabaseClient,
+  id: string,
+  patch: { category: TripCategory; purpose: string | undefined; confirmed: boolean },
+): Promise<void> {
+  await patchSyncItem(sb, 'trips', id, patch, 'Fahrt konnte nicht gespeichert werden');
+}
+
+export interface VehicleInput {
+  name: string;
+  make: string | undefined;
+  model: string | undefined;
+  licensePlate: string | undefined;
+  type: Vehicle['type'];
+}
+
+/** Fahrzeug anlegen/ändern (isDefault/Odometer verwaltet die App). */
+export async function saveVehicle(
+  sb: SupabaseClient,
+  userId: string,
+  input: VehicleInput,
+  existing?: Vehicle,
+): Promise<void> {
+  if (existing) {
+    await patchSyncItem(
+      sb,
+      'vehicles',
+      existing.id,
+      { ...input },
+      'Fahrzeug konnte nicht gespeichert werden',
+    );
+    return;
+  }
+  const vehicle: Vehicle = {
+    id: crypto.randomUUID(),
+    ...input,
+    isDefault: false,
+    createdAt: new Date().toISOString(),
+  };
+  const { error } = await sb.from('sync_items').upsert(
+    {
+      user_id: userId,
+      collection: 'vehicles',
+      item_id: vehicle.id,
+      data: vehicle,
+      updated_at: new Date().toISOString(),
+      deleted: false,
+    },
+    { onConflict: 'user_id,collection,item_id' },
+  );
+  if (error) fail('Fahrzeug konnte nicht angelegt werden', error);
+}
+
+/** Ort umbenennen/kategorisieren — Koordinaten bleiben unangetastet. */
+export async function updatePlace(
+  sb: SupabaseClient,
+  id: string,
+  patch: {
+    label: string;
+    type: SavedPlace['type'];
+    address: string | undefined;
+    defaultCategory: TripCategory | undefined;
+  },
+): Promise<void> {
+  await patchSyncItem(sb, 'places', id, patch, 'Ort konnte nicht gespeichert werden');
 }
 
 async function fetchCollection<T>(
