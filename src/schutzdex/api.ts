@@ -31,6 +31,52 @@ export async function fetchBriefings(sb: SupabaseClient): Promise<Briefing[]> {
   return (data ?? []) as Briefing[];
 }
 
+// ── Schreiben (Format identisch zur App, src/lib/queries.ts) ────────────────
+
+export interface MemberInput {
+  name: string;
+  taetigkeit: string | null;
+  email: string | null;
+  telefon: string | null;
+  eintritt_am: string | null;
+  aktiv: boolean;
+}
+
+export async function insertMember(
+  sb: SupabaseClient,
+  orgId: string,
+  input: MemberInput,
+): Promise<void> {
+  const { error } = await sb.from('member').insert({ org_id: orgId, ...input });
+  if (error) fail('Mitarbeiter konnte nicht angelegt werden', error);
+}
+
+export async function updateMember(
+  sb: SupabaseClient,
+  id: string,
+  input: MemberInput,
+): Promise<void> {
+  const { error } = await sb.from('member').update(input).eq('id', id);
+  if (error) fail('Mitarbeiter konnte nicht gespeichert werden', error);
+}
+
+export interface AssignmentInput {
+  briefing_id: string;
+  member_id: string;
+  faellig_am: string | null;
+  wiederholung: string;
+}
+
+/** Unterweisung einem Mitarbeiter zuweisen (Status startet 'offen'). */
+export async function addAssignment(
+  sb: SupabaseClient,
+  orgId: string,
+  input: AssignmentInput,
+): Promise<void> {
+  const { error } = await sb.from('assignment').insert({ org_id: orgId, ...input });
+  if (error) fail('Zuweisung konnte nicht angelegt werden', error);
+}
+
 export interface AssignmentFilter {
   memberId?: string;
   status?: AssignmentStatus;

@@ -100,6 +100,83 @@ export async function fetchOperationWithPhotos(
   return data as OperationWithPhotos;
 }
 
+// ── Schreiben (Format identisch zur Mobile-App, supabaseRepository.ts) ──────
+
+export interface PropertyInput {
+  name: string;
+  address: string;
+  customer_name: string | null;
+  customer_contact: string | null;
+  areas: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
+/** Objekt anlegen/ändern — Upsert wie app-seitiges saveProperty. */
+export async function saveProperty(
+  sb: SupabaseClient,
+  orgId: string,
+  input: PropertyInput,
+  existing?: Property,
+): Promise<void> {
+  const { error } = await sb.from('property').upsert({
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    name: input.name,
+    address: input.address,
+    lat: existing?.lat ?? null,
+    lng: existing?.lng ?? null,
+    customer_name: input.customer_name,
+    customer_contact: input.customer_contact,
+    areas: input.areas,
+    duty_times: existing?.duty_times ?? { mo_fr: '', sa: '', so: '' },
+    notes: input.notes,
+    active: input.active,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  });
+  if (error) fail('Objekt konnte nicht gespeichert werden', error);
+}
+
+export interface OperationInput {
+  property_id: string;
+  started_at: string;
+  ended_at: string | null;
+  action: Operation['action'];
+  grit_material: string | null;
+  grit_amount: string | null;
+  notes: string | null;
+  performer_name: string | null;
+}
+
+/** Einsatz nachtragen (append-only, wie app-seitiges addOperation — ohne GPS/Fotos). */
+export async function addOperation(
+  sb: SupabaseClient,
+  orgId: string,
+  userId: string,
+  input: OperationInput,
+): Promise<void> {
+  const { error } = await sb.from('operation').insert({
+    id: crypto.randomUUID(),
+    org_id: orgId,
+    property_id: input.property_id,
+    started_at: input.started_at,
+    ended_at: input.ended_at,
+    lat: null,
+    lng: null,
+    gps_accuracy_m: null,
+    action: input.action,
+    grit_material: input.grit_material,
+    grit_amount: input.grit_amount,
+    photo_urls: [],
+    weather: null,
+    notes: input.notes,
+    performed_by: userId,
+    performer_name: input.performer_name,
+    created_at: new Date().toISOString(),
+  });
+  if (error) fail('Einsatz konnte nicht gespeichert werden', error);
+}
+
 /** Einsätze eines Objekts im Zeitraum inkl. Fotos — nur für den PDF-Bericht. */
 export async function fetchOperationsForReport(
   sb: SupabaseClient,

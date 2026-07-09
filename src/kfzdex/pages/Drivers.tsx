@@ -1,22 +1,57 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { fmtDate } from '../../lib/format';
-import { fetchDrivers } from '../api';
+import { FormDialog, num, orNull, s, type FormValues } from '../../components/form';
+import { fmtDate, toInputDate } from '../../lib/format';
+import { addLicenseCheck, fetchDrivers, insertDriver, updateDriver } from '../api';
 import { DueBadge, dueLabel } from '../badges';
 import { licenseDue } from '../due';
 import type { Driver } from '../types';
 
 export function Drivers() {
   const { client } = useAppAuth();
+  const { data: org } = useOrg();
   const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState<Driver | 'new' | null>(null);
+  const [checking, setChecking] = useState<Driver | null>(null);
 
   const state = useAsync<Driver[]>(() => fetchDrivers(client), [client]);
 
+  async function onSave(v: FormValues) {
+    if (!org) throw new Error('Kein Betrieb geladen');
+    const input = {
+      name: s(v.name),
+      license_classes: orNull(v.license_classes),
+      check_interval_months: num(v.check_interval_months) ?? 6,
+      last_check: orNull(v.last_check),
+      active: v.active === true,
+    };
+    if (editing === 'new') await insertDriver(client, org.org.id, input);
+    else if (editing) await updateDriver(client, editing.id, input);
+    state.reload();
+  }
+
+  async function onCheck(v: FormValues) {
+    if (!org || !checking) throw new Error('Kein Betrieb geladen');
+    await addLicenseCheck(client, org.org.id, {
+      driver_id: checking.id,
+      date: s(v.date),
+      checked_by: s(v.checked_by),
+    });
+    state.reload();
+  }
+
   return (
     <>
-      <h1>Fahrer</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Fahrer</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setEditing('new')}>
+          ＋ Fahrer anlegen
+        </button>
+      </div>
 
       <div className="filter-bar">
         <input
@@ -56,6 +91,7 @@ export function Drivers() {
                     <th>Fällig</th>
                     <th>Kontrolle</th>
                     <th>Status</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -81,6 +117,16 @@ export function Drivers() {
                             <span className="badge">inaktiv</span>
                           )}
                         </td>
+                        <td>
+                          <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                            <button className="btn ghost small" onClick={() => setEditing(d)}>
+                              Bearbeiten
+                            </button>
+                            <button className="btn ghost small" onClick={() => setChecking(d)}>
+                              Kontrolle erfassen
+                            </button>
+                          </span>
+                        </td>
                       </tr>
                     );
                   })}
@@ -90,6 +136,52 @@ export function Drivers() {
           );
         }}
       </LoadGuard>
+
+      {editing && (
+        <FormDialog
+          title={editing === 'new' ? 'Fahrer anlegen' : `${editing.name} bearbeiten`}
+          onClose={() => setEditing(null)}
+          onSave={onSave}
+          fields={[
+            { key: 'name', label: 'Name', required: true },
+            { key: 'license_classes', label: 'Führerscheinklassen', placeholder: 'z. B. B, BE, C1' },
+            {
+              key: 'check_interval_months',
+              label: 'Kontroll-Intervall (Monate)',
+              kind: 'number',
+              required: true,
+              hint: 'Üblich sind 6 Monate',
+            },
+            { key: 'last_check', label: 'Letzte Führerscheinkontrolle', kind: 'date' },
+            { key: 'active', label: 'Aktiv (Kontrollen fällig)', kind: 'checkbox' },
+          ]}
+          initial={
+            editing === 'new'
+              ? { check_interval_months: '6', active: true }
+              : {
+                  name: editing.name,
+                  license_classes: editing.license_classes ?? '',
+                  check_interval_months: String(editing.check_interval_months),
+                  last_check: editing.last_check ?? '',
+                  active: editing.active,
+                }
+          }
+        />
+      )}
+
+      {checking && (
+        <FormDialog
+          title={`Führerscheinkontrolle — ${checking.name}`}
+          submitLabel="Kontrolle speichern"
+          onClose={() => setChecking(null)}
+          onSave={onCheck}
+          fields={[
+            { key: 'date', label: 'Kontrolldatum', kind: 'date', required: true },
+            { key: 'checked_by', label: 'Kontrolliert von', required: true },
+          ]}
+          initial={{ date: toInputDate(new Date()) }}
+        />
+      )}
     </>
   );
 }

@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { fmtDate, fmtNum } from '../../lib/format';
-import { fetchProjectSummaries } from '../api';
+import { FormDialog, num, orNull, s, type FormValues } from '../../components/form';
+import { fmtDate, fmtNum, parseLocalDate, toInputDate } from '../../lib/format';
+import { fetchProjectSummaries, insertProject, updateProjectHead } from '../api';
 import { ProjectStatusBadge } from '../badges';
 import {
   CATEGORY_LABELS,
@@ -15,21 +16,46 @@ import {
 const eur = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 
 export function Projects() {
-  const { client } = useAppAuth();
+  const { client, session } = useAppAuth();
   const [status, setStatus] = useState<'' | ProjectStatus>('');
   const [category, setCategory] = useState('');
+  const [editing, setEditing] = useState<ProjectSummary | 'new' | null>(null);
 
   const state = useAsync<ProjectSummary[]>(
     () => fetchProjectSummaries(client),
     [client],
   );
 
+  async function onSave(v: FormValues) {
+    if (!session) throw new Error('Nicht angemeldet');
+    const deadline = orNull(v.deadline);
+    const input = {
+      title: s(v.title),
+      category: s(v.category),
+      status: s(v.status) as ProjectStatus,
+      description: orNull(v.description) ?? undefined,
+      estimatedHours: num(v.estimatedHours),
+      budget: num(v.budget),
+      customerName: orNull(v.customerName) ?? undefined,
+      deadlineMs: deadline ? parseLocalDate(deadline).getTime() : null,
+    };
+    if (editing === 'new') await insertProject(client, session.user.id, input);
+    else if (editing) await updateProjectHead(client, editing.id, input);
+    state.reload();
+  }
+
   return (
     <>
-      <h1>Aufträge</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Aufträge</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setEditing('new')}>
+          ＋ Auftrag anlegen
+        </button>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
-        Alle Aufträge und Projekte mit Status, Stunden und Budget. Anlegen und
-        Bearbeiten läuft in der App.
+        Alle Aufträge und Projekte mit Status, Stunden und Budget — Schritte,
+        Material und Fotos pflegt die App.
       </p>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -85,6 +111,7 @@ export function Projects() {
                       <th>Stunden</th>
                       <th>Budget</th>
                       <th>Termin</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -112,6 +139,11 @@ export function Projects() {
                             ? fmtDate(new Date(p.deadline_ms).toISOString())
                             : '—'}
                         </td>
+                        <td>
+                          <button className="btn ghost small" onClick={() => setEditing(p)}>
+                            Bearbeiten
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -121,6 +153,63 @@ export function Projects() {
           );
         }}
       </LoadGuard>
+
+      {editing && (
+        <FormDialog
+          title={
+            editing === 'new'
+              ? 'Auftrag anlegen'
+              : `${editing.title ?? 'Auftrag'} bearbeiten`
+          }
+          onClose={() => setEditing(null)}
+          onSave={onSave}
+          fields={[
+            { key: 'title', label: 'Auftrag', required: true },
+            {
+              key: 'category',
+              label: 'Kategorie',
+              kind: 'select',
+              required: true,
+              options: Object.entries(CATEGORY_LABELS).map(([id, label]) => ({
+                value: id,
+                label,
+              })),
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              kind: 'select',
+              required: true,
+              options: (Object.keys(STATUS_LABELS) as ProjectStatus[]).map((st) => ({
+                value: st,
+                label: STATUS_LABELS[st],
+              })),
+            },
+            { key: 'customerName', label: 'Kunde' },
+            { key: 'estimatedHours', label: 'Geschätzte Stunden', kind: 'number' },
+            { key: 'budget', label: 'Budget (€)', kind: 'number' },
+            { key: 'deadline', label: 'Termin', kind: 'date' },
+            { key: 'description', label: 'Beschreibung', kind: 'textarea' },
+          ]}
+          initial={
+            editing === 'new'
+              ? { category: 'handwerk', status: 'quote' }
+              : {
+                  title: editing.title ?? '',
+                  category: editing.category ?? 'handwerk',
+                  status: editing.status ?? 'quote',
+                  customerName: editing.customer_name ?? '',
+                  estimatedHours:
+                    editing.estimated_hours != null ? String(editing.estimated_hours) : '',
+                  budget: editing.budget != null ? String(editing.budget) : '',
+                  deadline:
+                    editing.deadline_ms != null
+                      ? toInputDate(new Date(editing.deadline_ms))
+                      : '',
+                }
+          }
+        />
+      )}
     </>
   );
 }

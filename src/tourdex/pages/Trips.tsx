@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { FormDialog, s, type FormValues } from '../../components/form';
 import { fmtDate, fmtNum, fmtTime } from '../../lib/format';
-import { fetchTripSummaries, fetchVehicles } from '../api';
+import { fetchTripSummaries, fetchVehicles, updateTrip } from '../api';
 import { CategoryBadge, ConfirmedBadge } from '../badges';
 import {
   CATEGORY_LABELS,
@@ -17,6 +18,7 @@ export function Trips() {
   const [category, setCategory] = useState<'' | TripCategory>('');
   const [vehicleId, setVehicleId] = useState('');
   const [status, setStatus] = useState<'' | 'confirmed' | 'unconfirmed'>('');
+  const [editing, setEditing] = useState<TripSummary | null>(null);
 
   const state = useAsync<{ trips: TripSummary[]; vehicles: Vehicle[] }>(
     async () => {
@@ -29,12 +31,23 @@ export function Trips() {
     [client],
   );
 
+  async function onSave(v: FormValues) {
+    if (!editing) throw new Error('Keine Fahrt gewählt');
+    const purpose = s(v.purpose);
+    await updateTrip(client, editing.id, {
+      category: s(v.category) as TripCategory,
+      purpose: purpose || undefined,
+      confirmed: v.confirmed === true,
+    });
+    state.reload();
+  }
+
   return (
     <>
       <h1>Fahrten</h1>
       <p className="muted" style={{ marginTop: -6 }}>
-        Alle erfassten Fahrten mit Strecke, Kategorie und Status. Erfassen und
-        Bestätigen läuft in der App.
+        Alle erfassten Fahrten mit Strecke, Kategorie und Status — hier
+        klassifizieren und bestätigen, erfasst wird in der App.
       </p>
 
       <LoadGuard state={state}>
@@ -126,6 +139,7 @@ export function Trips() {
                           <th>Zweck</th>
                           <th>km</th>
                           <th>Status</th>
+                          <th></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -147,6 +161,14 @@ export function Trips() {
                             <td>
                               <ConfirmedBadge confirmed={t.confirmed} />
                             </td>
+                            <td>
+                              <button
+                                className="btn ghost small"
+                                onClick={() => setEditing(t)}
+                              >
+                                Bearbeiten
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -158,6 +180,37 @@ export function Trips() {
           );
         }}
       </LoadGuard>
+
+      {editing && (
+        <FormDialog
+          title={`Fahrt bearbeiten — ${fmtDate(editing.start_time)}, ${fmtTime(editing.start_time)}`}
+          onClose={() => setEditing(null)}
+          onSave={onSave}
+          fields={[
+            {
+              key: 'category',
+              label: 'Kategorie',
+              kind: 'select',
+              required: true,
+              options: (Object.keys(CATEGORY_LABELS) as TripCategory[]).map((c) => ({
+                value: c,
+                label: CATEGORY_LABELS[c],
+              })),
+            },
+            { key: 'purpose', label: 'Zweck', placeholder: 'z. B. Kundentermin Fa. Muster' },
+            {
+              key: 'confirmed',
+              label: 'Bestätigt (fürs Fahrtenbuch freigegeben)',
+              kind: 'checkbox',
+            },
+          ]}
+          initial={{
+            category: editing.category ?? 'business',
+            purpose: editing.purpose ?? '',
+            confirmed: editing.confirmed === true,
+          }}
+        />
+      )}
     </>
   );
 }

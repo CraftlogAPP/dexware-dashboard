@@ -1,17 +1,33 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
-import { fetchDamages, fetchRacks, fetchWarehouses } from '../api';
+import {
+  addDamage,
+  fetchDamages,
+  fetchRacks,
+  fetchWarehouses,
+  resolveDamage,
+} from '../api';
 import { DamageStatusBadge, SeverityBadge } from '../badges';
 import { rackNameMap, warehouseNameMap } from '../labels';
-import type { Damage, DamageStatus } from '../types';
+import {
+  SEVERITY_LABELS,
+  type Damage,
+  type DamageSeverity,
+  type DamageStatus,
+} from '../types';
 
 export function Damages() {
-  const { client } = useAppAuth();
+  const { client, session } = useAppAuth();
+  const { data: org } = useOrg();
   const [warehouseId, setWarehouseId] = useState('');
   const [status, setStatus] = useState<'' | DamageStatus>('open');
+  const [adding, setAdding] = useState(false);
+  const [resolving, setResolving] = useState<Damage | null>(null);
 
   // Stammdaten für Namens-Auflösung — einmal laden, nicht pro Filterwechsel.
   const baseState = useAsync(async () => {
@@ -31,12 +47,38 @@ export function Damages() {
     [client, warehouseId, status],
   );
 
+  async function onAdd(v: FormValues) {
+    if (!org || !session) throw new Error('Kein Betrieb geladen');
+    await addDamage(client, org.org.id, session.user.id, {
+      warehouse_id: s(v.warehouse_id),
+      rack_id: orNull(v.rack_id),
+      title: s(v.title),
+      description: orNull(v.description),
+      severity: s(v.severity) as DamageSeverity,
+      rack_blocked: v.rack_blocked === true,
+      reporter_name: orNull(v.reporter_name),
+    });
+    damagesState.reload();
+  }
+
+  async function onResolve(v: FormValues) {
+    if (!resolving) throw new Error('Kein Schaden gewählt');
+    await resolveDamage(client, resolving.id, s(v.note), s(v.resolver_name));
+    damagesState.reload();
+  }
+
   return (
     <>
-      <h1>Schäden</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Schäden</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setAdding(true)}>
+          ＋ Schaden melden
+        </button>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Gemeldete Schäden im Ampelverfahren (DIN EN 15635) mit Instandsetzungs-Vermerk
-        — Behebung läuft additiv über die App, nichts wird gelöscht.
+        — Behebung läuft additiv, nichts wird gelöscht.
       </p>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -85,6 +127,7 @@ export function Damages() {
                       <th>Ort / Regalzeile</th>
                       <th>Gefährdung</th>
                       <th>Status</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -130,6 +173,16 @@ export function Damages() {
                             </div>
                           )}
                         </td>
+                        <td>
+                          {d.status === 'open' && (
+                            <button
+                              className="btn ghost small"
+                              onClick={() => setResolving(d)}
+                            >
+                              Instandsetzen
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -139,6 +192,69 @@ export function Damages() {
           );
         }}
       </LoadGuard>
+
+      {adding && (
+        <FormDialog
+          title="Schaden melden"
+          submitLabel="Schaden speichern"
+          onClose={() => setAdding(false)}
+          onSave={onAdd}
+          fields={[
+            {
+              key: 'warehouse_id',
+              label: 'Lager',
+              kind: 'select',
+              required: true,
+              options: (baseState.data?.warehouses ?? []).map((w) => ({
+                value: w.id,
+                label: w.name,
+              })),
+            },
+            {
+              key: 'rack_id',
+              label: 'Regalzeile (optional)',
+              kind: 'select',
+              hint: 'Leer lassen für „Lager allgemein" — Regalzeile muss zum gewählten Lager gehören',
+              options: (baseState.data?.racks ?? [])
+                .filter((r) => !r.retired)
+                .map((r) => {
+                  const wh = baseState.data?.warehouses.find(
+                    (w) => w.id === r.warehouse_id,
+                  );
+                  return { value: r.id, label: `${wh?.name ?? '?'} — ${r.name}` };
+                }),
+            },
+            { key: 'title', label: 'Schaden', required: true, placeholder: 'z. B. Stütze verbogen' },
+            { key: 'description', label: 'Beschreibung', kind: 'textarea' },
+            {
+              key: 'severity',
+              label: 'Gefährdung (Ampel)',
+              kind: 'select',
+              required: true,
+              options: (Object.keys(SEVERITY_LABELS) as DamageSeverity[]).map((sv) => ({
+                value: sv,
+                label: SEVERITY_LABELS[sv],
+              })),
+            },
+            { key: 'rack_blocked', label: 'Feld/Zeile gesperrt', kind: 'checkbox' },
+            { key: 'reporter_name', label: 'Gemeldet von' },
+          ]}
+          initial={{ severity: 'amber' }}
+        />
+      )}
+
+      {resolving && (
+        <FormDialog
+          title={`Schaden instandsetzen — ${resolving.title}`}
+          submitLabel="Als instandgesetzt markieren"
+          onClose={() => setResolving(null)}
+          onSave={onResolve}
+          fields={[
+            { key: 'note', label: 'Instandsetzungs-Vermerk', kind: 'textarea', required: true },
+            { key: 'resolver_name', label: 'Instandgesetzt von', required: true },
+          ]}
+        />
+      )}
     </>
   );
 }

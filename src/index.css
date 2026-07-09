@@ -604,7 +604,8 @@ label.field {
   color: var(--muted);
 }
 input,
-select {
+select,
+textarea {
   width: 100%;
   margin-top: 5px;
   padding: 10px 12px;
@@ -616,9 +617,54 @@ select {
   font-family: inherit;
 }
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: none;
   border-color: var(--app-primary);
+}
+
+/* ---------- Modal (Bearbeiten-Dialoge) ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 16px 16px;
+  background: rgba(3, 8, 20, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  overflow-y: auto;
+}
+.modal-card {
+  width: 100%;
+  max-width: 560px;
+  padding: 22px 24px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--app-card, var(--surface));
+  box-shadow: var(--shadow);
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.modal-head h3 {
+  margin: 0;
+}
+.checkbox-field input {
+  width: auto;
+  margin: 0 6px 0 0;
+  vertical-align: middle;
+}
+.field-hint {
+  display: block;
+  font-weight: 400;
+  margin-top: 3px;
 }
 .row {
   display: flex;

@@ -1,19 +1,39 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import {
+  FormDialog,
+  isoFromLocal,
+  localFromIso,
+  orNull,
+  s,
+  type FormValues,
+} from '../../components/form';
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
-import { fetchInspections, fetchWarehouses } from '../api';
+import { addInspection, cancelInspection, fetchInspections, fetchWarehouses } from '../api';
 import { InspectionBadge } from '../badges';
 import { checklistSummary, warehouseNameMap } from '../labels';
 import {
+  CHECKLIST,
   INSPECTION_LABELS,
+  type CheckResult,
   type Inspection,
   type InspectionType,
 } from '../types';
 
+const CHECK_OPTIONS: { value: CheckResult; label: string }[] = [
+  { value: 'ok', label: 'In Ordnung' },
+  { value: 'defect', label: 'Schaden' },
+  { value: 'na', label: 'Nicht zutreffend' },
+];
+
 export function Inspections() {
-  const { client } = useAppAuth();
+  const { client, session } = useAppAuth();
+  const { data: org } = useOrg();
+  const [adding, setAdding] = useState(false);
+  const [canceling, setCanceling] = useState<Inspection | null>(null);
   const [warehouseId, setWarehouseId] = useState('');
   const [type, setType] = useState('');
   const [from, setFrom] = useState(() => {
@@ -37,13 +57,85 @@ export function Inspections() {
     [client, warehouseId, type, from, to],
   );
 
+  async function onAdd(v: FormValues) {
+    if (!org || !session) throw new Error('Kein Betrieb geladen');
+    const started = isoFromLocal(v.started_at);
+    if (!started) throw new Error('Bitte einen gültigen Zeitpunkt angeben');
+    const checklist: Record<string, CheckResult> = {};
+    for (const item of CHECKLIST) checklist[item.id] = s(v[`chk_${item.id}`]) as CheckResult;
+    await addInspection(client, org.org.id, session.user.id, {
+      warehouse_id: s(v.warehouse_id),
+      type: s(v.type) as InspectionType,
+      started_at: started,
+      checklist,
+      notes: orNull(v.notes),
+      inspector_name: orNull(v.inspector_name),
+    });
+    inspState.reload();
+  }
+
+  async function onCancel(v: FormValues) {
+    if (!canceling) throw new Error('Keine Inspektion gewählt');
+    await cancelInspection(client, canceling.id, s(v.reason));
+    inspState.reload();
+  }
+
   return (
     <>
-      <h1>Inspektionen</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Inspektionen</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setAdding(true)}>
+          ＋ Inspektion erfassen
+        </button>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Append-only-Prüfprotokoll — jeder Eintrag bleibt unveränderlich, Stornos sind
         gekennzeichnet.
       </p>
+
+      {adding && (
+        <FormDialog
+          title="Inspektion erfassen"
+          submitLabel="Inspektion speichern"
+          onClose={() => setAdding(false)}
+          onSave={onAdd}
+          fields={[
+            {
+              key: 'warehouse_id',
+              label: 'Lager',
+              kind: 'select',
+              required: true,
+              options: (whsState.data ?? []).map((w) => ({ value: w.id, label: w.name })),
+            },
+            {
+              key: 'type',
+              label: 'Inspektionsart',
+              kind: 'select',
+              required: true,
+              options: (Object.keys(INSPECTION_LABELS) as InspectionType[]).map((t) => ({
+                value: t,
+                label: INSPECTION_LABELS[t],
+              })),
+            },
+            { key: 'started_at', label: 'Zeitpunkt', kind: 'datetime', required: true },
+            { key: 'inspector_name', label: 'Kontrolliert von' },
+            ...CHECKLIST.map((item) => ({
+              key: `chk_${item.id}`,
+              label: item.label,
+              kind: 'select' as const,
+              required: true,
+              options: CHECK_OPTIONS,
+            })),
+            { key: 'notes', label: 'Notizen', kind: 'textarea' },
+          ]}
+          initial={{
+            started_at: localFromIso(new Date().toISOString()),
+            type: 'visual',
+            ...Object.fromEntries(CHECKLIST.map((item) => [`chk_${item.id}`, 'ok'])),
+          }}
+        />
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="row">
@@ -97,6 +189,7 @@ export function Inspections() {
                       <th>Inspektionsart</th>
                       <th>Ergebnis</th>
                       <th>Kontrolliert von</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -111,6 +204,16 @@ export function Inspections() {
                         </td>
                         <td className="muted wrap">{checklistSummary(i.checklist)}</td>
                         <td className="muted">{i.inspector_name ?? '—'}</td>
+                        <td>
+                          {!i.canceled && (
+                            <button
+                              className="btn ghost small"
+                              onClick={() => setCanceling(i)}
+                            >
+                              Stornieren
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -120,6 +223,24 @@ export function Inspections() {
           );
         }}
       </LoadGuard>
+
+      {canceling && (
+        <FormDialog
+          title={`Inspektion stornieren — ${fmtDateTime(canceling.started_at)}`}
+          submitLabel="Stornieren"
+          onClose={() => setCanceling(null)}
+          onSave={onCancel}
+          fields={[
+            {
+              key: 'reason',
+              label: 'Storno-Grund',
+              kind: 'textarea',
+              required: true,
+              hint: 'Die Inspektion bleibt im Prüfprotokoll sichtbar und wird nur gekennzeichnet',
+            },
+          ]}
+        />
+      )}
     </>
   );
 }

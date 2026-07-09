@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { FormDialog, s, type FormValues } from '../../components/form';
 import { fmtDate } from '../../lib/format';
-import { fetchDocumentSummaries, fetchProjects } from '../api';
+import { fetchDocumentSummaries, fetchProjects, saveProject } from '../api';
 import type { DocumentSummary, Project } from '../types';
 
 export function Projects() {
-  const { client } = useAppAuth();
+  const { client, session } = useAppAuth();
+  const [editing, setEditing] = useState<Project | 'new' | null>(null);
 
   const state = useAsync<{ projects: Project[]; docs: DocumentSummary[] }>(
     async () => {
@@ -19,12 +22,28 @@ export function Projects() {
     [client],
   );
 
+  async function onSave(v: FormValues) {
+    if (!session) throw new Error('Nicht angemeldet');
+    await saveProject(
+      client,
+      session.user.id,
+      s(v.name),
+      editing === 'new' ? undefined : (editing ?? undefined),
+    );
+    state.reload();
+  }
+
   return (
     <>
-      <h1>Projekte</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Projekte</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setEditing('new')}>
+          ＋ Projekt anlegen
+        </button>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Ordner zum Gruppieren von Dokumenten — z. B. „Umzug" oder „Steuer 2026".
-        Anlegen läuft in der App.
       </p>
 
       <LoadGuard state={state}>
@@ -42,6 +61,7 @@ export function Projects() {
                       <th>Projekt</th>
                       <th>Dokumente</th>
                       <th>Angelegt</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -58,6 +78,14 @@ export function Projects() {
                             )}
                           </td>
                           <td className="muted">{fmtDate(p.createdAt)}</td>
+                          <td>
+                            <button
+                              className="btn ghost small"
+                              onClick={() => setEditing(p)}
+                            >
+                              Umbenennen
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -73,6 +101,16 @@ export function Projects() {
           );
         }}
       </LoadGuard>
+
+      {editing && (
+        <FormDialog
+          title={editing === 'new' ? 'Projekt anlegen' : `${editing.name} umbenennen`}
+          onClose={() => setEditing(null)}
+          onSave={onSave}
+          fields={[{ key: 'name', label: 'Name', required: true }]}
+          initial={editing === 'new' ? {} : { name: editing.name }}
+        />
+      )}
     </>
   );
 }

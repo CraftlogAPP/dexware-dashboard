@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDate } from '../../lib/format';
-import { fetchDocumentSummaries, fetchProjects } from '../api';
+import { fetchDocumentSummaries, fetchProjects, updateDocumentHead } from '../api';
 import { TypeBadge } from '../badges';
 import {
   TYPE_LABELS,
@@ -18,6 +19,7 @@ export function Documents() {
   const [type, setType] = useState<'' | DocType>('');
   const [projectId, setProjectId] = useState(params.get('projekt') ?? '');
   const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState<DocumentSummary | null>(null);
 
   const state = useAsync<{ docs: DocumentSummary[]; projects: Project[] }>(
     async () => {
@@ -30,12 +32,22 @@ export function Documents() {
     [client],
   );
 
+  async function onSave(v: FormValues) {
+    if (!editing) throw new Error('Kein Dokument gewählt');
+    await updateDocumentHead(client, editing.id, {
+      title: s(v.title),
+      type: s(v.type) as DocType,
+      projectId: orNull(v.projectId),
+    });
+    state.reload();
+  }
+
   return (
     <>
       <h1>Dokumente</h1>
       <p className="muted" style={{ marginTop: -6 }}>
-        Alle archivierten Dokumente mit KI-Zusammenfassung und Fristen. Scannen
-        und Analysieren läuft in der App.
+        Alle archivierten Dokumente mit KI-Zusammenfassung und Fristen — Titel,
+        Typ und Projekt hier pflegbar; Scannen und Analysieren läuft in der App.
       </p>
 
       <LoadGuard state={state}>
@@ -123,6 +135,7 @@ export function Documents() {
                           <th>Projekt</th>
                           <th>Fristen</th>
                           <th>Hinzugefügt</th>
+                          <th></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -142,12 +155,52 @@ export function Documents() {
                                 : '—'}
                             </td>
                             <td className="muted">{fmtDate(d.created_at)}</td>
+                            <td>
+                              <button
+                                className="btn ghost small"
+                                onClick={() => setEditing(d)}
+                              >
+                                Bearbeiten
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 </>
+              )}
+              {editing && (
+                <FormDialog
+                  title={`${editing.title ?? 'Dokument'} bearbeiten`}
+                  onClose={() => setEditing(null)}
+                  onSave={onSave}
+                  fields={[
+                    { key: 'title', label: 'Titel', required: true },
+                    {
+                      key: 'type',
+                      label: 'Typ',
+                      kind: 'select',
+                      required: true,
+                      options: (Object.keys(TYPE_LABELS) as DocType[]).map((t) => ({
+                        value: t,
+                        label: TYPE_LABELS[t],
+                      })),
+                    },
+                    {
+                      key: 'projectId',
+                      label: 'Projekt',
+                      kind: 'select',
+                      hint: 'Leer lassen = ohne Projekt',
+                      options: projects.map((p) => ({ value: p.id, label: p.name })),
+                    },
+                  ]}
+                  initial={{
+                    title: editing.title ?? '',
+                    type: editing.type ?? 'other',
+                    projectId: editing.project_id ?? '',
+                  }}
+                />
               )}
             </>
           );

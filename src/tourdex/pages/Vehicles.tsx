@@ -1,11 +1,19 @@
+import { useState } from 'react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDate, fmtNum } from '../../lib/format';
-import { fetchTripSummaries, fetchVehicles } from '../api';
-import { VEHICLE_TYPE_LABELS, type TripSummary, type Vehicle } from '../types';
+import { fetchTripSummaries, fetchVehicles, saveVehicle } from '../api';
+import {
+  VEHICLE_TYPE_LABELS,
+  type TripSummary,
+  type Vehicle,
+  type VehicleType,
+} from '../types';
 
 export function Vehicles() {
-  const { client } = useAppAuth();
+  const { client, session } = useAppAuth();
+  const [editing, setEditing] = useState<Vehicle | 'new' | null>(null);
 
   const state = useAsync<{ vehicles: Vehicle[]; trips: TripSummary[] }>(
     async () => {
@@ -18,12 +26,34 @@ export function Vehicles() {
     [client],
   );
 
+  async function onSave(v: FormValues) {
+    if (!session) throw new Error('Nicht angemeldet');
+    await saveVehicle(
+      client,
+      session.user.id,
+      {
+        name: s(v.name),
+        make: orNull(v.make) ?? undefined,
+        model: orNull(v.model) ?? undefined,
+        licensePlate: orNull(v.licensePlate) ?? undefined,
+        type: s(v.type) as VehicleType,
+      },
+      editing === 'new' ? undefined : (editing ?? undefined),
+    );
+    state.reload();
+  }
+
   return (
     <>
-      <h1>Fahrzeuge</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Fahrzeuge</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setEditing('new')}>
+          ＋ Fahrzeug anlegen
+        </button>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
-        Alle Fahrzeuge mit Fahrten und Kilometern. Anlegen und Bearbeiten läuft in
-        der App.
+        Alle Fahrzeuge mit Fahrten und Kilometern.
       </p>
 
       <LoadGuard state={state}>
@@ -51,6 +81,7 @@ export function Vehicles() {
                     <th>km erfasst</th>
                     <th>km-Stand initial</th>
                     <th>Angelegt</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -77,6 +108,11 @@ export function Vehicles() {
                             : '—'}
                         </td>
                         <td className="muted">{fmtDate(v.createdAt)}</td>
+                        <td>
+                          <button className="btn ghost small" onClick={() => setEditing(v)}>
+                            Bearbeiten
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -86,6 +122,41 @@ export function Vehicles() {
           );
         }}
       </LoadGuard>
+
+      {editing && (
+        <FormDialog
+          title={editing === 'new' ? 'Fahrzeug anlegen' : `${editing.name} bearbeiten`}
+          onClose={() => setEditing(null)}
+          onSave={onSave}
+          fields={[
+            { key: 'name', label: 'Name', required: true, placeholder: 'z. B. Firmenwagen' },
+            {
+              key: 'type',
+              label: 'Typ',
+              kind: 'select',
+              required: true,
+              options: (Object.keys(VEHICLE_TYPE_LABELS) as VehicleType[]).map((t) => ({
+                value: t,
+                label: VEHICLE_TYPE_LABELS[t],
+              })),
+            },
+            { key: 'licensePlate', label: 'Kennzeichen' },
+            { key: 'make', label: 'Marke' },
+            { key: 'model', label: 'Modell' },
+          ]}
+          initial={
+            editing === 'new'
+              ? { type: 'car' }
+              : {
+                  name: editing.name,
+                  type: editing.type,
+                  licensePlate: editing.licensePlate ?? '',
+                  make: editing.make ?? '',
+                  model: editing.model ?? '',
+                }
+          }
+        />
+      )}
     </>
   );
 }

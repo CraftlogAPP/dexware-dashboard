@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fail } from '../lib/orgApi';
 import type {
+  CheckResult,
   Defect,
   DefectStatus,
   DefectWithPhotos,
@@ -57,6 +58,139 @@ export async function fetchEquipment(
   const { data, error } = await q;
   if (error) fail('Geräte konnten nicht geladen werden', error);
   return (data ?? []) as Equipment[];
+}
+
+// ── Schreiben (Format identisch zur Mobile-App, supabaseRepository.ts) ──────
+
+export interface PlaygroundInput {
+  name: string;
+  address: string;
+  operator_name: string | null;
+  operator_contact: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
+/** Spielplatz anlegen/ändern — Upsert wie app-seitiges savePlayground. */
+export async function savePlayground(
+  sb: SupabaseClient,
+  orgId: string,
+  input: PlaygroundInput,
+  existing?: Playground,
+): Promise<void> {
+  const { error } = await sb.from('playground').upsert({
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    name: input.name,
+    address: input.address,
+    lat: existing?.lat ?? null,
+    lng: existing?.lng ?? null,
+    operator_name: input.operator_name,
+    operator_contact: input.operator_contact,
+    notes: input.notes,
+    active: input.active,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  });
+  if (error) fail('Spielplatz konnte nicht gespeichert werden', error);
+}
+
+export interface InspectionInput {
+  playground_id: string;
+  type: InspectionType;
+  started_at: string;
+  checklist: Record<string, CheckResult>;
+  notes: string | null;
+  inspector_name: string | null;
+}
+
+/** Kontrolle nachtragen (append-only, wie app-seitiges addInspection — ohne GPS/Fotos). */
+export async function addInspection(
+  sb: SupabaseClient,
+  orgId: string,
+  userId: string,
+  input: InspectionInput,
+): Promise<void> {
+  const { error } = await sb.from('inspection').insert({
+    id: crypto.randomUUID(),
+    org_id: orgId,
+    playground_id: input.playground_id,
+    type: input.type,
+    started_at: input.started_at,
+    lat: null,
+    lng: null,
+    gps_accuracy_m: null,
+    checklist: input.checklist,
+    photo_urls: [],
+    notes: input.notes,
+    performed_by: userId,
+    inspector_name: input.inspector_name,
+    created_at: new Date().toISOString(),
+  });
+  if (error) fail('Kontrolle konnte nicht gespeichert werden', error);
+}
+
+/** Kontrolle stornieren — bleibt sichtbar, wird nur gekennzeichnet (RPC wie die App). */
+export async function cancelInspection(
+  sb: SupabaseClient,
+  id: string,
+  reason: string,
+): Promise<void> {
+  const { error } = await sb.rpc('cancel_inspection', {
+    p_inspection: id,
+    p_reason: reason,
+  });
+  if (error) fail('Kontrolle konnte nicht storniert werden', error);
+}
+
+export interface DefectInput {
+  playground_id: string;
+  equipment_id: string | null;
+  title: string;
+  description: string | null;
+  severity: Defect['severity'];
+  equipment_blocked: boolean;
+  reporter_name: string | null;
+}
+
+/** Mangel melden (wie app-seitiges addDefect — ohne Fotos). */
+export async function addDefect(
+  sb: SupabaseClient,
+  orgId: string,
+  userId: string,
+  input: DefectInput,
+): Promise<void> {
+  const { error } = await sb.from('defect').insert({
+    id: crypto.randomUUID(),
+    org_id: orgId,
+    playground_id: input.playground_id,
+    inspection_id: null,
+    equipment_id: input.equipment_id,
+    title: input.title,
+    description: input.description,
+    severity: input.severity,
+    equipment_blocked: input.equipment_blocked,
+    photo_urls: [],
+    reported_by: userId,
+    reporter_name: input.reporter_name,
+    created_at: new Date().toISOString(),
+  });
+  if (error) fail('Mangel konnte nicht gespeichert werden', error);
+}
+
+/** Mangel als behoben markieren (additiv, RPC wie die App). */
+export async function resolveDefect(
+  sb: SupabaseClient,
+  id: string,
+  note: string,
+  resolverName: string,
+): Promise<void> {
+  const { error } = await sb.rpc('resolve_defect', {
+    p_defect: id,
+    p_note: note,
+    p_resolver_name: resolverName,
+    p_photos: [],
+  });
+  if (error) fail('Mangel konnte nicht als behoben markiert werden', error);
 }
 
 export interface InspectionFilter {

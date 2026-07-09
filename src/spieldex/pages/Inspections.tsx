@@ -1,19 +1,39 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import {
+  FormDialog,
+  isoFromLocal,
+  localFromIso,
+  orNull,
+  s,
+  type FormValues,
+} from '../../components/form';
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
-import { fetchInspections, fetchPlaygrounds } from '../api';
+import { addInspection, cancelInspection, fetchInspections, fetchPlaygrounds } from '../api';
 import { InspectionBadge } from '../badges';
 import { checklistSummary, playgroundNameMap } from '../labels';
 import {
+  CHECKLIST,
   INSPECTION_LABELS,
+  type CheckResult,
   type Inspection,
   type InspectionType,
 } from '../types';
 
+const CHECK_OPTIONS: { value: CheckResult; label: string }[] = [
+  { value: 'ok', label: 'In Ordnung' },
+  { value: 'defect', label: 'Mangel' },
+  { value: 'na', label: 'Nicht zutreffend' },
+];
+
 export function Inspections() {
-  const { client } = useAppAuth();
+  const { client, session } = useAppAuth();
+  const { data: org } = useOrg();
+  const [adding, setAdding] = useState(false);
+  const [canceling, setCanceling] = useState<Inspection | null>(null);
   const [playgroundId, setPlaygroundId] = useState('');
   const [type, setType] = useState('');
   const [from, setFrom] = useState(() => {
@@ -37,13 +57,85 @@ export function Inspections() {
     [client, playgroundId, type, from, to],
   );
 
+  async function onAdd(v: FormValues) {
+    if (!org || !session) throw new Error('Kein Betrieb geladen');
+    const started = isoFromLocal(v.started_at);
+    if (!started) throw new Error('Bitte einen gültigen Zeitpunkt angeben');
+    const checklist: Record<string, CheckResult> = {};
+    for (const item of CHECKLIST) checklist[item.id] = s(v[`chk_${item.id}`]) as CheckResult;
+    await addInspection(client, org.org.id, session.user.id, {
+      playground_id: s(v.playground_id),
+      type: s(v.type) as InspectionType,
+      started_at: started,
+      checklist,
+      notes: orNull(v.notes),
+      inspector_name: orNull(v.inspector_name),
+    });
+    inspState.reload();
+  }
+
+  async function onCancel(v: FormValues) {
+    if (!canceling) throw new Error('Keine Kontrolle gewählt');
+    await cancelInspection(client, canceling.id, s(v.reason));
+    inspState.reload();
+  }
+
   return (
     <>
-      <h1>Kontrollen</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Kontrollen</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setAdding(true)}>
+          ＋ Kontrolle erfassen
+        </button>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Append-only-Kontrollbuch — jeder Eintrag bleibt unveränderlich, Stornos sind
         gekennzeichnet.
       </p>
+
+      {adding && (
+        <FormDialog
+          title="Kontrolle erfassen"
+          submitLabel="Kontrolle speichern"
+          onClose={() => setAdding(false)}
+          onSave={onAdd}
+          fields={[
+            {
+              key: 'playground_id',
+              label: 'Spielplatz',
+              kind: 'select',
+              required: true,
+              options: (pgsState.data ?? []).map((p) => ({ value: p.id, label: p.name })),
+            },
+            {
+              key: 'type',
+              label: 'Kontrollart',
+              kind: 'select',
+              required: true,
+              options: (Object.keys(INSPECTION_LABELS) as InspectionType[]).map((t) => ({
+                value: t,
+                label: INSPECTION_LABELS[t],
+              })),
+            },
+            { key: 'started_at', label: 'Zeitpunkt', kind: 'datetime', required: true },
+            { key: 'inspector_name', label: 'Kontrolliert von' },
+            ...CHECKLIST.map((item) => ({
+              key: `chk_${item.id}`,
+              label: item.label,
+              kind: 'select' as const,
+              required: true,
+              options: CHECK_OPTIONS,
+            })),
+            { key: 'notes', label: 'Notizen', kind: 'textarea' },
+          ]}
+          initial={{
+            started_at: localFromIso(new Date().toISOString()),
+            type: 'visual',
+            ...Object.fromEntries(CHECKLIST.map((item) => [`chk_${item.id}`, 'ok'])),
+          }}
+        />
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="row">
@@ -100,6 +192,7 @@ export function Inspections() {
                       <th>Kontrollart</th>
                       <th>Ergebnis</th>
                       <th>Kontrolliert von</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -114,6 +207,16 @@ export function Inspections() {
                         </td>
                         <td className="muted wrap">{checklistSummary(i.checklist)}</td>
                         <td className="muted">{i.inspector_name ?? '—'}</td>
+                        <td>
+                          {!i.canceled && (
+                            <button
+                              className="btn ghost small"
+                              onClick={() => setCanceling(i)}
+                            >
+                              Stornieren
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -123,6 +226,24 @@ export function Inspections() {
           );
         }}
       </LoadGuard>
+
+      {canceling && (
+        <FormDialog
+          title={`Kontrolle stornieren — ${fmtDateTime(canceling.started_at)}`}
+          submitLabel="Stornieren"
+          onClose={() => setCanceling(null)}
+          onSave={onCancel}
+          fields={[
+            {
+              key: 'reason',
+              label: 'Storno-Grund',
+              kind: 'textarea',
+              required: true,
+              hint: 'Die Kontrolle bleibt im Kontrollbuch sichtbar und wird nur gekennzeichnet',
+            },
+          ]}
+        />
+      )}
     </>
   );
 }

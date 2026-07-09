@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fail } from '../lib/orgApi';
 import type {
+  CheckResult,
   Damage,
   DamageStatus,
   DamageWithPhotos,
@@ -53,6 +54,139 @@ export async function fetchRacks(
   const { data, error } = await q;
   if (error) fail('Regalzeilen konnten nicht geladen werden', error);
   return (data ?? []) as Rack[];
+}
+
+// ── Schreiben (Format identisch zur Mobile-App, supabaseRepository.ts) ──────
+
+export interface WarehouseInput {
+  name: string;
+  address: string;
+  operator_name: string | null;
+  operator_contact: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
+/** Lager anlegen/ändern — Upsert wie app-seitiges saveWarehouse. */
+export async function saveWarehouse(
+  sb: SupabaseClient,
+  orgId: string,
+  input: WarehouseInput,
+  existing?: Warehouse,
+): Promise<void> {
+  const { error } = await sb.from('warehouse').upsert({
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    name: input.name,
+    address: input.address,
+    lat: existing?.lat ?? null,
+    lng: existing?.lng ?? null,
+    operator_name: input.operator_name,
+    operator_contact: input.operator_contact,
+    notes: input.notes,
+    active: input.active,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  });
+  if (error) fail('Lager konnte nicht gespeichert werden', error);
+}
+
+export interface InspectionInput {
+  warehouse_id: string;
+  type: InspectionType;
+  started_at: string;
+  checklist: Record<string, CheckResult>;
+  notes: string | null;
+  inspector_name: string | null;
+}
+
+/** Inspektion nachtragen (append-only, wie app-seitiges addInspection — ohne GPS/Fotos). */
+export async function addInspection(
+  sb: SupabaseClient,
+  orgId: string,
+  userId: string,
+  input: InspectionInput,
+): Promise<void> {
+  const { error } = await sb.from('inspection').insert({
+    id: crypto.randomUUID(),
+    org_id: orgId,
+    warehouse_id: input.warehouse_id,
+    type: input.type,
+    started_at: input.started_at,
+    lat: null,
+    lng: null,
+    gps_accuracy_m: null,
+    checklist: input.checklist,
+    photo_urls: [],
+    notes: input.notes,
+    performed_by: userId,
+    inspector_name: input.inspector_name,
+    created_at: new Date().toISOString(),
+  });
+  if (error) fail('Inspektion konnte nicht gespeichert werden', error);
+}
+
+/** Inspektion stornieren — bleibt sichtbar, wird nur gekennzeichnet (RPC wie die App). */
+export async function cancelInspection(
+  sb: SupabaseClient,
+  id: string,
+  reason: string,
+): Promise<void> {
+  const { error } = await sb.rpc('cancel_inspection', {
+    p_inspection: id,
+    p_reason: reason,
+  });
+  if (error) fail('Inspektion konnte nicht storniert werden', error);
+}
+
+export interface DamageInput {
+  warehouse_id: string;
+  rack_id: string | null;
+  title: string;
+  description: string | null;
+  severity: Damage['severity'];
+  rack_blocked: boolean;
+  reporter_name: string | null;
+}
+
+/** Schaden melden (wie app-seitiges addDamage — ohne Fotos). */
+export async function addDamage(
+  sb: SupabaseClient,
+  orgId: string,
+  userId: string,
+  input: DamageInput,
+): Promise<void> {
+  const { error } = await sb.from('damage').insert({
+    id: crypto.randomUUID(),
+    org_id: orgId,
+    warehouse_id: input.warehouse_id,
+    inspection_id: null,
+    rack_id: input.rack_id,
+    title: input.title,
+    description: input.description,
+    severity: input.severity,
+    rack_blocked: input.rack_blocked,
+    photo_urls: [],
+    reported_by: userId,
+    reporter_name: input.reporter_name,
+    created_at: new Date().toISOString(),
+  });
+  if (error) fail('Schaden konnte nicht gespeichert werden', error);
+}
+
+/** Schaden als instandgesetzt markieren (additiv, RPC wie die App). */
+export async function resolveDamage(
+  sb: SupabaseClient,
+  id: string,
+  note: string,
+  resolverName: string,
+): Promise<void> {
+  const { error } = await sb.rpc('resolve_damage', {
+    p_damage: id,
+    p_note: note,
+    p_resolver_name: resolverName,
+    p_photos: [],
+  });
+  if (error) fail('Schaden konnte nicht als behoben markiert werden', error);
 }
 
 export interface InspectionFilter {

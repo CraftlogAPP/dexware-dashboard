@@ -1,7 +1,16 @@
+import { useState } from 'react';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
+import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDate, fmtDateTime } from '../../lib/format';
-import { fetchAssignments, fetchCompletions, fetchMembers } from '../api';
+import {
+  fetchAssignments,
+  fetchCompletions,
+  fetchMembers,
+  insertMember,
+  updateMember,
+} from '../api';
 import { isOverdue } from '../labels';
 import type { Assignment, Completion, Member } from '../types';
 
@@ -13,6 +22,8 @@ interface Data {
 
 export function Members() {
   const { client } = useAppAuth();
+  const { data: org } = useOrg();
+  const [editing, setEditing] = useState<Member | 'new' | null>(null);
 
   const state = useAsync<Data>(async () => {
     const [members, assignments, completions] = await Promise.all([
@@ -23,9 +34,30 @@ export function Members() {
     return { members, assignments, completions };
   }, [client]);
 
+  async function onSave(v: FormValues) {
+    if (!org) throw new Error('Kein Betrieb geladen');
+    const input = {
+      name: s(v.name),
+      taetigkeit: orNull(v.taetigkeit),
+      email: orNull(v.email),
+      telefon: orNull(v.telefon),
+      eintritt_am: orNull(v.eintritt_am),
+      aktiv: v.aktiv === true,
+    };
+    if (editing === 'new') await insertMember(client, org.org.id, input);
+    else if (editing) await updateMember(client, editing.id, input);
+    state.reload();
+  }
+
   return (
     <>
-      <h1>Mitarbeiter</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Mitarbeiter</h1>
+        <div className="spacer" />
+        <button className="btn" onClick={() => setEditing('new')}>
+          ＋ Mitarbeiter anlegen
+        </button>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Mitarbeiter sind Datensätze im Betrieb (keine eigenen Konten) — sie
         unterschreiben in der App auf dem Gerät des Inhabers.
@@ -46,6 +78,7 @@ export function Members() {
                     <th>Offene Zuweisungen</th>
                     <th>Letzter Nachweis</th>
                     <th>Status</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -83,6 +116,11 @@ export function Members() {
                         <td>
                           <StatusBadge active={m.aktiv} />
                         </td>
+                        <td>
+                          <button className="btn ghost small" onClick={() => setEditing(m)}>
+                            Bearbeiten
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -92,6 +130,34 @@ export function Members() {
           )
         }
       </LoadGuard>
+
+      {editing && (
+        <FormDialog
+          title={editing === 'new' ? 'Mitarbeiter anlegen' : `${editing.name} bearbeiten`}
+          onClose={() => setEditing(null)}
+          onSave={onSave}
+          fields={[
+            { key: 'name', label: 'Name', required: true },
+            { key: 'taetigkeit', label: 'Tätigkeit', placeholder: 'z. B. Monteur' },
+            { key: 'email', label: 'E-Mail' },
+            { key: 'telefon', label: 'Telefon' },
+            { key: 'eintritt_am', label: 'Eintritt am', kind: 'date' },
+            { key: 'aktiv', label: 'Aktiv (bekommt Unterweisungen)', kind: 'checkbox' },
+          ]}
+          initial={
+            editing === 'new'
+              ? { aktiv: true }
+              : {
+                  name: editing.name,
+                  taetigkeit: editing.taetigkeit ?? '',
+                  email: editing.email ?? '',
+                  telefon: editing.telefon ?? '',
+                  eintritt_am: editing.eintritt_am ?? '',
+                  aktiv: editing.aktiv,
+                }
+          }
+        />
+      )}
     </>
   );
 }
