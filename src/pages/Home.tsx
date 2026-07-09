@@ -1,14 +1,20 @@
 import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { APPS, STATUS_ORDER, appIcon, type AppConfig } from '../apps/registry';
+import { DueBell } from '../duechecks/DueBell';
+import { useDueChecks } from '../duechecks/useDueChecks';
 
 export function Home() {
   const apps = [...APPS].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
   const liveCount = APPS.filter((a) => a.status === 'dashboard').length;
+  const due = useDueChecks();
 
   return (
     <>
       <header className="site-header home">
+        <div className="home-bell">
+          <DueBell {...due} />
+        </div>
         <a
           className="badge home-link"
           href="https://dexware.app"
@@ -40,7 +46,12 @@ export function Home() {
 
         <div className="tile-grid">
           {apps.map((app, i) => (
-            <AppTile key={app.id} app={app} index={i} />
+            <AppTile
+              key={app.id}
+              app={app}
+              index={i}
+              dueCount={due.results[app.id]?.count ?? 0}
+            />
           ))}
         </div>
       </main>
@@ -48,7 +59,15 @@ export function Home() {
   );
 }
 
-function AppTile({ app, index }: { app: AppConfig; index: number }) {
+function AppTile({
+  app,
+  index,
+  dueCount,
+}: {
+  app: AppConfig;
+  index: number;
+  dueCount: number;
+}) {
   const style = {
     '--tile-accent': app.theme.primary,
     '--tile-card': app.theme.card,
@@ -65,6 +84,11 @@ function AppTile({ app, index }: { app: AppConfig; index: number }) {
 
   const body = (
     <>
+      {dueCount > 0 && (
+        <span className="tile-due" title="Fällige Prüfungen">
+          {dueCount} fällig
+        </span>
+      )}
       <div className="tile-head">
         <img className="tile-icon" src={appIcon(app.id)} alt="" loading="lazy" />
         <h3>{app.name}</h3>
