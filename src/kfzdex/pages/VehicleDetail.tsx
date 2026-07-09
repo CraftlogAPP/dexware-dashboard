@@ -1,9 +1,11 @@
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate } from '../../lib/format';
-import { fetchUvvInspections, fetchVehicles } from '../api';
+import { deleteVehicle, fetchUvvInspections, fetchVehicles } from '../api';
 import { DueBadge, dueLabel, ResultBadge } from '../badges';
+import { UvvDialog, VehicleDialog } from '../dialogs';
 import { uvvDue } from '../due';
 import type { UvvInspection, Vehicle } from '../types';
 import { CHECK_ITEMS, VEHICLE_TYPE_LABEL } from '../types';
@@ -24,6 +26,9 @@ function checklistSummary(checklist: Record<string, boolean>): string {
 export function VehicleDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
+  const [inspecting, setInspecting] = useState(false);
 
   const state = useAsync<{ vehicle: Vehicle | null; inspections: UvvInspection[] }>(
     async () => {
@@ -51,7 +56,34 @@ export function VehicleDetail() {
             </p>
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <h1 style={{ marginBottom: 0 }}>{v.plate}</h1>
-              <DueBadge status={due.status} />
+              <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                <button className="btn ghost small" onClick={() => setEditing(true)}>
+                  Bearbeiten
+                </button>
+                <button className="btn ghost small" onClick={() => setInspecting(true)}>
+                  UVV erfassen
+                </button>
+                <button
+                  className="btn ghost small"
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        `Fahrzeug ${v.plate} wirklich löschen? Alle dokumentierten UVV-Prüfungen werden mitgelöscht — auch in der App.`,
+                      )
+                    )
+                      return;
+                    try {
+                      await deleteVehicle(client, v.id);
+                      navigate('../fahrzeuge');
+                    } catch (err) {
+                      alert(err instanceof Error ? err.message : String(err));
+                    }
+                  }}
+                >
+                  Löschen
+                </button>
+                <DueBadge status={due.status} />
+              </span>
             </div>
             <p className="muted">
               {v.name ? `${v.name} · ` : ''}
@@ -113,6 +145,21 @@ export function VehicleDetail() {
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {editing && (
+              <VehicleDialog
+                vehicle={v}
+                onClose={() => setEditing(false)}
+                onSaved={() => state.reload()}
+              />
+            )}
+            {inspecting && (
+              <UvvDialog
+                vehicle={v}
+                onClose={() => setInspecting(false)}
+                onSaved={() => state.reload()}
+              />
             )}
           </>
         );

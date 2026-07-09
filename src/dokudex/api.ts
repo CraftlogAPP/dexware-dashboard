@@ -13,6 +13,7 @@ const DOC_COLS = [
   'ai_type:data->analysis->>documentType',
   'summary:data->analysis->>summary',
   'deadlines:data->analysis->deadlines',
+  'notes:data->>notes',
   'created_at:data->>createdAt',
 ].join(', ');
 
@@ -50,6 +51,8 @@ export interface DocumentHeadInput {
   title: string;
   type: DocType;
   projectId: string | null;
+  /** Freitext-Notizen; null entfernt das Feld. */
+  notes: string | null;
 }
 
 export async function updateDocumentHead(
@@ -69,6 +72,7 @@ export async function updateDocumentHead(
     title: input.title,
     type: input.type,
     projectId: input.projectId,
+    notes: input.notes ?? undefined,
     updatedAt: now,
   };
   const { error: upError } = await sb
@@ -76,6 +80,50 @@ export async function updateDocumentHead(
     .update({ data: merged, updated_at: now })
     .eq('client_id', id);
   if (upError) fail('Dokument konnte nicht gespeichert werden', upError);
+}
+
+/** Dokument hart löschen — wie App SyncService.removeDocument (RLS scoped den User). */
+export async function deleteDocument(sb: SupabaseClient, id: string): Promise<void> {
+  const { error } = await sb.from('documents').delete().eq('client_id', id);
+  if (error) fail('Dokument konnte nicht gelöscht werden', error);
+}
+
+/**
+ * Projekt (Ordner) löschen — wie App storage.js deleteProject: zuerst die
+ * projectId der zugehörigen Dokumente lösen (Blob-Merge + updatedAt, damit die
+ * Dokumente ohne Projekt erhalten bleiben), dann die Projekt-Zeile hart löschen.
+ */
+export async function deleteProject(
+  sb: SupabaseClient,
+  userId: string,
+  project: Project,
+  memberDocs: DocumentSummary[],
+): Promise<void> {
+  for (const doc of memberDocs) {
+    const { data, error } = await sb
+      .from('documents')
+      .select('data')
+      .eq('client_id', doc.id)
+      .single();
+    if (error) fail('Dokument konnte nicht geladen werden', error);
+    const now = new Date().toISOString();
+    const merged = {
+      ...(data!.data as DocumentData),
+      projectId: null,
+      updatedAt: now,
+    };
+    const { error: upError } = await sb
+      .from('documents')
+      .update({ data: merged, updated_at: now })
+      .eq('client_id', doc.id);
+    if (upError) fail('Dokument konnte nicht gespeichert werden', upError);
+  }
+  const { error } = await sb
+    .from('projects')
+    .delete()
+    .eq('user_id', userId)
+    .eq('client_id', project.id);
+  if (error) fail('Projekt konnte nicht gelöscht werden', error);
 }
 
 /** Projekt (Dokumenten-Ordner) anlegen/umbenennen — Upsert wie app-seitiges pushProject. */

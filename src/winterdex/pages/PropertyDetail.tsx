@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { fetchOperations, fetchProperty } from '../api';
 import { ActionBadge, LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { fmtDateTime, gpsLabel } from '../../lib/format';
 import { gritLabel, weatherLabel } from '../labels';
+import { PropertyDialog } from '../dialogs';
 import type { Operation, Property } from '../types';
 import { dutyLabel } from './Properties';
 
@@ -15,6 +17,7 @@ interface Data {
 export function PropertyDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
+  const [editing, setEditing] = useState(false);
 
   const state = useAsync<Data>(async () => {
     const [property, ops] = await Promise.all([
@@ -36,10 +39,26 @@ export function PropertyDetail() {
               <Link to="../objekte">← Alle Objekte</Link>
             </p>
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h1 style={{ marginBottom: 0 }}>{property.name}</h1>
+              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <h1 style={{ marginBottom: 0 }}>{property.name}</h1>
+                <button className="btn ghost small" onClick={() => setEditing(true)}>
+                  Bearbeiten
+                </button>
+              </div>
               <StatusBadge active={property.active} />
             </div>
             <p className="muted">{property.address}</p>
+
+            {editing && (
+              <PropertyDialog
+                property={property}
+                onClose={() => setEditing(false)}
+                onSaved={() => {
+                  setEditing(false);
+                  state.reload();
+                }}
+              />
+            )}
 
             <div className="kpi-grid">
               <div className="card">

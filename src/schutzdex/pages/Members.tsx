@@ -5,6 +5,7 @@ import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDate, fmtDateTime } from '../../lib/format';
 import {
+  deleteMember,
   fetchAssignments,
   fetchCompletions,
   fetchMembers,
@@ -47,6 +48,21 @@ export function Members() {
     if (editing === 'new') await insertMember(client, org.org.id, input);
     else if (editing) await updateMember(client, editing.id, input);
     state.reload();
+  }
+
+  async function onDelete(m: Member) {
+    if (
+      !window.confirm(
+        `Mitarbeiter „${m.name}" wirklich löschen? Bereits erbrachte Nachweise bleiben mit erfasstem Namen erhalten; offene Zuweisungen werden entfernt.`,
+      )
+    )
+      return;
+    try {
+      await deleteMember(client, m.id);
+      state.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
   }
 
   return (
@@ -117,9 +133,14 @@ export function Members() {
                           <StatusBadge active={m.aktiv} />
                         </td>
                         <td>
-                          <button className="btn ghost small" onClick={() => setEditing(m)}>
-                            Bearbeiten
-                          </button>
+                          <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                            <button className="btn ghost small" onClick={() => setEditing(m)}>
+                              Bearbeiten
+                            </button>
+                            <button className="btn ghost small" onClick={() => onDelete(m)}>
+                              Löschen
+                            </button>
+                          </span>
                         </td>
                       </tr>
                     );

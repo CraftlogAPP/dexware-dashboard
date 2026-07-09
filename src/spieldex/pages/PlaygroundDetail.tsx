@@ -14,6 +14,7 @@ import {
 } from '../api';
 import { DefectStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, equipmentNameMap } from '../labels';
+import { PlaygroundDialog } from '../dialogs';
 import type { Defect, Equipment, Inspection, Playground } from '../types';
 
 interface Data {
@@ -28,6 +29,7 @@ export function PlaygroundDetail() {
   const { client } = useAppAuth();
   const { data: org } = useOrg();
   const [editingEq, setEditingEq] = useState<Equipment | 'new' | null>(null);
+  const [editingPg, setEditingPg] = useState(false);
 
   const state = useAsync<Data>(async () => {
     const [playground, equipment, inspections, defects] = await Promise.all([
@@ -72,10 +74,26 @@ export function PlaygroundDetail() {
               <Link to="../spielplaetze">← Alle Spielplätze</Link>
             </p>
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h1 style={{ marginBottom: 0 }}>{playground.name}</h1>
+              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <h1 style={{ marginBottom: 0 }}>{playground.name}</h1>
+                <button className="btn ghost small" onClick={() => setEditingPg(true)}>
+                  Bearbeiten
+                </button>
+              </div>
               <StatusBadge active={playground.active} />
             </div>
             <p className="muted">{playground.address}</p>
+
+            {editingPg && (
+              <PlaygroundDialog
+                playground={playground}
+                onClose={() => setEditingPg(false)}
+                onSaved={() => {
+                  setEditingPg(false);
+                  state.reload();
+                }}
+              />
+            )}
 
             <div className="kpi-grid">
               <div className="card">

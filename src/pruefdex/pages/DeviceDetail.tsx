@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate } from '../../lib/format';
 import { fetchCustomers, fetchDevice, fetchInspections } from '../api';
+import { DeviceDialog, InspectionDialog } from '../dialogs';
 import { DueBadge, ResultBadge } from '../badges';
 import { dueStatus, nameMap, skLabel } from '../labels';
 import type { Customer, Device, Inspection } from '../types';
@@ -16,6 +19,9 @@ interface Data {
 export function DeviceDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
+  const { data: org } = useOrg();
+  const [editingDevice, setEditingDevice] = useState(false);
+  const [addingInspection, setAddingInspection] = useState(false);
 
   const state = useAsync<Data>(async () => {
     const [device, customers, inspections] = await Promise.all([
@@ -48,6 +54,15 @@ export function DeviceDetail() {
                 ? ` · ${custNames.get(device.customer_id) ?? ''}`
                 : ''}
             </p>
+
+            <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+              <button className="btn ghost small" onClick={() => setEditingDevice(true)}>
+                Bearbeiten
+              </button>
+              <button className="btn small" onClick={() => setAddingInspection(true)}>
+                ＋ Prüfung erfassen
+              </button>
+            </div>
 
             <div className="kpi-grid">
               <div className="card">
@@ -113,6 +128,30 @@ export function DeviceDetail() {
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {editingDevice && org && (
+              <DeviceDialog
+                client={client}
+                orgId={org.org.id}
+                customers={customers}
+                device={device}
+                onClose={() => setEditingDevice(false)}
+                onSaved={() => state.reload()}
+              />
+            )}
+            {addingInspection && org && (
+              <InspectionDialog
+                client={client}
+                orgId={org.org.id}
+                devices={[device]}
+                fixedDeviceId={device.id}
+                onClose={() => setAddingInspection(false)}
+                onSaved={(warning) => {
+                  state.reload();
+                  if (warning) alert(warning);
+                }}
+              />
             )}
           </>
         );

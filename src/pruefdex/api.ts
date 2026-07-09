@@ -57,6 +57,13 @@ export interface CustomerInput {
   contact: string | null;
 }
 
+/** Kunde löschen — wie app-seitiges deleteCustomer. Geräte bleiben erhalten
+ * (device.customer_id ist FK „on delete set null"), verlieren nur die Zuordnung. */
+export async function deleteCustomer(sb: SupabaseClient, id: string): Promise<void> {
+  const { error } = await sb.from('customer').delete().eq('id', id);
+  if (error) fail('Kunde konnte nicht gelöscht werden', error);
+}
+
 /** Kunde anlegen/ändern — Upsert wie app-seitiges saveCustomer. */
 export async function saveCustomer(
   sb: SupabaseClient,
@@ -103,6 +110,13 @@ export async function saveDevice(
   if (error) fail('Gerät konnte nicht gespeichert werden', error);
 }
 
+/** Gerät löschen — wie app-seitiges deleteDevice. Alle Prüfungen des Geräts
+ * werden per FK „on delete cascade" mitgelöscht. */
+export async function deleteDevice(sb: SupabaseClient, id: string): Promise<void> {
+  const { error } = await sb.from('device').delete().eq('id', id);
+  if (error) fail('Gerät konnte nicht gelöscht werden', error);
+}
+
 export interface InspectionInput {
   device_id: string;
   inspected_at: string;
@@ -136,6 +150,77 @@ export async function addInspection(
   return upError
     ? `Die Prüfung wurde gespeichert, aber die Prüffrist am Gerät konnte nicht aktualisiert werden (${upError.message}). Bitte nicht erneut speichern.`
     : null;
+}
+
+export interface InspectionUpdateInput extends InspectionInput {
+  id: string;
+}
+
+/** Prüfung ändern + Geräte-Frist neu berechnen (wie die App, updateInspection). */
+export async function updateInspection(
+  sb: SupabaseClient,
+  input: InspectionUpdateInput,
+): Promise<string | null> {
+  const { error } = await sb
+    .from('inspection')
+    .update({
+      inspected_at: input.inspected_at,
+      inspector_name: input.inspector_name,
+      visual_checks: input.visual_checks,
+      measurements: input.measurements,
+      result: input.result,
+      next_due_date: input.next_due_date,
+      notes: input.notes,
+    })
+    .eq('id', input.id);
+  if (error) fail('Prüfung konnte nicht gespeichert werden', error);
+  const failMsg = await recomputeDeviceDue(sb, input.device_id);
+  // Prüfung ist schon gespeichert — Throw hieße Dialog offen bei bereits erfolgter Änderung.
+  return failMsg
+    ? `Die Prüfung wurde gespeichert, aber die Prüffrist am Gerät konnte nicht neu berechnet werden (${failMsg}). Bitte am Gerät prüfen.`
+    : null;
+}
+
+/** Prüfung löschen + Geräte-Frist neu berechnen (wie die App, deleteInspection). */
+export async function deleteInspection(
+  sb: SupabaseClient,
+  id: string,
+  deviceId: string,
+): Promise<string | null> {
+  const { error } = await sb.from('inspection').delete().eq('id', id);
+  if (error) fail('Prüfung konnte nicht gelöscht werden', error);
+  const failMsg = await recomputeDeviceDue(sb, deviceId);
+  return failMsg
+    ? `Die Prüfung wurde gelöscht, aber die Prüffrist am Gerät konnte nicht neu berechnet werden (${failMsg}). Bitte am Gerät prüfen.`
+    : null;
+}
+
+/**
+ * Frist des Geräts aus der jüngsten verbleibenden Prüfung neu setzen (null, wenn
+ * keine mehr existiert) — wie die App (recomputeDue). Als „neueste" gilt dieselbe
+ * Sortierung wie in fetchInspections (inspected_at, dann created_at absteigend);
+ * das created_at löst Gleichstände beim reinen Datums-Feld inspected_at auf.
+ * Gibt die DB-Fehlermeldung zurück, wenn die Neuberechnung nach der Primär-
+ * schreiboperation fehlschlägt, sonst null.
+ */
+async function recomputeDeviceDue(
+  sb: SupabaseClient,
+  deviceId: string,
+): Promise<string | null> {
+  const { data, error: selError } = await sb
+    .from('inspection')
+    .select('next_due_date')
+    .eq('device_id', deviceId)
+    .order('inspected_at', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (selError) return selError.message;
+  const due = data?.[0]?.next_due_date ?? null;
+  const { error: upError } = await sb
+    .from('device')
+    .update({ next_due_date: due })
+    .eq('id', deviceId);
+  return upError ? upError.message : null;
 }
 
 export interface InspectionFilter {

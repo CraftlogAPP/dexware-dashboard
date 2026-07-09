@@ -27,6 +27,7 @@ export interface DocumentSummary {
   summary: string | null;
   /** Fristen als kurze Strings, z. B. „Zahlung bis 15.01.2025" */
   deadlines: string[] | null;
+  notes: string | null;
   created_at: string | null;
 }
 

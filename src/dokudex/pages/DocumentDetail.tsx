@@ -1,14 +1,18 @@
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, fmtDateTime } from '../../lib/format';
-import { fetchDocument, fetchProjects } from '../api';
+import { deleteDocument, fetchDocument, fetchProjects } from '../api';
+import { DocumentDialog } from '../dialogs';
 import { TypeBadge } from '../badges';
 import type { DocumentData, Project } from '../types';
 
 export function DocumentDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
 
   const state = useAsync<{ doc: DocumentData | null; projects: Project[] }>(
     async () => {
@@ -42,7 +46,31 @@ export function DocumentDetail() {
             </p>
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <h1 style={{ marginBottom: 0 }}>{d.title}</h1>
-              <TypeBadge type={d.type} />
+              <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                <button className="btn ghost small" onClick={() => setEditing(true)}>
+                  Bearbeiten
+                </button>
+                <button
+                  className="btn ghost small"
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        `Dokument „${d.title}" wirklich löschen? Es wird auch in der App gelöscht.`,
+                      )
+                    )
+                      return;
+                    try {
+                      await deleteDocument(client, id!);
+                      navigate('../dokumente');
+                    } catch (err) {
+                      alert(err instanceof Error ? err.message : String(err));
+                    }
+                  }}
+                >
+                  Löschen
+                </button>
+                <TypeBadge type={d.type} />
+              </span>
             </div>
             <p className="muted">
               {a?.documentType ? `${a.documentType} · ` : ''}
@@ -145,6 +173,25 @@ export function DocumentDetail() {
               </a>
             ) : (
               <div className="card empty">Kein Scan-Bild in der Cloud.</div>
+            )}
+
+            {editing && (
+              <DocumentDialog
+                client={client}
+                projects={projects}
+                editing={{
+                  id: d.id,
+                  title: d.title,
+                  type: d.type,
+                  projectId: d.projectId ?? null,
+                  notes: d.notes ?? null,
+                }}
+                onClose={() => setEditing(false)}
+                onSaved={() => {
+                  setEditing(false);
+                  state.reload();
+                }}
+              />
             )}
           </>
         );

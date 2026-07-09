@@ -1,18 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
-import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
-import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
 import {
   fetchDamages,
   fetchInspectionMeta,
   fetchWarehouses,
-  saveWarehouse,
   type InspMeta,
 } from '../api';
 import { lastInspectionByWarehouse } from '../labels';
+import { WarehouseDialog } from '../dialogs';
 import type { Damage, Warehouse } from '../types';
 
 interface Data {
@@ -23,7 +21,6 @@ interface Data {
 
 export function Warehouses() {
   const { client } = useAppAuth();
-  const { data: org } = useOrg();
   const [editing, setEditing] = useState<Warehouse | 'new' | null>(null);
 
   const state = useAsync<Data>(async () => {
@@ -34,24 +31,6 @@ export function Warehouses() {
     ]);
     return { warehouses, lastByWh: lastInspectionByWarehouse(meta), openDamages };
   }, [client]);
-
-  async function onSave(v: FormValues) {
-    if (!org) throw new Error('Kein Betrieb geladen');
-    await saveWarehouse(
-      client,
-      org.org.id,
-      {
-        name: s(v.name),
-        address: s(v.address),
-        operator_name: orNull(v.operator_name),
-        operator_contact: orNull(v.operator_contact),
-        notes: orNull(v.notes),
-        active: v.active === true,
-      },
-      editing === 'new' ? undefined : (editing ?? undefined),
-    );
-    state.reload();
-  }
 
   return (
     <>
@@ -126,30 +105,13 @@ export function Warehouses() {
       </LoadGuard>
 
       {editing && (
-        <FormDialog
-          title={editing === 'new' ? 'Lager anlegen' : `${editing.name} bearbeiten`}
+        <WarehouseDialog
+          warehouse={editing}
           onClose={() => setEditing(null)}
-          onSave={onSave}
-          fields={[
-            { key: 'name', label: 'Name', required: true },
-            { key: 'address', label: 'Adresse', required: true },
-            { key: 'operator_name', label: 'Betreiber' },
-            { key: 'operator_contact', label: 'Betreiber-Kontakt' },
-            { key: 'notes', label: 'Notizen', kind: 'textarea' },
-            { key: 'active', label: 'Aktiv (wird inspiziert)', kind: 'checkbox' },
-          ]}
-          initial={
-            editing === 'new'
-              ? { active: true }
-              : {
-                  name: editing.name,
-                  address: editing.address,
-                  operator_name: editing.operator_name ?? '',
-                  operator_contact: editing.operator_contact ?? '',
-                  notes: editing.notes ?? '',
-                  active: editing.active,
-                }
-          }
+          onSaved={() => {
+            setEditing(null);
+            state.reload();
+          }}
         />
       )}
     </>

@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { FormDialog, orNull, s, type FormValues } from '../../components/form';
 import { fmtDate } from '../../lib/format';
-import { fetchDocumentSummaries, fetchProjects, updateDocumentHead } from '../api';
+import { deleteDocument, fetchDocumentSummaries, fetchProjects } from '../api';
+import { DocumentDialog } from '../dialogs';
 import { TypeBadge } from '../badges';
 import {
   TYPE_LABELS,
@@ -32,14 +32,19 @@ export function Documents() {
     [client],
   );
 
-  async function onSave(v: FormValues) {
-    if (!editing) throw new Error('Kein Dokument gewählt');
-    await updateDocumentHead(client, editing.id, {
-      title: s(v.title),
-      type: s(v.type) as DocType,
-      projectId: orNull(v.projectId),
-    });
-    state.reload();
+  async function onDelete(d: DocumentSummary) {
+    if (
+      !window.confirm(
+        `Dokument „${d.title ?? 'ohne Titel'}" wirklich löschen? Es wird auch in der App gelöscht.`,
+      )
+    )
+      return;
+    try {
+      await deleteDocument(client, d.id);
+      state.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
   }
 
   return (
@@ -156,12 +161,20 @@ export function Documents() {
                             </td>
                             <td className="muted">{fmtDate(d.created_at)}</td>
                             <td>
-                              <button
-                                className="btn ghost small"
-                                onClick={() => setEditing(d)}
-                              >
-                                Bearbeiten
-                              </button>
+                              <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                                <button
+                                  className="btn ghost small"
+                                  onClick={() => setEditing(d)}
+                                >
+                                  Bearbeiten
+                                </button>
+                                <button
+                                  className="btn ghost small"
+                                  onClick={() => onDelete(d)}
+                                >
+                                  Löschen
+                                </button>
+                              </span>
                             </td>
                           </tr>
                         ))}
@@ -171,34 +184,20 @@ export function Documents() {
                 </>
               )}
               {editing && (
-                <FormDialog
-                  title={`${editing.title ?? 'Dokument'} bearbeiten`}
-                  onClose={() => setEditing(null)}
-                  onSave={onSave}
-                  fields={[
-                    { key: 'title', label: 'Titel', required: true },
-                    {
-                      key: 'type',
-                      label: 'Typ',
-                      kind: 'select',
-                      required: true,
-                      options: (Object.keys(TYPE_LABELS) as DocType[]).map((t) => ({
-                        value: t,
-                        label: TYPE_LABELS[t],
-                      })),
-                    },
-                    {
-                      key: 'projectId',
-                      label: 'Projekt',
-                      kind: 'select',
-                      hint: 'Leer lassen = ohne Projekt',
-                      options: projects.map((p) => ({ value: p.id, label: p.name })),
-                    },
-                  ]}
-                  initial={{
+                <DocumentDialog
+                  client={client}
+                  projects={projects}
+                  editing={{
+                    id: editing.id,
                     title: editing.title ?? '',
-                    type: editing.type ?? 'other',
-                    projectId: editing.project_id ?? '',
+                    type: editing.type,
+                    projectId: editing.project_id,
+                    notes: editing.notes,
+                  }}
+                  onClose={() => setEditing(null)}
+                  onSaved={() => {
+                    setEditing(null);
+                    state.reload();
                   }}
                 />
               )}

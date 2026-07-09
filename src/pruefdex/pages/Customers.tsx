@@ -4,7 +4,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { FormDialog, orNull, s, type FormValues } from '../../components/form';
-import { fetchCustomers, fetchDevices, saveCustomer } from '../api';
+import { deleteCustomer, fetchCustomers, fetchDevices, saveCustomer } from '../api';
 import { dueStatus } from '../labels';
 import type { Customer, Device } from '../types';
 
@@ -39,6 +39,21 @@ export function Customers() {
       editing === 'new' ? undefined : (editing ?? undefined),
     );
     state.reload();
+  }
+
+  async function onDelete(c: Customer) {
+    if (
+      !window.confirm(
+        `Kunde „${c.name}" wirklich löschen? Die zugeordneten Geräte bleiben erhalten, verlieren aber die Kundenzuordnung.`,
+      )
+    )
+      return;
+    try {
+      await deleteCustomer(client, c.id);
+      state.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
   }
 
   return (
@@ -93,9 +108,14 @@ export function Customers() {
                           )}
                         </td>
                         <td>
-                          <button className="btn ghost small" onClick={() => setEditing(c)}>
-                            Bearbeiten
-                          </button>
+                          <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                            <button className="btn ghost small" onClick={() => setEditing(c)}>
+                              Bearbeiten
+                            </button>
+                            <button className="btn ghost small" onClick={() => onDelete(c)}>
+                              Löschen
+                            </button>
+                          </span>
                         </td>
                       </tr>
                     );

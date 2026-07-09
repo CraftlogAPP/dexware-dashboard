@@ -1,15 +1,20 @@
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate } from '../../lib/format';
-import { fetchDrivers, fetchLicenseChecks } from '../api';
+import { deleteDriver, fetchDrivers, fetchLicenseChecks } from '../api';
 import { DueBadge, dueLabel } from '../badges';
+import { DriverDialog, LicenseCheckDialog } from '../dialogs';
 import { licenseDue } from '../due';
 import type { Driver, LicenseCheck } from '../types';
 
 export function DriverDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   const state = useAsync<{ driver: Driver | null; checks: LicenseCheck[] }>(
     async () => {
@@ -38,6 +43,31 @@ export function DriverDetail() {
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <h1 style={{ marginBottom: 0 }}>{d.name}</h1>
               <span className="row" style={{ gap: 8 }}>
+                <button className="btn ghost small" onClick={() => setEditing(true)}>
+                  Bearbeiten
+                </button>
+                <button className="btn ghost small" onClick={() => setChecking(true)}>
+                  Kontrolle erfassen
+                </button>
+                <button
+                  className="btn ghost small"
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        `Fahrer ${d.name} wirklich löschen? Alle dokumentierten Führerscheinkontrollen werden mitgelöscht — auch in der App.`,
+                      )
+                    )
+                      return;
+                    try {
+                      await deleteDriver(client, d.id);
+                      navigate('../fahrer');
+                    } catch (err) {
+                      alert(err instanceof Error ? err.message : String(err));
+                    }
+                  }}
+                >
+                  Löschen
+                </button>
                 {d.active ? (
                   <span className="badge green">aktiv</span>
                 ) : (
@@ -102,6 +132,21 @@ export function DriverDetail() {
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {editing && (
+              <DriverDialog
+                driver={d}
+                onClose={() => setEditing(false)}
+                onSaved={() => state.reload()}
+              />
+            )}
+            {checking && (
+              <LicenseCheckDialog
+                driver={d}
+                onClose={() => setChecking(false)}
+                onSaved={() => state.reload()}
+              />
             )}
           </>
         );
