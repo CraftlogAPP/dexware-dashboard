@@ -2,6 +2,7 @@ import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
+import { AboPage } from '../components/AboPage';
 import { Overview } from './pages/Overview';
 import { Documents } from './pages/Documents';
 import { DocumentDetail } from './pages/DocumentDetail';
@@ -18,6 +19,7 @@ export function DokudexArea({ app }: { app: AppConfig }) {
           <Route path="dokumente" element={<Documents />} />
           <Route path="dokumente/:id" element={<DocumentDetail />} />
           <Route path="projekte" element={<Projects />} />
+          <Route path="abo" element={<AboPage />} />
         </Route>
       </Routes>
     </AppArea>
@@ -38,6 +40,7 @@ function Shell() {
         </NavLink>
         <NavLink to={`${base}/dokumente`}>📄 Dokumente</NavLink>
         <NavLink to={`${base}/projekte`}>🗂️ Projekte</NavLink>
+        <NavLink to={`${base}/abo`}>💳 Abo</NavLink>
         <div className="nav-footer">
           {session && (
             <>

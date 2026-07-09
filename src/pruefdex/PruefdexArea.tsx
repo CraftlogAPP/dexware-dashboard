@@ -3,6 +3,7 @@ import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
+import { AboPage } from '../components/AboPage';
 import { Overview } from './pages/Overview';
 import { Customers } from './pages/Customers';
 import { Devices } from './pages/Devices';
@@ -26,6 +27,7 @@ export function PruefdexArea({ app }: { app: AppConfig }) {
               <Route path="pruefungen" element={<Inspections />} />
               <Route path="pruefungen/:id" element={<InspectionDetail />} />
               <Route path="bericht" element={<Report />} />
+              <Route path="abo" element={<AboPage />} />
             </Route>
           </Routes>
         </OrgGate>
@@ -51,6 +53,7 @@ function Shell() {
         <NavLink to={`${base}/geraete`}>🔌 Geräte</NavLink>
         <NavLink to={`${base}/pruefungen`}>✅ Prüfungen</NavLink>
         <NavLink to={`${base}/bericht`}>📄 Prüflisten-PDF</NavLink>
+        <NavLink to={`${base}/abo`}>💳 Abo</NavLink>
         <div className="nav-footer">
           {data && (
             <>
