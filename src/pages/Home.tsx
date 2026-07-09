@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { APPS, STATUS_ORDER, type AppConfig } from '../apps/registry';
+import { APPS, STATUS_ORDER, appIcon, type AppConfig } from '../apps/registry';
 
 export function Home() {
   const apps = [...APPS].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
@@ -39,14 +39,16 @@ export function Home() {
 }
 
 function AppTile({ app }: { app: AppConfig }) {
-  const style = { '--tile-accent': app.theme.primary } as React.CSSProperties;
+  const style = {
+    '--tile-accent': app.theme.primary,
+    '--tile-card': app.theme.card,
+    '--tile-bg': app.theme.bg,
+  } as React.CSSProperties;
 
   const body = (
     <>
       <div className="tile-head">
-        <span className="tile-emoji" aria-hidden>
-          {app.emoji}
-        </span>
+        <img className="tile-icon" src={appIcon(app.id)} alt="" loading="lazy" />
         <h3>{app.name}</h3>
       </div>
       <p>{app.tagline}</p>
