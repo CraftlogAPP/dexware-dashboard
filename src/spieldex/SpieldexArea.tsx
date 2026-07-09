@@ -4,6 +4,7 @@ import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
 import { TeamPage } from '../components/TeamPage';
+import { AboPage } from '../components/AboPage';
 import { Overview } from './pages/Overview';
 import { Playgrounds } from './pages/Playgrounds';
 import { PlaygroundDetail } from './pages/PlaygroundDetail';
@@ -27,6 +28,7 @@ export function SpieldexArea({ app }: { app: AppConfig }) {
               <Route path="maengel" element={<Defects />} />
               <Route path="team" element={<TeamPage />} />
               <Route path="bericht" element={<Report />} />
+              <Route path="abo" element={<AboPage />} />
             </Route>
           </Routes>
         </OrgGate>
@@ -53,6 +55,7 @@ function Shell() {
         <NavLink to={`${base}/maengel`}>⚠️ Mängel</NavLink>
         <NavLink to={`${base}/team`}>👥 Team</NavLink>
         <NavLink to={`${base}/bericht`}>📄 Kontrollbuch-PDF</NavLink>
+        <NavLink to={`${base}/abo`}>💳 Abo</NavLink>
         <div className="nav-footer">
           {data && (
             <>

@@ -4,6 +4,7 @@ import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
 import { fetchOwnerOrgContext } from '../lib/orgApi';
+import { AboPage } from '../components/AboPage';
 import { Overview } from './pages/Overview';
 import { Members } from './pages/Members';
 import { Briefings } from './pages/Briefings';
@@ -24,6 +25,7 @@ export function SchutzdexArea({ app }: { app: AppConfig }) {
               <Route path="unterweisungen" element={<Briefings />} />
               <Route path="zuweisungen" element={<Assignments />} />
               <Route path="nachweise" element={<Completions />} />
+              <Route path="abo" element={<AboPage />} />
             </Route>
           </Routes>
         </OrgGate>
@@ -49,6 +51,7 @@ function Shell() {
         <NavLink to={`${base}/unterweisungen`}>🦺 Unterweisungen</NavLink>
         <NavLink to={`${base}/zuweisungen`}>📋 Zuweisungen</NavLink>
         <NavLink to={`${base}/nachweise`}>✍️ Nachweise</NavLink>
+        <NavLink to={`${base}/abo`}>💳 Abo</NavLink>
         <div className="nav-footer">
           {data && (
             <>

@@ -32,6 +32,11 @@ export interface AppConfig {
   externalUrl?: string;
   /** Nur bei status 'dashboard' */
   supabase?: SupabaseConfig;
+  /**
+   * Öffentlicher RevenueCat-SDK-Key (Android) — derselbe, der im App-Build steckt.
+   * Erlaubt nur das Lesen/Anlegen des eigenen Subscriber-Datensatzes (Abo-Anzeige).
+   */
+  revenueCat?: string;
   /** Emoji als Kachel-Icon */
   emoji: string;
 }
@@ -45,6 +50,7 @@ export const APPS: AppConfig[] = [
     emoji: '🛠️',
     theme: { primary: '#E8C97A', accent: '#F59E0B', bg: '#1C1A14', card: '#26231A' },
     landingUrl: 'https://craftdex.dexware.app',
+    revenueCat: 'goog_HmRtYRTtdzfVQSFyGWKUcvJUwEK',
     supabase: {
       url: 'https://hxwnpgnipukomxcuayjl.supabase.co',
       anonKey:
@@ -59,6 +65,7 @@ export const APPS: AppConfig[] = [
     emoji: '📄',
     theme: { primary: '#4F9EF8', accent: '#0EA5E9', bg: '#0F1420', card: '#171F30' },
     landingUrl: 'https://dokudex.dexware.app',
+    revenueCat: 'goog_koiFQGRJsYbLXBOfMsMxEcyKIno',
     supabase: {
       url: 'https://vzofqnhhwfmmsqsjcyhi.supabase.co',
       anonKey:
@@ -73,6 +80,7 @@ export const APPS: AppConfig[] = [
     emoji: '🧭',
     theme: { primary: '#60A5FA', accent: '#2563EB', bg: '#0F1923', card: '#182534' },
     landingUrl: 'https://tourdex.dexware.app',
+    revenueCat: 'goog_vGPVighPABtAUUCceMEYzkIasxZ',
     supabase: {
       url: 'https://uwchhdhdbjgixdqjtvhr.supabase.co',
       anonKey:
@@ -97,6 +105,7 @@ export const APPS: AppConfig[] = [
     emoji: '🦺',
     theme: { primary: '#22C55E', accent: '#2563EB', bg: '#0B1220', card: '#141E31' },
     landingUrl: 'https://schutzdex.dexware.app',
+    revenueCat: 'goog_bFUROrBgFYMKMKDFIJYmvCSMcrT',
     supabase: {
       url: 'https://fdeuotsktshxtkobkpay.supabase.co',
       anonKey:
@@ -111,6 +120,7 @@ export const APPS: AppConfig[] = [
     emoji: '🔌',
     theme: { primary: '#7DA7F9', accent: '#1D4ED8', bg: '#0D1526', card: '#162038' },
     landingUrl: 'https://pruefdex.dexware.app',
+    revenueCat: 'goog_pPXjHAIrXRKvpiGVTwCVDdRyOco',
     supabase: {
       url: 'https://rwiqqppaiqnepsraeeaa.supabase.co',
       anonKey:
@@ -125,6 +135,7 @@ export const APPS: AppConfig[] = [
     emoji: '❄️',
     theme: { primary: '#38BDF8', accent: '#FB923C', bg: '#0A1520', card: '#122334' },
     landingUrl: 'https://winterdex.dexware.app',
+    revenueCat: 'goog_EFamBqKZmcNVjBZZoYgveMeyoUw',
     supabase: {
       url: 'https://nppmhxpnynziuavvqmvd.supabase.co',
       anonKey:
@@ -139,6 +150,7 @@ export const APPS: AppConfig[] = [
     emoji: '🚛',
     theme: { primary: '#F97316', accent: '#FDBA74', bg: '#0C1017', card: '#171D28' },
     landingUrl: 'https://kfzdex.dexware.app',
+    revenueCat: 'goog_EGwxQkGUiswhKHzJfwpurysKnFI',
     supabase: {
       url: 'https://xjfkxrtvrpxwbqqozmar.supabase.co',
       anonKey:
@@ -153,6 +165,7 @@ export const APPS: AppConfig[] = [
     emoji: '🎠',
     theme: { primary: '#FF7A6E', accent: '#2DD4BF', bg: '#12191E', card: '#1B2730' },
     landingUrl: 'https://spieldex.dexware.app',
+    revenueCat: 'goog_pUmlTTpXcHtjVuLUNPSArxyVarJ',
     supabase: {
       url: 'https://ycstxklzqfapgtgoomxw.supabase.co',
       anonKey:
@@ -167,6 +180,7 @@ export const APPS: AppConfig[] = [
     emoji: '🏗️',
     theme: { primary: '#F59E0B', accent: '#5B7185', bg: '#14120C', card: '#211D14' },
     landingUrl: 'https://regaldex.dexware.app',
+    revenueCat: 'goog_aYtkRUUHPzDFfjbhkvXrpfyWHpn',
     supabase: {
       url: 'https://vzxqbdadtzjolppzfqxx.supabase.co',
       anonKey:

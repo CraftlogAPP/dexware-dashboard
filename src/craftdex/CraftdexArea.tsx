@@ -2,6 +2,7 @@ import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
+import { AboPage } from '../components/AboPage';
 import { Overview } from './pages/Overview';
 import { Projects } from './pages/Projects';
 import { ProjectDetail } from './pages/ProjectDetail';
@@ -16,6 +17,7 @@ export function CraftdexArea({ app }: { app: AppConfig }) {
           <Route index element={<Overview />} />
           <Route path="auftraege" element={<Projects />} />
           <Route path="auftraege/:id" element={<ProjectDetail />} />
+          <Route path="abo" element={<AboPage />} />
         </Route>
       </Routes>
     </AppArea>
@@ -35,6 +37,7 @@ function Shell() {
           📊 Übersicht
         </NavLink>
         <NavLink to={`${base}/auftraege`}>🛠️ Aufträge</NavLink>
+        <NavLink to={`${base}/abo`}>💳 Abo</NavLink>
         <div className="nav-footer">
           {session && (
             <>

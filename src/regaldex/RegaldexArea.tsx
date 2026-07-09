@@ -4,6 +4,7 @@ import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
 import { TeamPage } from '../components/TeamPage';
+import { AboPage } from '../components/AboPage';
 import { Overview } from './pages/Overview';
 import { Warehouses } from './pages/Warehouses';
 import { WarehouseDetail } from './pages/WarehouseDetail';
@@ -27,6 +28,7 @@ export function RegaldexArea({ app }: { app: AppConfig }) {
               <Route path="schaeden" element={<Damages />} />
               <Route path="team" element={<TeamPage />} />
               <Route path="bericht" element={<Report />} />
+              <Route path="abo" element={<AboPage />} />
             </Route>
           </Routes>
         </OrgGate>
@@ -53,6 +55,7 @@ function Shell() {
         <NavLink to={`${base}/schaeden`}>⚠️ Schäden</NavLink>
         <NavLink to={`${base}/team`}>👥 Team</NavLink>
         <NavLink to={`${base}/bericht`}>📄 Prüfbericht-PDF</NavLink>
+        <NavLink to={`${base}/abo`}>💳 Abo</NavLink>
         <div className="nav-footer">
           {data && (
             <>

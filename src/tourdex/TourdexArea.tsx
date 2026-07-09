@@ -2,6 +2,7 @@ import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
+import { AboPage } from '../components/AboPage';
 import { Overview } from './pages/Overview';
 import { Trips } from './pages/Trips';
 import { TripDetail } from './pages/TripDetail';
@@ -22,6 +23,7 @@ export function TourdexArea({ app }: { app: AppConfig }) {
           <Route path="fahrzeuge" element={<Vehicles />} />
           <Route path="orte" element={<Places />} />
           <Route path="bericht" element={<Report />} />
+          <Route path="abo" element={<AboPage />} />
         </Route>
       </Routes>
     </AppArea>
@@ -44,6 +46,7 @@ function Shell() {
         <NavLink to={`${base}/fahrzeuge`}>🚙 Fahrzeuge</NavLink>
         <NavLink to={`${base}/orte`}>📍 Orte</NavLink>
         <NavLink to={`${base}/bericht`}>📄 Fahrtenbuch-PDF</NavLink>
+        <NavLink to={`${base}/abo`}>💳 Abo</NavLink>
         <div className="nav-footer">
           {session && (
             <>

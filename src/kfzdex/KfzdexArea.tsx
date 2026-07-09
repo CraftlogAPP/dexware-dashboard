@@ -4,6 +4,7 @@ import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
 import { fetchKfzOrgContext } from './api';
+import { AboPage } from '../components/AboPage';
 import { Overview } from './pages/Overview';
 import { Vehicles } from './pages/Vehicles';
 import { VehicleDetail } from './pages/VehicleDetail';
@@ -26,6 +27,7 @@ export function KfzdexArea({ app }: { app: AppConfig }) {
               <Route path="fahrer" element={<Drivers />} />
               <Route path="fahrer/:id" element={<DriverDetail />} />
               <Route path="team" element={<Team />} />
+              <Route path="abo" element={<AboPage />} />
             </Route>
           </Routes>
         </OrgGate>
@@ -50,6 +52,7 @@ function Shell() {
         <NavLink to={`${base}/fahrzeuge`}>🚛 Fahrzeuge</NavLink>
         <NavLink to={`${base}/fahrer`}>🪪 Fahrer</NavLink>
         <NavLink to={`${base}/team`}>👥 Team</NavLink>
+        <NavLink to={`${base}/abo`}>💳 Abo</NavLink>
         <div className="nav-footer">
           {data && (
             <>
