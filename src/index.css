@@ -71,6 +71,16 @@ h3 {
     radial-gradient(600px 400px at 15% -5%, rgba(99, 102, 241, 0.16), transparent 65%),
     radial-gradient(700px 450px at 90% 0%, rgba(37, 99, 235, 0.14), transparent 65%),
     radial-gradient(800px 500px at 50% 110%, rgba(91, 141, 247, 0.1), transparent 70%);
+  animation: bg-breathe 12s ease-in-out infinite;
+}
+@keyframes bg-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
 }
 .bg-decor::after {
   content: '';
@@ -128,45 +138,99 @@ h3 {
 
 /* ---------- Layout ---------- */
 .page {
-  max-width: 1180px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 28px 22px 64px;
 }
 
 .hero {
   text-align: center;
-  padding: 42px 0 26px;
+  padding: 54px 0 30px;
 }
 .hero h1 {
-  font-size: clamp(28px, 4.5vw, 44px);
+  font-size: clamp(30px, 4.8vw, 52px);
   font-weight: 800;
   letter-spacing: -0.5px;
 }
 .hero h1 .grad {
-  background: linear-gradient(120deg, #9dc0ff, #6366f1);
+  background: linear-gradient(120deg, #9dc0ff, #6366f1, #38bdf8, #9dc0ff);
+  background-size: 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  animation: grad-shift 7s ease-in-out infinite;
+}
+@keyframes grad-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }
 .hero p {
   color: var(--muted);
   max-width: 620px;
   margin: 0 auto;
+  font-size: 16px;
+}
+
+.hero-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 16px;
+  margin-bottom: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(18, 26, 46, 0.7);
+  backdrop-filter: blur(8px);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.pulse-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+.pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--green);
+  animation: dot-pulse 2.2s ease-out infinite;
+}
+@keyframes dot-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  70%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
 }
 
 /* ---------- App-Kacheln (Entry) ---------- */
 .tile-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 16px;
-  margin-top: 26px;
+  grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
+  gap: 18px;
+  margin-top: 30px;
 }
 .tile {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 20px 18px 16px;
+  gap: 9px;
+  padding: 22px 20px 18px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: linear-gradient(
@@ -176,7 +240,19 @@ h3 {
   );
   color: var(--text);
   overflow: hidden;
-  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  animation: tile-in 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  animation-delay: var(--enter-delay, 0ms);
+}
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .tile::before {
   content: '';
@@ -188,31 +264,65 @@ h3 {
   opacity: 0.16;
   pointer-events: none;
 }
+/* Spotlight, folgt dem Cursor (--mx/--my werden per JS gesetzt) */
+.tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    200px circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in srgb, var(--tile-accent, var(--blue2)) 14%, transparent),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+a.tile:hover::after {
+  opacity: 1;
+}
 a.tile:hover {
-  transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--tile-accent, var(--blue2)) 55%, var(--border));
-  box-shadow: var(--shadow);
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--tile-accent, var(--blue2)) 60%, var(--border));
+  box-shadow: var(--shadow),
+    0 0 24px color-mix(in srgb, var(--tile-accent, var(--blue2)) 18%, transparent);
   text-decoration: none;
 }
 .tile .tile-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
 }
 .tile .tile-emoji {
   font-size: 26px;
   line-height: 1;
 }
 .tile .tile-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 11px;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease;
+}
+a.tile:hover .tile-icon {
+  transform: scale(1.08) rotate(-3deg);
 }
 .tile h3 {
   margin: 0;
   font-size: 18px;
   color: var(--tile-accent, var(--blue2));
+}
+.tile .tile-arrow {
+  margin-left: auto;
+  font-size: 18px;
+  color: var(--tile-accent, var(--blue2));
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+a.tile:hover .tile-arrow {
+  opacity: 1;
+  transform: translateX(0);
 }
 .tile p {
   margin: 0;
@@ -223,8 +333,7 @@ a.tile:hover {
 .tile .tile-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 12.5px;
 }
 .tile.disabled {
@@ -620,6 +729,14 @@ select:focus {
 .section-head h2 {
   font-size: 18px;
   margin: 0;
+}
+
+/* Abo-Seite: Karten untereinander mit gleichmäßigem Abstand */
+.abo-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
 }
 
 .spinner {
