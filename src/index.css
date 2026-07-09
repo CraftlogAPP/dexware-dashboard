@@ -538,6 +538,55 @@ select:focus {
   font-size: 13.5px;
 }
 
+.btn.google {
+  background: #fff;
+  color: #1f1f1f;
+  border-color: #dadce0;
+}
+.btn.google:hover {
+  filter: brightness(0.96);
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.suite-hint {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 13px;
+}
+.suite-hint > span {
+  color: var(--app-primary);
+  font-size: 16px;
+  line-height: 1.2;
+}
+.suite-hint p {
+  margin: 0;
+}
+.suite-hint a {
+  color: var(--app-primary);
+  white-space: nowrap;
+}
+
 .empty {
   text-align: center;
   color: var(--muted);

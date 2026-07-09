@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useAppAuth } from './AppAuthContext';
 
 type Mode = 'login' | 'reset-request' | 'reset-code';
@@ -39,6 +40,19 @@ export function LoginScreen() {
     });
   }
 
+  function onGoogle() {
+    void run(async () => {
+      const { error: err } = await client.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/app/${app.id}`,
+        },
+      });
+      if (err) throw new Error(googleErrorText(err.message));
+      // Browser navigiert jetzt zu Google — busy bleibt bis dahin aktiv.
+    });
+  }
+
   function onResetRequest(e: FormEvent) {
     e.preventDefault();
     void run(async () => {
@@ -70,12 +84,30 @@ export function LoginScreen() {
         <div className="auth-logo">{app.emoji}</div>
         <h2>{app.name} Dashboard</h2>
         <p className="auth-sub">
-          Melde dich mit deinem bestehenden {app.name}-Konto an — gleiche Zugangsdaten
-          wie in der App.
+          Melde dich mit deinem bestehenden {app.name}-Konto an — per Google oder mit
+          denselben Zugangsdaten wie in der App.
         </p>
 
         {error && <div className="error-box">{error}</div>}
         {info && <div className="info-box">{info}</div>}
+
+        {mode === 'login' && (
+          <>
+            <button
+              type="button"
+              className="btn google"
+              style={{ width: '100%' }}
+              disabled={busy}
+              onClick={onGoogle}
+            >
+              <GoogleIcon />
+              Mit Google anmelden
+            </button>
+            <div className="auth-divider">
+              <span>oder mit E-Mail</span>
+            </div>
+          </>
+        )}
 
         {mode === 'login' && (
           <form onSubmit={onLogin}>
@@ -187,7 +219,46 @@ export function LoginScreen() {
         Deine Daten bleiben in deinem {app.name}-Konto — das Dashboard ist nur eine
         weitere Ansicht darauf.
       </p>
+      <SuiteHint />
     </div>
+  );
+}
+
+/** Bewirbt den Haupteinstieg: eine Übersicht aller App-Dashboards der Suite. */
+function SuiteHint() {
+  return (
+    <div className="suite-hint">
+      <span aria-hidden>⊞</span>
+      <p>
+        Mehrere dexware-Apps im Einsatz? <b>dashboard.dexware.app</b> ist dein
+        Haupteinstieg — eine Übersicht, alle App-Dashboards.{' '}
+        <Link to="/">Zur Dashboard-Übersicht →</Link>
+      </p>
+    </div>
+  );
+}
+
+/** Offizielles Google-„G" als Inline-SVG (keine externen Assets). */
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden focusable="false">
+      <path
+        fill="#EA4335"
+        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+      />
+      <path
+        fill="#4285F4"
+        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+      />
+      <path
+        fill="#34A853"
+        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+      />
+    </svg>
   );
 }
 
@@ -197,6 +268,13 @@ function loginErrorText(raw: string): string {
   }
   if (/email not confirmed/i.test(raw)) {
     return 'E-Mail-Adresse noch nicht bestätigt — bitte zuerst den Bestätigungslink aus der Registrierungs-Mail öffnen.';
+  }
+  return raw;
+}
+
+function googleErrorText(raw: string): string {
+  if (/provider is not enabled|unsupported provider/i.test(raw)) {
+    return 'Google-Login ist für diese App noch nicht freigeschaltet — bitte mit E-Mail + Passwort anmelden.';
   }
   return raw;
 }

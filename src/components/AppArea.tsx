@@ -39,6 +39,9 @@ function Gate({ app, children }: { app: AppConfig; children: ReactNode }) {
           {app.emoji} <b>{app.name}</b> Dashboard
         </span>
         <div className="spacer" />
+        <Link className="badge" to="/" title="Haupteinstieg: alle App-Dashboards der Suite">
+          ⊞ Alle Dashboards
+        </Link>
         <HeaderUser />
       </header>
 
