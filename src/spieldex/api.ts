@@ -94,6 +94,32 @@ export async function savePlayground(
   if (error) fail('Spielplatz konnte nicht gespeichert werden', error);
 }
 
+export interface EquipmentInput {
+  playground_id: string;
+  name: string;
+  category: string;
+  manufacturer: string | null;
+  install_year: string | null;
+  notes: string | null;
+  retired: boolean;
+}
+
+/** Spielgerät anlegen/ändern — Upsert wie app-seitiges saveEquipment (photo_url bleibt unangetastet). */
+export async function saveEquipment(
+  sb: SupabaseClient,
+  orgId: string,
+  input: EquipmentInput,
+  existing?: Equipment,
+): Promise<void> {
+  const { error } = await sb.from('equipment').upsert({
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    ...input,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  });
+  if (error) fail('Spielgerät konnte nicht gespeichert werden', error);
+}
+
 export interface InspectionInput {
   playground_id: string;
   type: InspectionType;

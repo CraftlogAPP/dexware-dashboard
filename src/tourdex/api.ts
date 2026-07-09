@@ -163,6 +163,41 @@ export async function saveVehicle(
   if (error) fail('Fahrzeug konnte nicht angelegt werden', error);
 }
 
+/** Standard-Fahrzeug setzen — genau eines, wie app-seitiges setDefaultVehicle. */
+export async function setDefaultVehicle(
+  sb: SupabaseClient,
+  vehicles: Vehicle[],
+  id: string,
+): Promise<void> {
+  // Erst das Ziel setzen, dann die übrigen zurücksetzen: schlägt unterwegs
+  // etwas fehl, gibt es nie NULL Defaults (die App braucht eines für
+  // automatisch erfasste Fahrten). Zurückgesetzt wird unabhängig vom
+  // isDefault im UI-Snapshot — die App kann den Default inzwischen auf ein
+  // anderes Fahrzeug gelegt haben.
+  await patchSyncItem(
+    sb,
+    'vehicles',
+    id,
+    { isDefault: true },
+    'Standard-Fahrzeug konnte nicht gesetzt werden',
+  );
+  const results = await Promise.allSettled(
+    vehicles
+      .filter((v) => v.id !== id)
+      .map((v) =>
+        patchSyncItem(
+          sb,
+          'vehicles',
+          v.id,
+          { isDefault: false },
+          'Bisheriges Standard-Fahrzeug konnte nicht zurückgesetzt werden',
+        ),
+      ),
+  );
+  const failed = results.find((r) => r.status === 'rejected');
+  if (failed) throw (failed as PromiseRejectedResult).reason;
+}
+
 /** Ort umbenennen/kategorisieren — Koordinaten bleiben unangetastet. */
 export async function updatePlace(
   sb: SupabaseClient,

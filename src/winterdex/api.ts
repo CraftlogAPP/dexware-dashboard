@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Operation, OperationWithPhotos, Property } from './types';
+import type { DutyTimes, Operation, OperationWithPhotos, Property } from './types';
 
 // Spaltenliste für Einsätze OHNE photo_urls (Base64-Fotos, nur im Detail laden!)
 const OPERATION_COLS =
@@ -108,6 +108,7 @@ export interface PropertyInput {
   customer_name: string | null;
   customer_contact: string | null;
   areas: string | null;
+  duty_times: DutyTimes;
   notes: string | null;
   active: boolean;
 }
@@ -129,7 +130,7 @@ export async function saveProperty(
     customer_name: input.customer_name,
     customer_contact: input.customer_contact,
     areas: input.areas,
-    duty_times: existing?.duty_times ?? { mo_fr: '', sa: '', so: '' },
+    duty_times: input.duty_times,
     notes: input.notes,
     active: input.active,
     created_at: existing?.created_at ?? new Date().toISOString(),
@@ -175,6 +176,19 @@ export async function addOperation(
     created_at: new Date().toISOString(),
   });
   if (error) fail('Einsatz konnte nicht gespeichert werden', error);
+}
+
+/** Einsatz stornieren — bleibt sichtbar, wird nur gekennzeichnet (RPC wie die App). */
+export async function cancelOperation(
+  sb: SupabaseClient,
+  id: string,
+  reason: string,
+): Promise<void> {
+  const { error } = await sb.rpc('cancel_operation', {
+    p_operation: id,
+    p_reason: reason,
+  });
+  if (error) fail('Einsatz konnte nicht storniert werden', error);
 }
 
 /** Einsätze eines Objekts im Zeitraum inkl. Fotos — nur für den PDF-Bericht. */

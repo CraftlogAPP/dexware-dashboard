@@ -81,6 +81,15 @@ export function FormDialog({
 
   function submit(e: FormEvent) {
     e.preventDefault();
+    // HTML-required lässt reine Leerzeichen durch — hier abfangen, bevor
+    // getrimmte Leerwerte an die DB gehen (z. B. Storno-Grund-RPCs).
+    for (const f of fields) {
+      const val = values[f.key];
+      if (f.required && typeof val === 'string' && !val.trim()) {
+        setError(`Bitte „${f.label}" ausfüllen.`);
+        return;
+      }
+    }
     setBusy(true);
     setError(null);
     onSave(values)
