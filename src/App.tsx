@@ -19,6 +19,9 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   leiterdex: lazy(() =>
     import('./leiterdex/LeiterdexArea').then((m) => ({ default: m.LeiterdexArea })),
   ),
+  feuerdex: lazy(() =>
+    import('./feuerdex/FeuerdexArea').then((m) => ({ default: m.FeuerdexArea })),
+  ),
   pruefdex: lazy(() =>
     import('./pruefdex/PruefdexArea').then((m) => ({ default: m.PruefdexArea })),
   ),

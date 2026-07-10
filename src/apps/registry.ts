@@ -1,4 +1,4 @@
-// Zentrale App-Registry der dexware-Suite (11 Apps).
+// Zentrale App-Registry der dexware-Suite (12 Apps).
 // Eine neue App im Dashboard = ein Eintrag hier (plus ggf. ein Dashboard-Modul).
 
 export type AppStatus = 'dashboard' | 'external' | 'soon';
@@ -188,6 +188,17 @@ export const APPS: AppConfig[] = [
     },
   },
   {
+    id: 'feuerdex',
+    name: 'FeuerDex',
+    tagline: 'Feuerlöscher-Prüfung nach ASR A2.2 / DIN 14406-4',
+    // TODO: auf 'dashboard' stellen + supabase/revenueCat eintragen, sobald das
+    // FeuerDex-Supabase-Projekt existiert (Phase 4, siehe FeuerDex ROADMAP §12).
+    status: 'soon',
+    emoji: '🧯',
+    theme: { primary: '#EF4444', accent: '#B91C1C', bg: '#1C1512', card: '#292019' },
+    landingUrl: 'https://feuerdex.dexware.app',
+  },
+  {
     id: 'leiterdex',
     name: 'LeiterDex',
     tagline: 'Leitern- & Tritte-Prüfung nach BetrSichV / DGUV 208-016',
@@ -208,7 +219,7 @@ export function getApp(id: string): AppConfig | undefined {
   return APPS.find((a) => a.id === id);
 }
 
-/** Echtes App-Icon (public/icons/<id>.png, 128 px) — für alle 11 Apps vorhanden. */
+/** Echtes App-Icon (public/icons/<id>.png, 128 px) — für alle 12 Apps vorhanden. */
 export function appIcon(id: string): string {
   return `/icons/${id}.png`;
 }
