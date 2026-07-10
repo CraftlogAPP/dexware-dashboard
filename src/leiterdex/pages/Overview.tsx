@@ -127,8 +127,8 @@ export function Overview() {
                 <>
                   <div className="section-head">
                     <h2>Fällige Prüfungen</h2>
-                    <Link to="leitern" className="small">
-                      Alle Leitern →
+                    <Link to="standorte" className="small">
+                      Alle Standorte →
                     </Link>
                   </div>
                   <div className="table-wrap">

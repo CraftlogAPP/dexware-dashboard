@@ -191,12 +191,16 @@ export const APPS: AppConfig[] = [
     id: 'feuerdex',
     name: 'FeuerDex',
     tagline: 'Feuerlöscher-Prüfung nach ASR A2.2 / DIN 14406-4',
-    // TODO: auf 'dashboard' stellen + supabase/revenueCat eintragen, sobald das
-    // FeuerDex-Supabase-Projekt existiert (Phase 4, siehe FeuerDex ROADMAP §12).
-    status: 'soon',
+    // TODO: revenueCat-Key eintragen, sobald die RevenueCat-App existiert.
+    status: 'dashboard',
     emoji: '🧯',
     theme: { primary: '#EF4444', accent: '#B91C1C', bg: '#1C1512', card: '#292019' },
     landingUrl: 'https://feuerdex.dexware.app',
+    supabase: {
+      url: 'https://evwdeonvgocfeflpecga.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2d2Rlb252Z29jZmVmbHBlY2dhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2OTQwMzcsImV4cCI6MjA5OTI3MDAzN30.0zJqaTUx0fV5Y2OCGbXKZHJYMGOIzhSM9VIASSmB02U',
+    },
   },
   {
     id: 'leiterdex',

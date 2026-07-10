@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  expertIntervalDays,
   INSPECTION_INTERVAL_DAYS,
   INSPECTION_SHORT,
 } from '../feuerdex/types';
@@ -7,9 +8,10 @@ import { buildIntervalDue, throwOnError, type DueUnit } from './shared';
 import type { DueResult } from './types';
 
 // FeuerDex: Prüfung hängt am einzelnen Feuerlöscher (Sichtkontrolle 90 T /
-// Sachkundigen-Prüfung 730 T). Nur nicht-ausgesonderte Löscher an aktiven Standorten.
+// Sachkundigen-Prüfung land-abhängig: DE/AT 730 T, CH 1095 T).
+// Nur nicht-ausgesonderte Löscher an aktiven Standorten.
 export async function feuerdexDue(sb: SupabaseClient): Promise<DueResult> {
-  const [sites, extinguishers, insp] = await Promise.all([
+  const [sites, extinguishers, insp, org] = await Promise.all([
     sb.from('site').select('id, name, active'),
     sb.from('extinguisher').select('id, site_id, name, retired'),
     sb
@@ -17,8 +19,13 @@ export async function feuerdexDue(sb: SupabaseClient): Promise<DueResult> {
       .select('extinguisher_id, type, started_at, canceled')
       .order('started_at', { ascending: false })
       .limit(2000),
+    sb.from('org').select('land').limit(1).maybeSingle(),
   ]);
-  throwOnError(sites.error, extinguishers.error, insp.error);
+  throwOnError(sites.error, extinguishers.error, insp.error, org.error);
+  const intervals = {
+    ...INSPECTION_INTERVAL_DAYS,
+    expert: expertIntervalDays(org.data?.land),
+  };
 
   const activeSiteIds = new Set(
     (sites.data ?? []).filter((s) => s.active).map((s) => s.id),
@@ -39,7 +46,7 @@ export async function feuerdexDue(sb: SupabaseClient): Promise<DueResult> {
   return buildIntervalDue(
     units,
     meta,
-    INSPECTION_INTERVAL_DAYS,
+    intervals,
     INSPECTION_SHORT,
     '/app/feuerdex',
   );

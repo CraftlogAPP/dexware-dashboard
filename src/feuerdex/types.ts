@@ -28,6 +28,14 @@ export const INSPECTION_INTERVAL_DAYS: Record<InspectionType, number> = {
   expert: 730,
 };
 
+/**
+ * Sachkundigen-Intervall je Land (wie in der Mobile-App): DE/AT 2 Jahre
+ * (DIN 14406-4 / ÖNORM F 1053), CH üblich 3 Jahre (VKF-Praxis).
+ */
+export function expertIntervalDays(land: string | null | undefined): number {
+  return land === 'CH' ? 1095 : 730;
+}
+
 // ---------------------------------------------------------------------------
 // Checkliste der Feuerlöscher-Kontrolle (ASR A2.2 / DIN 14406-4 orientiert) —
 // identisch zur App, damit die gespeicherten checklist-Keys aufgelöst werden.

@@ -19,6 +19,7 @@ import {
   siteNameMap,
 } from '../labels';
 import {
+  expertIntervalDays,
   INSPECTION_INTERVAL_DAYS,
   INSPECTION_SHORT,
   type Defect,
@@ -83,12 +84,16 @@ export function Overview() {
           const redCount = openDefects.filter((d) => d.severity === 'red').length;
 
           const lastByType = lastInspectionByType(meta);
+          // Sachkundigen-Intervall land-abhängig (DE/AT 730 T, CH 1095 T) — wie in der App.
+          const intervals: Record<InspectionType, number> = {
+            ...INSPECTION_INTERVAL_DAYS,
+            expert: expertIntervalDays(orgCtx?.org.land),
+          };
           const isOverdue = (ext: Extinguisher, type: InspectionType): boolean => {
             const last = lastByType.get(`${ext.id}:${type}`);
             return (
               !last ||
-              now - new Date(last.started_at).getTime() >
-                INSPECTION_INTERVAL_DAYS[type] * dayMs
+              now - new Date(last.started_at).getTime() > intervals[type] * dayMs
             );
           };
           const dueExtinguishers = activeExtinguishers.filter((e) =>
@@ -142,7 +147,7 @@ export function Overview() {
                           <th>Standort</th>
                           {DUE_TYPES.map((t) => (
                             <th key={t}>
-                              {INSPECTION_SHORT[t]} (alle {INSPECTION_INTERVAL_DAYS[t]} T)
+                              {INSPECTION_SHORT[t]} (alle {intervals[t]} T)
                             </th>
                           ))}
                         </tr>
