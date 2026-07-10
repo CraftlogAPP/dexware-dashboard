@@ -47,6 +47,8 @@ export function LoginScreen() {
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/app/${app.id}`,
+          // Kontoauswahl immer anzeigen statt letztes Google-Konto still zu verwenden.
+          queryParams: { prompt: 'select_account' },
         },
       });
       if (err) throw new Error(googleErrorText(err.message));
