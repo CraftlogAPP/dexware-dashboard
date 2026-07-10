@@ -2,6 +2,7 @@
 // (CraftDex/TourDex/DokuDex/SchutzDex) und externe (BaumDex) fehlen bewusst.
 
 import type { DueAdapter } from './types';
+import { feuerdexDue } from './feuerdex';
 import { leiterdexDue } from './leiterdex';
 import { regaldexDue } from './regaldex';
 import { spieldexDue } from './spieldex';
@@ -10,6 +11,7 @@ import { pruefdexDue } from './pruefdex';
 import { kfzdexDue } from './kfzdex';
 
 export const ADAPTERS: Record<string, DueAdapter> = {
+  feuerdex: feuerdexDue,
   leiterdex: leiterdexDue,
   regaldex: regaldexDue,
   spieldex: spieldexDue,
