@@ -778,8 +778,14 @@ textarea:focus {
 .auth-links {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 16px;
   margin-top: 14px;
   font-size: 13.5px;
+}
+
+.auth-links a {
+  text-align: right;
 }
 
 .btn.google {
