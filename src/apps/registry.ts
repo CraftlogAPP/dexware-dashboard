@@ -206,11 +206,16 @@ export const APPS: AppConfig[] = [
     id: 'geruestdex',
     name: 'GerüstDex',
     tagline: 'Gerüstprüfung nach TRBS 2121-1 mit Freigabe-Nachweis',
-    // 'soon' bis das Supabase-Projekt existiert (siehe Desktop\GeruestDex\ROADMAP.md Phase 2).
-    status: 'soon',
+    status: 'dashboard',
     emoji: '🚧',
     theme: { primary: '#2DD4BF', accent: '#14B8A6', bg: '#0E1A19', card: '#162927' },
     landingUrl: 'https://geruestdex.dexware.app',
+    revenueCat: 'goog_JtcTMMIsmhGoHABsFvpqfmnGvUW',
+    supabase: {
+      url: 'https://tncufucamwaiqgjnyuwd.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRuY3VmdWNhbXdhaXFnam55dXdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MTg1ODQsImV4cCI6MjA5OTI5NDU4NH0.Mi7ULPWQ02f3F2-V4fBQ_KxNcSMNEqQfAaz-ivc12Lo',
+    },
   },
   {
     id: 'leiterdex',
