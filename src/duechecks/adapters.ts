@@ -3,6 +3,7 @@
 
 import type { DueAdapter } from './types';
 import { feuerdexDue } from './feuerdex';
+import { geruestdexDue } from './geruestdex';
 import { leiterdexDue } from './leiterdex';
 import { regaldexDue } from './regaldex';
 import { spieldexDue } from './spieldex';
@@ -12,6 +13,7 @@ import { kfzdexDue } from './kfzdex';
 
 export const ADAPTERS: Record<string, DueAdapter> = {
   feuerdex: feuerdexDue,
+  geruestdex: geruestdexDue,
   leiterdex: leiterdexDue,
   regaldex: regaldexDue,
   spieldex: spieldexDue,
