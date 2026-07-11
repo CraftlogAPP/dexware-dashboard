@@ -1,4 +1,4 @@
-// Zentrale App-Registry der dexware-Suite (12 Apps).
+// Zentrale App-Registry der dexware-Suite (13 Apps).
 // Eine neue App im Dashboard = ein Eintrag hier (plus ggf. ein Dashboard-Modul).
 
 export type AppStatus = 'dashboard' | 'external' | 'soon';
@@ -201,6 +201,16 @@ export const APPS: AppConfig[] = [
       anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2d2Rlb252Z29jZmVmbHBlY2dhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2OTQwMzcsImV4cCI6MjA5OTI3MDAzN30.0zJqaTUx0fV5Y2OCGbXKZHJYMGOIzhSM9VIASSmB02U',
     },
+  },
+  {
+    id: 'geruestdex',
+    name: 'GerüstDex',
+    tagline: 'Gerüstprüfung nach TRBS 2121-1 mit Freigabe-Nachweis',
+    // 'soon' bis das Supabase-Projekt existiert (siehe Desktop\GeruestDex\ROADMAP.md Phase 2).
+    status: 'soon',
+    emoji: '🚧',
+    theme: { primary: '#2DD4BF', accent: '#14B8A6', bg: '#0E1A19', card: '#162927' },
+    landingUrl: 'https://geruestdex.dexware.app',
   },
   {
     id: 'leiterdex',
