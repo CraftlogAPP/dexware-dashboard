@@ -27,8 +27,11 @@ Apps (Sicherheits-/Fristen-Relevanz — ausgeblendet heißt nicht „egal").
       Akzent-Häkchen, mobile-tauglich)
 - [x] `npx tsc -b` grün (WICHTIG: `npx tsc --noEmit` prüft in DIESEM Repo NICHTS —
       Root-tsconfig ist Solution-Datei!) + `npm run build` grün (12.07.2026)
-- [ ] Commit + Push (deployt automatisch), live auf dashboard.dexware.app verifizieren
-- [ ] Memory `dashboard-app-auswahl.md` + Worklog aktualisieren
+- [x] Commit + Push (deployt automatisch), live auf dashboard.dexware.app verifizieren
+      (Commit 6f27445, Pages-Deploy grün, Bundle `index-CNTR1T-H.js` enthält Feature — 12.07.2026)
+- [x] Memory `dashboard-app-auswahl.md` + Worklog aktualisieren
+
+**✅ Feature komplett (12.07.2026).**
 
 ## Kontext für nachfolgende KIs
 
