@@ -221,10 +221,16 @@ export const APPS: AppConfig[] = [
     id: 'toredex',
     name: 'ToreDex',
     tagline: 'Tor- & Türenprüfung nach ASR A1.7 mit Prüfbuch-PDF',
-    status: 'soon',
+    status: 'dashboard',
     emoji: '🚪',
     theme: { primary: '#A78BFA', accent: '#8B5CF6', bg: '#131020', card: '#1D1830' },
     landingUrl: 'https://toredex.dexware.app',
+    revenueCat: 'goog_vCXreEPQCtnZnxADPLpSozSpnRY',
+    supabase: {
+      url: 'https://lecgketoggxvecmolnqx.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlY2drZXRvZ2d4dmVjbW9sbnF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NzI2NDQsImV4cCI6MjA5OTQ0ODY0NH0.65afL7Xjl4EY_pspHJmohMfyf7ZbbPqPYMiZgqfel8M',
+    },
   },
   {
     id: 'leiterdex',
