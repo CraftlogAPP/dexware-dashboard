@@ -1,13 +1,16 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { APPS, STATUS_ORDER, appIcon, type AppConfig } from '../apps/registry';
 import { DueBell } from '../duechecks/DueBell';
 import { useDueChecks } from '../duechecks/useDueChecks';
+import { useHiddenApps } from '../lib/appPrefs';
 
 export function Home() {
   const apps = [...APPS].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
   const liveCount = APPS.filter((a) => a.status === 'dashboard').length;
   const due = useDueChecks();
+  const { hidden, toggle, reset } = useHiddenApps();
+  const visible = apps.filter((a) => !hidden.has(a.id));
 
   return (
     <>
@@ -15,14 +18,17 @@ export function Home() {
         <div className="home-bell">
           <DueBell {...due} />
         </div>
-        <a
-          className="badge home-link"
-          href="https://dexware.app"
-          target="_blank"
-          rel="noreferrer"
-        >
-          dexware.app ↗
-        </a>
+        <div className="home-actions">
+          <AppsMenu apps={apps} hidden={hidden} toggle={toggle} reset={reset} />
+          <a
+            className="badge home-link"
+            href="https://dexware.app"
+            target="_blank"
+            rel="noreferrer"
+          >
+            dexware.app ↗
+          </a>
+        </div>
         <div className="brand">
           dex<span>ware</span> Dashboard
         </div>
@@ -44,18 +50,121 @@ export function Home() {
           </p>
         </section>
 
-        <div className="tile-grid">
-          {apps.map((app, i) => (
-            <AppTile
-              key={app.id}
-              app={app}
-              index={i}
-              dueCount={due.results[app.id]?.count ?? 0}
-            />
-          ))}
-        </div>
+        {visible.length > 0 ? (
+          <div className="tile-grid">
+            {visible.map((app, i) => (
+              <AppTile
+                key={app.id}
+                app={app}
+                index={i}
+                dueCount={due.results[app.id]?.count ?? 0}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="tiles-empty">
+            <p>Alle Apps sind ausgeblendet.</p>
+            <button type="button" className="badge live" onClick={reset}>
+              Alle anzeigen
+            </button>
+          </div>
+        )}
+        {hidden.size > 0 && visible.length > 0 && (
+          <p className="tiles-hidden-hint">
+            {hidden.size} {hidden.size === 1 ? 'App' : 'Apps'} ausgeblendet —{' '}
+            <button type="button" onClick={reset}>
+              alle anzeigen
+            </button>
+          </p>
+        )}
       </main>
     </>
+  );
+}
+
+/** Ausklapp-Menü rechts oben: welche App-Kacheln die Startseite zeigt. */
+function AppsMenu({
+  apps,
+  hidden,
+  toggle,
+  reset,
+}: {
+  apps: AppConfig[];
+  hidden: Set<string>;
+  toggle: (id: string) => void;
+  reset: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Klick außerhalb oder Escape schließt das Panel.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="apps-menu" ref={ref}>
+      <button
+        type="button"
+        className="badge apps-menu-btn"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title="Auswählen, welche Apps die Startseite zeigt"
+      >
+        ⚙️ Apps
+        {hidden.size > 0 && ` · ${apps.length - hidden.size}/${apps.length}`}
+      </button>
+      {open && (
+        <div className="apps-menu-panel" role="dialog" aria-label="Startseite anpassen">
+          <div className="apps-menu-head">
+            <b>Startseite anpassen</b>
+            <button
+              type="button"
+              className="apps-menu-reset"
+              onClick={reset}
+              disabled={hidden.size === 0}
+            >
+              Alle anzeigen
+            </button>
+          </div>
+          <p className="apps-menu-hint">
+            Abgewählte Apps werden nur ausgeblendet — Daten und Fristen-Glocke bleiben
+            unberührt. Jederzeit hier wieder einschaltbar.
+          </p>
+          {apps.map((a) => {
+            const shown = !hidden.has(a.id);
+            return (
+              <button
+                type="button"
+                key={a.id}
+                className={`apps-menu-row${shown ? ' on' : ''}`}
+                onClick={() => toggle(a.id)}
+                aria-pressed={shown}
+                style={{ '--row-accent': a.theme.primary } as React.CSSProperties}
+              >
+                <img src={appIcon(a.id)} alt="" loading="lazy" />
+                <span className="apps-menu-name">{a.name}</span>
+                <span className="apps-menu-check" aria-hidden>
+                  {shown ? '✓' : ''}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
