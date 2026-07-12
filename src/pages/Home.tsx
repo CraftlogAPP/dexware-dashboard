@@ -43,7 +43,7 @@ export function Home() {
           <div className="hero-pill">
             <span className="pulse-dot" aria-hidden />
             {liveCount} Dashboards live
-            {externalNames && ` + ${externalNames} als eigenständiges Webportal`} — gleiche
+            {externalNames && ` + ${externalNames} als externes Webportal`} — gleiche
             Daten wie in deinen Apps
           </div>
           <h1>
@@ -219,9 +219,9 @@ function AppTile({
         {app.status === 'external' && (
           <span
             className="badge external"
-            title="Eigenständiges Webportal — zählt daher nicht zu den Dashboards"
+            title="Externes Webportal — zählt daher nicht zu den Dashboards"
           >
-            Eigenes Webportal ↗
+            Externes Webportal ↗
           </span>
         )}
         {app.status === 'soon' && <span className="badge">Dashboard folgt</span>}
