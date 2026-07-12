@@ -10,6 +10,7 @@ import { spieldexDue } from './spieldex';
 import { winterdexDue } from './winterdex';
 import { pruefdexDue } from './pruefdex';
 import { kfzdexDue } from './kfzdex';
+import { toredexDue } from './toredex';
 
 export const ADAPTERS: Record<string, DueAdapter> = {
   feuerdex: feuerdexDue,
@@ -20,4 +21,5 @@ export const ADAPTERS: Record<string, DueAdapter> = {
   winterdex: winterdexDue,
   pruefdex: pruefdexDue,
   kfzdex: kfzdexDue,
+  toredex: toredexDue,
 };
