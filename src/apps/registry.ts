@@ -1,4 +1,4 @@
-// Zentrale App-Registry der dexware-Suite (13 Apps).
+// Zentrale App-Registry der dexware-Suite (14 Apps).
 // Eine neue App im Dashboard = ein Eintrag hier (plus ggf. ein Dashboard-Modul).
 
 export type AppStatus = 'dashboard' | 'external' | 'soon';
@@ -218,6 +218,15 @@ export const APPS: AppConfig[] = [
     },
   },
   {
+    id: 'toredex',
+    name: 'ToreDex',
+    tagline: 'Tor- & Türenprüfung nach ASR A1.7 mit Prüfbuch-PDF',
+    status: 'soon',
+    emoji: '🚪',
+    theme: { primary: '#A78BFA', accent: '#8B5CF6', bg: '#131020', card: '#1D1830' },
+    landingUrl: 'https://toredex.dexware.app',
+  },
+  {
     id: 'leiterdex',
     name: 'LeiterDex',
     tagline: 'Leitern- & Tritte-Prüfung nach BetrSichV / DGUV 208-016',
@@ -238,7 +247,7 @@ export function getApp(id: string): AppConfig | undefined {
   return APPS.find((a) => a.id === id);
 }
 
-/** Echtes App-Icon (public/icons/<id>.png, 128 px) — für alle 12 Apps vorhanden. */
+/** Echtes App-Icon (public/icons/<id>.png, 128 px) — für alle 14 Apps vorhanden. */
 export function appIcon(id: string): string {
   return `/icons/${id}.png`;
 }
