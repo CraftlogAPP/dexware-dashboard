@@ -1065,6 +1065,12 @@ textarea:focus {
   background: var(--green);
   opacity: 0.8;
 }
+/* Variante auf den App-Kacheln: rechts in der Fußzeile, noch eine Spur kleiner */
+.tile .tile-auth {
+  margin-left: auto;
+  padding-left: 10px;
+  font-size: 11.5px;
+}
 .due-bell {
   position: relative;
 }
@@ -1214,12 +1220,13 @@ textarea:focus {
     top: 12px;
     left: 12px;
   }
-  /* Wenig Platz: nur der Status-Punkt bleibt, Text fällt weg */
-  .auth-status {
+  /* Wenig Platz im Header: nur der Status-Punkt bleibt, Text fällt weg
+     (auf den Kacheln bleibt der Text — dort ist Platz) */
+  .home-bell .auth-status {
     font-size: 0;
     gap: 0;
   }
-  .auth-status-dot {
+  .home-bell .auth-status-dot {
     width: 8px;
     height: 8px;
   }

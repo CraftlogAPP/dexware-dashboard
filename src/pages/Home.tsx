@@ -62,6 +62,11 @@ export function Home() {
                 app={app}
                 index={i}
                 dueCount={due.results[app.id]?.count ?? 0}
+                signedIn={
+                  due.sessionsChecked && app.id in due.sessions
+                    ? due.sessions[app.id]
+                    : null
+                }
               />
             ))}
           </div>
@@ -198,10 +203,13 @@ function AppTile({
   app,
   index,
   dueCount,
+  signedIn,
 }: {
   app: AppConfig;
   index: number;
   dueCount: number;
+  /** null = kein eigener Login (extern/soon) oder Prüfung läuft noch */
+  signedIn: boolean | null;
 }) {
   const style = {
     '--tile-accent': app.theme.primary,
@@ -236,6 +244,19 @@ function AppTile({
       <p>{app.tagline}</p>
       <div className="tile-foot">
         {app.status === 'dashboard' && <span className="badge live">● Dashboard öffnen</span>}
+        {signedIn !== null && (
+          <span
+            className={`auth-status tile-auth${signedIn ? ' on' : ''}`}
+            title={
+              signedIn
+                ? `Bei ${app.name} angemeldet — Daten und Fälligkeiten werden geladen.`
+                : `Bei ${app.name} nicht angemeldet — zum Anmelden Dashboard öffnen.`
+            }
+          >
+            <span className="auth-status-dot" aria-hidden />
+            {signedIn ? 'angemeldet' : 'nicht angemeldet'}
+          </span>
+        )}
         {app.status === 'external' && (
           <span
             className="badge external"

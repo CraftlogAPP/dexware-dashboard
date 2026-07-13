@@ -14,12 +14,14 @@ export interface DueChecksState {
   signedInCount: number | null;
   /** Anzahl der Apps mit Backend, deren Anmeldung geprüft wird. */
   appCount: number;
+  /** Anmelde-Status je App-Id (nur Apps mit Backend enthalten). */
+  sessions: Record<string, boolean>;
+  /** true sobald der Anmelde-Status aller Apps feststeht. */
+  sessionsChecked: boolean;
 }
 
-/** Apps mit Supabase-Backend + Adapter — nur die können Fälligkeiten melden. */
-const BACKEND_APPS = APPS.filter(
-  (a) => a.status === 'dashboard' && a.supabase && ADAPTERS[a.id],
-);
+/** Apps mit eigenem Login (Supabase-Backend) — deren Anmeldung wird geprüft. */
+const BACKEND_APPS = APPS.filter((a) => a.status === 'dashboard' && a.supabase);
 
 /**
  * Prüft appübergreifend die Fälligkeiten aller Apps mit Supabase-Backend +
@@ -31,7 +33,7 @@ const BACKEND_APPS = APPS.filter(
 export function useDueChecks(): DueChecksState {
   const [results, setResults] = useState<Record<string, DueResult>>({});
   const [loading, setLoading] = useState(true);
-  const [signedIn, setSignedIn] = useState(0);
+  const [sessions, setSessions] = useState<Record<string, boolean>>({});
   const [sessionsChecked, setSessionsChecked] = useState(false);
 
   useEffect(() => {
@@ -51,7 +53,7 @@ export function useDueChecks(): DueChecksState {
       const markSession = (hasSession: boolean) => {
         if (sessionCounted || !mounted) return;
         sessionCounted = true;
-        if (hasSession) setSignedIn((n) => n + 1);
+        setSessions((prev) => ({ ...prev, [app.id]: hasSession }));
         sessionsRemaining -= 1;
         if (sessionsRemaining === 0) setSessionsChecked(true);
       };
@@ -60,7 +62,8 @@ export function useDueChecks(): DueChecksState {
         const client = getClient(app);
         const { data } = await client.auth.getSession();
         markSession(Boolean(data.session));
-        if (!data.session) return null; // keine Anmeldung → App überspringen
+        // keine Anmeldung oder kein Fälligkeits-Adapter → App überspringen
+        if (!data.session || !ADAPTERS[app.id]) return null;
         return ADAPTERS[app.id](client);
       })()
         .then((res) => {
@@ -85,11 +88,14 @@ export function useDueChecks(): DueChecksState {
   }, []);
 
   const totalCount = Object.values(results).reduce((n, r) => n + r.count, 0);
+  const signedIn = Object.values(sessions).filter(Boolean).length;
   return {
     results,
     totalCount,
     loading,
     signedInCount: sessionsChecked ? signedIn : null,
     appCount: BACKEND_APPS.length,
+    sessions,
+    sessionsChecked,
   };
 }
