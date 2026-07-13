@@ -1035,6 +1035,35 @@ textarea:focus {
   top: 14px;
   left: 22px;
   z-index: 21;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Dezenter Anmelde-Status neben der Glocke (grau, bewusst unaufdringlich) */
+.auth-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--muted);
+  opacity: 0.6;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+.auth-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.55;
+}
+.auth-status.on .auth-status-dot {
+  background: var(--green);
+  opacity: 0.8;
 }
 .due-bell {
   position: relative;
@@ -1184,5 +1213,14 @@ textarea:focus {
   .home-bell {
     top: 12px;
     left: 12px;
+  }
+  /* Wenig Platz: nur der Status-Punkt bleibt, Text fällt weg */
+  .auth-status {
+    font-size: 0;
+    gap: 0;
+  }
+  .auth-status-dot {
+    width: 8px;
+    height: 8px;
   }
 }
