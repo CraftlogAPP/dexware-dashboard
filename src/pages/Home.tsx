@@ -7,11 +7,10 @@ import { useHiddenApps } from '../lib/appPrefs';
 
 export function Home() {
   const apps = [...APPS].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
-  const liveCount = APPS.filter((a) => a.status === 'dashboard').length;
-  // BaumDex läuft als eigenständiges Portal — hier benennen, sonst wirkt die Zählung falsch
-  const externalNames = APPS.filter((a) => a.status === 'external')
-    .map((a) => a.name)
-    .join(', ');
+  // Externe Dashboards (BaumDex) zählen mit — für den Nutzer ist es genauso ein Dashboard
+  const liveCount = APPS.filter(
+    (a) => a.status === 'dashboard' || a.status === 'external',
+  ).length;
   const due = useDueChecks();
   const { hidden, toggle, reset } = useHiddenApps();
   const visible = apps.filter((a) => !hidden.has(a.id));
@@ -42,9 +41,7 @@ export function Home() {
         <section className="hero">
           <div className="hero-pill">
             <span className="pulse-dot" aria-hidden />
-            {liveCount} Dashboards live
-            {externalNames && ` + ${externalNames} als externes Webportal`} — gleiche
-            Daten wie in deinen Apps
+            {liveCount} Dashboards live — gleiche Daten wie in deinen Apps
           </div>
           <h1>
             Dein Betrieb. <span className="grad">Alle Nachweise.</span> Ein Cockpit.
@@ -219,9 +216,9 @@ function AppTile({
         {app.status === 'external' && (
           <span
             className="badge external"
-            title="Externes Webportal — zählt daher nicht zu den Dashboards"
+            title="Externes Dashboard — läuft unter eigener Adresse, öffnet in neuem Tab"
           >
-            Externes Webportal ↗
+            Externes Dashboard ↗
           </span>
         )}
         {app.status === 'soon' && <span className="badge">Dashboard folgt</span>}
