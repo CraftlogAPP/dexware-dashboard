@@ -20,6 +20,7 @@ export function Home() {
       <header className="site-header home">
         <div className="home-bell">
           <DueBell {...due} />
+          <AuthStatus signedIn={due.signedInCount} total={due.appCount} />
         </div>
         <div className="home-actions">
           <AppsMenu apps={apps} hidden={hidden} toggle={toggle} reset={reset} />
@@ -82,6 +83,28 @@ export function Home() {
         )}
       </main>
     </>
+  );
+}
+
+/**
+ * Dezenter Anmelde-Status neben der Glocke: zeigt, ob überhaupt eine App
+ * angemeldet ist — nur dann kann die Glocke Fälligkeiten melden.
+ */
+function AuthStatus({ signedIn, total }: { signedIn: number | null; total: number }) {
+  if (signedIn === null) return null; // Session-Prüfung läuft noch — kein Flackern
+  const on = signedIn > 0;
+  return (
+    <span
+      className={`auth-status${on ? ' on' : ''}`}
+      title={
+        on
+          ? `In ${signedIn} von ${total} Apps angemeldet — die Glocke prüft deren Fälligkeiten.`
+          : 'In keiner App angemeldet — Fälligkeiten erscheinen erst nach Anmeldung in einem Dashboard.'
+      }
+    >
+      <span className="auth-status-dot" aria-hidden />
+      {on ? `Angemeldet · ${signedIn}/${total}` : 'Nicht angemeldet'}
+    </span>
   );
 }
 
