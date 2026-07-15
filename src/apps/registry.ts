@@ -1,4 +1,4 @@
-// Zentrale App-Registry der dexware-Suite (14 Apps).
+// Zentrale App-Registry der dexware-Suite (15 Apps).
 // Eine neue App im Dashboard = ein Eintrag hier (plus ggf. ein Dashboard-Modul).
 
 export type AppStatus = 'dashboard' | 'external' | 'soon';
@@ -230,6 +230,21 @@ export const APPS: AppConfig[] = [
       url: 'https://lecgketoggxvecmolnqx.supabase.co',
       anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlY2drZXRvZ2d4dmVjbW9sbnF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NzI2NDQsImV4cCI6MjA5OTQ0ODY0NH0.65afL7Xjl4EY_pspHJmohMfyf7ZbbPqPYMiZgqfel8M',
+    },
+  },
+  {
+    id: 'gurtdex',
+    name: 'GurtDex',
+    tagline: 'PSA gegen Absturz prüfen — mit Ablegereife-Wächter (DGUV 312-906)',
+    status: 'dashboard',
+    emoji: '🧗',
+    theme: { primary: '#F472B6', accent: '#DB2777', bg: '#170D14', card: '#241520' },
+    landingUrl: 'https://gurtdex.dexware.app',
+    revenueCat: 'goog_AgviVPXkwpqsIocTiFHGfTvnIdM',
+    supabase: {
+      url: 'https://sqwvkpigdxqfflvaotek.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxd3ZrcGlnZHhxZmZsdmFvdGVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMjk5MzEsImV4cCI6MjA5OTcwNTkzMX0.LQ-WgfbD7gZ3PCjDtCgLtuamMznbxlgow-JhXnpnSTU',
     },
   },
   {
