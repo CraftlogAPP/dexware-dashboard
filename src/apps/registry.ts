@@ -1,4 +1,4 @@
-// Zentrale App-Registry der dexware-Suite (15 Apps).
+// Zentrale App-Registry der dexware-Suite (16 Apps).
 // Eine neue App im Dashboard = ein Eintrag hier (plus ggf. ein Dashboard-Modul).
 
 export type AppStatus = 'dashboard' | 'external' | 'soon';
@@ -261,6 +261,15 @@ export const APPS: AppConfig[] = [
       anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sdW9jZ2x1cnB5bWRoaHpmeGpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MDgyNzEsImV4cCI6MjA5OTE4NDI3MX0.1m1IfBeSDOy7vODufezJ2p0_RhL2iaFMSRrxZN2SCds',
     },
+  },
+  {
+    id: 'turndex',
+    name: 'TurnDex',
+    tagline: 'Sportgeräte & Sporthallen prüfen nach DGUV-I 202-044 (DIN EN 913)',
+    status: 'soon',
+    emoji: '🤸',
+    theme: { primary: '#A3E635', accent: '#84CC16', bg: '#141807', card: '#1E240F' },
+    landingUrl: 'https://turndex.dexware.app',
   },
 ];
 
