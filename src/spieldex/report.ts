@@ -154,6 +154,7 @@ export function buildReportHtml(
     .sig-grid { display: flex; flex-wrap: wrap; gap: 14px 28px; margin-top: 20px; }
     .sig { width: 46%; }
     .sig-line { border-bottom: 1px solid #333; height: 30px; }
+    .sig-img { display: block; height: 46px; max-width: 220px; object-fit: contain; margin-bottom: -34px; }
     .sig-label { font-size: 10px; color: #555; margin-top: 3px; }
     .footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #dcc9c4; color: #51606f; font-size: 10.5px; display: flex; justify-content: space-between; }
   @media print { body { margin: 12mm; } }
@@ -196,8 +197,18 @@ export function buildReportHtml(
 
   ${(() => {
     // Unterschriftsfeld je prüfender Person im Zeitraum (Prüfaufzeichnung: Name + Unterschrift)
-    const names = [...new Set(inspections.filter((i) => !i.canceled).map((i) => (i.inspector_name || '').trim()).filter(Boolean))];
-    const fields = (names.length ? names : ['']).map((n) => `<div class="sig"><div class="sig-line"></div><div class="sig-label">Datum, Unterschrift${n ? ` — ${esc(n)}` : ' der prüfenden Person'}</div></div>`).join('');
+    const valid = inspections.filter((i) => !i.canceled);
+    const names = [...new Set(valid.map((i) => (i.inspector_name || '').trim()).filter(Boolean))];
+    const sigOf = (n: string) =>
+      valid
+        .filter((i) => (i.inspector_name || '').trim() === n && i.signature)
+        .sort((x, y) => y.started_at.localeCompare(x.started_at))[0]?.signature;
+    const fields = (names.length ? names : [''])
+      .map((n) => {
+        const sig = n ? sigOf(n) : undefined;
+        return `<div class="sig">${sig ? `<img class="sig-img" src="${sig}" alt="Unterschrift" />` : ''}<div class="sig-line"></div><div class="sig-label">${sig ? 'Elektronisch unterschrieben' : 'Datum, Unterschrift'}${n ? ` — ${esc(n)}` : ' der prüfenden Person'}</div></div>`;
+      })
+      .join('');
     return `<div class="sign"><b>Bestätigung der prüfenden Person${names.length > 1 ? 'en' : ''}</b><div class="sig-grid">${fields}</div></div>`;
   })()}
 

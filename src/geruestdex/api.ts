@@ -318,15 +318,21 @@ export async function fetchInspectionsForReport(
 ): Promise<InspectionWithPhotos[]> {
   const end = new Date(to);
   end.setHours(23, 59, 59, 999);
-  const { data, error } = await sb
+  const query = (cols: string) =>
+    sb
     .from('inspection')
-    .select(`${INSPECTION_COLS}, photo_urls`)
+    .select(cols)
     .eq('site_id', siteId)
     .gte('started_at', from.toISOString())
     .lte('started_at', end.toISOString())
     .order('started_at');
+  let { data, error } = await query(`${INSPECTION_COLS}, photo_urls, signature`);
+  // Spalte signature (Update 2026-10-29) fehlt noch → Bericht ohne Unterschriftsbild.
+  if (error && /signature|42703|PGRST204/i.test(`${error.code} ${error.message}`)) {
+    ({ data, error } = await query(`${INSPECTION_COLS}, photo_urls`));
+  }
   if (error) fail('Berichtsdaten konnten nicht geladen werden', error);
-  return (data ?? []) as InspectionWithPhotos[];
+  return (data ?? []) as unknown as InspectionWithPhotos[];
 }
 
 /** Mängel einer Baustelle im Zeitraum inkl. Fotos — nur für den PDF-Bericht. */

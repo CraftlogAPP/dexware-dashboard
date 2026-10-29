@@ -110,6 +110,8 @@ export interface Inspection {
 
 export interface InspectionWithPhotos extends Inspection {
   photo_urls: string[];
+  /** Unterschrift der prüfenden Person (ab Datenbank-Update 2026-10-29), nur im Bericht geladen. */
+  signature?: string | null;
 }
 
 // ---------------------------------------------------------------------------
