@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, fmtDateTime, fmtNum, gpsLabel } from '../../lib/format';
-import { deleteTrip, fetchTrip, fetchVehicles } from '../api';
+import { cancelTrip, deleteTrip, fetchTrip, fetchVehicles } from '../api';
 import { TripDialog, type TripFormInitial } from '../dialogs';
 import { CategoryBadge, ConfirmedBadge } from '../badges';
 import { CATEGORY_LABELS, type TripData, type Vehicle } from '../types';
@@ -44,6 +44,21 @@ export function TripDetail() {
 
   async function onDelete(t: TripData) {
     if (!session) return;
+    if (t.confirmed) {
+      const reason = window.prompt(
+        'Bestätigte Fahrten werden nicht gelöscht, sondern storniert — sie bleiben im Fahrtenbuch gekennzeichnet stehen (geschlossene Form).\n\nGrund der Stornierung:',
+      );
+      if (!reason?.trim()) return;
+      setDeleting(true);
+      try {
+        await cancelTrip(client, t.id, reason);
+        navigate('../fahrten');
+      } catch (err) {
+        alert(err instanceof Error ? err.message : String(err));
+        setDeleting(false);
+      }
+      return;
+    }
     if (
       !window.confirm(
         'Diese Fahrt wirklich löschen? Sie wird beim nächsten Sync auch aus der App entfernt.',
@@ -88,18 +103,24 @@ export function TripDetail() {
               {t.manual ? ' · manuell erfasst' : ' · GPS-erfasst'}
             </p>
 
-            <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-              <button className="btn ghost small" onClick={() => setEditing(true)}>
-                Bearbeiten
-              </button>
-              <button
-                className="btn ghost small"
-                disabled={deleting}
-                onClick={() => onDelete(t)}
-              >
-                Löschen
-              </button>
-            </div>
+            {t.canceled ? (
+              <div className="error-box">
+                Storniert{t.canceledAt ? ` am ${fmtDate(t.canceledAt)}` : ''}: {t.cancelReason ?? '—'}
+              </div>
+            ) : (
+              <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+                <button className="btn ghost small" onClick={() => setEditing(true)}>
+                  Bearbeiten
+                </button>
+                <button
+                  className="btn ghost small"
+                  disabled={deleting}
+                  onClick={() => onDelete(t)}
+                >
+                  {t.confirmed ? 'Stornieren' : 'Löschen'}
+                </button>
+              </div>
+            )}
 
             <div className="kpi-grid">
               <div className="card">

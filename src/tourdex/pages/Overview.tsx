@@ -31,8 +31,9 @@ export function Overview() {
         {({ trips, vehicles }) => {
           const vehicleName = (id: string | null) =>
             vehicles.find((v) => v.id === id)?.name ?? '—';
-          const totalKm = trips.reduce((sum, t) => sum + (t.distance_km ?? 0), 0);
-          const businessKm = trips
+          const active = trips.filter((t) => !t.canceled);
+          const totalKm = active.reduce((sum, t) => sum + (t.distance_km ?? 0), 0);
+          const businessKm = active
             .filter((t) => t.category === 'business')
             .reduce((sum, t) => sum + (t.distance_km ?? 0), 0);
           const unconfirmed = trips.filter((t) => !t.confirmed);

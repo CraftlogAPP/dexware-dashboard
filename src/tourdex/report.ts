@@ -18,7 +18,7 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function tripRow(t: TripSummary, cumulativeKm: number): string {
+function tripRow(t: TripSummary, odo: { startKm: number; endKm: number; corrected: boolean } | undefined): string {
   const status = t.confirmed ? 'bestätigt' : 'unbestätigt';
   const source = t.manual ? 'manuell' : 'GPS';
   return `<tr class="${t.confirmed ? '' : 'unconfirmed'}">
@@ -27,8 +27,9 @@ function tripRow(t: TripSummary, cumulativeKm: number): string {
     <td class="wrap">${esc(t.end_address ?? '—')}</td>
     <td class="wrap">${esc(t.purpose ?? '—')}</td>
     <td>${t.category ? esc(CATEGORY_LABELS[t.category] ?? t.category) : '—'}</td>
+    <td class="num">${odo ? Math.round(odo.startKm).toLocaleString('de-DE') : '—'}</td>
+    <td class="num">${odo ? Math.round(odo.endKm).toLocaleString('de-DE') + (odo.corrected ? ' *' : '') : '—'}</td>
     <td class="num">${fmtNum(t.distance_km)}</td>
-    <td class="num">${fmtNum(cumulativeKm)}</td>
     <td>${status}<div class="note">${source}</div></td>
   </tr>`;
 }
@@ -36,15 +37,34 @@ function tripRow(t: TripSummary, cumulativeKm: number): string {
 export function buildFahrtenbuchHtml(
   accountEmail: string,
   vehicle: Vehicle,
-  trips: TripSummary[],
+  allTrips: TripSummary[],
   periodLabel: string,
+  /** Fahrten des Fahrzeugs vor dem Zeitraum — der Kilometerstand läuft fortlaufend weiter. */
+  priorTrips: TripSummary[] = [],
 ): string {
-  let cumulative = 0;
-  const rows = trips
-    .map((t) => {
-      cumulative += t.distance_km ?? 0;
-      return tripRow(t, cumulative);
-    })
+  // Stornierte Fahrten zählen nicht, bleiben aber separat aufgeführt (geschlossene Form).
+  const trips = allTrips.filter((t) => !t.canceled);
+  const canceledTrips = allTrips.filter((t) => t.canceled);
+  // Kilometerstand je Fahrt wie in der App (utils/odometer.ts): Anfangsstand + gefahrene km,
+  // ein eingetragener Tachostand setzt den Stand neu.
+  const odo = new Map<string, { startKm: number; endKm: number; corrected: boolean }>();
+  if (vehicle.initialOdometerKm != null) {
+    let cursor = vehicle.initialOdometerKm;
+    for (const t of [...priorTrips.filter((p) => !p.canceled), ...trips]) {
+      const corrected = t.odometer_end_km != null;
+      const endKm = corrected ? (t.odometer_end_km as number) : cursor + (t.distance_km ?? 0);
+      odo.set(t.id, { startKm: cursor, endKm, corrected });
+      cursor = endKm;
+    }
+  }
+  const rows = trips.map((t) => tripRow(t, odo.get(t.id))).join('');
+  const canceledRows = canceledTrips
+    .map(
+      (t) =>
+        `<li><b>${fmtDate(t.start_time)} ${fmtTime(t.start_time)}</b> — ${esc(t.start_address ?? '—')} → ${esc(
+          t.end_address ?? '—',
+        )}, ${fmtNum(t.distance_km)} km · storniert ${t.canceled_at ? fmtDate(t.canceled_at) : ''}: ${esc(t.cancel_reason ?? '—')}</li>`,
+    )
     .join('');
 
   const kmByCategory: Record<TripCategory, number> = {
@@ -105,8 +125,8 @@ export function buildFahrtenbuchHtml(
   }</div>
   <div class="legal">Elektronisch geführtes Fahrtenbuch. Die Fahrten wurden zeitnah
   erfasst (GPS-gestützt bzw. manuell, je Eintrag gekennzeichnet) und sind fortlaufend
-  dokumentiert. Nachträgliche Änderungen erfolgen ausschließlich in der TourDex-App
-  und werden synchronisiert.</div>
+  dokumentiert. Nachträgliche Änderungen werden mit Zeitstempel protokolliert; bestätigte
+  Fahrten werden nicht gelöscht, sondern gekennzeichnet storniert.</div>
 
   <table>
     <thead>
@@ -116,13 +136,20 @@ export function buildFahrtenbuchHtml(
         <th>Ziel</th>
         <th>Anlass / Zweck</th>
         <th>Kategorie</th>
+        <th class="num">km-Stand Beginn</th>
+        <th class="num">km-Stand Ende</th>
         <th class="num">km</th>
-        <th class="num">km kum.</th>
         <th>Status</th>
       </tr>
     </thead>
-    <tbody>${rows || '<tr><td colspan="8">Keine Fahrten im Zeitraum.</td></tr>'}</tbody>
+    <tbody>${rows || '<tr><td colspan="9">Keine Fahrten im Zeitraum.</td></tr>'}</tbody>
   </table>
+  <div class="note">${
+    odo.size > 0
+      ? 'km-Stand fortlaufend aus Anfangsstand und gefahrenen Kilometern; * = Tachostand eingetragen.'
+      : 'Kein Anfangs-Kilometerstand beim Fahrzeug hinterlegt — km-Stände fehlen.'
+  }</div>
+  ${canceledRows ? `<h2>Stornierte Fahrten</h2><div class="note">Zählen nicht in den Summen, bleiben zur Nachvollziehbarkeit aufgeführt.</div><ul>${canceledRows}</ul>` : ''}
 
   <h2>Zusammenfassung</h2>
   <div class="summary">

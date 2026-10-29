@@ -36,6 +36,10 @@ const TRIP_COLS = [
   'purpose:data->>purpose',
   'confirmed:data->confirmed',
   'manual:data->manual',
+  'canceled:data->canceled',
+  'cancel_reason:data->>cancelReason',
+  'canceled_at:data->>canceledAt',
+  'odometer_end_km:data->odometerEndKm',
 ].join(', ');
 
 export async function fetchTripSummaries(sb: SupabaseClient): Promise<TripSummary[]> {
@@ -227,13 +231,34 @@ export async function updateTripFull(
         latitude: 0,
         longitude: 0,
       };
+      const point = (p?: GeoPoint) =>
+        p ? p.address || `${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}` : undefined;
+      const str = (v: unknown) => (v == null || v === '' ? undefined : String(v));
+      const nextStart = { ...prevStart, address: edit.startAddress };
+      const nextEnd = { ...prevEnd, address: edit.endAddress };
+      const pairs: [string, string | undefined, string | undefined][] = [
+        ['startTime', str(prev.startTime), edit.startTime],
+        ['endTime', str(prev.endTime), edit.endTime],
+        ['start', point(prev.start as GeoPoint | undefined), point(nextStart)],
+        ['end', point(prev.end as GeoPoint | undefined), point(nextEnd)],
+        ['distanceKm', str(prev.distanceKm), str(edit.distanceKm)],
+        ['category', str(prev.category), edit.category],
+        ['purpose', str(prev.purpose), edit.purpose || undefined],
+        ['vehicleId', str(prev.vehicleId), edit.vehicleId],
+      ];
+      const changes = pairs
+        .filter(([, from, to]) => (from ?? '') !== (to ?? ''))
+        .map(([field, from, to]) => ({ field, from, to }));
+      const edits = Array.isArray(prev.edits) ? [...(prev.edits as unknown[])] : [];
+      if (changes.length > 0) edits.push({ at: new Date().toISOString(), changes });
       const next: Record<string, unknown> = {
         ...prev,
+        edits,
         vehicleId: edit.vehicleId,
         startTime: edit.startTime,
         endTime: edit.endTime,
-        start: { ...prevStart, address: edit.startAddress },
-        end: { ...prevEnd, address: edit.endAddress },
+        start: nextStart,
+        end: nextEnd,
         distanceKm: edit.distanceKm,
         category: edit.category,
         confirmed: edit.confirmed,
@@ -247,7 +272,41 @@ export async function updateTripFull(
 }
 
 /**
- * Fahrt löschen — Tombstone wie mobile pushDeletions (deleted=true, data={}),
+ * Bestätigte Fahrt stornieren (geschlossene Form): bleibt im Fahrtenbuch, gekennzeichnet mit Grund.
+ */
+export async function cancelTrip(sb: SupabaseClient, id: string, reason: string): Promise<void> {
+  await transformSyncItem(
+    sb,
+    'trips',
+    id,
+    (prev) => ({ ...prev, canceled: true, cancelReason: reason.trim(), canceledAt: new Date().toISOString() }),
+    'Fahrt konnte nicht storniert werden',
+  );
+}
+
+/**
+ * Alle Fahrten eines Fahrzeugs vor einem Zeitpunkt — Grundlage für den fortlaufenden Kilometerstand.
+ */
+export async function fetchTripsBefore(
+  sb: SupabaseClient,
+  vehicleId: string,
+  before: Date,
+): Promise<TripSummary[]> {
+  const { data, error } = await sb
+    .from('sync_items')
+    .select(TRIP_COLS)
+    .eq('collection', 'trips')
+    .eq('deleted', false)
+    .eq('data->>vehicleId', vehicleId)
+    .lt('data->>startTime', before.toISOString())
+    .order('data->>startTime', { ascending: true });
+  if (error) fail('Fahrten konnten nicht geladen werden', error);
+  return (data ?? []) as unknown as TripSummary[];
+}
+
+/**
+ * Unbestätigte Fahrt löschen (z. B. GPS-Fehlalarm). Bestätigte Fahrten nur stornieren.
+ * Tombstone wie mobile pushDeletions (deleted=true, data={}),
  * damit die Löschung beim nächsten Sync auch die App erreicht.
  */
 export async function deleteTrip(

@@ -4,7 +4,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
 import { openReportWindow } from '../../lib/print';
-import { fetchTripsForReport, fetchVehicles } from '../api';
+import { fetchTripsBefore, fetchTripsForReport, fetchVehicles } from '../api';
 import { buildFahrtenbuchHtml } from '../report';
 import type { Vehicle } from '../types';
 
@@ -34,7 +34,10 @@ export function Report() {
       // Bis-Datum inklusiv: Fahrten bis Mitternacht des Folgetags
       const toExclusive = parseLocalDate(to);
       toExclusive.setDate(toExclusive.getDate() + 1);
-      const trips = await fetchTripsForReport(client, vehicleId, fromDate, toExclusive);
+      const [trips, priorTrips] = await Promise.all([
+        fetchTripsForReport(client, vehicleId, fromDate, toExclusive),
+        fetchTripsBefore(client, vehicleId, fromDate),
+      ]);
       const periodLabel = `${fmtDate(fromDate.toISOString())} – ${fmtDate(
         parseLocalDate(to).toISOString(),
       )}`;
@@ -43,6 +46,7 @@ export function Report() {
         vehicle,
         trips,
         periodLabel,
+        priorTrips,
       );
       if (!openReportWindow(html)) {
         setError(

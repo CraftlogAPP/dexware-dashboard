@@ -46,6 +46,12 @@ export interface TripSummary {
   purpose: string | null;
   confirmed: boolean | null;
   manual: boolean | null;
+  /** Bestätigte Fahrten werden nie gelöscht, sondern storniert (wie in der App). */
+  canceled: boolean | null;
+  cancel_reason: string | null;
+  canceled_at: string | null;
+  /** Echter Tachostand am Fahrtende, falls in der App eingetragen. */
+  odometer_end_km: number | null;
 }
 
 // --- Volle Blobs (Shape wie mobile src/types) ---
@@ -82,6 +88,9 @@ export interface TripData {
   path?: GeoPoint[];
   manual: boolean;
   createdAt: string;
+  canceled?: boolean;
+  cancelReason?: string;
+  canceledAt?: string;
 }
 
 export interface Vehicle {

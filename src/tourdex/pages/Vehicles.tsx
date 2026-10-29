@@ -82,7 +82,7 @@ export function Vehicles() {
             return <div className="card empty">Noch keine Fahrzeuge in der Cloud.</div>;
           }
           const statsFor = (id: string) => {
-            const own = trips.filter((t) => t.vehicle_id === id);
+            const own = trips.filter((t) => t.vehicle_id === id && !t.canceled);
             return {
               count: own.length,
               km: own.reduce((sum, t) => sum + (t.distance_km ?? 0), 0),

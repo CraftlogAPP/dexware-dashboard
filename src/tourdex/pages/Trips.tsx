@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, fmtNum, fmtTime } from '../../lib/format';
-import { deleteTrip, fetchTripSummaries, fetchVehicles } from '../api';
+import { cancelTrip, deleteTrip, fetchTripSummaries, fetchVehicles } from '../api';
 import { TripDialog, type TripFormInitial } from '../dialogs';
 import { CategoryBadge, ConfirmedBadge } from '../badges';
 import {
@@ -50,6 +50,20 @@ export function Trips() {
 
   async function onDelete(t: TripSummary) {
     if (!session) return;
+    if (t.confirmed) {
+      const reason = window.prompt('Bestätigte Fahrten werden nicht gelöscht, sondern storniert — sie bleiben im Fahrtenbuch gekennzeichnet stehen (geschlossene Form).\n\nGrund der Stornierung:');
+      if (!reason?.trim()) return;
+      setDeleting(true);
+      try {
+        await cancelTrip(client, t.id, reason);
+        state.reload();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : String(err));
+      } finally {
+        setDeleting(false);
+      }
+      return;
+    }
     if (
       !window.confirm(
         `Fahrt vom ${fmtDate(t.start_time)} wirklich löschen? Sie wird beim nächsten Sync auch aus der App entfernt.`,
@@ -94,7 +108,9 @@ export function Trips() {
               (!status ||
                 (status === 'confirmed' ? !!t.confirmed : !t.confirmed)),
           );
-          const totalKm = trips.reduce((sum, t) => sum + (t.distance_km ?? 0), 0);
+          const totalKm = trips
+            .filter((t) => !t.canceled)
+            .reduce((sum, t) => sum + (t.distance_km ?? 0), 0);
 
           return (
             <>
@@ -192,9 +208,16 @@ export function Trips() {
                             <td className="wrap muted">{t.purpose ?? '—'}</td>
                             <td className="muted">{fmtNum(t.distance_km)}</td>
                             <td>
-                              <ConfirmedBadge confirmed={t.confirmed} />
+                              {t.canceled ? (
+                                <span className="badge red" title={t.cancel_reason ?? ''}>
+                                  storniert
+                                </span>
+                              ) : (
+                                <ConfirmedBadge confirmed={t.confirmed} />
+                              )}
                             </td>
                             <td>
+                              {t.canceled ? null : (
                               <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                                 <button
                                   className="btn ghost small"
@@ -207,9 +230,10 @@ export function Trips() {
                                   disabled={deleting}
                                   onClick={() => onDelete(t)}
                                 >
-                                  Löschen
+                                  {t.confirmed ? 'Stornieren' : 'Löschen'}
                                 </button>
                               </span>
+                              )}
                             </td>
                           </tr>
                         ))}
