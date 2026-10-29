@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
+import { X } from 'lucide-react';
 
 /**
  * Generische Formular-Infrastruktur für die Bearbeiten-Funktionen:
@@ -27,7 +28,7 @@ export function Modal({
         <div className="modal-head">
           <h3>{title}</h3>
           <button type="button" className="btn ghost small" onClick={onClose} aria-label="Schließen">
-            ✕
+            <X className="i" aria-hidden />
           </button>
         </div>
         {children}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FileDown } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
@@ -294,7 +295,7 @@ export function SiteDetail() {
             <div className="section-head">
               <h2>Prüf-Historie ({inspections.length})</h2>
               <Link className="btn small" to={`../bericht?standort=${site.id}`}>
-                📄 Prüfbericht-PDF erstellen
+                <FileDown className="i" aria-hidden /> Prüfbericht-PDF erstellen
               </Link>
             </div>
 

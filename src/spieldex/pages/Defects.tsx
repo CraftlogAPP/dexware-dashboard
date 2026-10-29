@@ -116,7 +116,7 @@ export function Defects() {
           const pgNames = playgroundNameMap(baseState.data?.playgrounds ?? []);
           const eqNames = equipmentNameMap(baseState.data?.equipment ?? []);
           return defects.length === 0 ? (
-            <div className="card empty">Keine Mängel mit den gewählten Filtern. 👍</div>
+            <div className="card empty">Keine Mängel mit den gewählten Filtern.</div>
           ) : (
             <>
               <p className="muted small">{defects.length} Mängel</p>

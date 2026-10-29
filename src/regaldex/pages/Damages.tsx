@@ -113,7 +113,7 @@ export function Damages() {
           const whNames = warehouseNameMap(baseState.data?.warehouses ?? []);
           const rackNames = rackNameMap(baseState.data?.racks ?? []);
           return damages.length === 0 ? (
-            <div className="card empty">Keine Schäden mit den gewählten Filtern. 👍</div>
+            <div className="card empty">Keine Schäden mit den gewählten Filtern.</div>
           ) : (
             <>
               <p className="muted small">{damages.length} Schäden</p>

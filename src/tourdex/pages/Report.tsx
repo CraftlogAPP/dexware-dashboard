@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FileDown } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
@@ -99,7 +100,7 @@ export function Report() {
               disabled={busy || !vehicleId}
               onClick={() => void onGenerate()}
             >
-              {busy ? 'Lade Fahrten …' : '📄 Fahrtenbuch erstellen'}
+              {busy ? 'Lade Fahrten …' : <><FileDown className="i" aria-hidden /> Fahrtenbuch erstellen</>}
             </button>
             <p className="muted small" style={{ marginTop: 10 }}>
               Unbestätigte Fahrten sind im Bericht gelb markiert — für ein sauberes

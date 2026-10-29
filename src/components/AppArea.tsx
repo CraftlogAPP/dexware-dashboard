@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import type { AppConfig } from '../apps/registry';
+import { LayoutGrid, LogOut } from 'lucide-react';
+import { appIcon, type AppConfig } from '../apps/registry';
 import { AppAuthProvider, useAppAuth } from '../auth/AppAuthContext';
 import { LoginScreen } from '../auth/LoginScreen';
 
@@ -11,10 +12,9 @@ import { LoginScreen } from '../auth/LoginScreen';
  */
 export function AppArea({ app, children }: { app: AppConfig; children: ReactNode }) {
   const style = {
-    '--app-primary': app.theme.primary,
-    '--app-accent': app.theme.accent,
-    '--app-bg': app.theme.bg,
-    '--app-card': app.theme.card,
+    '--accent': app.theme.accent,
+    '--on-accent': app.theme.onAccent,
+    '--bg': app.theme.bg,
   } as React.CSSProperties;
 
   return (
@@ -32,15 +32,25 @@ function Gate({ app, children }: { app: AppConfig; children: ReactNode }) {
   return (
     <>
       <header className="site-header">
-        <Link className="brand" to="/">
-          dex<span>ware</span>
+        <Link className="brand" to="/" aria-label="Dexware Dashboard – alle Apps">
+          <img src="/dexware.webp" alt="" width="28" height="28" />
+          <span className="wm">
+            Dex<span>ware</span>
+          </span>
         </Link>
+        <span className="header-sep" aria-hidden />
         <span className="app-chip">
-          {app.emoji} <b>{app.name}</b> Dashboard
+          <img src={appIcon(app.id)} alt="" width="24" height="24" />
+          {app.name} <span className="hide-sm">Dashboard</span>
         </span>
         <div className="spacer" />
-        <Link className="badge" to="/" title="Haupteinstieg: alle App-Dashboards der Suite">
-          ⊞ Alle Dashboards
+        <Link
+          className="btn ghost small"
+          to="/"
+          title="Haupteinstieg: alle App-Dashboards der Suite"
+        >
+          <LayoutGrid className="i" aria-hidden />
+          <span className="hide-sm">Alle Dashboards</span>
         </Link>
         <HeaderUser />
       </header>
@@ -62,10 +72,15 @@ function HeaderUser() {
   const { session, signOut } = useAppAuth();
   if (!session) return null;
   return (
-    <span className="row" style={{ gap: 10 }}>
-      <span className="muted small">{session.user.email}</span>
-      <button className="btn ghost small" onClick={() => void signOut()}>
-        Abmelden
+    <span className="header-user">
+      <span className="email">{session.user.email}</span>
+      <button
+        className="btn ghost small"
+        onClick={() => void signOut()}
+        title="Abmelden"
+      >
+        <LogOut className="i" aria-hidden />
+        <span className="hide-sm">Abmelden</span>
       </button>
     </span>
   );

@@ -3,15 +3,14 @@
 
 export type AppStatus = 'dashboard' | 'external' | 'soon';
 
+/** Farben wie auf der App-Landing (dexware-suite/landing-system/apps/<app>.js). */
 export interface AppTheme {
-  /** Markenfarbe, lesbar auf dunklem Grund (Buttons, Links, aktive Nav, Kachel-Akzent) */
-  primary: string;
-  /** Sekundär-/Akzentfarbe (Badges, Highlights) */
+  /** Markenfarbe (Knöpfe, aktive Navigation); Textvariante leitet das CSS ab */
   accent: string;
-  /** Flächen-Hintergrund des App-Bereichs */
+  /** Schriftfarbe auf der Markenfarbe */
+  onAccent: string;
+  /** Dunkler Seitengrund des App-Bereichs */
   bg: string;
-  /** Kartenfläche */
-  card: string;
 }
 
 export interface SupabaseConfig {
@@ -48,7 +47,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Aufträge, Zeiterfassung & Doku für Handwerksbetriebe',
     status: 'dashboard',
     emoji: '🛠️',
-    theme: { primary: '#E8C97A', accent: '#F59E0B', bg: '#1C1A14', card: '#26231A' },
+    theme: { accent: '#E8C97A', onAccent: '#1c1607', bg: '#13110c' },
     landingUrl: 'https://craftdex.dexware.app',
     revenueCat: 'goog_HmRtYRTtdzfVQSFyGWKUcvJUwEK',
     supabase: {
@@ -63,7 +62,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Dokumente sicher archivieren & jederzeit wiederfinden',
     status: 'dashboard',
     emoji: '📄',
-    theme: { primary: '#4F9EF8', accent: '#0EA5E9', bg: '#0F1420', card: '#171F30' },
+    theme: { accent: '#4F9EF8', onAccent: '#03172e', bg: '#0b0c10' },
     landingUrl: 'https://dokudex.dexware.app',
     revenueCat: 'goog_koiFQGRJsYbLXBOfMsMxEcyKIno',
     supabase: {
@@ -78,7 +77,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Automatisches, finanzamt-konformes Fahrtenbuch',
     status: 'dashboard',
     emoji: '🧭',
-    theme: { primary: '#60A5FA', accent: '#2563EB', bg: '#0F1923', card: '#182534' },
+    theme: { accent: '#3B82F6', onAccent: '#ffffff', bg: '#0a1119' },
     landingUrl: 'https://tourdex.dexware.app',
     revenueCat: 'goog_vGPVighPABtAUUCceMEYzkIasxZ',
     supabase: {
@@ -93,7 +92,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Baumkataster & Verkehrssicherung — Kontrollen rechtssicher dokumentiert',
     status: 'external',
     emoji: '🌳',
-    theme: { primary: '#4ADE80', accent: '#0D9488', bg: '#0A1712', card: '#122A1E' },
+    theme: { accent: '#4ADE80', onAccent: '#052e16', bg: '#0a1410' },
     landingUrl: 'https://baumdex.dexware.app',
     externalUrl: 'https://baumdex-portal.vercel.app',
   },
@@ -103,7 +102,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Arbeitsschutz-Unterweisung mit prüffestem Nachweis',
     status: 'dashboard',
     emoji: '🦺',
-    theme: { primary: '#22C55E', accent: '#2563EB', bg: '#0B1220', card: '#141E31' },
+    theme: { accent: '#3B82F6', onAccent: '#ffffff', bg: '#090e1a' },
     landingUrl: 'https://schutzdex.dexware.app',
     revenueCat: 'goog_bFUROrBgFYMKMKDFIJYmvCSMcrT',
     supabase: {
@@ -118,7 +117,7 @@ export const APPS: AppConfig[] = [
     tagline: 'DGUV-V3-Geräteprüfung mobil & prüffest',
     status: 'dashboard',
     emoji: '🔌',
-    theme: { primary: '#7DA7F9', accent: '#1D4ED8', bg: '#0D1526', card: '#162038' },
+    theme: { accent: '#2F6BF2', onAccent: '#ffffff', bg: '#090e1c' },
     landingUrl: 'https://pruefdex.dexware.app',
     revenueCat: 'goog_pPXjHAIrXRKvpiGVTwCVDdRyOco',
     supabase: {
@@ -133,7 +132,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Räum- & Streupflicht gerichtsfest dokumentiert',
     status: 'dashboard',
     emoji: '❄️',
-    theme: { primary: '#38BDF8', accent: '#FB923C', bg: '#0A1520', card: '#122334' },
+    theme: { accent: '#0EA5E9', onAccent: '#03202f', bg: '#08111a' },
     landingUrl: 'https://winterdex.dexware.app',
     revenueCat: 'goog_EFamBqKZmcNVjBZZoYgveMeyoUw',
     supabase: {
@@ -148,7 +147,7 @@ export const APPS: AppConfig[] = [
     tagline: 'UVV-Prüfung & Führerscheinkontrolle mit Fristen-Ampel',
     status: 'dashboard',
     emoji: '🚛',
-    theme: { primary: '#F97316', accent: '#FDBA74', bg: '#0C1017', card: '#171D28' },
+    theme: { accent: '#F97316', onAccent: '#1f0b00', bg: '#0b0f15' },
     landingUrl: 'https://kfzdex.dexware.app',
     revenueCat: 'goog_EGwxQkGUiswhKHzJfwpurysKnFI',
     supabase: {
@@ -163,7 +162,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Spielplatzkontrolle nach DIN EN 1176 mit PDF-Kontrollbuch',
     status: 'dashboard',
     emoji: '🎠',
-    theme: { primary: '#FF7A6E', accent: '#2DD4BF', bg: '#12191E', card: '#1B2730' },
+    theme: { accent: '#EA5A47', onAccent: '#ffffff', bg: '#0b1517' },
     landingUrl: 'https://spieldex.dexware.app',
     revenueCat: 'goog_pUmlTTpXcHtjVuLUNPSArxyVarJ',
     supabase: {
@@ -178,7 +177,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Regalinspektion nach DIN EN 15635 im Ampelverfahren',
     status: 'dashboard',
     emoji: '🏗️',
-    theme: { primary: '#F59E0B', accent: '#5B7185', bg: '#14120C', card: '#211D14' },
+    theme: { accent: '#F59E0B', onAccent: '#211400', bg: '#13110c' },
     landingUrl: 'https://regaldex.dexware.app',
     revenueCat: 'goog_aYtkRUUHPzDFfjbhkvXrpfyWHpn',
     supabase: {
@@ -193,7 +192,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Feuerlöscher-Prüfung nach ASR A2.2 / DIN 14406-4',
     status: 'dashboard',
     emoji: '🧯',
-    theme: { primary: '#EF4444', accent: '#B91C1C', bg: '#1C1512', card: '#292019' },
+    theme: { accent: '#DC2626', onAccent: '#ffffff', bg: '#140c0b' },
     landingUrl: 'https://feuerdex.dexware.app',
     revenueCat: 'goog_UZqByYBRPUCNkRbRMVXyAVdQfuX',
     supabase: {
@@ -208,7 +207,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Gerüstprüfung nach TRBS 2121-1 mit Freigabe-Nachweis',
     status: 'dashboard',
     emoji: '🚧',
-    theme: { primary: '#2DD4BF', accent: '#14B8A6', bg: '#0E1A19', card: '#162927' },
+    theme: { accent: '#14B8A6', onAccent: '#042f2b', bg: '#0a1413' },
     landingUrl: 'https://geruestdex.dexware.app',
     revenueCat: 'goog_JtcTMMIsmhGoHABsFvpqfmnGvUW',
     supabase: {
@@ -223,7 +222,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Tor- & Türenprüfung nach ASR A1.7 mit Prüfbuch-PDF',
     status: 'dashboard',
     emoji: '🚪',
-    theme: { primary: '#A78BFA', accent: '#8B5CF6', bg: '#131020', card: '#1D1830' },
+    theme: { accent: '#7C3AED', onAccent: '#ffffff', bg: '#100d17' },
     landingUrl: 'https://toredex.dexware.app',
     revenueCat: 'goog_vCXreEPQCtnZnxADPLpSozSpnRY',
     supabase: {
@@ -238,7 +237,7 @@ export const APPS: AppConfig[] = [
     tagline: 'PSA gegen Absturz prüfen — mit Ablegereife-Wächter (DGUV 312-906)',
     status: 'dashboard',
     emoji: '🧗',
-    theme: { primary: '#F472B6', accent: '#DB2777', bg: '#170D14', card: '#241520' },
+    theme: { accent: '#DB2777', onAccent: '#ffffff', bg: '#150d13' },
     landingUrl: 'https://gurtdex.dexware.app',
     revenueCat: 'goog_AgviVPXkwpqsIocTiFHGfTvnIdM',
     supabase: {
@@ -253,7 +252,7 @@ export const APPS: AppConfig[] = [
     tagline: 'Leitern- & Tritte-Prüfung nach BetrSichV / DGUV 208-016',
     status: 'dashboard',
     emoji: '🪜',
-    theme: { primary: '#60A5FA', accent: '#64748B', bg: '#141A22', card: '#1B2733' },
+    theme: { accent: '#2563EB', onAccent: '#ffffff', bg: '#0a0e16' },
     landingUrl: 'https://leiterdex.dexware.app',
     revenueCat: 'goog_vTdzyRKXPUnpDufpvAdJPpBFdhS',
     supabase: {

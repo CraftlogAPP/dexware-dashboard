@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FileDown } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
@@ -78,7 +79,7 @@ export function Report() {
             </label>
             {error && <div className="error-box">{error}</div>}
             <button className="btn" disabled={busy} onClick={() => void onGenerate()}>
-              {busy ? 'Lade Geräte …' : '📄 Prüfliste erstellen'}
+              {busy ? 'Lade Geräte …' : <><FileDown className="i" aria-hidden /> Prüfliste erstellen</>}
             </button>
           </div>
         )}

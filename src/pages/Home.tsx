@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowRight, ArrowUpRight, Check, SlidersHorizontal } from 'lucide-react';
 import { APPS, STATUS_ORDER, appIcon, type AppConfig } from '../apps/registry';
 import { DueBell } from '../duechecks/DueBell';
 import { useDueChecks } from '../duechecks/useDueChecks';
@@ -17,43 +18,50 @@ export function Home() {
 
   return (
     <>
-      <header className="site-header home">
-        <div className="home-bell">
-          <DueBell {...due} />
-          <AuthStatus signedIn={due.signedInCount} total={due.appCount} />
-        </div>
+      <header className="site-header">
+        <Link className="brand" to="/" aria-label="Dexware Dashboard">
+          <img src="/dexware.webp" alt="" width="28" height="28" />
+          <span className="wm">
+            Dex<span>ware</span>
+          </span>
+          <span className="brand-sub">Dashboard</span>
+        </Link>
+        <div className="spacer" />
         <div className="home-actions">
+          <AuthStatus signedIn={due.signedInCount} total={due.appCount} />
+          <DueBell {...due} />
           <AppsMenu apps={apps} hidden={hidden} toggle={toggle} reset={reset} />
           <a
-            className="badge home-link"
+            className="btn ghost small hide-sm"
             href="https://dexware.app"
             target="_blank"
             rel="noreferrer"
           >
-            dexware.app ↗
+            dexware.app
+            <ArrowUpRight className="i" aria-hidden />
           </a>
-        </div>
-        <div className="brand">
-          dex<span>ware</span> Dashboard
         </div>
       </header>
 
       <main className="page">
         <section className="hero">
-          <div className="hero-pill">
+          <div className="kicker">
             <span className="pulse-dot" aria-hidden />
             {liveCount} Dashboards live — gleiche Daten wie in deinen Apps
           </div>
           <h1>
-            Dein Betrieb. <span className="grad">Alle Nachweise.</span> Ein Cockpit.
+            Dein Betrieb. <em>Alle Nachweise.</em>
+            <br />
+            Ein Cockpit.
           </h1>
           <p>
-            Das Web-Dashboard zur dexware-Suite: Objekte, Kontrollen und Fristen deiner
+            Das Web-Dashboard zur Dexware-Suite: Objekte, Kontrollen und Fristen deiner
             Apps am großen Bildschirm — gleiche Daten, live. Anmeldung mit deinem
             App-Konto: per Google oder E-Mail + Passwort.
           </p>
         </section>
 
+        <h2 className="group-title">Deine Apps</h2>
         {visible.length > 0 ? (
           <div className="tile-grid">
             {visible.map((app, i) => (
@@ -73,7 +81,7 @@ export function Home() {
         ) : (
           <div className="tiles-empty">
             <p>Alle Apps sind ausgeblendet.</p>
-            <button type="button" className="badge live" onClick={reset}>
+            <button type="button" className="btn ghost small" onClick={reset}>
               Alle anzeigen
             </button>
           </div>
@@ -149,13 +157,14 @@ function AppsMenu({
     <div className="apps-menu" ref={ref}>
       <button
         type="button"
-        className="badge apps-menu-btn"
+        className="btn ghost small apps-menu-btn"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         title="Auswählen, welche Apps die Startseite zeigt"
       >
-        ⚙️ Apps
-        {hidden.size > 0 && ` · ${apps.length - hidden.size}/${apps.length}`}
+        <SlidersHorizontal className="i" aria-hidden />
+        <span className="hide-sm">Apps</span>
+        {hidden.size > 0 && ` ${apps.length - hidden.size}/${apps.length}`}
       </button>
       {open && (
         <div className="apps-menu-panel" role="dialog" aria-label="Startseite anpassen">
@@ -183,12 +192,12 @@ function AppsMenu({
                 className={`apps-menu-row${shown ? ' on' : ''}`}
                 onClick={() => toggle(a.id)}
                 aria-pressed={shown}
-                style={{ '--row-accent': a.theme.primary } as React.CSSProperties}
+                style={{ '--accent': a.theme.accent } as React.CSSProperties}
               >
                 <img src={appIcon(a.id)} alt="" loading="lazy" />
                 <span className="apps-menu-name">{a.name}</span>
                 <span className="apps-menu-check" aria-hidden>
-                  {shown ? '✓' : ''}
+                  {shown && <Check className="i" />}
                 </span>
               </button>
             );
@@ -212,18 +221,9 @@ function AppTile({
   signedIn: boolean | null;
 }) {
   const style = {
-    '--tile-accent': app.theme.primary,
-    '--tile-card': app.theme.card,
-    '--tile-bg': app.theme.bg,
+    '--tile-accent': app.theme.accent,
     '--enter-delay': `${index * 45}ms`,
   } as React.CSSProperties;
-
-  // Spotlight folgt dem Cursor (nur Desktop relevant, auf Touch passiert nichts)
-  const onMove = useCallback((e: React.MouseEvent<HTMLElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`);
-    e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`);
-  }, []);
 
   const body = (
     <>
@@ -237,13 +237,17 @@ function AppTile({
         <h3>{app.name}</h3>
         {app.status !== 'soon' && (
           <span className="tile-arrow" aria-hidden>
-            →
+            {app.status === 'external' ? (
+              <ArrowUpRight className="i" />
+            ) : (
+              <ArrowRight className="i" />
+            )}
           </span>
         )}
       </div>
       <p>{app.tagline}</p>
       <div className="tile-foot">
-        {app.status === 'dashboard' && <span className="badge live">● Dashboard öffnen</span>}
+        {app.status === 'dashboard' && <span className="tile-open">Dashboard öffnen</span>}
         {signedIn !== null && (
           <span
             className={`auth-status tile-auth${signedIn ? ' on' : ''}`}
@@ -259,10 +263,10 @@ function AppTile({
         )}
         {app.status === 'external' && (
           <span
-            className="badge external"
+            className="tile-open"
             title="Externes Dashboard — läuft unter eigener Adresse, öffnet in neuem Tab"
           >
-            Externes Dashboard ↗
+            Externes Portal öffnen
           </span>
         )}
         {app.status === 'soon' && <span className="badge">Dashboard folgt</span>}
@@ -272,7 +276,7 @@ function AppTile({
 
   if (app.status === 'dashboard') {
     return (
-      <Link className="tile" style={style} to={`/app/${app.id}`} onMouseMove={onMove}>
+      <Link className="tile" style={style} to={`/app/${app.id}`}>
         {body}
       </Link>
     );
@@ -285,7 +289,7 @@ function AppTile({
         href={app.externalUrl}
         target="_blank"
         rel="noreferrer"
-        onMouseMove={onMove}
+       
       >
         {body}
       </a>

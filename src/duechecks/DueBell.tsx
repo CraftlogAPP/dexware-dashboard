@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { APPS, appIcon } from '../apps/registry';
 import type { DueChecksState } from './useDueChecks';
@@ -44,7 +45,7 @@ export function DueBell({ results, totalCount, loading }: DueChecksState) {
         aria-label={`Fälligkeiten${totalCount > 0 ? `: ${totalCount}` : ''}`}
         aria-expanded={open}
       >
-        <span aria-hidden>🔔</span>
+        <Bell className="i" aria-hidden />
         {totalCount > 0 && <span className="due-bell-count">{totalCount}</span>}
       </button>
 
@@ -57,7 +58,7 @@ export function DueBell({ results, totalCount, loading }: DueChecksState) {
 
           {groups.length === 0 ? (
             <div className="due-pop-empty">
-              {loading ? 'Prüfe Fälligkeiten…' : 'Nichts fällig. 👍'}
+              {loading ? 'Prüfe Fälligkeiten…' : 'Nichts fällig.'}
             </div>
           ) : (
             <div className="due-pop-body">

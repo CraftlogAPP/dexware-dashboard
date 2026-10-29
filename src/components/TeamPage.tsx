@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { useOrg } from './OrgContext';
 import {
@@ -124,7 +125,15 @@ export function TeamPage() {
                   {inviteCode}
                 </span>
                 <button className="btn ghost small" onClick={() => void onCopy()}>
-                  {copied ? '✓ Kopiert' : 'Kopieren'}
+                  {copied ? (
+                    <>
+                      <Check className="i" aria-hidden /> Kopiert
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="i" aria-hidden /> Kopieren
+                    </>
+                  )}
                 </button>
               </>
             )}

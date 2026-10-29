@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { LayoutGrid } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { appIcon } from '../apps/registry';
 import { useAppAuth } from './AppAuthContext';
@@ -233,9 +234,9 @@ export function LoginScreen() {
 function SuiteHint() {
   return (
     <div className="suite-hint">
-      <span aria-hidden>⊞</span>
+      <LayoutGrid className="i" aria-hidden />
       <p>
-        Mehrere dexware-Apps im Einsatz? <b>dashboard.dexware.app</b> ist dein
+        Mehrere Dexware-Apps im Einsatz? <b>dashboard.dexware.app</b> ist dein
         Haupteinstieg — eine Übersicht, alle App-Dashboards.{' '}
         <Link to="/">Zur Dashboard-Übersicht →</Link>
       </p>

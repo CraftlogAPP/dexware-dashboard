@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
+import { BookOpenCheck, CreditCard, LayoutDashboard, ListChecks, PenLine, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
@@ -45,13 +46,13 @@ function Shell() {
     <div className="app-shell">
       <nav className="app-nav">
         <NavLink to={base} end>
-          📊 Übersicht
+          <LayoutDashboard className="i" aria-hidden /> Übersicht
         </NavLink>
-        <NavLink to={`${base}/mitarbeiter`}>👥 Mitarbeiter</NavLink>
-        <NavLink to={`${base}/unterweisungen`}>🦺 Unterweisungen</NavLink>
-        <NavLink to={`${base}/zuweisungen`}>📋 Zuweisungen</NavLink>
-        <NavLink to={`${base}/nachweise`}>✍️ Nachweise</NavLink>
-        <NavLink to={`${base}/abo`}>💳 Abo</NavLink>
+        <NavLink to={`${base}/mitarbeiter`}><Users className="i" aria-hidden /> Mitarbeiter</NavLink>
+        <NavLink to={`${base}/unterweisungen`}><BookOpenCheck className="i" aria-hidden /> Unterweisungen</NavLink>
+        <NavLink to={`${base}/zuweisungen`}><ListChecks className="i" aria-hidden /> Zuweisungen</NavLink>
+        <NavLink to={`${base}/nachweise`}><PenLine className="i" aria-hidden /> Nachweise</NavLink>
+        <NavLink to={`${base}/abo`}><CreditCard className="i" aria-hidden /> Abo</NavLink>
         <div className="nav-footer">
           {data && (
             <>

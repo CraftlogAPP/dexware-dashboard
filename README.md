@@ -62,6 +62,13 @@ npm run build      # tsc + vite build + 404.html-Fallback (GitHub Pages SPA)
 npm run preview
 ```
 
+**Design** (seit 2026-10-29): gleiche Sprache wie App-Landings und dexware.app —
+Tokens aus `dexware-suite/landing-system/styles.js`, Inter lokal (`public/fonts/`),
+Icons von `lucide-react` (Klasse `i`). Alles Optische steckt zentral in `src/index.css`;
+App-Farben (`theme.accent/onAccent/bg` in der Registry) = Werte der jeweiligen Landing.
+Ohne Test-Login zeigt **`/vorschau?app=<id>`** (nur `npm run dev`, fehlt im Build) alle
+Bausteine mit Beispieldaten; `&dialog=1` öffnet zusätzlich den Bearbeiten-Dialog.
+
 ## Deployment (GitHub Pages)
 
 - Workflow: `.github/workflows/pages.yml` (Push auf main/master → Pages).

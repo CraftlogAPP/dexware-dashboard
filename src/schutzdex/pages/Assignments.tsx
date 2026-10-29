@@ -141,7 +141,7 @@ export function Assignments() {
           });
           return assignments.length === 0 ? (
             <div className="card empty">
-              Keine Zuweisungen mit den gewählten Filtern. 👍
+              Keine Zuweisungen mit den gewählten Filtern.
             </div>
           ) : (
             <>

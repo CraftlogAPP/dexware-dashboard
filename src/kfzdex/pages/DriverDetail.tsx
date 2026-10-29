@@ -125,7 +125,7 @@ export function DriverDetail() {
                         <td className="muted">
                           {/* photo_uri ist ein lokaler Pfad auf dem Kontroll-Gerät —
                               hier nur anzeigen, DASS ein Foto existiert. */}
-                          {c.photo_uri ? '📷 auf dem Kontroll-Gerät' : '—'}
+                          {c.photo_uri ? 'Foto auf dem Kontroll-Gerät' : '—'}
                         </td>
                       </tr>
                     ))}

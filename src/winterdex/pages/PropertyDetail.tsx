@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FileDown } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { fetchOperations, fetchProperty } from '../api';
@@ -83,7 +84,7 @@ export function PropertyDetail() {
             <div className="section-head">
               <h2>Einsatz-Historie ({ops.length})</h2>
               <Link className="btn small" to={`../bericht?objekt=${property.id}`}>
-                📄 Nachweis-PDF erstellen
+                <FileDown className="i" aria-hidden /> Nachweis-PDF erstellen
               </Link>
             </div>
 

@@ -51,6 +51,11 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   ),
 };
 
+// Design-Vorschau mit Beispieldaten — nur im Dev-Server, fehlt im Produktions-Build.
+const Vorschau = import.meta.env.DEV
+  ? lazy(() => import('./dev/Vorschau').then((m) => ({ default: m.Vorschau })))
+  : null;
+
 const loading = (
   <div className="empty">
     <span className="spinner" />
@@ -74,6 +79,7 @@ export default function App() {
               />
             );
           })}
+          {Vorschau && <Route path="/vorschau" element={<Vorschau />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

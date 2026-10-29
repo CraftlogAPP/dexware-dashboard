@@ -120,7 +120,7 @@ export function Defects() {
           const siteNames = siteNameMap(sites);
           const scaffoldNames = scaffoldNameMap(scaffolds);
           return damages.length === 0 ? (
-            <div className="card empty">Keine Mängel mit den gewählten Filtern. 👍</div>
+            <div className="card empty">Keine Mängel mit den gewählten Filtern.</div>
           ) : (
             <>
               <p className="muted small">{damages.length} Mängel</p>

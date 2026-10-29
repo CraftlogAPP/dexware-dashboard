@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FileDown } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
@@ -89,7 +90,7 @@ export function Report() {
               disabled={busy || !propertyId}
               onClick={() => void onGenerate()}
             >
-              {busy ? 'Lade Einsätze & Fotos …' : '📄 Bericht erstellen'}
+              {busy ? 'Lade Einsätze & Fotos …' : <><FileDown className="i" aria-hidden /> Bericht erstellen</>}
             </button>
             <p className="muted small" style={{ marginTop: 10 }}>
               Bei vielen Beweisfotos kann das Laden einen Moment dauern — die Fotos

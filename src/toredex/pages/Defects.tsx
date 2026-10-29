@@ -121,7 +121,7 @@ export function Defects() {
           const siteNames = siteNameMap(sites);
           const gateNames = gateNameMap(gates);
           return defects.length === 0 ? (
-            <div className="card empty">Keine Mängel mit den gewählten Filtern. 👍</div>
+            <div className="card empty">Keine Mängel mit den gewählten Filtern.</div>
           ) : (
             <>
               <p className="muted small">{defects.length} Mängel</p>

@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
+import { CreditCard, Hammer, LayoutDashboard } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
@@ -34,10 +35,10 @@ function Shell() {
     <div className="app-shell">
       <nav className="app-nav">
         <NavLink to={base} end>
-          📊 Übersicht
+          <LayoutDashboard className="i" aria-hidden /> Übersicht
         </NavLink>
-        <NavLink to={`${base}/auftraege`}>🛠️ Aufträge</NavLink>
-        <NavLink to={`${base}/abo`}>💳 Abo</NavLink>
+        <NavLink to={`${base}/auftraege`}><Hammer className="i" aria-hidden /> Aufträge</NavLink>
+        <NavLink to={`${base}/abo`}><CreditCard className="i" aria-hidden /> Abo</NavLink>
         <div className="nav-footer">
           {session && (
             <>

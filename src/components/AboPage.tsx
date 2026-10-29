@@ -23,7 +23,7 @@ export function AboPage() {
   return (
     <>
       <div className="section-head">
-        <h2>💳 Abo &amp; Tarif</h2>
+        <h2>Abo &amp; Tarif</h2>
       </div>
       <LoadGuard state={state}>{(info) => <AboContent info={info} />}</LoadGuard>
     </>

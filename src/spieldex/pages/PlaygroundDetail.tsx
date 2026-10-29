@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FileDown } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
@@ -245,7 +246,7 @@ export function PlaygroundDetail() {
             <div className="section-head">
               <h2>Kontroll-Historie ({inspections.length})</h2>
               <Link className="btn small" to={`../bericht?spielplatz=${playground.id}`}>
-                📄 Kontrollbuch-PDF erstellen
+                <FileDown className="i" aria-hidden /> Kontrollbuch-PDF erstellen
               </Link>
             </div>
 

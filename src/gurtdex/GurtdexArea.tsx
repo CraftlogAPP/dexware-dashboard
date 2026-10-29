@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
+import { Building2, ClipboardCheck, CreditCard, FileDown, LayoutDashboard, TriangleAlert, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
@@ -48,14 +49,14 @@ function Shell() {
     <div className="app-shell">
       <nav className="app-nav">
         <NavLink to={base} end>
-          📊 Übersicht
+          <LayoutDashboard className="i" aria-hidden /> Übersicht
         </NavLink>
-        <NavLink to={`${base}/standorte`}>🏢 Standorte</NavLink>
-        <NavLink to={`${base}/pruefungen`}>✅ Prüfungen</NavLink>
-        <NavLink to={`${base}/maengel`}>⚠️ Mängel</NavLink>
-        <NavLink to={`${base}/team`}>👥 Team</NavLink>
-        <NavLink to={`${base}/bericht`}>📄 Prüfprotokoll-PDF</NavLink>
-        <NavLink to={`${base}/abo`}>💳 Abo</NavLink>
+        <NavLink to={`${base}/standorte`}><Building2 className="i" aria-hidden /> Standorte</NavLink>
+        <NavLink to={`${base}/pruefungen`}><ClipboardCheck className="i" aria-hidden /> Prüfungen</NavLink>
+        <NavLink to={`${base}/maengel`}><TriangleAlert className="i" aria-hidden /> Mängel</NavLink>
+        <NavLink to={`${base}/team`}><Users className="i" aria-hidden /> Team</NavLink>
+        <NavLink to={`${base}/bericht`}><FileDown className="i" aria-hidden /> Prüfprotokoll-PDF</NavLink>
+        <NavLink to={`${base}/abo`}><CreditCard className="i" aria-hidden /> Abo</NavLink>
         <div className="nav-footer">
           {data && (
             <>
