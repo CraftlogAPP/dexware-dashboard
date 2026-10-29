@@ -196,6 +196,6 @@ export interface DefectWithPhotos extends Defect {
 // Rechtsgrundlage je Land — erscheint im Berichtskopf (wie mobile pdf/report.ts).
 export const LEGAL_BASIS: Record<Org['land'], string> = {
   DE: 'Grundlage: Bereitstellungs- und Kontrollpflichten des Arbeitgebers (ArbSchG; ASR A2.2 „Maßnahmen gegen Brände") i. V. m. DIN 14406-4 (Instandhaltung tragbarer Feuerlöscher durch Sachkundige, spätestens alle 2 Jahre) und BetrSichV (innere Prüfung alle 5 Jahre, Festigkeitsprüfung alle 10 Jahre).',
-  AT: 'Grundlage: ArbeitnehmerInnenschutzgesetz (ASchG) und Arbeitsstättenverordnung (AStV) — Bereithaltung und wiederkehrende Überprüfung von Feuerlöschern — i. V. m. TRVB F 124 bzw. ÖNORM F 1053 (Überprüfung üblich alle 2 Jahre).',
+  AT: 'Grundlage: ArbeitnehmerInnenschutzgesetz (ASchG) und § 13 Arbeitsstättenverordnung (AStV) — Überprüfung von Löschgeräten mindestens alle zwei Kalenderjahre, längstens nach 27 Monaten, durch fachkundige Personen — i. V. m. TRVB F 124 bzw. ÖNORM F 1053.',
   CH: 'Grundlage: Brandschutzvorschriften der VKF und Arbeitsmittel-Pflichten nach VUV i. V. m. den Hersteller-Vorgaben und Empfehlungen (periodische Wartung, üblich alle 3 Jahre).',
 };

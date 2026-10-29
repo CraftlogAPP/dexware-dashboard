@@ -197,6 +197,6 @@ export interface DamageWithPhotos extends Damage {
 // Rechtsgrundlage je Land — erscheint im Berichtskopf (wie mobile pdf/report.ts).
 export const LEGAL_BASIS: Record<Org['land'], string> = {
   DE: 'Grundlage: Prüfpflicht des Arbeitgebers (BetrSichV §§ 3, 14; ArbSchG) i. V. m. TRBS 2121-1 (Gefährdung durch Absturz — Gerüste) und DGUV Information 201-011 (Arbeiten auf Gerüsten); Ausführung nach DIN EN 12811-1.',
-  AT: 'Grundlage: ArbeitnehmerInnenschutzgesetz (ASchG) und Bauarbeiterschutzverordnung (BauV, 6. Abschnitt — Gerüste) i. V. m. ÖNORM EN 12811-1.',
+  AT: 'Grundlage: ArbeitnehmerInnenschutzgesetz (ASchG) und Bauarbeiterschutzverordnung (BauV, §§ 55–62 Gerüste; Prüfung nach § 61) i. V. m. ÖNORM EN 12811-1.',
   CH: 'Grundlage: Bauarbeitenverordnung (BauAV, Kapitel Gerüste) und VUV i. V. m. SN EN 12811-1 sowie den Suva-Regeln für Gerüstarbeiten.',
 };

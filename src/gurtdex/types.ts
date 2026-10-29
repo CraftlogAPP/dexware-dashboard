@@ -248,6 +248,6 @@ export interface DefectWithPhotos extends Defect {
 // Rechtsgrundlage je Land — erscheint im Berichtskopf (wie mobile pdf/report.ts).
 export const LEGAL_BASIS: Record<Org['land'], string> = {
   DE: 'Grundlage: BetrSichV i. V. m. PSA-Benutzungsverordnung — Pflicht zur sicheren Bereitstellung und Prüfung von PSA gegen Absturz — sowie DGUV Regel 112-198/112-199 und DGUV Grundsatz 312-906: Sicht-/Funktionskontrolle durch die Benutzerin/den Benutzer vor jeder Benutzung, mindestens alle 12 Monate Prüfung durch eine sachkundige Person (EN 365), außerdem nach Sturzbelastung oder erkennbarer Beschädigung. Ablegereife nach Herstellerangabe.',
-  AT: 'Grundlage: ArbeitnehmerInnenschutzgesetz (ASchG) i. V. m. PSA-Sicherheitsverordnung (PSASV) und Arbeitsmittelverordnung (AM-VO) — wiederkehrende Prüfung von PSA gegen Absturz nach Herstellerangaben und Stand der Technik, mindestens jährlich durch eine fachkundige Person (EN 365).',
+  AT: 'Grundlage: ArbeitnehmerInnenschutzgesetz (ASchG) i. V. m. § 14 der Verordnung Persönliche Schutzausrüstung (PSA-V) — wiederkehrende Prüfung von PSA gegen Absturz mindestens einmal im Kalenderjahr, längstens nach 15 Monaten, durch eine fachkundige Person nach Herstellerangaben und Stand der Technik (EN 365).',
   CH: 'Grundlage: Verordnung über die Unfallverhütung (VUV) — Instandhaltungs- und Prüfpflichten für Arbeitsmittel/PSA — i. V. m. EKAS-Richtlinien und Hersteller-Vorgaben (periodische Prüfung von PSA gegen Absturz, üblich jährlich; EN 365).',
 };
