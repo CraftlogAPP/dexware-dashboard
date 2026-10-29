@@ -74,7 +74,7 @@ export const APPS: AppConfig[] = [
   {
     id: 'tourdex',
     name: 'TourDex',
-    tagline: 'Automatisches, finanzamt-konformes Fahrtenbuch',
+    tagline: 'Automatisches Fahrtenbuch mit PDF fürs Finanzamt',
     status: 'dashboard',
     emoji: '🧭',
     theme: { accent: '#3B82F6', onAccent: '#ffffff', bg: '#0a1119' },
@@ -89,7 +89,7 @@ export const APPS: AppConfig[] = [
   {
     id: 'baumdex',
     name: 'BaumDex',
-    tagline: 'Baumkataster & Verkehrssicherung — Kontrollen rechtssicher dokumentiert',
+    tagline: 'Baumkataster & Verkehrssicherung — Kontrollen lückenlos dokumentiert',
     status: 'external',
     emoji: '🌳',
     theme: { accent: '#4ADE80', onAccent: '#052e16', bg: '#0a1410' },
@@ -129,7 +129,7 @@ export const APPS: AppConfig[] = [
   {
     id: 'winterdex',
     name: 'WinterDex',
-    tagline: 'Räum- & Streupflicht gerichtsfest dokumentiert',
+    tagline: 'Räum- & Streupflicht lückenlos dokumentiert',
     status: 'dashboard',
     emoji: '❄️',
     theme: { accent: '#0EA5E9', onAccent: '#03202f', bg: '#08111a' },
