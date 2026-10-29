@@ -150,7 +150,12 @@ export function buildReportHtml(
   .photos { display: flex; flex-wrap: wrap; gap: 8px; }
   .photos img { width: 180px; border: 1px solid #dcc9c4; border-radius: 4px; }
   .photo-group { break-inside: avoid; }
-  .footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #dcc9c4; color: #51606f; font-size: 10.5px; display: flex; justify-content: space-between; }
+  .sign { margin-top: 18px; page-break-inside: avoid; font-size: 11px; }
+    .sig-grid { display: flex; flex-wrap: wrap; gap: 14px 28px; margin-top: 20px; }
+    .sig { width: 46%; }
+    .sig-line { border-bottom: 1px solid #333; height: 30px; }
+    .sig-label { font-size: 10px; color: #555; margin-top: 3px; }
+    .footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #dcc9c4; color: #51606f; font-size: 10.5px; display: flex; justify-content: space-between; }
   @media print { body { margin: 12mm; } }
 </style>
 </head>
@@ -188,6 +193,13 @@ export function buildReportHtml(
   ${defectTable}
 
   ${photoAppendix(inspections, defects)}
+
+  ${(() => {
+    // Unterschriftsfeld je prüfender Person im Zeitraum (Prüfaufzeichnung: Name + Unterschrift)
+    const names = [...new Set(inspections.filter((i) => !i.canceled).map((i) => (i.inspector_name || '').trim()).filter(Boolean))];
+    const fields = (names.length ? names : ['']).map((n) => `<div class="sig"><div class="sig-line"></div><div class="sig-label">Datum, Unterschrift${n ? ` — ${esc(n)}` : ' der prüfenden Person'}</div></div>`).join('');
+    return `<div class="sign"><b>Bestätigung der prüfenden Person${names.length > 1 ? 'en' : ''}</b><div class="sig-grid">${fields}</div></div>`;
+  })()}
 
   <div class="footer">
     <span>Einträge sind append-only dokumentiert; Korrekturen nur als gekennzeichnete Stornos. Erstellt mit SpielDex — spieldex.dexware.app</span>

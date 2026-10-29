@@ -88,10 +88,16 @@ export interface MeasurementDef {
 
 export const MEASUREMENTS: MeasurementDef[] = [
   {
+    key: 'leitungslaenge',
+    label: 'Leitungslänge',
+    unit: 'm',
+    hint: 'Optional — bei Leitungen über 5 m steigt der Grenzwert für den Schutzleiterwiderstand',
+  },
+  {
     key: 'schutzleiterwiderstand',
     label: 'Schutzleiterwiderstand',
     unit: 'Ω',
-    hint: 'Grenzwert ≤ 0,3 Ω (bis 5 m Leitung) — nur Schutzklasse I',
+    hint: '≤ 0,3 Ω bis 5 m Leitung, je weitere 7,5 m + 0,1 Ω (max. 1 Ω) — nur Schutzklasse I',
   },
   {
     key: 'isolationswiderstand',

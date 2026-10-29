@@ -38,18 +38,27 @@ export function parseMeasure(raw?: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Grenzwert Schutzleiterwiderstand je Leitungslänge: 0,3 Ω bis 5 m, je weitere angefangene 7,5 m + 0,1 Ω, max. 1 Ω (wie die App). */
+export function schutzleiterLimit(lengthRaw: string | undefined): number {
+  const len = parseMeasure(lengthRaw);
+  if (len === null || len <= 5) return 0.3;
+  return Math.min(1, Math.round((0.3 + 0.1 * Math.ceil((len - 5) / 7.5)) * 10) / 10);
+}
+
 /** Bewertet einen Messwert gegen die Grenzwerte nach VDE 0701-0702. */
 export function evaluateMeasurement(
   key: string,
   raw: string | undefined,
   sk: ProtectionClass | null,
+  all?: Measurements,
 ): MeasureEval {
+  if (key === 'leitungslaenge') return 'none';
   const v = parseMeasure(raw);
   if (v === null) return 'none';
   switch (key) {
     case 'schutzleiterwiderstand':
       if (sk !== 'I') return 'na'; // nur bei Schutzklasse I relevant
-      return v <= 0.3 ? 'ok' : 'fail';
+      return v <= schutzleiterLimit(all?.leitungslaenge) ? 'ok' : 'fail';
     case 'isolationswiderstand': {
       const min = sk === 'II' ? 2.0 : sk === 'III' ? 0.25 : 1.0;
       return v >= min ? 'ok' : 'fail';
@@ -70,7 +79,7 @@ export function anyMeasurementFail(
   sk: ProtectionClass | null,
 ): boolean {
   return ['schutzleiterwiderstand', 'isolationswiderstand', 'ableitstrom'].some(
-    (key) => evaluateMeasurement(key, meas[key], sk) === 'fail',
+    (key) => evaluateMeasurement(key, meas[key], sk, meas) === 'fail',
   );
 }
 

@@ -179,7 +179,7 @@ export function InspectionDetail() {
                 <tbody>
                   {MEASUREMENTS.map((m) => {
                     const raw = i.measurements[m.key];
-                    const ev = evaluateMeasurement(m.key, raw, sk);
+                    const ev = evaluateMeasurement(m.key, raw, sk, i.measurements);
                     const badge = EVAL_BADGE[ev];
                     return (
                       <tr key={m.key}>
