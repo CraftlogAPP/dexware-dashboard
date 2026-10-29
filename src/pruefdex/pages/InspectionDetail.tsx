@@ -4,7 +4,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate } from '../../lib/format';
-import { deleteInspection, fetchDevice, fetchInspectionWithPhotos } from '../api';
+import { cancelInspection, fetchDevice, fetchInspectionWithPhotos } from '../api';
 import { InspectionDialog } from '../dialogs';
 import { ResultBadge } from '../badges';
 import { evaluateMeasurement, skLabel, type MeasureEval } from '../labels';
@@ -41,16 +41,12 @@ export function InspectionDetail() {
   }, [client, id]);
 
   async function onDelete(i: InspectionWithPhotos) {
-    if (
-      !window.confirm(
-        `Prüfung vom ${fmtDate(i.inspected_at)} wirklich löschen? Die Prüffrist des Geräts wird aus der neuesten verbleibenden Prüfung neu berechnet.`,
-      )
-    )
-      return;
+    const reason = window.prompt('Prüfungen werden nicht gelöscht: Sie bleibt in der Historie, gekennzeichnet als storniert. Die Prüffrist richtet sich danach nach der jüngsten gültigen Prüfung.\n\nGrund der Stornierung:');
+    if (!reason?.trim()) return;
     try {
-      const warning = await deleteInspection(client, i.id, i.device_id);
+      const warning = await cancelInspection(client, i.id, i.device_id, reason);
       if (warning) alert(warning);
-      // Datensatz ist weg — zurück zur Prüfungsliste.
+      // Bleibt als storniert in der Historie — zurück zur Prüfungsliste.
       navigate('../pruefungen');
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
@@ -88,14 +84,17 @@ export function InspectionDetail() {
                 : ''}
             </p>
 
-            <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-              <button className="btn ghost small" onClick={() => setEditing(true)}>
-                Bearbeiten
-              </button>
-              <button className="btn ghost small" onClick={() => onDelete(i)}>
-                Löschen
-              </button>
-            </div>
+            {i.canceled ? (
+              <div className="error-box">
+                Storniert{i.canceled_at ? ` am ${fmtDate(i.canceled_at)}` : ''}: {i.cancel_reason ?? '—'}
+              </div>
+            ) : (
+              <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+                <button className="btn ghost small" onClick={() => onDelete(i)}>
+                  Stornieren
+                </button>
+              </div>
+            )}
 
             {editing && org && (
               <InspectionDialog

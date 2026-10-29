@@ -28,6 +28,9 @@ export interface Device {
   location_note: string | null;
   interval_months: number;
   next_due_date: string | null; // ISO 'YYYY-MM-DD'
+  /** Ausgesondert statt gelöscht (ab Datenbank-Update 2026-10-29). */
+  retired?: boolean | null;
+  retired_at?: string | null;
   created_at: string;
 }
 
@@ -46,6 +49,10 @@ export interface Inspection {
   result: InspectionResult;
   next_due_date: string | null;
   notes: string | null;
+  /** Storno statt Löschen (ab Datenbank-Update 2026-10-29). */
+  canceled?: boolean | null;
+  cancel_reason?: string | null;
+  canceled_at?: string | null;
   created_at: string;
 }
 

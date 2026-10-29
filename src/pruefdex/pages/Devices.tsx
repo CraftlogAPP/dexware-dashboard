@@ -4,7 +4,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate } from '../../lib/format';
-import { deleteDevice, fetchCustomers, fetchDevices } from '../api';
+import { fetchCustomers, fetchDevices, setDeviceRetired } from '../api';
 import { DeviceDialog } from '../dialogs';
 import { DueBadge } from '../badges';
 import { dueStatus, nameMap, skLabel, type DueStatus } from '../labels';
@@ -22,19 +22,22 @@ export function Devices() {
   const custState = useAsync(() => fetchCustomers(client), [client]);
 
   const devState = useAsync<Device[]>(
-    () => fetchDevices(client, { customerId: customerId || undefined }),
+    () => fetchDevices(client, { customerId: customerId || undefined, includeRetired: true }),
     [client, customerId],
   );
 
   async function onDelete(d: Device) {
+    const retire = !d.retired;
     if (
       !window.confirm(
-        `Gerät „${d.name}" wirklich löschen? Alle Prüfungen dieses Geräts werden mitgelöscht.`,
+        retire
+          ? `Gerät „${d.name}" aussondern? Es fällt aus Fristen und Übersicht, die Prüfhistorie bleibt erhalten.`
+          : `Gerät „${d.name}" wieder in Betrieb nehmen?`,
       )
     )
       return;
     try {
-      await deleteDevice(client, d.id);
+      await setDeviceRetired(client, d.id, retire);
       devState.reload();
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
@@ -121,7 +124,11 @@ export function Devices() {
                         </td>
                         <td>{d.next_due_date ? fmtDate(d.next_due_date) : '—'}</td>
                         <td>
-                          <DueBadge status={dueStatus(d.next_due_date)} />
+                          {d.retired ? (
+                            <span className="badge">ausgesondert</span>
+                          ) : (
+                            <DueBadge status={dueStatus(d.next_due_date)} />
+                          )}
                         </td>
                         <td>
                           <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
@@ -129,7 +136,7 @@ export function Devices() {
                               Bearbeiten
                             </button>
                             <button className="btn ghost small" onClick={() => onDelete(d)}>
-                              Löschen
+                              {d.retired ? 'Wieder in Betrieb' : 'Aussondern'}
                             </button>
                           </span>
                         </td>

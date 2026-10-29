@@ -4,7 +4,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, toInputDate } from '../../lib/format';
-import { deleteInspection, fetchDevices, fetchInspections } from '../api';
+import { cancelInspection, fetchDevices, fetchInspections } from '../api';
 import { InspectionDialog } from '../dialogs';
 import { ResultBadge } from '../badges';
 import { nameMap } from '../labels';
@@ -39,14 +39,10 @@ export function Inspections() {
   );
 
   async function onDelete(i: Inspection) {
-    if (
-      !window.confirm(
-        `Prüfung vom ${fmtDate(i.inspected_at)} wirklich löschen? Die Prüffrist des Geräts wird aus der neuesten verbleibenden Prüfung neu berechnet.`,
-      )
-    )
-      return;
+    const reason = window.prompt('Prüfungen werden nicht gelöscht: Sie bleibt in der Historie, gekennzeichnet als storniert. Die Prüffrist richtet sich danach nach der jüngsten gültigen Prüfung.\n\nGrund der Stornierung:');
+    if (!reason?.trim()) return;
     try {
-      const warning = await deleteInspection(client, i.id, i.device_id);
+      const warning = await cancelInspection(client, i.id, i.device_id, reason);
       inspState.reload();
       devState.reload();
       if (warning) alert(warning);
@@ -146,21 +142,18 @@ export function Inspections() {
                         </td>
                         <td className="wrap">{devNames.get(i.device_id) ?? '—'}</td>
                         <td>
-                          <ResultBadge result={i.result} />
+                          {i.canceled ? <span className="badge red">storniert</span> : <ResultBadge result={i.result} />}
                         </td>
                         <td className="muted">
                           {i.next_due_date ? fmtDate(i.next_due_date) : '—'}
                         </td>
                         <td className="muted">{i.inspector_name ?? '—'}</td>
                         <td>
-                          <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-                            <button className="btn ghost small" onClick={() => setEditing(i)}>
-                              Bearbeiten
-                            </button>
+                          {i.canceled ? null : (
                             <button className="btn ghost small" onClick={() => onDelete(i)}>
-                              Löschen
+                              Stornieren
                             </button>
-                          </span>
+                          )}
                         </td>
                       </tr>
                     ))}

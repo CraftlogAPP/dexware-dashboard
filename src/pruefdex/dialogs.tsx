@@ -8,7 +8,7 @@ import {
   type FormValues,
 } from '../components/form';
 import { fmtDate, toInputDate } from '../lib/format';
-import { addInspection, saveDevice, updateInspection } from './api';
+import { addInspection, saveDevice } from './api';
 import {
   MEASUREMENTS,
   VISUAL_CHECKS,
@@ -177,9 +177,8 @@ export function InspectionDialog({
         (device ? plusMonths(inspectedAt, device.interval_months) : null),
       notes: orNull(v.notes),
     };
-    const warning = inspection
-      ? await updateInspection(client, { id: inspection.id, ...payload })
-      : await addInspection(client, orgId, payload);
+    // Prüfungen sind unveränderlich — der Dialog legt nur neue an (Korrektur per Storno).
+    const warning = await addInspection(client, orgId, payload);
     onSaved(warning);
   }
 

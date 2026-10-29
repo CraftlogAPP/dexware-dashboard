@@ -9,10 +9,29 @@ import type {
 } from './types';
 
 // Spaltenlisten OHNE Base64-Foto-Spalten — Fotos nur im Detail laden!
-const DEVICE_COLS =
+const DEVICE_COLS_BASE =
   'id, org_id, customer_id, qr_code, name, device_type, manufacturer, serial_number, protection_class, location_note, interval_months, next_due_date, created_at';
-const INSPECTION_COLS =
+const INSPECTION_COLS_BASE =
   'id, org_id, device_id, inspected_at, inspector_name, visual_checks, measurements, result, next_due_date, notes, created_at';
+
+// Ab dem Datenbank-Update 2026-10-29 gibt es Storno-/Aussondern-Spalten. Fehlen sie noch,
+// fällt das Dashboard einmalig auf die alten Spalten zurück und läuft unverändert weiter.
+let hasAppendOnly = true;
+const devCols = () => (hasAppendOnly ? `${DEVICE_COLS_BASE}, retired, retired_at` : DEVICE_COLS_BASE);
+const inspCols = () =>
+  hasAppendOnly ? `${INSPECTION_COLS_BASE}, canceled, cancel_reason, canceled_at` : INSPECTION_COLS_BASE;
+const isUnknownColumn = (e: { code?: string; message?: string } | null) =>
+  !!e && (e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|could not find/i.test(e.message ?? ''));
+async function withColumnFallback<R extends { error: { code?: string; message: string } | null }>(
+  run: () => PromiseLike<R>,
+): Promise<R> {
+  const r = await run();
+  if (hasAppendOnly && isUnknownColumn(r.error)) {
+    hasAppendOnly = false;
+    return run();
+  }
+  return r;
+}
 
 export async function fetchCustomers(sb: SupabaseClient): Promise<Customer[]> {
   const { data, error } = await sb.from('customer').select('*').order('name');
@@ -25,28 +44,30 @@ export async function fetchDevice(
   sb: SupabaseClient,
   id: string,
 ): Promise<Device | null> {
-  const { data, error } = await sb
-    .from('device')
-    .select(DEVICE_COLS)
-    .eq('id', id)
-    .maybeSingle();
+  const { data, error } = await withColumnFallback(() =>
+    sb.from('device').select(devCols()).eq('id', id).maybeSingle(),
+  );
   if (error) fail('Gerät konnte nicht geladen werden', error);
-  return data as Device | null;
+  return data as unknown as Device | null;
 }
 
+/** Ohne includeRetired nur Geräte in Betrieb (Fristen, KPIs). */
 export async function fetchDevices(
   sb: SupabaseClient,
-  opts: { customerId?: string } = {},
+  opts: { customerId?: string; includeRetired?: boolean } = {},
 ): Promise<Device[]> {
-  let q = sb
-    .from('device')
-    .select(DEVICE_COLS)
-    .order('next_due_date', { ascending: true, nullsFirst: false })
-    .order('name');
-  if (opts.customerId) q = q.eq('customer_id', opts.customerId);
-  const { data, error } = await q;
+  const { data, error } = await withColumnFallback(() => {
+    let q = sb
+      .from('device')
+      .select(devCols())
+      .order('next_due_date', { ascending: true, nullsFirst: false })
+      .order('name');
+    if (opts.customerId) q = q.eq('customer_id', opts.customerId);
+    return q;
+  });
   if (error) fail('Geräte konnten nicht geladen werden', error);
-  return (data ?? []) as Device[];
+  const list = (data ?? []) as unknown as Device[];
+  return opts.includeRetired ? list : list.filter((d) => !d.retired);
 }
 
 // ── Schreiben (Format identisch zur Mobile-App, supabaseRepository.ts) ──────
@@ -110,11 +131,13 @@ export async function saveDevice(
   if (error) fail('Gerät konnte nicht gespeichert werden', error);
 }
 
-/** Gerät löschen — wie app-seitiges deleteDevice. Alle Prüfungen des Geräts
- * werden per FK „on delete cascade" mitgelöscht. */
-export async function deleteDevice(sb: SupabaseClient, id: string): Promise<void> {
-  const { error } = await sb.from('device').delete().eq('id', id);
-  if (error) fail('Gerät konnte nicht gelöscht werden', error);
+/** Aussondern statt löschen (wie die App) — die Prüfhistorie bleibt erhalten. */
+export async function setDeviceRetired(sb: SupabaseClient, id: string, retired: boolean): Promise<void> {
+  const { error } = await sb
+    .from('device')
+    .update({ retired, retired_at: retired ? new Date().toISOString() : null })
+    .eq('id', id);
+  if (error) fail(isUnknownColumn(error) ? 'Aussondern ist erst nach dem Datenbank-Update möglich' : 'Gerät konnte nicht gespeichert werden', error);
 }
 
 export interface InspectionInput {
@@ -152,46 +175,25 @@ export async function addInspection(
     : null;
 }
 
-export interface InspectionUpdateInput extends InspectionInput {
-  id: string;
-}
-
-/** Prüfung ändern + Geräte-Frist neu berechnen (wie die App, updateInspection). */
-export async function updateInspection(
-  sb: SupabaseClient,
-  input: InspectionUpdateInput,
-): Promise<string | null> {
-  const { error } = await sb
-    .from('inspection')
-    .update({
-      inspected_at: input.inspected_at,
-      inspector_name: input.inspector_name,
-      visual_checks: input.visual_checks,
-      measurements: input.measurements,
-      result: input.result,
-      next_due_date: input.next_due_date,
-      notes: input.notes,
-    })
-    .eq('id', input.id);
-  if (error) fail('Prüfung konnte nicht gespeichert werden', error);
-  const failMsg = await recomputeDeviceDue(sb, input.device_id);
-  // Prüfung ist schon gespeichert — Throw hieße Dialog offen bei bereits erfolgter Änderung.
-  return failMsg
-    ? `Die Prüfung wurde gespeichert, aber die Prüffrist am Gerät konnte nicht neu berechnet werden (${failMsg}). Bitte am Gerät prüfen.`
-    : null;
-}
-
-/** Prüfung löschen + Geräte-Frist neu berechnen (wie die App, deleteInspection). */
-export async function deleteInspection(
+/** Prüfung stornieren (unveränderlich, wie die App) + Geräte-Frist aus der jüngsten gültigen Prüfung neu berechnen. */
+export async function cancelInspection(
   sb: SupabaseClient,
   id: string,
   deviceId: string,
+  reason: string,
 ): Promise<string | null> {
-  const { error } = await sb.from('inspection').delete().eq('id', id);
-  if (error) fail('Prüfung konnte nicht gelöscht werden', error);
+  const { error } = await sb.rpc('cancel_inspection', { p_inspection: id, p_reason: reason.trim() });
+  if (error) {
+    fail(
+      /cancel_inspection|PGRST202/i.test(`${error.code} ${error.message}`)
+        ? 'Stornieren ist erst nach dem Datenbank-Update möglich'
+        : 'Prüfung konnte nicht storniert werden',
+      error,
+    );
+  }
   const failMsg = await recomputeDeviceDue(sb, deviceId);
   return failMsg
-    ? `Die Prüfung wurde gelöscht, aber die Prüffrist am Gerät konnte nicht neu berechnet werden (${failMsg}). Bitte am Gerät prüfen.`
+    ? `Die Prüfung wurde storniert, aber die Prüffrist am Gerät konnte nicht neu berechnet werden (${failMsg}). Bitte am Gerät prüfen.`
     : null;
 }
 
@@ -211,6 +213,7 @@ async function recomputeDeviceDue(
     .from('inspection')
     .select('next_due_date')
     .eq('device_id', deviceId)
+    .eq('canceled', false)
     .order('inspected_at', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(1);
@@ -236,19 +239,21 @@ export async function fetchInspections(
   sb: SupabaseClient,
   filter: InspectionFilter = {},
 ): Promise<Inspection[]> {
-  let q = sb
-    .from('inspection')
-    .select(INSPECTION_COLS)
-    .order('inspected_at', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(filter.limit ?? 500);
-  if (filter.deviceId) q = q.eq('device_id', filter.deviceId);
-  if (filter.result) q = q.eq('result', filter.result);
-  if (filter.from) q = q.gte('inspected_at', filter.from);
-  if (filter.to) q = q.lte('inspected_at', filter.to);
-  const { data, error } = await q;
+  const { data, error } = await withColumnFallback(() => {
+    let q = sb
+      .from('inspection')
+      .select(inspCols())
+      .order('inspected_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(filter.limit ?? 500);
+    if (filter.deviceId) q = q.eq('device_id', filter.deviceId);
+    if (filter.result) q = q.eq('result', filter.result);
+    if (filter.from) q = q.gte('inspected_at', filter.from);
+    if (filter.to) q = q.lte('inspected_at', filter.to);
+    return q;
+  });
   if (error) fail('Prüfungen konnten nicht geladen werden', error);
-  return (data ?? []) as Inspection[];
+  return (data ?? []) as unknown as Inspection[];
 }
 
 /** Minimale Prüf-Metadaten für KPIs/„letzte Prüfung"-Logik. */
@@ -263,14 +268,17 @@ export async function fetchInspectionMeta(
   sb: SupabaseClient,
   opts: { limit?: number } = {},
 ): Promise<InspMeta[]> {
-  const { data, error } = await sb
-    .from('inspection')
-    .select('id, device_id, inspected_at, result')
-    .order('inspected_at', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(opts.limit ?? 2000);
+  const { data, error } = await withColumnFallback(() =>
+    sb
+      .from('inspection')
+      .select(hasAppendOnly ? 'id, device_id, inspected_at, result, canceled' : 'id, device_id, inspected_at, result')
+      .order('inspected_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(opts.limit ?? 2000),
+  );
   if (error) fail('Prüf-Daten konnten nicht geladen werden', error);
-  return (data ?? []) as InspMeta[];
+  // KPIs und „letzte Prüfung" nur aus gültigen (nicht stornierten) Prüfungen.
+  return ((data ?? []) as unknown as (InspMeta & { canceled?: boolean })[]).filter((i) => !i.canceled);
 }
 
 /** Einzelne Prüfung inkl. Beweisfotos (Base64-Daten-URIs). */
@@ -278,11 +286,9 @@ export async function fetchInspectionWithPhotos(
   sb: SupabaseClient,
   id: string,
 ): Promise<InspectionWithPhotos> {
-  const { data, error } = await sb
-    .from('inspection')
-    .select(`${INSPECTION_COLS}, photo_urls`)
-    .eq('id', id)
-    .single();
+  const { data, error } = await withColumnFallback(() =>
+    sb.from('inspection').select(`${inspCols()}, photo_urls`).eq('id', id).single(),
+  );
   if (error) fail('Prüfung konnte nicht geladen werden', error);
-  return data as InspectionWithPhotos;
+  return data as unknown as InspectionWithPhotos;
 }
