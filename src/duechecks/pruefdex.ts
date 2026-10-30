@@ -6,17 +6,22 @@ import type { DueItem, DueResult } from './types';
 
 // PrüfDex: je Gerät ein gespeichertes next_due_date. Fällig = überfällig
 // (Datum < heute) oder bald fällig (≤ 1 Monat) — analog Übersichts-Ampel.
+// Ausgesonderte Geräte zählen nicht (Spalte retired seit DB-Update 2026-10-29;
+// fehlt sie noch, wird ohne Filter gelesen).
 export async function pruefdexDue(sb: SupabaseClient): Promise<DueResult> {
-  const [devices, customers] = await Promise.all([
-    sb.from('device').select('id, name, next_due_date, customer_id'),
+  const base = 'id, name, next_due_date, customer_id';
+  const [withRetired, customers] = await Promise.all([
+    sb.from('device').select(`${base}, retired`),
     sb.from('customer').select('id, name'),
   ]);
+  const devices = withRetired.error ? await sb.from('device').select(base) : withRetired;
   throwOnError(devices.error, customers.error);
 
   const custName = new Map((customers.data ?? []).map((c) => [c.id, c.name as string]));
 
   const scored: (DueItem & { sort: number })[] = [];
-  for (const d of devices.data ?? []) {
+  for (const d of (devices.data ?? []) as Array<Record<string, any>>) {
+    if (d.retired === true) continue;
     const status = dueStatus(d.next_due_date);
     if (status !== 'overdue' && status !== 'soon') continue;
     const cust = d.customer_id ? custName.get(d.customer_id) : null;
