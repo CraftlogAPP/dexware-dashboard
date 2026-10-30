@@ -1,0 +1,75 @@
+import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
+import { Building2, ClipboardCheck, CreditCard, FileDown, LayoutDashboard, TriangleAlert, Users } from 'lucide-react';
+import type { AppConfig } from '../apps/registry';
+import { AppArea } from '../components/AppArea';
+import { useAppAuth } from '../auth/AppAuthContext';
+import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
+import { TeamPage } from '../components/TeamPage';
+import { AboPage } from '../components/AboPage';
+import { Overview } from './pages/Overview';
+import { Sites } from './pages/Sites';
+import { SiteDetail } from './pages/SiteDetail';
+import { Inspections } from './pages/Inspections';
+import { InspectionDetail } from './pages/InspectionDetail';
+import { Defects } from './pages/Defects';
+import { Report } from './pages/Report';
+
+export function HebedexArea({ app }: { app: AppConfig }) {
+  return (
+    <AppArea app={app}>
+      <OrgProvider>
+        <OrgGate>
+          <Routes>
+            <Route element={<Shell />}>
+              <Route index element={<Overview />} />
+              <Route path="standorte" element={<Sites />} />
+              <Route path="standorte/:id" element={<SiteDetail />} />
+              <Route path="pruefungen" element={<Inspections />} />
+              <Route path="pruefungen/:id" element={<InspectionDetail />} />
+              <Route path="maengel" element={<Defects />} />
+              <Route path="team" element={<TeamPage />} />
+              <Route path="bericht" element={<Report />} />
+              <Route path="abo" element={<AboPage />} />
+            </Route>
+          </Routes>
+        </OrgGate>
+      </OrgProvider>
+    </AppArea>
+  );
+}
+
+function Shell() {
+  const { app } = useAppAuth();
+  const { data } = useOrg();
+  // Absolute Pfade: Die Shell rendert in einer pathless Layout-Route unter einer
+  // Splat-Route — relative NavLinks würden sich dort an die aktuelle URL anhängen.
+  const base = `/app/${app.id}`;
+
+  return (
+    <div className="app-shell">
+      <nav className="app-nav">
+        <NavLink to={base} end>
+          <LayoutDashboard className="i" aria-hidden /> Übersicht
+        </NavLink>
+        <NavLink to={`${base}/standorte`}><Building2 className="i" aria-hidden /> Standorte</NavLink>
+        <NavLink to={`${base}/pruefungen`}><ClipboardCheck className="i" aria-hidden /> Prüfungen</NavLink>
+        <NavLink to={`${base}/maengel`}><TriangleAlert className="i" aria-hidden /> Mängel</NavLink>
+        <NavLink to={`${base}/team`}><Users className="i" aria-hidden /> Team</NavLink>
+        <NavLink to={`${base}/bericht`}><FileDown className="i" aria-hidden /> Prüfbuch-PDF</NavLink>
+        <NavLink to={`${base}/abo`}><CreditCard className="i" aria-hidden /> Abo</NavLink>
+        <div className="nav-footer">
+          {data && (
+            <>
+              <b>{data.org.name}</b>
+              <br />
+              Rolle: {data.role === 'owner' ? 'Inhaber' : 'Mitarbeiter'}
+            </>
+          )}
+        </div>
+      </nav>
+      <main className="app-main">
+        <Outlet />
+      </main>
+    </div>
+  );
+}

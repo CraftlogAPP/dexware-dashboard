@@ -1,4 +1,4 @@
-// Zentrale App-Registry der dexware-Suite (16 Apps).
+// Zentrale App-Registry der dexware-Suite (16 Apps, HebeDex noch „Dashboard folgt“).
 // Eine neue App im Dashboard = ein Eintrag hier (plus ggf. ein Dashboard-Modul).
 
 export type AppStatus = 'dashboard' | 'external' | 'soon';
@@ -245,6 +245,17 @@ export const APPS: AppConfig[] = [
       anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxd3ZrcGlnZHhxZmZsdmFvdGVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMjk5MzEsImV4cCI6MjA5OTcwNTkzMX0.LQ-WgfbD7gZ3PCjDtCgLtuamMznbxlgow-JhXnpnSTU',
     },
+  },
+  {
+    id: 'hebedex',
+    name: 'HebeDex',
+    tagline: 'Anschlag-, Lastaufnahme- & Zurrmittel prüfen — mit Ablegereife-Rechner (DGUV Regel 109-017)',
+    // 'soon', bis das Supabase-Projekt steht. Dann: status 'dashboard' + supabase-URL/Anon-Key
+    // + revenueCat-Key eintragen — der Bereich src/hebedex/ ist fertig.
+    status: 'soon',
+    emoji: '⛓️',
+    theme: { accent: '#84CC16', onAccent: '#0E120B', bg: '#0E120B' },
+    landingUrl: 'https://hebedex.dexware.app',
   },
   {
     id: 'leiterdex',

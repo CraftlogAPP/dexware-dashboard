@@ -49,6 +49,9 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   gurtdex: lazy(() =>
     import('./gurtdex/GurtdexArea').then((m) => ({ default: m.GurtdexArea })),
   ),
+  hebedex: lazy(() =>
+    import('./hebedex/HebedexArea').then((m) => ({ default: m.HebedexArea })),
+  ),
 };
 
 // Design-Vorschau mit Beispieldaten — nur im Dev-Server, fehlt im Produktions-Build.
