@@ -250,12 +250,16 @@ export const APPS: AppConfig[] = [
     id: 'hebedex',
     name: 'HebeDex',
     tagline: 'Anschlag-, Lastaufnahme- & Zurrmittel prüfen — mit Ablegereife-Rechner (DGUV Regel 109-017)',
-    // 'soon', bis das Supabase-Projekt steht. Dann: status 'dashboard' + supabase-URL/Anon-Key
-    // + revenueCat-Key eintragen — der Bereich src/hebedex/ ist fertig.
-    status: 'soon',
+    status: 'dashboard',
     emoji: '⛓️',
     theme: { accent: '#84CC16', onAccent: '#0E120B', bg: '#0E120B' },
     landingUrl: 'https://hebedex.dexware.app',
+    revenueCat: 'goog_RARplVhVPiwOtVtDVUmuqwmqBGk',
+    supabase: {
+      url: 'https://pwaxrteojzryzfiagbfc.supabase.co',
+      anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3YXhydGVvanpyeXpmaWFnYmZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM1MjM3NDEsImV4cCI6MjEwOTA5OTc0MX0.UiItgyGJAC2wfdc3gIxDatLqvx12D5GBsulPx7Qa2YY',
+    },
   },
   {
     id: 'leiterdex',
