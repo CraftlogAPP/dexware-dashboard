@@ -175,7 +175,7 @@ export function Operations() {
                         <td className="muted">{weatherLabel(op.weather)}</td>
                         <td className="muted">{op.performer_name ?? '—'}</td>
                         <td>
-                          {!op.canceled && (
+                          {!op.canceled && org?.role === 'owner' && (
                             <button
                               className="btn ghost small"
                               onClick={() => setCanceling(op)}

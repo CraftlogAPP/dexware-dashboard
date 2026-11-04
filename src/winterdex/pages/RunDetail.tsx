@@ -162,7 +162,7 @@ export function RunDetail() {
               <button className="btn" onClick={() => print(run)}>
                 <FileDown className="i" aria-hidden /> Nachweis als PDF
               </button>
-              {!run.canceled && (
+              {!run.canceled && org?.role === 'owner' && (
                 <button className="btn ghost" onClick={() => setCanceling(true)}>
                   Fahrt stornieren
                 </button>
