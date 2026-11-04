@@ -65,8 +65,34 @@ export function OperationDetail() {
               <div className="card">
                 <div className="kpi-label">GPS-Stempel</div>
                 <div className="mono small">
+                  {op.end_lat != null ? 'Beginn: ' : ''}
                   {gpsLabel(op.lat, op.lng, op.gps_accuracy_m)}
+                  {op.gps_at ? ` · ${fmtTime(op.gps_at)}` : ''}
+                  {op.distance_m != null ? ` · ${Math.round(op.distance_m)} m vom Objekt` : ''}
                 </div>
+                {op.end_lat != null && (
+                  <div className="mono small">
+                    Ende: {gpsLabel(op.end_lat, op.end_lng ?? null, op.end_accuracy_m ?? null)}
+                    {op.end_gps_at ? ` · ${fmtTime(op.end_gps_at)}` : ''}
+                    {op.end_distance_m != null ? ` · ${Math.round(op.end_distance_m)} m vom Objekt` : ''}
+                  </div>
+                )}
+                {(op.gps_mocked || op.end_mocked) && (
+                  <div className="small" style={{ color: 'var(--danger, #DC2626)', fontWeight: 700 }}>
+                    Achtung: Fake-GPS gemeldet (Android)
+                  </div>
+                )}
+                {[op.distance_m, op.end_distance_m].some((d) => d != null && d > 100) && (
+                  <div className="small" style={{ color: 'var(--danger, #DC2626)', fontWeight: 700 }}>
+                    Achtung: mehr als 100 m vom Objekt entfernt
+                  </div>
+                )}
+                {op.entry_hash && (
+                  <div className="muted small">
+                    Server-Eingang {fmtDateTime(op.received_at ?? op.created_at)} · Prüfcode{' '}
+                    <span className="mono">{op.entry_hash.slice(0, 12)}</span>
+                  </div>
+                )}
                 {op.lat != null && op.lng != null && (
                   <a
                     className="small"

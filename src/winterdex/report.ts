@@ -1,7 +1,7 @@
 // Nachweis-PDF (Kontrollbuch) — HTML-Aufbau nach dem Muster von mobile/src/pdf/report.ts,
 // Ausgabe über openReportWindow (src/lib/print.ts) im Browser-Druckdialog.
 
-import { fmtDate, fmtDateTime, fmtTime, gpsLabel } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
 import { gritLabel, weatherLabel } from './labels';
 import {
@@ -19,12 +19,40 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+
+// ---- Prüffester GPS-Nachweis (wie im PDF der App) ----
+const GPS_WEAK_M = 50;
+const mapLink = (lat: number, lng: number) =>
+  `https://www.google.com/maps/search/?api=1&amp;query=${lat.toFixed(6)},${lng.toFixed(6)}`;
+function stamp(label: string, lat?: number | null, lng?: number | null, acc?: number | null, at?: string | null, dist?: number | null, mocked?: boolean | null): string {
+  if (lat == null || lng == null) return `<div><b>${label}:</b> kein GPS</div>`;
+  const warn: string[] = [];
+  if (acc != null && acc > GPS_WEAK_M) warn.push(`Ortung ungenau (±${Math.round(acc)} m)`);
+  if (dist != null && dist > Math.max(100, (acc ?? 0) * 2)) warn.push(`${Math.round(dist)} m vom Objekt entfernt`);
+  if (mocked) warn.push('Fake-GPS gemeldet (Android)');
+  return `<div><b>${label}</b>${at ? ` ${fmtTime(at)}` : ''} · ${lat.toFixed(5)}, ${lng.toFixed(5)}${acc != null ? ` · ±${Math.round(acc)} m` : ''}${
+    dist != null ? ` · ${Math.round(dist)} m vom Objekt` : ''
+  } · <a href="${mapLink(lat, lng)}">Karte</a></div>${warn.map((w) => `<div style="color:#B91C1C;font-weight:700">Achtung: ${w}</div>`).join('')}`;
+}
+function gpsProofCell(op: OperationWithPhotos): string {
+  if (op.lat == null && op.end_lat == null) return '<span style="color:#B91C1C;font-weight:700">kein GPS-Stempel</span>';
+  return stamp('Beginn', op.lat, op.lng, op.gps_accuracy_m, op.gps_at, op.distance_m, op.gps_mocked) +
+    (op.end_lat != null ? stamp('Ende', op.end_lat, op.end_lng, op.end_accuracy_m, op.end_gps_at, op.end_distance_m, op.end_mocked) : '');
+}
+const PROOF_NOTE = `<p class="small" style="border:1.5px solid #AFC1D2;border-radius:8px;padding:8px 12px;page-break-inside:avoid">
+  <b>Prüffester GPS-Nachweis.</b> Jeder Einsatz trägt zwei GPS-Stempel (Beginn und Speichern) mit Uhrzeit der Ortung und Genauigkeit.
+  Abstand zum hinterlegten Objekt-Standort und Server-Eingang berechnet der Server selbst — unabhängig von Handy-Uhr und App.
+  Jeder Eintrag erhält beim Eingang einen Prüfcode (SHA-256 über alle Nachweisfelder); eine spätere Änderung ist technisch gesperrt.
+  Hinweise in Rot: Ortung ungenauer als ±${GPS_WEAK_M} m, mehr als 100 m vom Objekt entfernt oder Fake-GPS gemeldet.
+  Einträge ohne Prüfcode wurden vor Einführung des Prüfcodes erfasst.</p>`;
+
 export function buildReportHtml(
   org: Org,
   property: Property,
   ops: OperationWithPhotos[],
   periodLabel: string,
 ): string {
+  const hasProof = ops.some((o) => !!o.entry_hash);
   const rows = ops
     .map((op) => {
       const action = op.canceled
@@ -36,12 +64,15 @@ export function buildReportHtml(
       const time = `${fmtDate(op.started_at)}<br>${fmtTime(op.started_at)}${
         op.ended_at ? ` – ${fmtTime(op.ended_at)}` : ''
       }`;
+      const proof = op.entry_hash
+        ? `<br><span class="small">Server-Eingang ${fmtDateTime(op.received_at ?? op.created_at)}</span><br><span class="small mono">Prüfcode ${esc(op.entry_hash.slice(0, 12))}</span>`
+        : '';
       return `<tr class="${op.canceled ? 'canceled' : ''}">
-        <td>${time}</td>
+        <td>${time}${proof}</td>
         <td>${action}</td>
         <td>${grit}</td>
         <td>${esc(weatherLabel(op.weather))}</td>
-        <td class="mono">${esc(gpsLabel(op.lat, op.lng, op.gps_accuracy_m))}</td>
+        <td class="small">${gpsProofCell(op)}</td>
         <td>${esc(op.performer_name ?? '—')}</td>
         <td>${op.photo_urls.length || '—'}</td>
       </tr>`;
@@ -116,6 +147,7 @@ export function buildReportHtml(
   </table>
 
   ${photoBlocks ? `<h2>Foto-Anhang</h2>${photoBlocks}` : ''}
+  ${hasProof ? PROOF_NOTE : ''}
 
   <div class="footer">
     <span>Erstellt mit WinterDex — winterdex.dexware.app</span>

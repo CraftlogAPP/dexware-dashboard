@@ -56,6 +56,18 @@ export interface Operation {
   lat: number | null;
   lng: number | null;
   gps_accuracy_m: number | null;
+  // Prüffester GPS-Nachweis (seit 04.11.2026; fehlt in älteren Datenbanken)
+  gps_at?: string | null;
+  gps_mocked?: boolean | null;
+  end_lat?: number | null;
+  end_lng?: number | null;
+  end_accuracy_m?: number | null;
+  end_gps_at?: string | null;
+  end_mocked?: boolean | null;
+  distance_m?: number | null;
+  end_distance_m?: number | null;
+  received_at?: string | null;
+  entry_hash?: string | null;
   action: OperationAction;
   grit_material: string | null;
   grit_amount: string | null;

@@ -6,6 +6,19 @@ import type { DutyTimes, Operation, OperationWithPhotos, Property } from './type
 const OPERATION_COLS =
   'id, org_id, property_id, started_at, ended_at, lat, lng, gps_accuracy_m, action, grit_material, grit_amount, weather, notes, performed_by, performer_name, canceled, cancel_reason, canceled_at, created_at';
 
+// GPS-Prüfnachweis-Spalten (gps-pruefnachweis.sql). Einmal je Sitzung prüfen, ob die
+// Datenbank sie schon hat — sonst wie bisher ohne sie laden.
+const GPS_PROOF_COLS =
+  'gps_at, gps_mocked, end_lat, end_lng, end_accuracy_m, end_gps_at, end_mocked, distance_m, end_distance_m, received_at, entry_hash';
+let gpsProof: boolean | null = null;
+async function opCols(sb: SupabaseClient): Promise<string> {
+  if (gpsProof === null) {
+    const { error } = await sb.from('operation').select('entry_hash').limit(1);
+    gpsProof = !(error && (error.code === '42703' || error.code === 'PGRST204' || /does not exist|could not find/i.test(error.message)));
+  }
+  return gpsProof ? `${OPERATION_COLS}, ${GPS_PROOF_COLS}` : OPERATION_COLS;
+}
+
 function fail(msg: string, error: { message: string } | null): never {
   throw new Error(`${msg}${error ? `: ${error.message}` : ''}`);
 }
@@ -49,7 +62,7 @@ export async function fetchOperations(
 ): Promise<Operation[]> {
   let q = sb
     .from('operation')
-    .select(OPERATION_COLS)
+    .select(await opCols(sb))
     .order('started_at', { ascending: false })
     .limit(filter.limit ?? 500);
   if (filter.propertyId) q = q.eq('property_id', filter.propertyId);
@@ -61,7 +74,7 @@ export async function fetchOperations(
   }
   const { data, error } = await q;
   if (error) fail('Einsätze konnten nicht geladen werden', error);
-  return (data ?? []) as Operation[];
+  return (data ?? []) as unknown as Operation[];
 }
 
 /** Minimale Einsatz-Metadaten für KPIs/„letzter Einsatz"-Logik (schmale Spalten, hohes Limit). */
@@ -94,11 +107,11 @@ export async function fetchOperationWithPhotos(
 ): Promise<OperationWithPhotos> {
   const { data, error } = await sb
     .from('operation')
-    .select(`${OPERATION_COLS}, photo_urls`)
+    .select(`${await opCols(sb)}, photo_urls`)
     .eq('id', id)
     .single();
   if (error) fail('Einsatz konnte nicht geladen werden', error);
-  return (await signPhotos(sb, data)) as OperationWithPhotos;
+  return (await signPhotos(sb, data)) as unknown as OperationWithPhotos;
 }
 
 // ── Schreiben (Format identisch zur Mobile-App, supabaseRepository.ts) ──────
@@ -203,12 +216,12 @@ export async function fetchOperationsForReport(
   end.setHours(23, 59, 59, 999);
   const { data, error } = await sb
     .from('operation')
-    .select(`${OPERATION_COLS}, photo_urls`)
+    .select(`${await opCols(sb)}, photo_urls`)
     .eq('property_id', propertyId)
     .gte('started_at', from.toISOString())
     .lte('started_at', end.toISOString())
     .order('started_at');
   if (error) fail('Berichtsdaten konnten nicht geladen werden', error);
-  return (await signPhotos(sb, data ?? [])) as OperationWithPhotos[];
+  return (await signPhotos(sb, data ?? [])) as unknown as OperationWithPhotos[];
 }
 
