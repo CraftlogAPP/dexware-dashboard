@@ -152,7 +152,7 @@ function tierLabel(productId: string): string {
   if (/teamxl/i.test(productId)) return 'Team XL · bis 100 Mitarbeiter · ';
   if (/_team_/i.test(productId)) return 'Team · bis 50 Mitarbeiter · ';
   if (/suite/i.test(productId)) return '';
-  return 'bis 20 Mitarbeiter · ';
+  return '';
 }
 
 function periodLabel(period: string | null): string {
