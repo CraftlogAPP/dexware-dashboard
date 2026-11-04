@@ -729,11 +729,24 @@ button.badge:hover {
   font-size: 12.5px;
   color: var(--muted);
 }
+/* Rasterzellen dürfen schrumpfen; lange Koordinaten/Prüfcodes brechen um statt die Seite zu sprengen */
+.kpi-grid > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 760px) {
   .kpi-grid {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
   }
+}
+/* Detail-Karten (GPS-Stempel, Team-Code …) am Handy über die volle Breite; KPI-Kacheln bleiben zweispaltig */
+@media (max-width: 560px) {
+  .kpi-grid > .card {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 760px) {
   .kpi {
     padding: 14px;
   }
@@ -1342,4 +1355,9 @@ select option {
   .app-nav {
     display: none !important;
   }
+}
+
+/* GPS-Hinweise: im PDF dunkelrot (weißes Papier), im dunklen Dashboard heller für Kontrast */
+.app-scope .gps-warn {
+  color: #f87171 !important;
 }

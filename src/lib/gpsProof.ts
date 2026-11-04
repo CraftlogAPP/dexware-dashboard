@@ -60,7 +60,7 @@ function stamp(label: string, place: string, lat?: number | null, lng?: number |
   return `<div><b>${label}</b>${at ? ` ${fmtT(at)}` : ''} · ${lat.toFixed(5)}, ${lng.toFixed(5)}${
     acc != null ? ` · ±${Math.round(acc)} m` : ''
   }${dist != null ? ` · ${Math.round(dist)} m vom ${place}` : ''} · <a href="${mapLink(lat, lng)}" target="_blank" rel="noreferrer">Karte</a></div>${warn
-    .map((w) => `<div style="color:#B91C1C;font-weight:700">Achtung: ${w}</div>`)
+    .map((w) => `<div class="gps-warn" style="color:#B91C1C;font-weight:700">Achtung: ${w}</div>`)
     .join('')}`;
 }
 

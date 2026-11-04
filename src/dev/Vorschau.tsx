@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { APPS, appIcon } from '../apps/registry';
 import { FormDialog } from '../components/form';
+import { gpsProofHtml, proofStampHtml } from '../lib/gpsProof';
 
 export function Vorschau() {
   const [params] = useSearchParams();
@@ -178,6 +179,28 @@ export function Vorschau() {
             </button>
           </div>
           <div className="card empty">Keine Mängel mit den gewählten Filtern.</div>
+
+          <div className="section-head">
+            <h2>Prüfnachweis (Detail)</h2>
+          </div>
+          <div className="kpi-grid">
+            <div className="card">
+              <div className="kpi-label">GPS-Stempel</div>
+              <div className="small" dangerouslySetInnerHTML={{ __html: gpsProofHtml({"lat":47.84567,"lng":16.52345,"gps_accuracy_m":8,"gps_at":"2026-10-28T08:12:04Z","distance_m":14,"end_lat":47.84571,"end_lng":16.52351,"end_accuracy_m":72,"end_gps_at":"2026-10-28T08:31:40Z","end_distance_m":212,"end_mocked":true,"received_at":"2026-10-28T08:31:44Z","entry_hash":"9f2c4be1a07d3e55c0aa1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcd"}, 'Standort') + proofStampHtml({"lat":47.84567,"lng":16.52345,"gps_accuracy_m":8,"gps_at":"2026-10-28T08:12:04Z","distance_m":14,"end_lat":47.84571,"end_lng":16.52351,"end_accuracy_m":72,"end_gps_at":"2026-10-28T08:31:40Z","end_distance_m":212,"end_mocked":true,"received_at":"2026-10-28T08:31:44Z","entry_hash":"9f2c4be1a07d3e55c0aa1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcd"}, (x) => new Date(x).toLocaleString('de-DE')) }} />
+              <div className="small" style={{ marginTop: 6 }}>
+                <button className="btn ghost small">Prüfcode prüfen</button>{' '}
+                <b style={{ color: 'var(--danger, #DC2626)' }}>✗ Prüfcode passt NICHT zum Inhalt — bitte support@dexware.app melden.</b>
+              </div>
+            </div>
+            <div className="card">
+              <div className="kpi-label">Team-Code</div>
+              <div className="row">
+                <span className="badge live mono" style={{ fontSize: 18 }}>WD-7K3Q-9XPA</span>
+                <button className="btn ghost small">Kopieren</button>
+                <button className="btn ghost small">Neuen Code erzeugen</button>
+              </div>
+            </div>
+          </div>
 
           <div className="section-head">
             <h2>Knöpfe & Zustände</h2>
