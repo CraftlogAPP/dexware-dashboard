@@ -13,7 +13,8 @@ export function VerifyProof({ id, hash, rpc = 'verify_inspection' }: { id: strin
   if (!hash) return null;
   async function check() {
     setState('busy');
-    const arg = rpc === 'verify_operation' ? { p_operation: id } : { p_inspection: id };
+    const arg =
+      rpc === 'verify_operation' ? { p_operation: id } : rpc === 'verify_route_run' ? { p_run: id } : { p_inspection: id };
     const { data, error } = await client.rpc(rpc, arg);
     if (error) return setState('err');
     const r = Array.isArray(data) ? data[0] : data;

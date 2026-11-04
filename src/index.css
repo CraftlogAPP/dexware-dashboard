@@ -1361,3 +1361,36 @@ select option {
 .app-scope .gps-warn {
   color: #f87171 !important;
 }
+
+/* ---------- WinterDex Strecken-Nachweis: Kartenskizze ---------- */
+/* Helles „Papier" auch im dunklen Dashboard — gleiche Farben wie im PDF, Linien bleiben gut lesbar. */
+.route-sketch {
+  margin: 0 0 18px;
+}
+.route-sketch svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 460px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.route-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+  align-items: center;
+}
+.route-legend i {
+  display: inline-block;
+  width: 14px;
+  height: 6px;
+  border-radius: 3px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.route-legend a {
+  margin-left: auto;
+}

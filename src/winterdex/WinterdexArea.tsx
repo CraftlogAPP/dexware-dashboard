@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
-import { Building2, CreditCard, FileDown, LayoutDashboard, Snowflake, Users } from 'lucide-react';
+import { Building2, CreditCard, FileDown, LayoutDashboard, Route as RouteIcon, Snowflake, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
@@ -12,6 +12,9 @@ import { PropertyDetail } from './pages/PropertyDetail';
 import { Operations } from './pages/Operations';
 import { OperationDetail } from './pages/OperationDetail';
 import { Report } from './pages/Report';
+import { Routes as RoutesPage } from './pages/Routes';
+import { RouteDetail } from './pages/RouteDetail';
+import { RunDetail } from './pages/RunDetail';
 
 export function WinterdexArea({ app }: { app: AppConfig }) {
   return (
@@ -25,6 +28,9 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
               <Route path="objekte/:id" element={<PropertyDetail />} />
               <Route path="einsaetze" element={<Operations />} />
               <Route path="einsaetze/:id" element={<OperationDetail />} />
+              <Route path="strecken" element={<RoutesPage />} />
+              <Route path="strecken/fahrten/:id" element={<RunDetail />} />
+              <Route path="strecken/:id" element={<RouteDetail />} />
               <Route path="team" element={<TeamPage />} />
               <Route path="bericht" element={<Report />} />
               <Route path="abo" element={<AboPage />} />
@@ -51,6 +57,7 @@ function Shell() {
         </NavLink>
         <NavLink to={`${base}/objekte`}><Building2 className="i" aria-hidden /> Objekte</NavLink>
         <NavLink to={`${base}/einsaetze`}><Snowflake className="i" aria-hidden /> Einsätze</NavLink>
+        <NavLink to={`${base}/strecken`}><RouteIcon className="i" aria-hidden /> Strecken</NavLink>
         <NavLink to={`${base}/team`}><Users className="i" aria-hidden /> Team</NavLink>
         <NavLink to={`${base}/bericht`}><FileDown className="i" aria-hidden /> Nachweis-PDF</NavLink>
         <NavLink to={`${base}/abo`}><CreditCard className="i" aria-hidden /> Abo</NavLink>
