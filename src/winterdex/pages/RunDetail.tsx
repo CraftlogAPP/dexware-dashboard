@@ -8,12 +8,12 @@ import { useOrg } from '../../components/OrgContext';
 import { FormDialog, s, type FormValues } from '../../components/form';
 import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
 import { VerifyProof } from '../../components/VerifyProof';
-import { fmtDateTime, fmtTime } from '../../lib/format';
+import { fmtDateTime } from '../../lib/format';
 import { openReportWindow } from '../../lib/print';
 import { gritLabel, weatherLabel } from '../labels';
 import { CoverageBadge, RouteSketch } from '../RouteSketch';
 import { buildRunHtml } from '../routeReport';
-import { cancelRun, fetchRun, fmtDistance, fmtDuration, type Run } from '../routes';
+import { cancelRun, fetchRun, fmtDistance, fmtDuration, fmtTimeSpan, type Run } from '../routes';
 
 export function RunDetail() {
   const { id } = useParams<{ id: string }>();
@@ -43,7 +43,7 @@ export function RunDetail() {
         return (
           <>
             <p className="small" style={{ marginBottom: 4 }}>
-              {run.route_id ? <Link to={`../${run.route_id}`}>← {name}</Link> : <Link to="../..">← Alle Strecken</Link>}
+              {run.route_id ? <Link to={`../strecken/${run.route_id}`}>← {name}</Link> : <Link to="../strecken">← Alle Strecken</Link>}
             </p>
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <h1 style={{ marginBottom: 0 }}>
@@ -52,7 +52,7 @@ export function RunDetail() {
               <ActionBadge action={run.action} canceled={run.canceled} />
             </div>
             <p className="muted">
-              {fmtTime(run.started_at)}–{fmtTime(run.ended_at)} Uhr · dokumentiert von {run.performer_name ?? '—'}
+              {fmtTimeSpan(run.started_at, run.ended_at)} · dokumentiert von {run.performer_name ?? '—'}
             </p>
 
             {run.canceled && (
@@ -71,7 +71,7 @@ export function RunDetail() {
                 <div className="kpi-label">Dauer</div>
                 <div className="kpi-value">{fmtDuration(Date.parse(run.ended_at) - Date.parse(run.started_at))}</div>
                 <div className="kpi-sub">
-                  {fmtTime(run.started_at)}–{fmtTime(run.ended_at)} Uhr
+                  {fmtTimeSpan(run.started_at, run.ended_at)}
                 </div>
               </div>
               {hasPlan && (
@@ -100,7 +100,7 @@ export function RunDetail() {
               <div className="card" style={{ marginBottom: 16 }}>
                 {run.gaps.length > 0 && (
                   <div className="gps-warn" style={{ color: '#B91C1C', fontWeight: 700 }}>
-                    Pausen in der Aufzeichnung: {run.gaps.map(([a, b]) => `${fmtTime(a)}–${fmtTime(b)}`).join(', ')} Uhr (App verlassen —
+                    Pausen in der Aufzeichnung: {run.gaps.map(([a, b]) => fmtTimeSpan(a, b)).join(', ')} (App verlassen —
                     nicht als gefahren gewertet)
                   </div>
                 )}

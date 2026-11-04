@@ -47,6 +47,7 @@ export function RouteDetail() {
   function printLog(route: Route) {
     setPrintErr(null);
     if (!org) return setPrintErr('Betrieb nicht geladen.');
+    if (!from || !to) return setPrintErr('Bitte Von- und Bis-Datum wählen.');
     const runs = [...(runsState.data ?? [])].reverse(); // chronologisch
     const period = `${fmtDate(parseLocalDate(from).toISOString())} – ${fmtDate(parseLocalDate(to).toISOString())}`;
     if (!openReportWindow(buildRouteLogHtml(org.org, route, runs, period)))
@@ -58,7 +59,7 @@ export function RouteDetail() {
       {({ route, last }) => (
         <>
           <p className="small" style={{ marginBottom: 4 }}>
-            <Link to="..">← Alle Strecken</Link>
+            <Link to="../strecken">← Alle Strecken</Link>
           </p>
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <h1 style={{ marginBottom: 0 }}>{route.name}</h1>
@@ -78,7 +79,7 @@ export function RouteDetail() {
           <p className="small muted" style={{ marginTop: -8 }}>
             {last ? (
               <>
-                Grün = letzte Fahrt (<Link to={`../fahrten/${last.id}`}>{fmtDateTime(last.started_at)}</Link>), rot = dabei nicht befahren.
+                Grün = letzte Fahrt (<Link to={`../strecken/fahrten/${last.id}`}>{fmtDateTime(last.started_at)}</Link>), rot = dabei nicht befahren.
               </>
             ) : (
               'Noch keine Fahrt auf dieser Strecke.'
@@ -104,7 +105,7 @@ export function RouteDetail() {
             </div>
             {printErr && <div className="error-box" style={{ marginTop: 10 }}>{printErr}</div>}
           </div>
-          <LoadGuard state={runsState}>{(runs) => <RunTable runs={runs} linkPrefix="../fahrten/" showRoute={false} />}</LoadGuard>
+          <LoadGuard state={runsState}>{(runs) => <RunTable runs={runs} linkPrefix="../strecken/fahrten/" showRoute={false} />}</LoadGuard>
         </>
       )}
     </LoadGuard>

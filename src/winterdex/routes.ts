@@ -4,6 +4,7 @@
 // Länge, Abdeckung, nicht befahrene Abschnitte und Prüfcode rechnet der SERVER beim Eingang.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fmtTime } from '../lib/format';
 import { signPhotos } from '../lib/photos';
 import type { OperationAction, WeatherSnapshot } from './types';
 
@@ -101,7 +102,9 @@ export interface RunFilter {
 export async function fetchRuns(sb: SupabaseClient, f: RunFilter = {}): Promise<RunMeta[]> {
   let q = sb.from('route_run').select(RUN_META_COLS).order('started_at', { ascending: false }).limit(f.limit ?? 500);
   if (f.routeId) q = q.eq('route_id', f.routeId);
-  else if (f.free) q = q.is('route_id', null);
+  // Frei = nie mit Vorlage gefahren. Fahrten einer später gelöschten Strecke haben route_id NULL,
+  // behalten aber route_name (ON DELETE SET NULL) — die gehören nicht hierher.
+  else if (f.free) q = q.is('route_id', null).is('route_name', null);
   if (f.from) q = q.gte('started_at', f.from.toISOString());
   if (f.to) {
     const end = new Date(f.to);
@@ -141,6 +144,10 @@ export function fmtDuration(ms: number): string {
 export function fmtPct(n: number | null | undefined): string {
   return n == null ? '—' : `${n.toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
 }
+/** „16:43–17:19 Uhr“ (fmtTime hängt selbst „Uhr“ an). */
+export function fmtTimeSpan(a: string, b: string): string {
+  return `${fmtTime(a).replace(/ Uhr$/, '')}–${fmtTime(b)}`;
+}
 /** Lokales Datum (yyyy-mm-dd) — „heute gefahren" nach Ortszeit, nicht UTC. */
 export function localDay(iso: string | Date): string {
   const d = typeof iso === 'string' ? new Date(iso) : iso;
@@ -152,6 +159,13 @@ function distM(a: number, b: number, c: number, d: number): number {
   const r = Math.PI / 180;
   const x = Math.sin(((c - a) * r) / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(((d - b) * r) / 2) ** 2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(x)));
+}
+
+/** Länge eines Pfads [[lat,lng],…] in Metern. */
+export function pathLengthM(p: readonly LatLng[]): number {
+  let m = 0;
+  for (let i = 1; i < p.length; i++) m += distM(p[i - 1][0], p[i - 1][1], p[i][0], p[i][1]);
+  return m;
 }
 
 // ---------------------------------------------------------------- Kartenskizze
@@ -198,7 +212,7 @@ export function buildSketch(
     p.length <= max ? p : p.filter((_, i) => i % Math.ceil(p.length / max) === 0 || i === p.length - 1);
   const line = (p: readonly (readonly number[])[]) => thin(p).map((q) => `${X(q[1]).toFixed(1)},${Y(q[0]).toFixed(1)}`).join(' ');
 
-  const metersPerPx = distM(minLat, minLng, minLat, maxLng) / Math.max(1, spanX * scale) || 1;
+  const metersPerPx = 111195 / scale; // 1° Breite ≈ 111,2 km; Y-Achse nutzt `scale` direkt
   const target = (w / 4) * metersPerPx;
   const nice = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000].find((n) => n >= target * 0.6) ?? 10000;
 

@@ -1,8 +1,22 @@
 // Kartenskizze im Dashboard: gleiche Geometrie und Farben wie im PDF (routes.ts → buildSketch).
 // Bewusst ohne Kartendienst — kein Fremd-Server, lädt sofort, sieht im Druck genauso aus.
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { buildSketch, firstPoint, ROUTE_COLORS, type LatLng, type Track } from './routes';
+
+// Am Handy (≤560 px wie die Detail-Karten) schmaleres Format — sonst wird die 640er-Skizze auf
+// ~360 px gestaucht und Maßstab, Nordpfeil und Linien werden winzig.
+function useNarrow(max = 560): boolean {
+  const q = `(max-width: ${max}px)`;
+  const [narrow, setNarrow] = useState(() => window.matchMedia(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia(q);
+    const on = () => setNarrow(m.matches);
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, [q]);
+  return narrow;
+}
 
 export function RouteSketch({
   plan,
@@ -15,7 +29,8 @@ export function RouteSketch({
   missed?: LatLng[][] | null;
   label: string;
 }) {
-  const s = buildSketch(plan, track, missed);
+  const narrow = useNarrow();
+  const s = buildSketch(plan, track, missed, narrow ? 360 : 640, narrow ? 300 : 360);
   if (!s) return <div className="card empty">Keine Kartenskizze — es wurden keine Positionen aufgezeichnet.</div>;
   const c = ROUTE_COLORS;
   const p = firstPoint(plan, track);

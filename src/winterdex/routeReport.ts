@@ -1,11 +1,11 @@
 // Strecken-Nachweis zum Drucken/als PDF — gleicher Aufbau wie in der App (mobile/src/pdf/routeReport.ts),
 // gleicher Druckstil wie das Kontrollbuch (report.ts). Ausgabe über openReportWindow.
 
-import { fmtDate, fmtDateTime, fmtTime } from '../lib/format';
+import { fmtDate, fmtDateTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
 import { gritLabel, weatherLabel } from './labels';
 import { ACTION_LABELS, LEGAL_BASIS } from './types';
-import { buildSketch, fmtDistance, fmtDuration, fmtPct, ROUTE_COLORS, sketchSvg, type Route, type Run, type RunMeta } from './routes';
+import { buildSketch, fmtDistance, fmtDuration, fmtPct, fmtTimeSpan, pathLengthM, ROUTE_COLORS, sketchSvg, type Route, type Run, type RunMeta } from './routes';
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -82,22 +82,22 @@ export function buildRunHtml(org: Org, run: Run): string {
   const body = `
   <h1>Strecken-Nachweis Winterdienst</h1>
   <div class="meta"><b>${esc(org.name)}</b>${org.address ? ` · ${esc(org.address)}` : ''}</div>
-  <div class="meta">Strecke: <b>${esc(name)}</b> · ${fmtDate(run.started_at)}, ${fmtTime(run.started_at)}–${fmtTime(run.ended_at)} Uhr</div>
+  <div class="meta">Strecke: <b>${esc(name)}</b> · ${fmtDate(run.started_at)}, ${fmtTimeSpan(run.started_at, run.ended_at)}</div>
   <div class="kpis">
     <div class="kpi"><b>${fmtDistance(run.track_length_m)}</b><span>gefahren (GPS)</span></div>
-    <div class="kpi"><b>${fmtDuration(dur)}</b><span>${fmtTime(run.started_at)}–${fmtTime(run.ended_at)} Uhr</span></div>
+    <div class="kpi"><b>${fmtDuration(dur)}</b><span>${fmtTimeSpan(run.started_at, run.ended_at)}</span></div>
     ${plan ? `<div class="kpi"><b>${fmtPct(run.coverage_pct)}</b><span>der Strecke abgedeckt</span></div>` : ''}
   </div>
   ${sketchSvg(buildSketch(plan, run.track, missed))}
   ${legend(!!plan, run.track.some((s) => s.length >= 2), missed.some((s) => s.length >= 2))}
   <div class="box">
-    <div><b>Strecke:</b> ${esc(run.route_name ?? 'freie Fahrt (ohne Vorlage)')}${plan ? ` (Vorlage ${fmtDistance(lengthOf(plan))})` : ''}</div>
+    <div><b>Strecke:</b> ${esc(run.route_name ?? 'freie Fahrt (ohne Vorlage)')}${plan ? ` (Vorlage ${fmtDistance(pathLengthM(plan))})` : ''}</div>
     <div><b>Maßnahme:</b> ${esc(ACTION_LABELS[run.action])} · Streumittel: ${esc(gritLabel(run.grit_material, run.grit_amount))}</div>
     <div><b>Wetterlage (archiviert):</b> ${esc(weatherLabel(run.weather))}</div>
     <div><b>Dokumentiert von:</b> ${esc(run.performer_name ?? '—')}</div>
     ${run.notes ? `<div><b>Notiz:</b> ${esc(run.notes)}</div>` : ''}
     ${missed.length ? `<div class="warn">Nicht befahren: ${missed.length} ${missed.length === 1 ? 'Abschnitt' : 'Abschnitte'}, zusammen ${fmtDistance(run.missed_m ?? 0)} (rot in der Skizze)</div>` : ''}
-    ${run.gaps.length ? `<div class="warn">Pausen in der Aufzeichnung: ${run.gaps.map(([a, b]) => `${fmtTime(a)}–${fmtTime(b)}`).join(', ')} Uhr</div>` : ''}
+    ${run.gaps.length ? `<div class="warn">Pausen in der Aufzeichnung: ${run.gaps.map(([a, b]) => fmtTimeSpan(a, b)).join(', ')}</div>` : ''}
     ${run.gps_mocked ? '<div class="warn">Achtung: Das Gerät hat Fake-GPS gemeldet (Android).</div>' : ''}
     ${run.canceled ? `<div class="storno">STORNIERT am ${fmtDateTime(run.canceled_at)}: ${esc(run.cancel_reason ?? '')}</div>` : ''}
   </div>
@@ -115,7 +115,7 @@ export function buildRouteLogHtml(org: Org, route: Route, runs: RunMeta[], perio
     .map((r) => {
       const dur = Date.parse(r.ended_at) - Date.parse(r.started_at);
       return `<tr class="${r.canceled ? 'canceled' : ''}">
-        <td>${fmtDate(r.started_at)}<br>${fmtTime(r.started_at)}–${fmtTime(r.ended_at)} · ${fmtDuration(dur)}</td>
+        <td>${fmtDate(r.started_at)}<br>${fmtTimeSpan(r.started_at, r.ended_at)} · ${fmtDuration(dur)}</td>
         <td>${fmtDistance(r.track_length_m)}</td>
         <td>${fmtPct(r.coverage_pct)}${r.missed_m ? `<br><span class="small warn">${fmtDistance(r.missed_m)} nicht befahren</span>` : ''}</td>
         <td>${esc(ACTION_LABELS[r.action])}<br><span class="small">${esc(gritLabel(r.grit_material, r.grit_amount))}</span></td>
@@ -141,14 +141,3 @@ export function buildRouteLogHtml(org: Org, route: Route, runs: RunMeta[], perio
   return page(`Fahrtenbuch — ${route.name}`, body);
 }
 
-function lengthOf(p: [number, number][]): number {
-  let m = 0;
-  for (let i = 1; i < p.length; i++) {
-    const [a, b] = p[i - 1];
-    const [c, d] = p[i];
-    const r = Math.PI / 180;
-    const x = Math.sin(((c - a) * r) / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(((d - b) * r) / 2) ** 2;
-    m += 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(x)));
-  }
-  return m;
-}
