@@ -3,6 +3,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDateTime } from '../../lib/format';
 import { gpsProofHtml, proofStampHtml } from '../../lib/gpsProof';
+import { VerifyProof } from '../../components/VerifyProof';
 import { fetchDefects, fetchInspectionWithPhotos, fetchPlayground } from '../api';
 import { DefectStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import {
@@ -76,6 +77,7 @@ export function InspectionDetail() {
             <div className="card">
               <div className="kpi-label">GPS-Stempel</div>
               <div className="small" dangerouslySetInnerHTML={{ __html: gpsProofHtml(i, 'Spielplatz') + proofStampHtml(i, fmtDateTime) }} />
+              <VerifyProof id={i.id} hash={(i as { entry_hash?: string | null }).entry_hash} />
               {i.lat != null && i.lng != null && (
                 <a
                   className="small"

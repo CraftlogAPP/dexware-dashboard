@@ -7,6 +7,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 const PROOF_COLS =
   'id, gps_at, gps_mocked, end_lat, end_lng, end_accuracy_m, end_gps_at, end_mocked, distance_m, end_distance_m, received_at, entry_hash';
 
+const PROOF_COLS_NO_DIST = PROOF_COLS.replace(', distance_m, end_distance_m', '');
+
 export interface GpsProofFields {
   lat?: number | null;
   lng?: number | null;
@@ -32,7 +34,9 @@ export async function withGpsProof<T>(sb: SupabaseClient, table: string, data: T
   if (!ids.length) return data;
   const byId = new Map<string, Record<string, unknown>>();
   for (let i = 0; i < ids.length; i += 200) {
-    const { data: extra, error } = await sb.from(table).select(PROOF_COLS).in('id', ids.slice(i, i + 200));
+    let { data: extra, error }: { data: unknown[] | null; error: unknown } = await sb.from(table).select(PROOF_COLS).in('id', ids.slice(i, i + 200));
+    // PrüfDex hat keinen Bezugsort → ohne Abstandsspalten erneut
+    if (error) ({ data: extra, error } = await sb.from(table).select(PROOF_COLS_NO_DIST).in('id', ids.slice(i, i + 200)));
     if (error) return data; // Spalten fehlen (noch) → unverändert
     for (const e of (extra ?? []) as unknown as Record<string, unknown>[]) byId.set(e.id as string, e);
   }

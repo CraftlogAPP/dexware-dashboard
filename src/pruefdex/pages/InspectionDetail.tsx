@@ -4,6 +4,8 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate } from '../../lib/format';
+import { gpsProofHtml, proofStampHtml, type GpsProofFields } from '../../lib/gpsProof';
+import { VerifyProof } from '../../components/VerifyProof';
 import { cancelInspection, fetchDevice, fetchInspectionWithPhotos } from '../api';
 import { InspectionDialog } from '../dialogs';
 import { ResultBadge } from '../badges';
@@ -205,6 +207,18 @@ export function InspectionDetail() {
                   <h2>Notizen</h2>
                 </div>
                 <div className="card">{i.notes}</div>
+              </>
+            )}
+
+            {((i as GpsProofFields).lat != null || (i as GpsProofFields).entry_hash) && (
+              <>
+                <div className="section-head">
+                  <h2>Nachweis</h2>
+                </div>
+                <div className="card small">
+                  <div dangerouslySetInnerHTML={{ __html: gpsProofHtml(i as GpsProofFields) + proofStampHtml(i as GpsProofFields, (x) => new Date(x).toLocaleString('de-DE')) }} />
+                  <VerifyProof id={i.id} hash={(i as GpsProofFields).entry_hash} />
+                </div>
               </>
             )}
 

@@ -3,6 +3,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { fetchOperationWithPhotos, fetchProperty } from '../api';
 import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
 import { fmtDateTime, fmtNum, fmtTime, gpsLabel } from '../../lib/format';
+import { VerifyProof } from '../../components/VerifyProof';
 import { gritLabel } from '../labels';
 import type { OperationWithPhotos, Property } from '../types';
 
@@ -93,6 +94,7 @@ export function OperationDetail() {
                     <span className="mono">{op.entry_hash.slice(0, 12)}</span>
                   </div>
                 )}
+                <VerifyProof id={op.id} hash={op.entry_hash} rpc="verify_operation" />
                 {op.lat != null && op.lng != null && (
                   <a
                     className="small"
