@@ -107,7 +107,7 @@ function EntitlementDetails({ info }: { info: EntitlementInfo }) {
       <div className="kpi">
         <div className="kpi-label">Abrechnung</div>
         <div className="kpi-value">{periodLabel(info.periodType)}</div>
-        {info.productId && <div className="kpi-sub">{info.productId}</div>}
+        {info.productId && <div className="kpi-sub">{tierLabel(info.productId)}{info.productId}</div>}
       </div>
       <div className="kpi">
         <div className="kpi-label">
@@ -145,6 +145,14 @@ function fmtDate(iso: string): string {
     month: '2-digit',
     year: 'numeric',
   });
+}
+
+/** Teamgrößen-Stufe aus der Produkt-ID (seit 03.11.2026: *_team_* bis 50, *_teamxl_* bis 100). */
+function tierLabel(productId: string): string {
+  if (/teamxl/i.test(productId)) return 'Team XL · bis 100 Mitarbeiter · ';
+  if (/_team_/i.test(productId)) return 'Team · bis 50 Mitarbeiter · ';
+  if (/suite/i.test(productId)) return '';
+  return 'bis 20 Mitarbeiter · ';
 }
 
 function periodLabel(period: string | null): string {
