@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { signPhotos } from '../lib/photos';
+import { withGpsProof } from '../lib/gpsProof';
 import { fail } from '../lib/orgApi';
 import type {
   CheckResult,
@@ -288,7 +289,7 @@ export async function fetchInspectionWithPhotos(
     .eq('id', id)
     .single();
   if (error) fail('Prüfung konnte nicht geladen werden', error);
-  return (await signPhotos(sb, data)) as InspectionWithPhotos;
+  return (await withGpsProof(sb, 'inspection', await signPhotos(sb, data))) as InspectionWithPhotos;
 }
 
 export interface DefectFilter {
@@ -340,7 +341,7 @@ export async function fetchInspectionsForReport(
     ({ data, error } = await query(`${INSPECTION_COLS}, photo_urls`));
   }
   if (error) fail('Berichtsdaten konnten nicht geladen werden', error);
-  return (await signPhotos(sb, data ?? [])) as unknown as InspectionWithPhotos[];
+  return (await withGpsProof(sb, 'inspection', await signPhotos(sb, data ?? []))) as unknown as InspectionWithPhotos[];
 }
 
 /** Mängel eines Standorts im Zeitraum inkl. Fotos — nur für den PDF-Bericht. */

@@ -1,7 +1,8 @@
 import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { fmtDateTime, gpsLabel } from '../../lib/format';
+import { fmtDateTime } from '../../lib/format';
+import { gpsProofHtml, proofStampHtml } from '../../lib/gpsProof';
 import {
   fetchDefects,
   fetchItems,
@@ -91,7 +92,7 @@ export function InspectionDetail() {
             </div>
             <div className="card">
               <div className="kpi-label">GPS-Stempel</div>
-              <div className="mono small">{gpsLabel(i.lat, i.lng, i.gps_accuracy_m)}</div>
+              <div className="small" dangerouslySetInnerHTML={{ __html: gpsProofHtml(i, 'Standort') + proofStampHtml(i, fmtDateTime) }} />
               {i.lat != null && i.lng != null && (
                 <a
                   className="small"

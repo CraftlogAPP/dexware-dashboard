@@ -1,7 +1,8 @@
 // Prüfbericht PSA gegen Absturz — HTML-Aufbau nach dem Muster von mobile/src/pdf/report.ts,
 // Ausgabe über openReportWindow (src/lib/print.ts) im Browser-Druckdialog.
 
-import { fmtDateTime, gpsLabel } from '../lib/format';
+import { fmtDateTime } from '../lib/format';
+import { gpsProofHtml, gpsProofNote, proofStampHtml } from '../lib/gpsProof';
 import type { Org } from '../lib/orgApi';
 import { checklistSummary, itemTypeLabel, itemMetaLabel } from './labels';
 import {
@@ -35,13 +36,13 @@ function inspectionRow(i: InspectionWithPhotos, items: PsaItem[]): string {
       }</div>`
     : '';
   return `<tr class="${i.canceled ? 'canceled' : ''}">
-    <td>${fmtDateTime(i.started_at)}</td>
+    <td>${fmtDateTime(i.started_at)}${proofStampHtml(i, fmtDateTime)}</td>
     <td>${esc(itemName(i.item_id, items))}</td>
     <td>${esc(INSPECTION_LABELS[i.type])}${storno}</td>
     <td>${esc(checklistSummary(i.checklist))}${
       i.notes ? `<div class="note">Notiz: ${esc(i.notes)}</div>` : ''
     }</td>
-    <td class="mono">${esc(gpsLabel(i.lat, i.lng, i.gps_accuracy_m))}</td>
+    <td class="small">${gpsProofHtml(i, 'Standort')}</td>
     <td>${esc(i.inspector_name ?? '—')}</td>
     <td>${i.photo_urls.length || '—'}</td>
   </tr>`;
@@ -217,6 +218,7 @@ export function buildReportHtml(
     return `<div class="sign"><b>Bestätigung der prüfenden Person${names.length > 1 ? 'en' : ''}</b><div class="sig-grid">${fields}</div></div>`;
   })()}
 
+  ${gpsProofNote(inspections, 'Standort')}
   <div class="footer">
     <span>Einträge sind append-only dokumentiert; Korrekturen nur als gekennzeichnete Stornos. Erstellt mit GurtDex — gurtdex.dexware.app</span>
     <span>Erstellt am ${fmtDateTime(new Date().toISOString())}</span>
