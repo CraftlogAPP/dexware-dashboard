@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { FileDown } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
-import { LoadGuard, useAsync } from '../../components/ui';
+import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { fmtDate, fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
 import { openReportWindow } from '../../lib/print';
 import { RouteSketch } from '../RouteSketch';
@@ -43,6 +43,9 @@ export function RouteDetail() {
       }),
     [client, id, from, to],
   );
+
+  // Live: letzte Fahrt in der Skizze + Fahrtenliste aktuell halten.
+  useLiveRefresh([state.refresh, runsState.refresh]);
 
   function printLog(route: Route) {
     setPrintErr(null);

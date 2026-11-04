@@ -21,7 +21,7 @@ export function OrgProvider({
   fetch?: (sb: SupabaseClient) => Promise<OrgContextData | null>;
 }) {
   const { client, session } = useAppAuth();
-  const { data, loading, error, reload } = useAsync(
+  const { data, loading, error, reload, refresh } = useAsync(
     () => fetch(client),
     [client, session?.user.id, fetch],
   );
@@ -29,8 +29,8 @@ export function OrgProvider({
   // Stabile Context-Identität, damit useOrg-Consumer nicht bei jedem
   // Provider-Render (z. B. Auth-Events) neu rendern.
   const value = useMemo<OrgState>(
-    () => ({ data, loading, error, reload }),
-    [data, loading, error, reload],
+    () => ({ data, loading, error, reload, refresh }),
+    [data, loading, error, reload, refresh],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

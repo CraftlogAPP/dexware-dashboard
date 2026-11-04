@@ -7,7 +7,7 @@ import {
   fetchProperties,
   type OpMeta,
 } from '../api';
-import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
+import { ActionBadge, LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { fmtDateTime } from '../../lib/format';
 import { lastOpByProperty, propertyNameMap, weatherLabel } from '../labels';
 import type { Operation, Property } from '../types';
@@ -32,6 +32,8 @@ export function Overview() {
     ]);
     return { properties, meta, recentOps };
   }, [client]);
+  // Live: neue Einsätze aus der App erscheinen ohne Neuladen.
+  useLiveRefresh([state.refresh]);
 
   return (
     <>

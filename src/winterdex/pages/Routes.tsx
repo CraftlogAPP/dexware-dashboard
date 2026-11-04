@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
-import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
+import { ActionBadge, LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
 import { CoverageBadge } from '../RouteSketch';
 import { fetchRoutes, fetchRuns, fmtDistance, fmtPct, localDay, ROUTES_MISSING, type Route, type RunMeta } from '../routes';
@@ -35,6 +35,9 @@ export function Routes() {
       }),
     [client, routeId, from, to],
   );
+
+  // Live: neue Fahrten erscheinen ohne Neuladen (alle 30 s + beim Zurückwechseln in den Tab).
+  useLiveRefresh([base.refresh, runsState.refresh]);
 
   if (base.error === ROUTES_MISSING || runsState.error === ROUTES_MISSING) {
     return (

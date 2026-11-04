@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type DependencyList,
   type ReactNode,
@@ -13,6 +14,8 @@ export interface AsyncState<T> {
   loading: boolean;
   error: string | null;
   reload: () => void;
+  /** Still neu laden (ohne Ladekreis); bei Fehler bleiben die letzten Daten stehen. */
+  refresh: () => void;
 }
 
 /** Kleiner Daten-Hook: lädt bei Mount/Dep-Änderung, mit Fehler + Reload. */
@@ -21,9 +24,14 @@ export function useAsync<T>(fn: () => Promise<T>, deps: DependencyList): AsyncSt
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
+  // Jede Neuladung (Deps/Reload) bekommt eine Nummer — ein spätes stilles Ergebnis überschreibt nie neuere Daten.
+  const gen = useRef(0);
 
   useEffect(() => {
     let mounted = true;
+    gen.current += 1;
     setLoading(true);
     setError(null);
     fn()
@@ -43,7 +51,40 @@ export function useAsync<T>(fn: () => Promise<T>, deps: DependencyList): AsyncSt
   }, [...deps, tick]);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
-  return { data, loading, error, reload };
+  const refresh = useCallback(() => {
+    const g = gen.current;
+    fnRef.current().then(
+      (d) => {
+        if (gen.current === g) {
+          setData(d);
+          setError(null);
+        }
+      },
+      () => {
+        /* still: letzte Daten bleiben sichtbar, nächster Versuch beim nächsten Takt */
+      },
+    );
+  }, []);
+  return { data, loading, error, reload, refresh };
+}
+
+/**
+ * Hält Seiten aktuell (Strecken, Einsätze): alle `ms` still neu laden, solange der Tab sichtbar ist,
+ * und sofort beim Zurückwechseln in den Tab.
+ */
+export function useLiveRefresh(refreshers: Array<() => void>, ms = 30000) {
+  useEffect(() => {
+    const run = () => {
+      if (document.visibilityState === 'visible') refreshers.forEach((f) => f());
+    };
+    const t = setInterval(run, ms);
+    document.addEventListener('visibilitychange', run);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', run);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ms, ...refreshers]);
 }
 
 export function LoadGuard<T>({

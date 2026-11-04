@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { addOperation, cancelOperation, fetchOperations, fetchProperties } from '../api';
-import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
+import { ActionBadge, LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import {
   FormDialog,
   isoFromLocal,
@@ -41,6 +41,7 @@ export function Operations() {
       }),
     [client, propertyId, from, to],
   );
+  useLiveRefresh([opsState.refresh]);
 
   async function onAdd(v: FormValues) {
     if (!org || !session) throw new Error('Kein Betrieb geladen');
