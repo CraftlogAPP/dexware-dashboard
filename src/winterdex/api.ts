@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { signPhotos } from '../lib/photos';
 import type { DutyTimes, Operation, OperationWithPhotos, Property } from './types';
 
 // Spaltenliste für Einsätze OHNE photo_urls (Base64-Fotos, nur im Detail laden!)
@@ -97,7 +98,7 @@ export async function fetchOperationWithPhotos(
     .eq('id', id)
     .single();
   if (error) fail('Einsatz konnte nicht geladen werden', error);
-  return data as OperationWithPhotos;
+  return (await signPhotos(sb, data)) as OperationWithPhotos;
 }
 
 // ── Schreiben (Format identisch zur Mobile-App, supabaseRepository.ts) ──────
@@ -208,6 +209,6 @@ export async function fetchOperationsForReport(
     .lte('started_at', end.toISOString())
     .order('started_at');
   if (error) fail('Berichtsdaten konnten nicht geladen werden', error);
-  return (data ?? []) as OperationWithPhotos[];
+  return (await signPhotos(sb, data ?? [])) as OperationWithPhotos[];
 }
 

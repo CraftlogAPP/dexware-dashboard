@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { signPhotos } from '../lib/photos';
 import { fail } from '../lib/orgApi';
 import type {
   CheckResult,
@@ -298,7 +299,7 @@ export async function fetchInspectionWithPhotos(
     .eq('id', id)
     .single();
   if (error) fail('Prüfung konnte nicht geladen werden', error);
-  return data as InspectionWithPhotos;
+  return (await signPhotos(sb, data)) as InspectionWithPhotos;
 }
 
 export interface DefectFilter {
@@ -347,7 +348,7 @@ export async function fetchInspectionsForReport(
   // Spalte signature gibt es bei HebeDex von Anfang an.
   const { data, error } = await query(`${INSPECTION_COLS}, photo_urls, signature`);
   if (error) fail('Berichtsdaten konnten nicht geladen werden', error);
-  return (data ?? []) as unknown as InspectionWithPhotos[];
+  return (await signPhotos(sb, data ?? [])) as unknown as InspectionWithPhotos[];
 }
 
 /** Mängel eines Standorts im Zeitraum inkl. Fotos — nur für den PDF-Bericht. */
@@ -367,5 +368,5 @@ export async function fetchDefectsForReport(
     .lte('created_at', end.toISOString())
     .order('created_at');
   if (error) fail('Mängel für den Bericht konnten nicht geladen werden', error);
-  return (data ?? []) as DefectWithPhotos[];
+  return (await signPhotos(sb, data ?? [])) as DefectWithPhotos[];
 }

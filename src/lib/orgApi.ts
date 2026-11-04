@@ -102,10 +102,45 @@ export async function removeMember(
 export async function updateOrg(
   sb: SupabaseClient,
   orgId: string,
-  input: { name: string; land: Org['land'] },
+  input: { name: string; land?: Org['land'] },
 ): Promise<void> {
   const { error } = await sb.from('org').update(input).eq('id', orgId);
   if (error) fail('Betrieb konnte nicht gespeichert werden', error);
+}
+
+export interface TeamCode {
+  code: string;
+  expires_at: string;
+  use_count: number;
+}
+
+/** true, wenn die RPC in dieser App (noch) nicht existiert → älteres Modell nutzen. */
+const missingRpc = (e: { code?: string; message?: string } | null) =>
+  !!e && (e.code === 'PGRST202' || /could not find the function|does not exist/i.test(e.message ?? ''));
+
+/**
+ * Owner: EIN Team-Code für alle Mitarbeiter (seit 03.11.2026: 30 Tage, beliebig oft
+ * einlösbar). renew = true macht den alten sofort ungültig. null = App kennt den
+ * Team-Code noch nicht (dann Einzelcode über createInvite).
+ */
+export async function fetchTeamCode(sb: SupabaseClient, renew = false): Promise<TeamCode | null> {
+  const { data, error } = await sb.rpc('team_code', { p_renew: renew });
+  if (missingRpc(error)) return null;
+  if (error) fail('Team-Code konnte nicht geladen werden', error);
+  const r = (Array.isArray(data) ? data[0] : data) as TeamCode | undefined;
+  return r?.code ? r : null;
+}
+
+/**
+ * Owner: Teamgröße mit dem Abo abgleichen (Server fragt RevenueCat: Pro 20 · Team 50 ·
+ * Team XL 100 · größer per Vertrag). null = App hat noch keine Teamgrößen-Stufen.
+ */
+export async function fetchSeats(sb: SupabaseClient): Promise<{ limit: number; members: number } | null> {
+  const { data, error } = await sb.rpc('sync_seat_limit');
+  if (missingRpc(error)) return null;
+  if (error) return null; // Anzeige ist Komfort — nie die Team-Seite blockieren
+  const r = (Array.isArray(data) ? data[0] : data) as { seat_limit?: number; members?: number } | undefined;
+  return r ? { limit: r.seat_limit ?? 20, members: r.members ?? 0 } : null;
 }
 
 /** Owner: 7 Tage gültigen Beitrittscode erzeugen (Präfix je App, z. B. WD-/SD-/RD-). */

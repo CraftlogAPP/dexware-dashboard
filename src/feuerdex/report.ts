@@ -134,7 +134,7 @@ export function buildReportHtml(
 <head>
 <meta charset="utf-8">
 <title>Prüfbericht Feuerlöscher — ${esc(site.name)}</title>
-<style>
+<style>thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}
   body { font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; color: #211a15; margin: 32px; font-size: 12px; }
   h1 { font-size: 20px; margin: 0 0 2px; color: #B91C1C; }
   h2 { font-size: 14px; margin: 22px 0 8px; }
@@ -142,7 +142,7 @@ export function buildReportHtml(
   .meta { color: #6b5e55; margin-bottom: 4px; }
   .legal { margin: 10px 0 18px; padding: 8px 12px; background: #fdf0ef; border-left: 3px solid #EF4444; font-size: 11px; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #e4d9d2; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th, td { border: 1.5px solid #B2A9A4; padding: 6px 8px; text-align: left; vertical-align: top; }
   th { background: #f8f1ed; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; }
   tr.canceled td { color: #9a8d84; background: #fbfaf9; }
   .mono { font-family: Consolas, monospace; font-size: 10.5px; }
@@ -151,7 +151,7 @@ export function buildReportHtml(
   .open { color: #d97706; font-size: 10.5px; font-weight: 800; margin-top: 2px; }
   .resolved { color: #16a34a; font-size: 10.5px; font-weight: 700; margin-top: 2px; }
   .photos { display: flex; flex-wrap: wrap; gap: 8px; }
-  .photos img { width: 180px; border: 1px solid #e4d9d2; border-radius: 4px; }
+  .photos img { width: 180px; border: 1.5px solid #B2A9A4; border-radius: 4px; }
   .photo-group { break-inside: avoid; }
   .sign { margin-top: 18px; page-break-inside: avoid; font-size: 11px; }
     .sig-grid { display: flex; flex-wrap: wrap; gap: 14px 28px; margin-top: 20px; }
@@ -159,7 +159,7 @@ export function buildReportHtml(
     .sig-line { border-bottom: 1px solid #333; height: 30px; }
     .sig-img { display: block; height: 46px; max-width: 220px; object-fit: contain; margin-bottom: -34px; }
     .sig-label { font-size: 10px; color: #555; margin-top: 3px; }
-    .footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #e4d9d2; color: #6b5e55; font-size: 10.5px; display: flex; justify-content: space-between; }
+    .footer { margin-top: 26px; padding-top: 10px; border-top: 1.5px solid #B2A9A4; color: #6b5e55; font-size: 10.5px; display: flex; justify-content: space-between; }
   @media print { body { margin: 12mm; } }
 </style>
 </head>

@@ -67,7 +67,7 @@ export function buildReportHtml(
 <head>
 <meta charset="utf-8">
 <title>Winterdienst-Nachweis — ${esc(property.name)}</title>
-<style>
+<style>thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}
   body { font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; color: #16202b; margin: 32px; font-size: 12px; }
   h1 { font-size: 20px; margin: 0 0 2px; color: #075985; }
   h2 { font-size: 14px; margin: 22px 0 8px; }
@@ -75,14 +75,14 @@ export function buildReportHtml(
   .meta { color: #51606f; margin-bottom: 4px; }
   .legal { margin: 10px 0 18px; padding: 8px 12px; background: #f0f7fc; border-left: 3px solid #0284c7; font-size: 11px; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #c8d4de; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th, td { border: 1.5px solid #9CA5AD; padding: 6px 8px; text-align: left; vertical-align: top; }
   th { background: #eaf2f8; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; }
   tr.canceled td { color: #8a97a3; background: #fafbfc; }
   .mono { font-family: Consolas, monospace; font-size: 10.5px; }
   .photos { display: flex; flex-wrap: wrap; gap: 8px; }
-  .photos img { width: 180px; border: 1px solid #c8d4de; border-radius: 4px; }
+  .photos img { width: 180px; border: 1.5px solid #9CA5AD; border-radius: 4px; }
   .photo-group { break-inside: avoid; }
-  .footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #c8d4de; color: #51606f; font-size: 10.5px; display: flex; justify-content: space-between; }
+  .footer { margin-top: 26px; padding-top: 10px; border-top: 1.5px solid #9CA5AD; color: #51606f; font-size: 10.5px; display: flex; justify-content: space-between; }
   @media print { body { margin: 12mm; } }
 </style>
 </head>

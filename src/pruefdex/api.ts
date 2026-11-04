@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { signPhotos } from '../lib/photos';
 import { fail } from '../lib/orgApi';
 import type {
   Customer,
@@ -290,5 +291,5 @@ export async function fetchInspectionWithPhotos(
     sb.from('inspection').select(`${inspCols()}, photo_urls`).eq('id', id).single(),
   );
   if (error) fail('Prüfung konnte nicht geladen werden', error);
-  return data as unknown as InspectionWithPhotos;
+  return (await signPhotos(sb, data)) as unknown as InspectionWithPhotos;
 }

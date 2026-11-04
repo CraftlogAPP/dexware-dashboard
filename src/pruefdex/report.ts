@@ -64,18 +64,18 @@ export function buildReportHtml(
 <head>
 <meta charset="utf-8">
 <title>DGUV-V3-Prüfliste — ${esc(customer?.name ?? 'Alle Geräte')}</title>
-<style>
+<style>thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}
   body { font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; color: #16202b; margin: 32px; font-size: 12px; }
   h1 { font-size: 20px; margin: 0 0 2px; color: #1d4ed8; }
   .meta { color: #51606f; margin-bottom: 4px; }
   .legal { margin: 10px 0 18px; padding: 8px 12px; background: #eff4fd; border-left: 3px solid #1d4ed8; font-size: 11px; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #c8d0de; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th, td { border: 1.5px solid #9CA2AD; padding: 6px 8px; text-align: left; vertical-align: top; }
   th { background: #e8eefa; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; }
   tr.overdue td { background: #fdf1f0; }
   .mono { font-family: Consolas, monospace; font-size: 10.5px; }
   .note { font-size: 10.5px; color: #51606f; margin-top: 2px; }
-  .footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #c8d0de; color: #51606f; font-size: 10.5px; display: flex; justify-content: space-between; }
+  .footer { margin-top: 26px; padding-top: 10px; border-top: 1.5px solid #9CA2AD; color: #51606f; font-size: 10.5px; display: flex; justify-content: space-between; }
   @media print { body { margin: 12mm; } }
 </style>
 </head>

@@ -94,23 +94,23 @@ export function buildFahrtenbuchHtml(
 <head>
 <meta charset="utf-8">
 <title>Fahrtenbuch — ${esc(vehicle.name)}</title>
-<style>
+<style>thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}
   body { font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; color: #16202b; margin: 32px; font-size: 12px; }
   h1 { font-size: 20px; margin: 0 0 2px; color: #1d4ed8; }
   h2 { font-size: 14px; margin: 22px 0 8px; }
   .meta { color: #51606f; margin-bottom: 4px; }
   .legal { margin: 10px 0 18px; padding: 8px 12px; background: #eff6ff; border-left: 3px solid #2563eb; font-size: 11px; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #c9d4e0; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th, td { border: 1.5px solid #9DA5AF; padding: 6px 8px; text-align: left; vertical-align: top; }
   th { background: #e8eff8; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; }
   td.num, th.num { text-align: right; white-space: nowrap; }
   .wrap { overflow-wrap: anywhere; }
   tr.unconfirmed td { background: #fffbeb; }
   .note { font-size: 10.5px; color: #51606f; margin-top: 2px; }
   .summary { margin-top: 14px; display: flex; gap: 24px; flex-wrap: wrap; }
-  .summary div { border: 1px solid #c9d4e0; border-radius: 6px; padding: 8px 14px; }
+  .summary div { border: 1.5px solid #9DA5AF; border-radius: 6px; padding: 8px 14px; }
   .summary b { display: block; font-size: 14px; }
-  .footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #c9d4e0; color: #51606f; font-size: 10.5px; display: flex; justify-content: space-between; }
+  .footer { margin-top: 26px; padding-top: 10px; border-top: 1.5px solid #9DA5AF; color: #51606f; font-size: 10.5px; display: flex; justify-content: space-between; }
   @media print { body { margin: 12mm; } }
 </style>
 </head>
