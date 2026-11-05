@@ -1,19 +1,13 @@
 // PrüfDex-spezifische Helfer: Fristen-Ampel + Messwert-Bewertung
 // (Logik gespiegelt aus mobile/src/lib/dguv.ts).
 
+import { addMonthsLocalISO, todayLocalISO } from '../lib/format';
 import type { Measurements, ProtectionClass } from './types';
 
 export type DueStatus = 'ok' | 'soon' | 'overdue' | 'none';
 
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function addMonthsISO(iso: string, months: number): string {
-  const d = new Date(iso + 'T00:00:00');
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
-}
+const todayISO = todayLocalISO;
+const addMonthsISO = addMonthsLocalISO;
 
 /** Fälligkeits-Status für die Ampel-Logik (überfällig / fällig ≤ 1 Monat / ok). */
 export function dueStatus(nextDueDate?: string | null): DueStatus {

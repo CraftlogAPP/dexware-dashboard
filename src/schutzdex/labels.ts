@@ -1,5 +1,6 @@
 // SchutzDex-spezifische Anzeige-Helfer.
 
+import { todayLocalISO } from '../lib/format';
 import type { Assignment } from './types';
 
 /** Schnelle Namens-Auflösung id → Name für Tabellen. */
@@ -22,5 +23,5 @@ export function briefingTitleMap(
 export function isOverdue(a: Assignment): boolean {
   if (a.status === 'ueberfaellig') return true;
   if (a.status !== 'offen' || !a.faellig_am) return false;
-  return a.faellig_am < new Date().toISOString().slice(0, 10);
+  return a.faellig_am.slice(0, 10) < todayLocalISO();
 }

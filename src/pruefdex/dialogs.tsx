@@ -7,7 +7,7 @@ import {
   type FieldDef,
   type FormValues,
 } from '../components/form';
-import { fmtDate, toInputDate } from '../lib/format';
+import { addMonthsLocalISO, fmtDate, toInputDate } from '../lib/format';
 import { addInspection, saveDevice } from './api';
 import {
   MEASUREMENTS,
@@ -21,9 +21,7 @@ import {
 
 /** Fällige Folgeprüfung: Prüfdatum + Intervall des Geräts (Monate). */
 function plusMonths(isoDate: string, months: number): string {
-  const d = new Date(`${isoDate}T00:00:00`);
-  d.setMonth(d.getMonth() + months);
-  return toInputDate(d);
+  return addMonthsLocalISO(isoDate, months);
 }
 
 /**

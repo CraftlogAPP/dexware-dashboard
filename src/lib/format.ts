@@ -60,3 +60,16 @@ export function parseLocalDate(input: string): Date {
   const [y, m, d] = input.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
+
+/** Heutiges LOKALES Datum als yyyy-mm-dd (toISOString wäre UTC → zwischen 0 und 1/2 Uhr „gestern“). */
+export function todayLocalISO(): string {
+  return toInputDate(new Date());
+}
+
+/** Monate auf ein yyyy-mm-dd addieren, Monatsende gekappt (31.08. + 6 = 28./29.02.). */
+export function addMonthsLocalISO(iso: string, months: number): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const t = new Date(y, m - 1 + months, 1);
+  t.setDate(Math.min(d, new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate()));
+  return toInputDate(t);
+}
