@@ -3,6 +3,7 @@ import { LayoutGrid } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { appIcon } from '../apps/registry';
 import { useAppAuth } from './AppAuthContext';
+import { LegalLinks } from '../components/LegalLinks';
 
 type Mode = 'login' | 'reset-request' | 'reset-code';
 
@@ -226,6 +227,7 @@ export function LoginScreen() {
         weitere Ansicht darauf.
       </p>
       <SuiteHint />
+      <LegalLinks />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { APPS, STATUS_ORDER, appIcon, type AppConfig } from '../apps/registry';
 import { DueBell } from '../duechecks/DueBell';
 import { useDueChecks } from '../duechecks/useDueChecks';
 import { useHiddenApps } from '../lib/appPrefs';
+import { LegalLinks } from '../components/LegalLinks';
 
 export function Home() {
   const apps = [...APPS].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
@@ -94,6 +95,7 @@ export function Home() {
             </button>
           </p>
         )}
+        <LegalLinks />
       </main>
     </>
   );
