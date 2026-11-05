@@ -64,7 +64,11 @@ export interface DueInfo {
 }
 
 function infoFor(dueAt: Date): DueInfo {
-  const daysLeft = Math.ceil((dueAt.getTime() - Date.now()) / DAY_MS);
+  // Kalendertage (wie die App): sonst "Fällig in 1 Tag" am Fälligkeitstag selbst.
+  const n = new Date();
+  const today = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+  const day = new Date(dueAt.getFullYear(), dueAt.getMonth(), dueAt.getDate()).getTime();
+  const daysLeft = Math.round((day - today) / DAY_MS);
   const state: DueState = daysLeft <= 0 ? 'overdue' : daysLeft <= DUE_SOON_DAYS ? 'soon' : 'ok';
   return { state, dueAt, daysLeft };
 }
