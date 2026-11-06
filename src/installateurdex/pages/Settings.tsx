@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAsync, useUnsavedGuard } from '../../components/ui';
 import { fmtDateTime } from '../../lib/format';
 import { useInst } from '../context';
 import type { OrgSettingsInput } from '../data';
+import { useChecksSummary } from '../pruefpunkte/summary';
+import { isRegionOf, regionsOf } from '../region';
 import { ITEM_KINDS, fmtDay, isProOrg, looksLikeEmail, reminderState, type InstOrg } from '../types';
 
 interface Form {
@@ -17,6 +19,84 @@ interface Form {
 }
 
 const DAY_OPTIONS = [7, 14, 21, 30, 45, 60, 90];
+
+/**
+ * Land & Bundesland + Berechtigungsnummern (region.sql): steuert, welche Landesgesetze App und KI anwenden
+ * (Prüffristen Heizung/Klima/Wärmepumpe usw.). Eigenes Speichern — unabhängig vom Formular oben.
+ */
+function RegionCard() {
+  const { data, org, isOwner, refreshOrg } = useInst();
+  const [region, setRegion] = useState(org.region ?? '');
+  const [inspectionNo, setInspectionNo] = useState(org.legal?.inspectionNo ?? '');
+  const [fgasCert, setFgasCert] = useState(org.legal?.fgasCert ?? '');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const regions = regionsOf(org.land);
+  const valid = isRegionOf(org.land, region);
+  const dirty = region !== (org.region ?? '') || inspectionNo !== (org.legal?.inspectionNo ?? '') || fgasCert !== (org.legal?.fgasCert ?? '');
+
+  async function save() {
+    if (!isOwner) return;
+    if (/[<>]/.test(inspectionNo + fgasCert)) return setMsg({ ok: false, text: 'Bitte keine spitzen Klammern in den Nummern.' });
+    setBusy(true);
+    setMsg(null);
+    try {
+      const legal = { ...(org.legal ?? {}), inspectionNo: inspectionNo.trim(), fgasCert: fgasCert.trim() };
+      await data.saveRegion(org.id, valid ? region : null, legal);
+      setMsg({ ok: true, text: '✓ Gespeichert' });
+      refreshOrg();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="section-head">
+        <h2>Land &amp; Bundesland</h2>
+      </div>
+      <div className="card">
+        <p className="small muted" style={{ marginTop: 0 }}>
+          Bestimmt, welche Gesetze App und KI für deinen Betrieb anwenden: Prüffristen für Heizungen, Klimaanlagen und
+          Wärmepumpen, Kältemittel, Normen im Protokoll und die Rechnung. Land: <b style={{ color: 'var(--text)' }}>{org.land === 'AT' ? '🇦🇹 Österreich' : org.land === 'DE' ? '🇩🇪 Deutschland' : org.land}</b> (änderbar in der App).
+        </p>
+        {!valid && <div className="info-box">Noch kein Bundesland gewählt — bis dahin kennt die App nur die bundesweiten Regeln.</div>}
+        <fieldset disabled={!isOwner || busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <label className="field" style={{ maxWidth: 360 }}>
+            Bundesland
+            <select value={valid ? region : ''} onChange={(e) => { setRegion(e.target.value); setMsg(null); }}>
+              <option value="">— bitte wählen —</option>
+              {Object.entries(regions).map(([id, label]) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field" style={{ maxWidth: 360 }}>
+            Landes-Prüfberechtigung (Nummer, falls vorhanden)
+            <input type="text" value={inspectionNo} maxLength={60} placeholder={org.land === 'AT' ? 'z. B. BPR-1234 (Bgld.)' : 'Nummer laut Landesrecht'} onChange={(e) => { setInspectionNo(e.target.value); setMsg(null); }} />
+            <span className="small muted">Steht dann auf Prüfberichten. Ohne Nummer zeigt die App Pflichtprüfungen nur als Hinweis für den Kunden.</span>
+          </label>
+          <label className="field" style={{ maxWidth: 360, marginBottom: 0 }}>
+            F-Gas-/Kältemittel-Zertifikat (Nummer)
+            <input type="text" value={fgasCert} maxLength={60} onChange={(e) => { setFgasCert(e.target.value); setMsg(null); }} />
+          </label>
+        </fieldset>
+        {isOwner && (
+          <div className="idx-save-bar" style={{ marginTop: 12 }}>
+            <button type="button" className="btn" disabled={busy || !dirty} onClick={save}>
+              {busy ? 'Speichern …' : 'Bundesland speichern'}
+            </button>
+            {msg && (msg.ok ? <span className="idx-ok">{msg.text}</span> : <span className="error-box" style={{ margin: 0 }}>{msg.text}</span>)}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
 
 function priceInput(v: unknown): string {
   return typeof v === 'number' && v > 0
@@ -56,8 +136,9 @@ function normalizeWebsite(raw: string): string | null {
 }
 
 export function Settings() {
-  const { data, org, isOwner, refreshOrg } = useInst();
+  const { data, org, isOwner, refreshOrg, base } = useInst();
   const location = useLocation();
+  const checksSummary = useChecksSummary();
   const [form, setForm] = useState<Form>(() => fromOrg(org));
   // Gespeicherter Stand (nach dem Speichern so, wie es eingegeben wurde) — Vergleich ohne leere Preisfelder,
   // damit „gespeichert“ nicht gleich wieder als geändert gilt (Preise als Text, Webseite normalisiert)
@@ -290,6 +371,24 @@ export function Settings() {
           </div>
         )}
       </form>
+
+      <RegionCard />
+
+      <div className="section-head">
+        <h2>Prüfpunkte &amp; Messwerte</h2>
+      </div>
+      <div className="card pp-settings-card">
+        <div>
+          <p className="small muted" style={{ margin: 0 }}>
+            Checklisten für Wartung und Inbetriebnahme an deinen Betrieb anpassen: eigene Prüfpunkte, Standard-Punkte
+            ausblenden, eigene Messwerte. Gilt fürs ganze Team.
+          </p>
+          {checksSummary && <p style={{ margin: '6px 0 0', fontSize: 14 }}>{checksSummary}</p>}
+        </div>
+        <Link className="btn ghost small" to={`${base}/pruefpunkte`}>
+          {isOwner ? 'Bearbeiten' : 'Ansehen'}
+        </Link>
+      </div>
 
       {extra.data && extra.data.reminders.length > 0 && (
         <>

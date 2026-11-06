@@ -661,6 +661,11 @@ export function createDemoStore(onOrgChange: (org: InstOrg) => void): DemoStore 
       await wait(null, 250);
       onOrgChange(structuredClone(org));
     },
+    saveRegion: async (_orgId, region: string | null, legal: Record<string, string>) => {
+      Object.assign(org, { region, legal: structuredClone(legal) });
+      await wait(null, 250);
+      onOrgChange(structuredClone(org));
+    },
     reminders: (limit) => wait(REMINDERS.slice(0, limit)),
     members: () => wait(MEMBERS),
     setSitePortal: async (siteId, enabled) => {

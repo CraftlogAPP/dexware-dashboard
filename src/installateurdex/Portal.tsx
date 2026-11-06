@@ -13,6 +13,7 @@ import {
   CreditCard,
   Inbox,
   LayoutDashboard,
+  ListChecks,
   FileUp,
   Settings as SettingsIcon,
   Users,
@@ -36,6 +37,7 @@ import { Rechnungen } from './geld/Rechnungen';
 import { Material } from './geld/Material';
 import { Auswertungen } from './auswertung/Auswertungen';
 import { Profil } from './auswertung/Profil';
+import { Pruefpunkte } from './pruefpunkte/Pruefpunkte';
 // @route-import
 
 export function PortalRoutes() {
@@ -60,6 +62,7 @@ export function PortalRoutes() {
         <Route path="material" element={<Material />} />
         <Route path="auswertungen/*" element={<Auswertungen />} />
         <Route path="profil" element={<Profil />} />
+        <Route path="pruefpunkte" element={<Pruefpunkte />} />
         {/* @routes */}
         <Route path="*" element={<Navigate to={base} replace />} />
       </Route>
@@ -119,6 +122,9 @@ function Shell() {
         )}
         <NavLink to={`${base}/einstellungen`}>
           <SettingsIcon className="i" aria-hidden /> Einstellungen
+        </NavLink>
+        <NavLink to={`${base}/pruefpunkte`}>
+          <ListChecks className="i" aria-hidden /> Prüfpunkte
         </NavLink>
         {isOwner && (
           <NavLink to={`${base}/profil`}>

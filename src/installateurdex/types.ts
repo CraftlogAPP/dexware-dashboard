@@ -32,6 +32,10 @@ export interface InstOrg extends Org {
   reminder_days?: number | null;
   /** Link zu den Google-Bewertungen (https://…) — App: Bewertungs-Kreislauf nach sauberem Einsatz (B6) */
   review_url?: string | null;
+  /** Bundesland (region.sql) — steuert die Landesgesetze in App und KI */
+  region?: string | null;
+  /** Berechtigungen des Betriebs, z. B. { inspectionNo: 'BPR-1234', fgasCert: '…' } (region.sql) */
+  legal?: Record<string, string> | null;
 }
 
 /** Wie Server und App (org_is_pro in diktat.sql): Pro nur bis plan_until — abgelaufen = Gratis. Die alte Spalte is_pro zählt nicht. */
@@ -323,13 +327,13 @@ export function measureResult(
 const REFRIGERANTS: { id: string; gwp: number; fgas: boolean; annex2Share?: number }[] = [
   { id: 'R32', gwp: 675, fgas: true },
   { id: 'R410A', gwp: 2088, fgas: true },
-  { id: 'R454B', gwp: 466, fgas: true, annex2Share: 0.311 }, // R-32 68,9 % / R-1234yf 31,1 %
+  { id: 'R454B', gwp: 465, fgas: true, annex2Share: 0.311 }, // R-32 68,9 % / R-1234yf 31,1 %
   { id: 'R407C', gwp: 1774, fgas: true },
   { id: 'R134a', gwp: 1430, fgas: true },
-  { id: 'R513A', gwp: 631, fgas: true, annex2Share: 0.56 }, // R-134a 44 % / R-1234yf 56 %
-  { id: 'R290', gwp: 3, fgas: false },
+  { id: 'R513A', gwp: 629, fgas: true, annex2Share: 0.56 }, // R-134a 44 % / R-1234yf 56 %
+  { id: 'R290', gwp: 0.02, fgas: false },
   { id: 'R744', gwp: 1, fgas: false },
-  { id: 'R1234yf', gwp: 1, fgas: true, annex2Share: 1 },
+  { id: 'R1234yf', gwp: 0.501, fgas: true, annex2Share: 1 },
 ];
 
 /** Kältemittel-Text („R 32“, „r-410a“) → Kennung wie in der App (R32, R410A …); unbekannte bleiben wie eingegeben. */
@@ -339,7 +343,7 @@ export function refrigerantId(raw: string): string {
 }
 
 function refrigerantInfo(id?: string | null) {
-  const t = (id ?? '').toUpperCase().replace(/\s/g, '');
+  const t = (id ?? '').toUpperCase().replace(/[\s\-‐–]/g, '');
   return REFRIGERANTS.find((x) => x.id.toUpperCase() === t);
 }
 
@@ -432,7 +436,10 @@ export function isLeakCheck(j: Pick<Job, 'canceled' | 'measurements'>): boolean 
 
 /** Ergebnis „undicht" (auch „nicht dicht", „Leck …") → nach der Reparatur ist eine Nachkontrolle fällig. */
 export function isLeakFound(result: unknown): boolean {
-  return /undicht|nicht\s*dicht|leck/i.test(String(result ?? ''));
+  // wie App (lib/fgas.ts): „keine Leckage“ / „Lecksuche ohne Befund“ zählen NICHT als undicht
+  const t = String(result ?? '').toLowerCase();
+  if (/undicht|nicht\s*dicht/.test(t)) return true;
+  return /leck(age|stelle)?\s*(gefunden|festgestellt|vorhanden|lokalisiert)/.test(t) && !/\b(kein|keine|ohne)\b/.test(t);
 }
 
 export interface LeakInfo {

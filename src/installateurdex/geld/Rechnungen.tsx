@@ -1,5 +1,6 @@
 // Rechnungen & Angebote — wie App InvoicesScreen: Kacheln offen / überfällig / bezahlt im Monat, Filter, Liste,
-// Export für die Steuerberatung (Rechnungsausgangsbuch, gleiche Datei wie die App: lib/invoiceExport.ts).
+// Export für die Steuerberatung (DATEV-Buchungsstapel / BMD-Buchungsimport / Rechnungsausgangsbuch, gleiche Dateien
+// wie die App: lib/accountingExport.ts + lib/invoiceExport.ts).
 // Nur der Inhaber (wie in der App: Bereich „Geld“ nur für Inhaber; RLS invoice_select zeigt Monteuren nur Eigenes).
 // Unterseiten: neu, firmendaten, :id (Beleg.tsx, Firmendaten.tsx).
 
@@ -14,6 +15,7 @@ import { Beleg } from './Beleg';
 import { Firmendaten } from './Firmendaten';
 import { euro } from './invoice';
 import { invoiceBookCsv, periodRange, type Period } from './invoiceExport';
+import { accountingExport, BOOK_FORMAT_INFO, bookFormats, defaultBookFormat, missingAccountingSetup, type BookFormat } from './accountingExport';
 import { InvoiceBadge } from './parts';
 import { deDay, errText, isOverdue, kindLabel, localDay } from './util';
 import './geld.css';
@@ -312,35 +314,62 @@ const EXPORTS: { id: Exclude<Zeitraum, 'latest'>; label: string }[] = [
 ];
 
 function ExportDialog({ onClose }: { onClose: () => void }) {
-  const { ext } = useInst();
+  const { ext, org, base } = useInst();
+  // Rechnungsprofil: Land (Vorauswahl DATEV/BMD) + Buchhaltungskonten aus den Firmendaten
+  const prof = useAsync(() => ext.geld.profile(org.id, org.land, org.name), [ext.geld, org.id]);
+  const land = prof.data?.land ?? org.land;
+  const [picked, setPicked] = useState<BookFormat | null>(null);
+  const format: BookFormat = picked ?? defaultBookFormat(land);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const missing = prof.data && format !== 'list' ? missingAccountingSetup(format, prof.data) : [];
+
+  function download(name: string, part: BlobPart, type: string) {
+    const blob = new Blob([part], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   async function run(z: Exclude<Zeitraum, 'latest'>) {
     if (busy) return;
     setBusy(z);
     setMsg(null);
+    setWarnings([]);
     try {
       const { ref, p } = periodOf(z);
       const { from, to, label } = periodRange(ref, p);
       const rows = await ext.geld.invoices({ from, to });
-      const csv = invoiceBookCsv(rows, from, to);
-      if (!csv.includes('\n')) {
+      if (format === 'list') {
+        const csv = invoiceBookCsv(rows, from, to);
+        if (!csv.includes('\n')) {
+          setMsg({ ok: false, text: 'In diesem Zeitraum gibt es keine ausgestellten Rechnungen.' });
+          return;
+        }
+        // Gleiche Datei wie die App: UTF-8 mit BOM, Semikolon, CRLF (App InvoicesScreen exportBook)
+        download(`Rechnungsausgangsbuch_${label}.csv`, String.fromCharCode(0xfeff) + csv, 'text/csv;charset=utf-8');
+        const n = csv.split('\r\n').length - 1;
+        setMsg({ ok: true, text: `Rechnungsausgangsbuch_${label}.csv heruntergeladen (${n} ${n === 1 ? 'Zeile' : 'Zeilen'}).` });
+        return;
+      }
+      const profile = prof.data ?? (await ext.geld.profile(org.id, org.land, org.name));
+      const out = accountingExport(format, rows, from, to, profile, { now: new Date(), label });
+      if (out.count === 0) {
         setMsg({ ok: false, text: 'In diesem Zeitraum gibt es keine ausgestellten Rechnungen.' });
         return;
       }
-      // Gleiche Datei wie die App: UTF-8 mit BOM, Semikolon, CRLF (App InvoicesScreen exportBook)
-      const blob = new Blob([String.fromCharCode(0xfeff) + csv], { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Rechnungsausgangsbuch_${label}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      const n = csv.split('\r\n').length - 1;
-      setMsg({ ok: true, text: `Rechnungsausgangsbuch_${label}.csv heruntergeladen (${n} ${n === 1 ? 'Zeile' : 'Zeilen'}).` });
+      // DATEV/BMD: Windows-1252 (ANSI), wie beide Programme es erwarten — gleiche Bytes wie aus der App
+      const bytes = new Uint8Array(out.bytes.length);
+      bytes.set(out.bytes);
+      download(out.fileName, bytes.buffer, 'text/csv;charset=windows-1252');
+      setWarnings(out.warnings);
+      setMsg({ ok: true, text: `${out.fileName} heruntergeladen (${out.count} ${out.count === 1 ? 'Buchung' : 'Buchungen'}).` });
     } catch (e) {
       setMsg({ ok: false, text: errText(e) });
     } finally {
@@ -350,10 +379,24 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="Export für die Steuerberatung" onClose={onClose}>
-      <p className="muted" style={{ marginTop: 0 }}>
-        Rechnungsausgangsbuch als CSV (öffnet in Excel, liest BMD/DATEV ein). Eine Zeile je Beleg und Steuersatz,
-        Stornorechnungen negativ, nach Belegdatum. Angebote und Entwürfe sind nicht dabei. Gleiche Datei wie aus der App.
+      <div className="idx-status-pick" role="radiogroup" aria-label="Format">
+        {bookFormats(land).map((f) => (
+          <button key={f} type="button" role="radio" aria-checked={format === f} className={format === f ? 'on' : ''} onClick={() => { setPicked(f); setMsg(null); setWarnings([]); }}>
+            {BOOK_FORMAT_INFO[f].label}
+          </button>
+        ))}
+      </div>
+      <p className="muted">
+        {BOOK_FORMAT_INFO[format].hint} Angebote und Entwürfe sind nicht dabei. Gleiche Datei wie aus der App.
       </p>
+      {missing.length > 0 && (
+        <div className="info-box">
+          Noch offen: {missing.join(', ')}.{' '}
+          <Link to={`${base}/rechnungen/firmendaten`} onClick={onClose}>
+            In den Firmendaten unter „Buchhaltung“ ergänzen
+          </Link>
+        </div>
+      )}
       <div className="idx-geld-export">
         {EXPORTS.map((z) => (
           <button key={z.id} type="button" className="btn ghost" onClick={() => void run(z.id)} disabled={!!busy}>
@@ -362,6 +405,11 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
         ))}
       </div>
       {msg && <div className={msg.ok ? 'info-box' : 'error-box'}>{msg.text}</div>}
+      {warnings.map((w) => (
+        <div key={w} className="error-box">
+          {w}
+        </div>
+      ))}
     </Modal>
   );
 }

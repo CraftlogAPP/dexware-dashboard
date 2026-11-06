@@ -150,7 +150,9 @@ function photoAppendix(jobs: JobWithPhotos[], defects: DefectWithPhotos[], asset
   for (const j of jobs) {
     // Beschriftung je Foto (photo_tags, gleicher Index) wie im App-PDF — erst zuordnen, dann ungültige Bilder aussortieren
     const tags = Array.isArray(j.photo_tags) ? j.photo_tags : [];
-    const photos = (j.photo_urls ?? []).map((u, i) => ({ src: imgSrc(u), tag: typeof tags[i] === 'string' ? tags[i].trim() : '' })).filter((x) => x.src);
+    const photos = (j.photo_urls ?? []).map((u, i) => ({ src: imgSrc(u), tag: typeof tags[i] === 'string' ? tags[i].trim() : '' }))
+      // „Nur intern“ (App-Fotobeschriftung) gehört nicht in den Ausdruck für den Kunden
+      .filter((x) => x.src && x.tag !== 'Nur intern');
     if (!photos.length) continue;
     blocks.push(`<div class="photo-block"><div class="photo-head">${fmtDateTime(j.started_at)} — ${esc(name(j.item_id))}, ${esc(jobInfo(j.type).label)}${j.canceled ? ' (storniert)' : ''}</div>
       ${photos.map((x) => (x.tag ? `<figure><img src="${x.src}" alt="${esc(x.tag)}"/><figcaption>${esc(x.tag)}</figcaption></figure>` : `<img src="${x.src}" alt=""/>`)).join('')}</div>`);

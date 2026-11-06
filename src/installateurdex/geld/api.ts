@@ -6,6 +6,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '../fetchAll';
+import type { AccountingSettings } from './accountingExport';
 import { articleNoOf, matchArticle, saleCents, type Article, type PricingRule } from './articles';
 import { defaultVatRate, totals, type InvoiceDraft, type InvoiceKind, type InvoiceProfile, type InvoiceLine, type Land, type MaterialLine } from './invoice';
 
@@ -40,6 +41,8 @@ export type StoredProfile = InvoiceProfile & {
   quotePrefix?: string;
   materialPrices?: Record<string, number>;
   articlePricing?: PricingRule;
+  /** Konten für den DATEV-/BMD-Export (optional — ohne das Feld gelten die Standardwerte aus accountingExport.ts) */
+  accounting?: AccountingSettings;
 };
 
 export type StoredArticle = Article & { id: string; usedAt?: string; updatedAt?: string };
@@ -116,11 +119,12 @@ export function emptyProfile(land: Land, name = ''): StoredProfile {
   return { legalName: name, street: '', zip: '', city: '', land, vatRate: defaultVatRate(land), paymentDays: 14, laborStepMinutes: 15, prefix: 'RE', quotePrefix: 'AN', materialPrices: {} };
 }
 
-/** Schnappschuss fürs Ausstellen: ohne Preisliste/Preisregel (wie App issueInvoice). */
+/** Schnappschuss fürs Ausstellen: ohne Preisliste/Preisregel/Buchhaltungskonten (wie App issueInvoice). */
 export function profileSnapshot(p: StoredProfile): StoredProfile {
-  const { materialPrices: _m, articlePricing: _p, ...snapshot } = p;
+  const { materialPrices: _m, articlePricing: _p, accounting: _a, ...snapshot } = p;
   void _m;
   void _p;
+  void _a;
   return snapshot;
 }
 
@@ -357,23 +361,13 @@ export function supabaseGeld(sb: SupabaseClient): GeldData {
         if (error) dbError('Belege konnten nicht geladen werden', error);
         return ((data ?? []) as Row[]).map(fromRow);
       }
-      // Zeitraum: alle Belege mit Belegdatum im Zeitraum, seitenweise (kein 500er-Deckel — Export muss vollständig sein)
-      const out: StoredInvoice[] = [];
-      for (let from = 0; ; from += 1000) {
-        const { data, error } = await sb
-          .from('invoice')
-          .select(LIST_COLS)
-          .gte('issued_at', range.from)
-          .lt('issued_at', range.to)
-          .order('issued_at', { ascending: false })
-          .order('id')
-          .range(from, from + 999);
-        if (error) dbError('Belege konnten nicht geladen werden', error);
-        const rows = (data ?? []) as Row[];
-        out.push(...rows.map(fromRow));
-        if (rows.length < 1000) break;
-      }
-      return out;
+      // Zeitraum: alle Belege mit Belegdatum im Zeitraum, seitenweise bis zu einer leeren Seite (kein 500er-Deckel,
+      // auch richtig bei max_rows < 1.000 — Export für den Steuerberater muss vollständig sein)
+      const { data, error } = await fetchAllRows<Row>((a, b) =>
+        sb.from('invoice').select(LIST_COLS).gte('issued_at', range.from).lt('issued_at', range.to).order('issued_at', { ascending: false }).order('id').range(a, b),
+      );
+      if (error) dbError('Belege konnten nicht geladen werden', error);
+      return data.map(fromRow);
     },
     async tileInvoices(paidSince) {
       // fetchAllRows lädt bis zu einer LEEREN Seite — auch richtig, wenn max_rows im Projekt kleiner als 1.000 ist

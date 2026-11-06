@@ -1,5 +1,6 @@
 // Firmendaten für Rechnung & Angebot — wie App InvoiceProfileScreen (org.invoice_profile): Anschrift, UID/Steuernummer,
-// Bank, Stundensatz, Anfahrt, Takt, Zahlungsziel, Kleinunternehmer, Nummern-Präfixe. Speichern nur Inhaber (RLS org).
+// Bank, Stundensatz, Anfahrt, Takt, Zahlungsziel, Kleinunternehmer, Nummern-Präfixe, Buchhaltungskonten (DATEV/BMD).
+// Speichern nur Inhaber (RLS org).
 // Gespeichert werden nur diese Felder — Preisliste und Preisregel im selben Profil bleiben unangetastet.
 
 import { useState } from 'react';
@@ -8,6 +9,7 @@ import { ArrowLeft } from 'lucide-react';
 import { LoadGuard, useAsync, useUnsavedGuard } from '../../components/ui';
 import { useInst } from '../context';
 import type { StoredProfile } from './api';
+import { cleanAccounting, resolveAccounting, revenueKeys, revenueLabel, type AccountingSettings } from './accountingExport';
 import { errText } from './util';
 
 // wie App InvoiceProfileScreen
@@ -60,6 +62,10 @@ function Form({ initial }: { initial: StoredProfile }) {
   ];
   const done = checks.filter((c) => c.ok).length;
   const de = p.land === 'DE';
+  // Buchhaltungskonten (wie App InvoiceProfileScreen): gespeichert werden nur eingetragene Werte, leer = Standard
+  const acc: AccountingSettings = p.accounting ?? {};
+  const accFull = resolveAccounting(p.land, acc);
+  const setAcc = (patch: Partial<AccountingSettings>) => set('accounting', cleanAccounting({ ...acc, ...patch }));
 
   async function save() {
     if (saving) return;
@@ -91,6 +97,7 @@ function Form({ initial }: { initial: StoredProfile }) {
         paymentDays: p.paymentDays,
         prefix: p.prefix,
         quotePrefix: p.quotePrefix,
+        accounting: cleanAccounting(p.accounting),
       };
       const next = await ext.geld.saveProfile(org.id, org.land, org.name, patch);
       setP(next);
@@ -256,6 +263,51 @@ function Form({ initial }: { initial: StoredProfile }) {
             ` · 💡 Deine Preisliste kennt schon ${Object.keys(p.materialPrices ?? {}).length} Artikel — sie lernt mit jeder Rechnung dazu.`}
         </p>
       </div>
+
+      {(de || p.land === 'AT') && (
+        <>
+          <div className="section-head">
+            <h2>Buchhaltung (Export für den Steuerberater)</h2>
+          </div>
+          <div className="card idx-geld-form">
+            <p className="small muted idx-geld-wide" style={{ margin: 0 }}>
+              {de
+                ? 'Für die DATEV-Datei. Berater- und Mandantennummer sagt dir dein Steuerberater. Leere Konten-Felder = übliche Standardkonten (grau).'
+                : 'Für die BMD-Datei. Konten mit deinem Steuerberater abstimmen. Leere Felder = übliche Standardkonten (grau).'}
+            </p>
+            {de && (
+              <>
+                <label className="field">
+                  Beraternummer
+                  <input value={acc.beraterNr ?? ''} inputMode="numeric" placeholder="z. B. 1234567" onChange={(e) => setAcc({ beraterNr: e.target.value.replace(/\D/g, '').slice(0, 7) || undefined })} />
+                </label>
+                <label className="field">
+                  Mandantennummer
+                  <input value={acc.mandantNr ?? ''} inputMode="numeric" placeholder="z. B. 10001" onChange={(e) => setAcc({ mandantNr: e.target.value.replace(/\D/g, '').slice(0, 5) || undefined })} />
+                </label>
+                <div className="idx-geld-wide">
+                  <div className="small muted" style={{ marginBottom: 6 }}>
+                    Kontenrahmen
+                  </div>
+                  <div className="idx-status-pick" role="radiogroup" aria-label="Kontenrahmen">
+                    {(['SKR03', 'SKR04'] as const).map((k) => chip(accFull.kontenrahmen === k, k, () => setAcc({ kontenrahmen: k })))}
+                  </div>
+                </div>
+              </>
+            )}
+            <label className="field">
+              Debitor (Kundenkonto)
+              <input value={acc.debitor ?? ''} inputMode="numeric" placeholder={accFull.debitor} onChange={(e) => setAcc({ debitor: e.target.value.replace(/\D/g, '').slice(0, 9) || undefined })} />
+            </label>
+            {revenueKeys(p.land).map((k) => (
+              <label key={k} className="field">
+                {revenueLabel(p.land, k)}
+                <input value={acc.erloese?.[k] ?? ''} inputMode="numeric" placeholder={accFull.erloese[k]} onChange={(e) => setAcc({ erloese: { ...(acc.erloese ?? {}), [k]: e.target.value.replace(/\D/g, '').slice(0, 9) } })} />
+              </label>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="idx-save-bar">
         <button type="button" className="btn" onClick={() => void save()} disabled={saving}>

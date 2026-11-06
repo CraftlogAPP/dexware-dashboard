@@ -77,6 +77,8 @@ export interface InstData {
   /** Vom Kunden gewählte Termine ab `from`, aufsteigend (ohne erledigte/abgelehnte Anfragen). */
   appointments(from: Date): Promise<ServiceRequest[]>;
   saveOrgSettings(orgId: string, input: OrgSettingsInput): Promise<void>;
+  /** Bundesland + Berechtigungsnummern (region.sql; nur Inhaber — RLS org_update). */
+  saveRegion(orgId: string, region: string | null, legal: Record<string, string>): Promise<void>;
   reminders(limit: number): Promise<ReminderLog[]>;
   members(): Promise<Member[]>;
   /** Kundenportal „Mein Zuhause“ je Objekt freigeben (nur Inhaber — RLS site_update; nur mit Kunden-E-Mail wie die App). */
@@ -475,6 +477,14 @@ export function supabaseData(sb: SupabaseClient): InstData {
       // org_update-Policy: nur Inhaber. plan/extra_seats schützt der Trigger org_protect_plan.
       const { error } = await sb.from('org').update(input).eq('id', orgId);
       if (error) fail('Einstellungen konnten nicht gespeichert werden', error);
+    },
+
+    async saveRegion(orgId, region, legal) {
+      const { error } = await sb.from('org').update({ region, legal }).eq('id', orgId);
+      if (error && /region|legal/.test(error.message) && /column|schema cache/i.test(error.message)) {
+        throw new Error('Die Datenbank kennt das Bundesland noch nicht — das Datenbank-Update (region.sql) muss erst eingespielt werden.');
+      }
+      if (error) fail('Bundesland konnte nicht gespeichert werden', error);
     },
 
     async reminders(limit) {
