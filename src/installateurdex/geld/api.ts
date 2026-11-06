@@ -225,7 +225,7 @@ const txt = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : typeof
 const opt = (v: unknown) => (typeof v === 'string' ? v : undefined);
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
   allowed.includes(v as T) ? (v as T) : fallback;
-const isoDay = (v: unknown) => (typeof v === 'string' && /^d{4}-d{2}-d{2}/.test(v) ? v.slice(0, 10) : undefined);
+const isoDay = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : undefined);
 const LINE_KINDS = ['labor', 'travel', 'material', 'flat', 'other'] as const;
 const LANDS = ['DE', 'AT', 'CH'] as const;
 
