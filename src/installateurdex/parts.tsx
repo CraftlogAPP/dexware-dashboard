@@ -19,6 +19,18 @@ import {
   type Site,
 } from './types';
 
+/**
+ * Überschrift einer Anfrage: Anlage · Objekt, sonst das Objekt. Ohne beides: Anfrage aus dem Installateur-Helfer
+ * (neuer Kunde, noch ohne Objekt) mit Kontaktnamen — „nicht mehr vorhanden“ nur, wenn die verknüpfte Anlage fehlt.
+ */
+export function requestTitle(r: ServiceRequest, asset: Asset | null | undefined, site: Site | null | undefined): string {
+  if (asset) return `${asset.name} · ${site?.name ?? 'Objekt'}`;
+  if (site) return site.name;
+  if (r.asset_id) return 'Anlage nicht mehr vorhanden';
+  if (r.site_id) return 'Objekt nicht mehr vorhanden';
+  return r.contact_name?.trim() ? `Neuer Kunde: ${r.contact_name.trim()}` : 'Neuer Kunde (noch ohne Objekt)';
+}
+
 /** Karte einer Anfrage in Listen (Start, Inbox, Objekt). Störungen rot, Angebote grün abgesetzt. */
 export function RequestCard({
   r,
@@ -48,9 +60,11 @@ export function RequestCard({
           {r.status !== 'new' && <RequestStatusBadge status={r.status} />}
           {asset?.contract && <span className="badge green">🤝 Vertragskunde</span>}
           {r.source === 'reminder' && <span className="badge">aus Erinnerungsmail</span>}
+          {r.source === 'portal' && <span className="badge">aus „Mein Zuhause“</span>}
+          {r.source === 'helper' && <span className="badge amber">🧭 Neuer Kunde über den Installateur-Helfer</span>}
         </span>
         <span className="idx-req-title" style={{ display: 'block', marginTop: 6 }}>
-          {asset ? `${asset.name} · ${site?.name ?? 'Objekt'}` : site ? site.name : 'Anlage nicht mehr vorhanden'}
+          {requestTitle(r, asset, site)}
         </span>
         {r.message && <span className="idx-req-msg">{r.message}</span>}
         {r.ai_note && (

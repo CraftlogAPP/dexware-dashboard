@@ -36,6 +36,17 @@ const TIME_COLS = 'id, org_id, user_id, user_name, kind, started_at, ended_at, s
 
 type PgError = { message: string; code?: string; details?: string | null; hint?: string | null } | null;
 
+/** Häufige englische Server-/Netzwerkmeldungen verständlich machen; den Rohtext nur in die Konsole (Fehlersuche). */
+function plain(e: NonNullable<PgError>): string {
+  console.error(e);
+  const m = e.message ?? '';
+  if (/Failed to fetch|NetworkError|network|Load failed|timeout/i.test(m)) return 'Keine Verbindung — bitte erneut versuchen.';
+  if (/JWT expired|invalid JWT|not authenticated/i.test(m) || e.code === 'PGRST301' || e.code === 'PGRST303') return 'Sitzung abgelaufen — bitte neu anmelden.';
+  if (e.code === '42501' || /row-level security|permission denied/i.test(m)) return 'Dafür fehlt die Berechtigung.';
+  if (e.code === 'P0001' && m) return m; // eigene Meldung aus einem Datenbank-Trigger (deutsch)
+  return 'Unerwarteter Fehler — bitte neu laden und erneut versuchen.';
+}
+
 /** Datenbank-Fehler verständlich auf Deutsch. */
 function apptError(msg: string, e: PgError): never {
   if (!e) throw new Error(msg);
@@ -47,15 +58,16 @@ function apptError(msg: string, e: PgError): never {
   if (e.code === '23514') throw new Error(`${msg}: Zeit oder Text ungültig (Ende nach Beginn, höchstens 14 Stunden, Titel bis 120 Zeichen).`);
   if (e.code === '23503') throw new Error(`${msg}: Objekt, Anlage oder Anfrage gibt es nicht mehr — bitte neu laden.`);
   if (e.code === '42P01' || e.code === 'PGRST205') throw new Error(`${msg}: Die Plantafel ist in der Datenbank noch nicht eingerichtet (plantafel.sql).`);
-  throw new Error(`${msg}: ${e.message}`);
+  throw new Error(`${msg}: ${plain(e)}`);
 }
 
 function timeError(msg: string, e: PgError): never {
   if (!e) throw new Error(msg);
-  if (e.code === '42501') throw new Error(`${msg}: Keine Berechtigung.`);
+  // RLS time_insert/time_update (zeit.sql): eigene Einträge nur mit Beginn zwischen vor 8 Tagen und morgen
+  if (e.code === '42501') throw new Error(`${msg}: Keine Berechtigung — eigene Zeiten gehen nur bis 7 Tage zurück und nicht in die Zukunft; ältere korrigiert der Inhaber.`);
   if (e.code === '23514') throw new Error(`${msg}: Ende muss nach dem Beginn liegen, höchstens 24 Stunden je Eintrag.`);
   if (e.code === '42P01' || e.code === 'PGRST205') throw new Error(`${msg}: Die Zeiterfassung ist in der Datenbank noch nicht eingerichtet (zeit.sql).`);
-  throw new Error(`${msg}: ${e.message}`);
+  throw new Error(`${msg}: ${plain(e)}`);
 }
 
 const NO_ROW = 'Keine Berechtigung oder der Eintrag wurde inzwischen gelöscht — bitte neu laden.';
@@ -122,7 +134,7 @@ export function supabasePlanung(sb: SupabaseClient): PlanungData {
       // Ohne termin.sql gibt es scheduled_at nicht — dann einfach keine Kundentermine statt Fehlerseite.
       if (error) {
         if (/scheduled_at/.test(error.message)) return [];
-        throw new Error(`Kundentermine konnten nicht geladen werden: ${error.message}`);
+        throw new Error(`Kundentermine konnten nicht geladen werden: ${plain(error)}`);
       }
       return (data ?? []) as PlanRequest[];
     },
@@ -142,7 +154,7 @@ export function supabasePlanung(sb: SupabaseClient): PlanungData {
           .in('status', ['new', 'scheduled'])
           .order('created_at', { ascending: false })
           .limit(300);
-        if (e2) throw new Error(`Anfragen konnten nicht geladen werden: ${e2.message}`);
+        if (e2) throw new Error(`Anfragen konnten nicht geladen werden: ${plain(e2)}`);
         return ((d2 ?? []) as Omit<PlanRequest, 'scheduled_at' | 'scheduled_end'>[]).map((r) => ({ ...r, scheduled_at: null, scheduled_end: null }));
       }
       return (data ?? []) as PlanRequest[];
@@ -151,7 +163,7 @@ export function supabasePlanung(sb: SupabaseClient): PlanungData {
     async markRequestScheduled(id) {
       // p_note null: vorhandene Notiz bleibt (coalesce in set_request_status).
       const { error } = await sb.rpc('set_request_status', { p_id: id, p_status: 'scheduled', p_note: null });
-      if (error) throw new Error(`Anfrage-Status nicht gesetzt: ${error.message}`);
+      if (error) throw new Error(`Anfrage-Status nicht gesetzt: ${plain(error)}`);
     },
 
     async timeEntries(from, to) {
@@ -181,7 +193,7 @@ export function supabasePlanung(sb: SupabaseClient): PlanungData {
       // RLS time_delete: nur eigene, bis 24 Stunden nach dem Anlegen.
       const { data, error } = await sb.from('time_entry').delete().eq('id', id).select('id');
       if (error) timeError('Zeit nicht gelöscht', error);
-      if (!data?.length) throw new Error('Zeit nicht gelöscht: Löschen geht nur bei eigenen Einträgen bis 24 Stunden nach dem Anlegen.');
+      if (!data?.length) throw new Error('Zeit nicht gelöscht: Löschen geht nur bei eigenen, nicht vom Inhaber korrigierten Einträgen bis 24 Stunden nach dem Anlegen.');
     },
   };
 }

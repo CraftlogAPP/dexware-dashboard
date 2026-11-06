@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useAsync } from '../../components/ui';
+import { useAsync, useUnsavedGuard } from '../../components/ui';
 import { fmtDateTime } from '../../lib/format';
 import { useInst } from '../context';
 import type { OrgSettingsInput } from '../data';
@@ -10,6 +10,7 @@ interface Form {
   phone: string;
   email: string;
   website: string;
+  review: string;
   prices: Record<string, string>;
   reminder: boolean;
   days: string;
@@ -30,6 +31,7 @@ function fromOrg(org: InstOrg): Form {
     phone: org.public_phone ?? '',
     email: org.public_email ?? '',
     website: org.website ?? '',
+    review: org.review_url ?? '',
     prices,
     reminder: org.reminder_mail === true,
     days: String(org.reminder_days ?? 30),
@@ -57,6 +59,12 @@ export function Settings() {
   const { data, org, isOwner, refreshOrg } = useInst();
   const location = useLocation();
   const [form, setForm] = useState<Form>(() => fromOrg(org));
+  // Gespeicherter Stand (nach dem Speichern so, wie es eingegeben wurde) — Vergleich ohne leere Preisfelder,
+  // damit „gespeichert“ nicht gleich wieder als geändert gilt (Preise als Text, Webseite normalisiert)
+  const [baseline, setBaseline] = useState<Form>(() => fromOrg(org));
+  const comparable = (f: Form) => ({ ...f, website: f.website.trim(), review: f.review.trim(), prices: Object.fromEntries(Object.entries(f.prices).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v !== '').sort(([a], [b]) => a.localeCompare(b))) });
+  const dirty = JSON.stringify(comparable(form)) !== JSON.stringify(comparable(baseline));
+  useUnsavedGuard(isOwner && dirty);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -95,6 +103,10 @@ export function Settings() {
     if (form.phone.trim().length > 40) return setError('Die Telefonnummer ist zu lang (höchstens 40 Zeichen).');
     const website = normalizeWebsite(form.website);
     if (website && (/\s/.test(website) || website.length > 200)) return setError('Die Webseite sieht nicht richtig aus.');
+    // Bewertungslink: Datenbank-Regel (anlagenpass.sql) — https://, höchstens 300 Zeichen; wie die App
+    const review = form.review.trim();
+    if (review && (!/^https:\/\/\S+$/.test(review) || review.length > 300))
+      return setError('Der Bewertungslink muss mit https:// beginnen (z. B. aus Google Maps → Teilen → Link zu Rezensionen).');
     const prices: Record<string, number> = {};
     for (const k of ITEM_KINDS) {
       const p = parsePrice(form.prices[k.id] ?? '');
@@ -111,6 +123,7 @@ export function Settings() {
       public_phone: form.phone.trim() || null,
       public_email: email || null,
       website,
+      review_url: review || null,
       maintenance_prices: prices,
       reminder_mail: form.reminder,
       reminder_days: days,
@@ -119,6 +132,7 @@ export function Settings() {
     try {
       await data.saveOrgSettings(org.id, input);
       setForm((f) => ({ ...f, website: website ?? '' }));
+      setBaseline({ ...form, website: website ?? '' });
       setSaved(true);
       refreshOrg();
     } catch (err) {
@@ -173,6 +187,20 @@ export function Settings() {
                 placeholder="www.dein-betrieb.at"
                 onChange={(e) => set('website', e.target.value)}
               />
+            </label>
+            <label className="field" style={{ marginBottom: 0 }}>
+              Link zu deinen Google-Bewertungen
+              <input
+                type="url"
+                inputMode="url"
+                value={form.review}
+                maxLength={300}
+                placeholder="https://g.page/r/…"
+                onChange={(e) => set('review', e.target.value)}
+              />
+              <span className="small muted">
+                Nach einem sauber abgeschlossenen, unterschriebenen Einsatz bittet die App den Kunden einmal um eine Bewertung — mit diesem Link.
+              </span>
             </label>
           </div>
 

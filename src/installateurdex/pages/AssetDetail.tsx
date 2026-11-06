@@ -21,14 +21,12 @@ import {
   fmtMinutes,
   intervalOf,
   kindInfo,
-  lastServiceFromJobs,
   makerModel,
   measureResult,
   measureRows,
   passUrl,
   assetPrice,
   hasContractPrice,
-  leakInfoFromJobs,
   leakCheckDuty,
   leakDue,
   remoteServiceLabel,
@@ -46,23 +44,36 @@ export function AssetDetail() {
   const state = useAsync(async () => {
     const asset = await data.asset(id!);
     if (!asset) return null;
-    const [site, jobs, defects, requests] = await Promise.all([
+    const [site, jobs, defects, requests, status, photo] = await Promise.all([
       data.site(asset.site_id),
       data.jobs({ itemId: asset.id, limit: 300 }),
       data.defects({ itemId: asset.id }),
       data.requests({ assetId: asset.id }),
+      // Wartungsstand, Dichtheit und Einsatz-Zahl vollständig vom Server (die Liste oben zeigt nur die neuesten 300)
+      data.assetStatus(asset.id),
+      data.assetPhoto(asset.id).catch(() => null),
     ]);
-    return { asset, site, jobs, defects, requests };
+    return { asset, site, jobs, defects, requests, status, photo };
   }, [data, id]);
 
   return (
-    <LoadGuard state={state}>
+    <LoadGuard
+      state={state}
+      empty={
+        <>
+          <Link className="idx-back" to={`${base}/kunden`}>
+            ← Kunden &amp; Objekte
+          </Link>
+          <div className="error-box">Anlage nicht gefunden — sie wurde gelöscht oder der Link ist alt.</div>
+        </>
+      }
+    >
       {(d) => {
-        if (!d) return <div className="error-box">Anlage nicht gefunden.</div>;
-        const { asset, site, jobs, defects, requests } = d;
+        if (!d) return null; // zeigt LoadGuard über `empty`
+        const { asset, site, jobs, defects, requests, status, photo } = d;
         const k = kindInfo(asset.kind);
-        const lastService = lastServiceFromJobs(jobs);
-        const last = lastService.get(asset.id);
+        const last = status.lastService;
+        const lastService = new Map<string, string>(last ? [[asset.id, last]] : []);
         const due = dueInfo(last, asset);
         const price = assetPrice(org, asset);
         const fromContract = hasContractPrice(asset);
@@ -70,17 +81,21 @@ export function AssetDetail() {
         const warranty = warrantyInfo(asset, asset.retired ? undefined : due);
         // Pflicht-Dichtheitskontrolle (F-Gas-VO Art. 5): letzte Kontrolle aus den Einsätzen dieser Anlage
         // („undicht" bei der letzten Kontrolle → Nachkontrolle nach einem Monat, wie die App)
-        const leak = asset.retired ? null : leakDue(asset, leakInfoFromJobs(jobs).get(asset.id));
+        const leak = asset.retired ? null : leakDue(asset, status.leak);
         const open = defects.filter((x) => x.status === 'open');
         const blocked = open.some((x) => x.item_blocked);
         const pass = data.demo ? `${PASS_BASE}demo` : passUrl(asset);
-        const validJobs = jobs.filter((j) => !j.canceled).length;
+        const validJobs = status.validJobs;
 
         return (
           <>
-            {site && (
+            {site ? (
               <Link className="idx-back" to={`${base}/kunden/${site.id}`}>
                 ← {site.name}
+              </Link>
+            ) : (
+              <Link className="idx-back" to={`${base}/kunden`}>
+                ← Kunden &amp; Objekte
               </Link>
             )}
             <div className="idx-head">
@@ -217,6 +232,14 @@ export function AssetDetail() {
                 <div className="card">
                   <h3 className="idx-card-title">Stammdaten</h3>
                   <MasterData asset={asset} leak={leak} />
+                  {photo && (
+                    <div style={{ marginTop: 14 }}>
+                      <h3 className="idx-card-title">Typenschild</h3>
+                      <a href={photo} target="_blank" rel="noreferrer" title="Foto in voller Größe öffnen">
+                        <img src={photo} alt={`Typenschild ${asset.name}`} style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 8 }} loading="lazy" />
+                      </a>
+                    </div>
+                  )}
                 </div>
 
                 <div className="card">

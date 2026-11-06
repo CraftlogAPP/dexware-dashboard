@@ -6,12 +6,34 @@ import { DueCell, JobBadge, LeakLine, RequestKindBadge, WarrantyRiskBadge } from
 import { useInst } from '../context';
 import { RequestCard } from '../parts';
 import { buildDueRows, byDue, contractStatsOf, counts, onlyDemo, potentialOf, startOfWeek } from '../portfolio';
-import { byRequestRank, dueBucket, fmtEur, kindInfo, slotLabel, type Asset, type Site } from '../types';
+import { byRequestRank, dueBucket, fmtEur, kindInfo, slotLabel, type Asset, type ServiceRequest, type Site } from '../types';
+import type { Appt } from '../planung/logic';
 
 const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
 
+/** Ein Eintrag in „Nächste Termine“: Plantafel-Termin oder vom Kunden gewählter Termin einer Anfrage. */
+type Upcoming =
+  | { kind: 'plan'; id: string; start: string; end: string; a: Appt }
+  | { kind: 'request'; id: string; start: string; end: string | null; r: ServiceRequest };
+
+/**
+ * Wie die App (SitesScreen „Nächste Termine“): geplante Plantafel-Termine + vom Kunden gewählte Termine offener
+ * Anfragen, ohne doppelte (Anfrage schon als Plantafel-Termin übernommen), nur was noch nicht vorbei ist, nach Beginn.
+ */
+function upcomingOf(appts: Appt[], requests: ServiceRequest[], now = Date.now()): Upcoming[] {
+  const linked = new Set(appts.map((a) => a.request_id).filter(Boolean));
+  return [
+    ...appts
+      .filter((a) => a.status === 'planned' && Date.parse(a.ends_at) >= now)
+      .map((a): Upcoming => ({ kind: 'plan', id: a.id, start: a.starts_at, end: a.ends_at, a })),
+    ...requests
+      .filter((r) => r.scheduled_at && !linked.has(r.id) && new Date(r.scheduled_end ?? r.scheduled_at).getTime() >= now)
+      .map((r): Upcoming => ({ kind: 'request', id: r.id, start: r.scheduled_at!, end: r.scheduled_end ?? null, r })),
+  ].sort((x, y) => Date.parse(x.start) - Date.parse(y.start));
+}
+
 export function Start() {
-  const { data, org, base, requestsVersion, isOwner } = useInst();
+  const { data, ext, org, base, requestsVersion, isOwner } = useInst();
 
   const state = useAsync(async () => {
     const today = new Date();
@@ -27,8 +49,10 @@ export function Start() {
       data.appointments(today),
       data.openFollowUps(),
     ]);
-    return { sites, assets, lastService, lastLeak, week, newRequests, openDefects, appointments, followUps };
-  }, [data, requestsVersion]);
+    // Plantafel-Termine der nächsten 60 Tage (fehlt plantafel.sql → nur die Kundentermine, keine Fehlerseite)
+    const planned = await ext.planung.appointments(today, new Date(today.getTime() + 60 * 86_400_000)).catch(() => [] as Appt[]);
+    return { sites, assets, lastService, lastLeak, week, newRequests, openDefects, appointments: upcomingOf(planned, appointments), followUps };
+  }, [data, ext, requestsVersion]);
   useLiveRefresh([state.refresh]);
 
   return (
@@ -256,7 +280,8 @@ export function Start() {
               </div>
               {appointments.length === 0 ? (
                 <div className="card empty">
-                  Keine gewählten Termine. In einer Anfrage schlägst du bis zu 3 Termine vor — der Kunde wählt per Link.
+                  Keine anstehenden Termine. Plane sie in der <Link to={`${base}/plantafel`}>Plantafel</Link> oder schlag in einer
+                  Anfrage bis zu 3 Termine vor — der Kunde wählt per Link.
                 </div>
               ) : (
                 <div className="table-wrap">
@@ -266,29 +291,43 @@ export function Start() {
                         <th>Termin</th>
                         <th>Art</th>
                         <th>Anlage · Objekt</th>
-                        <th className="idx-hide-sm">Kontakt</th>
+                        <th className="idx-hide-sm">Monteur · Kontakt</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {appointments.slice(0, 10).map((r) => {
-                        const a = r.asset_id ? assetById.get(r.asset_id) : undefined;
-                        const s = siteById.get(r.site_id ?? a?.site_id ?? '');
+                      {appointments.slice(0, 10).map((u) => {
+                        const assetId = u.kind === 'plan' ? u.a.asset_id : u.r.asset_id;
+                        const a = assetId ? assetById.get(assetId) : undefined;
+                        const s = siteById.get((u.kind === 'plan' ? u.a.site_id : u.r.site_id) ?? a?.site_id ?? '');
                         return (
-                          <tr key={r.id}>
+                          <tr key={`${u.kind}-${u.id}`}>
                             <td>
-                              <Link to={`${base}/anfragen/${r.id}`}>{slotLabel(r.scheduled_at!, r.scheduled_end)} Uhr</Link>
-                              {isToday(r.scheduled_at!) && <span className="idx-sub" style={{ color: '#86efac' }}>heute</span>}
+                              <Link to={u.kind === 'plan' ? `${base}/plantafel` : `${base}/anfragen/${u.id}`}>{slotLabel(u.start, u.end)} Uhr</Link>
+                              {isToday(u.start) && <span className="idx-sub" style={{ color: '#86efac' }}>heute</span>}
                             </td>
                             <td>
-                              <RequestKindBadge kind={r.kind} />
+                              {u.kind === 'plan' ? (
+                                <span className="badge">{u.a.title === 'Störung' ? '🚨' : '🗓️'} {u.a.title}</span>
+                              ) : (
+                                <>
+                                  <RequestKindBadge kind={u.r.kind} />
+                                  <span className="idx-sub">vom Kunden gewählt</span>
+                                </>
+                              )}
                             </td>
                             <td className="wrap">
                               {a ? <Link to={`${base}/anlagen/${a.id}`}>{a.name}</Link> : '—'}
                               <span className="idx-sub">{s ? `${s.operator_name ? `${s.operator_name} · ` : ''}${s.name}` : ''}</span>
                             </td>
                             <td className="wrap muted idx-hide-sm">
-                              {r.contact_name ?? '—'}
-                              {r.contact_phone && <span className="idx-sub">{r.contact_phone}</span>}
+                              {u.kind === 'plan' ? (
+                                u.a.assigned_name ?? 'nicht zugeteilt'
+                              ) : (
+                                <>
+                                  {u.r.contact_name ?? '—'}
+                                  {u.r.contact_phone && <span className="idx-sub">{u.r.contact_phone}</span>}
+                                </>
+                              )}
                             </td>
                           </tr>
                         );
@@ -314,7 +353,7 @@ export function Start() {
                         <th>Fällig</th>
                         <th>Anlage</th>
                         <th>Kunde · Objekt</th>
-                        <th className="idx-num">Preis</th>
+                        {isOwner && <th className="idx-num">Preis</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -335,7 +374,8 @@ export function Start() {
                             {r.site?.operator_name ?? '—'}
                             <span className="idx-sub">{r.site?.name}</span>
                           </td>
-                          <td className="idx-num">{r.price !== undefined ? fmtEur(r.price) : <span className="muted">—</span>}</td>
+                          {/* Preise wie Potenzial und Wartungsliste nur für den Inhaber */}
+                          {isOwner && <td className="idx-num">{r.price !== undefined ? fmtEur(r.price) : <span className="muted">—</span>}</td>}
                         </tr>
                       ))}
                     </tbody>

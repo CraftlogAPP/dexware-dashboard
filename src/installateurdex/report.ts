@@ -92,6 +92,8 @@ function css(accent: string): string {
   .sigs { display: flex; gap: 24px; margin-top: 6px; } .sigs img { height: 40px; max-width: 200px; object-fit: contain; display: block; }
   .photo-block { margin-bottom: 12px; page-break-inside: avoid; } .photo-head { font-weight: 700; font-size: 11px; margin-bottom: 4px; }
   .photo-block img { max-width: 180px; max-height: 135px; margin: 0 6px 6px 0; border-radius: 6px; border: 1.5px solid #D5DBE2; }
+  .photo-block figure { display: inline-block; margin: 0 6px 6px 0; vertical-align: top; } .photo-block figure img { margin: 0; display: block; }
+  .photo-block figcaption { font-size: 10px; color: #555; margin-top: 2px; max-width: 180px; }
   .footer { margin-top: 20px; font-size: 10px; color: #68717D; border-top: 1.5px solid #D5DBE2; padding-top: 8px; }
   .watermark { position: fixed; top: 45%; left: 0; right: 0; text-align: center; transform: rotate(-24deg);
     font-size: 44px; font-weight: 800; color: rgba(185, 28, 28, 0.10); pointer-events: none; }
@@ -146,10 +148,12 @@ function photoAppendix(jobs: JobWithPhotos[], defects: DefectWithPhotos[], asset
   const name = (id: string) => assets.find((a) => a.id === id)?.name ?? 'Anlage';
   const blocks: string[] = [];
   for (const j of jobs) {
-    const photos = (j.photo_urls ?? []).map(imgSrc).filter(Boolean);
+    // Beschriftung je Foto (photo_tags, gleicher Index) wie im App-PDF — erst zuordnen, dann ungültige Bilder aussortieren
+    const tags = Array.isArray(j.photo_tags) ? j.photo_tags : [];
+    const photos = (j.photo_urls ?? []).map((u, i) => ({ src: imgSrc(u), tag: typeof tags[i] === 'string' ? tags[i].trim() : '' })).filter((x) => x.src);
     if (!photos.length) continue;
     blocks.push(`<div class="photo-block"><div class="photo-head">${fmtDateTime(j.started_at)} — ${esc(name(j.item_id))}, ${esc(jobInfo(j.type).label)}${j.canceled ? ' (storniert)' : ''}</div>
-      ${photos.map((u) => `<img src="${u}" alt=""/>`).join('')}</div>`);
+      ${photos.map((x) => (x.tag ? `<figure><img src="${x.src}" alt="${esc(x.tag)}"/><figcaption>${esc(x.tag)}</figcaption></figure>` : `<img src="${x.src}" alt=""/>`)).join('')}</div>`);
   }
   for (const d of defects) {
     const photos = [...(d.photo_urls ?? []), ...(d.resolution_photo_urls ?? [])].map(imgSrc).filter(Boolean);

@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { LoadGuard, useAsync } from '../../components/ui';
+import { LoadGuard, useAsync, useUnsavedGuard } from '../../components/ui';
 import { useInst } from '../context';
 import type { StoredProfile } from './api';
 import { errText } from './util';
@@ -42,8 +42,12 @@ function Form({ initial }: { initial: StoredProfile }) {
   const [travel, setTravel] = useState(centsToText(initial.travelFlatCents));
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // Ungespeicherte Änderungen nicht beim Wegklicken verlieren
+  const [dirty, setDirty] = useState(false);
+  useUnsavedGuard(dirty);
   const set = <K extends keyof StoredProfile>(k: K, v: StoredProfile[K]) => {
     setMsg(null);
+    setDirty(true);
     setP((x) => ({ ...x, [k]: v }));
   };
 
@@ -90,6 +94,7 @@ function Form({ initial }: { initial: StoredProfile }) {
       };
       const next = await ext.geld.saveProfile(org.id, org.land, org.name, patch);
       setP(next);
+      setDirty(false);
       setMsg({ ok: true, text: 'Gespeichert.' });
     } catch (e) {
       setMsg({ ok: false, text: `${errText(e)} (nur der Inhaber kann das ändern)` });
@@ -209,6 +214,7 @@ function Form({ initial }: { initial: StoredProfile }) {
           Stundensatz netto
           <input value={rate} inputMode="decimal" placeholder="78,00" onChange={(e) => {
               setMsg(null);
+              setDirty(true);
               setRate(e.target.value);
             }} />
         </label>
@@ -216,6 +222,7 @@ function Form({ initial }: { initial: StoredProfile }) {
           Anfahrt pauschal
           <input value={travel} inputMode="decimal" placeholder="35,00" onChange={(e) => {
               setMsg(null);
+              setDirty(true);
               setTravel(e.target.value);
             }} />
         </label>

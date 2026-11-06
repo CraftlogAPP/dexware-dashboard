@@ -126,9 +126,12 @@ export function Garantie() {
                                 <CalendarPlus className="i" aria-hidden /> Termin
                               </Link>
                             ) : (
-                              <Link className="btn ghost small" to={`${base}/rechnungen/neu?art=angebot&objekt=${encodeURIComponent(e.asset.site_id)}`}>
-                                <FileText className="i" aria-hidden /> Angebot
-                              </Link>
+                              // Angebote schreibt nur der Inhaber (Rechnungen & Angebote sind für Monteure gesperrt)
+                              isOwner && (
+                                <Link className="btn ghost small" to={`${base}/rechnungen/neu?art=angebot&objekt=${encodeURIComponent(e.asset.site_id)}`}>
+                                  <FileText className="i" aria-hidden /> Angebot
+                                </Link>
+                              )
                             )}
                             {/* Anlagen ändern darf nur der Inhaber (RLS item_update) */}
                             {isOwner && !e.asset.contract && (

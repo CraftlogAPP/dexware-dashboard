@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Download, FileUp, Upload } from 'lucide-react';
-import { LoadGuard, useAsync } from '../../components/ui';
+import { LoadGuard, useAsync, useUnsavedGuard } from '../../components/ui';
 import { downloadCsv } from '../csv';
 import { useInst } from '../context';
 import {
@@ -22,6 +22,9 @@ import {
   type PlanRow,
 } from '../importer';
 import { isProOrg, type Asset, type ItemKind, type Site } from '../types';
+
+/** „1 Objekt“ / „2 Objekte“ */
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_ROWS = 5000;
@@ -73,6 +76,10 @@ function ImportFlow({ sites, assets, onImported }: { sites: Site[]; assets: Asse
   const [sitesOnly, setSitesOnly] = useState(false);
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
+  useUnsavedGuard(
+    !!running,
+    'Der Import läuft noch. Trotzdem verlassen? Schon Angelegtes bleibt — die Datei einfach noch einmal importieren, Doppeltes wird übersprungen.',
+  );
   const [runError, setRunError] = useState<string | null>(null);
   const [result, setResult] = useState<{ sites: number; assets: number } | null>(null);
 
@@ -164,7 +171,7 @@ function ImportFlow({ sites, assets, onImported }: { sites: Site[]; assets: Asse
       setFile(null);
     } catch (e) {
       setRunError(
-        `${e instanceof Error ? e.message : String(e)} — bis dahin angelegt: ${sitesDone} Objekte, ${assetsDone} Anlagen. ` +
+        `${e instanceof Error ? e.message : String(e)} — bis dahin angelegt: ${plural(sitesDone, 'Objekt', 'Objekte')}, ${plural(assetsDone, 'Anlage', 'Anlagen')}. ` +
           'Datei einfach noch einmal importieren: schon Angelegtes wird erkannt und übersprungen.',
       );
     } finally {
@@ -336,21 +343,21 @@ function ImportFlow({ sites, assets, onImported }: { sites: Site[]; assets: Asse
           </div>
           <div className="idx-import-summary">
             <span>
-              <b>{plan.newSites.length}</b> neue Objekte
+              <b>{plan.newSites.length}</b> {plan.newSites.length === 1 ? 'neues Objekt' : 'neue Objekte'}
             </span>
             {plan.reusedSites > 0 && (
               <span>
-                <b>{plan.reusedSites}</b> bestehende Objekte ergänzt
+                <b>{plan.reusedSites}</b> {plan.reusedSites === 1 ? 'bestehendes Objekt' : 'bestehende Objekte'} ergänzt
               </span>
             )}
             {!sitesOnly && (
               <span>
-                <b>{plan.newAssets.length}</b> neue Anlagen
+                <b>{plan.newAssets.length}</b> {plan.newAssets.length === 1 ? 'neue Anlage' : 'neue Anlagen'}
               </span>
             )}
             {plan.skippedAssets > 0 && (
               <span>
-                <b>{plan.skippedAssets}</b> Anlagen gibt es schon (übersprungen)
+                <b>{plan.skippedAssets}</b> {plan.skippedAssets === 1 ? 'Anlage gibt' : 'Anlagen gibt'} es schon (übersprungen)
               </span>
             )}
             {plan.errorRows > 0 && (
@@ -386,7 +393,7 @@ function ImportFlow({ sites, assets, onImported }: { sites: Site[]; assets: Asse
             <button type="button" className="btn" onClick={() => void runImport()} disabled={!canImport}>
               <Upload className="i" aria-hidden />
               {running ??
-                `${plan.newSites.length} Objekte${sitesOnly ? '' : ` und ${plan.newAssets.length} Anlagen`} importieren`}
+                `${plural(plan.newSites.length, 'Objekt', 'Objekte')}${sitesOnly ? '' : ` und ${plural(plan.newAssets.length, 'Anlage', 'Anlagen')}`} importieren`}
             </button>
             {!running && usesAssets && unresolved.length > 0 && (
               <span className="small" style={{ color: '#fcd34d' }}>

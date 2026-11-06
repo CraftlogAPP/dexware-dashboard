@@ -27,7 +27,10 @@ export function periodRange(ref: Date, p: Period): { from: string; to: string; l
   return { from: `${y}-01-01`, to: `${y + 1}-01-01`, label: String(y) };
 }
 
-const de = (iso?: string) => (iso ? iso.slice(0, 10).split('-').reverse().join('.') : '');
+// Nur echte Daten JJJJ-MM-TT ausgeben, sonst leer — das Leistungsdatum stammt aus dem Entwurf (jsonb) und darf weder
+// Formel noch Semikolon in die Datei bringen. Ebenso der USt-Satz: nur als Zahl (Sicherheits-Nachtrag 06.11.).
+const de = (iso?: string) => (typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}/.test(iso) ? iso.slice(0, 10).split('-').reverse().join('.') : '');
+const pct = (n: unknown) => (Number.isFinite(Number(n)) ? String(Number(n)) : '0');
 /** Zeitstempel → lokaler Tag TT.MM.JJJJ (Zahlung um 23:30 zählt zum selben Tag) */
 const deTs = (iso?: string) => {
   if (!iso) return '';
@@ -67,7 +70,7 @@ export function invoiceBookCsv(rows: ExportRow[], from: string, to: string): str
       out.push([
         de(r.issuedAt), q(r.number), r.kind === 'credit' ? 'Stornorechnung' : r.data.partial ? 'Abschlagsrechnung' : 'Rechnung',
         q(r.data.recipient.name), q(r.data.recipient.uid ?? ''), de(r.data.serviceDateTo || r.data.serviceDate),
-        num(sign * g.baseCents), `${g.rate}`, num(sign * g.vatCents), num(sign * (g.baseCents + g.vatCents)),
+        num(sign * g.baseCents), pct(g.rate), num(sign * g.vatCents), num(sign * (g.baseCents + g.vatCents)),
         vatMode, r.kind === 'credit' ? 'Storno' : STATUS[r.status] ?? r.status, deTs(r.paidAt), q(r.data.cancels ?? ''),
       ].join(';'));
     }

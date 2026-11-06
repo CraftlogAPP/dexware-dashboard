@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { FileUp, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Modal } from '../../components/form';
-import { LoadGuard, useAsync } from '../../components/ui';
+import { LoadGuard, useAsync, useUnsavedGuard } from '../../components/ui';
 import { useInst } from '../context';
 import { planArticleImport, type Catalog, type StoredArticle, type StoredProfile } from './api';
 import { costCents, decodeBytes, DEFAULT_PRICING, parseArticles, parseMoney, saleCents, type Article, type ParseResult, type PricingRule } from './articles';
@@ -87,6 +87,8 @@ function Owner({
 
   const draftRule: PricingRule = { mode, discountPercent: pct(discText), markupPercent: pct(markText) };
   const ruleChanged = draftRule.mode !== saved.mode || draftRule.discountPercent !== saved.discountPercent || draftRule.markupPercent !== saved.markupPercent;
+  // Ungespeicherte Preisregel nicht beim Wegklicken verlieren
+  useUnsavedGuard(ruleChanged);
   const example = { priceCents: 10000, priceKind: 'list' as const };
 
   async function saveRule() {
@@ -208,13 +210,11 @@ function ImportSection({ suppliers, draftRule, onChanged }: { suppliers: Catalog
   const cancel = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Während des Imports nicht versehentlich wegklicken
-  useEffect(() => {
-    if (!progress) return;
-    const h = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener('beforeunload', h);
-    return () => window.removeEventListener('beforeunload', h);
-  }, [progress]);
+  // Während des Imports nicht versehentlich wegklicken (Neuladen und Links im Portal)
+  useUnsavedGuard(
+    !!progress,
+    'Der Import läuft noch. Trotzdem verlassen? Bis dahin übernommene Artikel bleiben, der Rest fehlt — erneut einlesen setzt fort.',
+  );
 
   function pick() {
     setMsg(null);

@@ -30,6 +30,8 @@ export interface InstOrg extends Org {
   maintenance_prices?: Record<string, number> | null;
   reminder_mail?: boolean | null;
   reminder_days?: number | null;
+  /** Link zu den Google-Bewertungen (https://…) — App: Bewertungs-Kreislauf nach sauberem Einsatz (B6) */
+  review_url?: string | null;
 }
 
 /** Wie Server und App (org_is_pro in diktat.sql): Pro nur bis plan_until — abgelaufen = Gratis. Die alte Spalte is_pro zählt nicht. */
@@ -330,6 +332,12 @@ const REFRIGERANTS: { id: string; gwp: number; fgas: boolean; annex2Share?: numb
   { id: 'R1234yf', gwp: 1, fgas: true, annex2Share: 1 },
 ];
 
+/** Kältemittel-Text („R 32“, „r-410a“) → Kennung wie in der App (R32, R410A …); unbekannte bleiben wie eingegeben. */
+export function refrigerantId(raw: string): string {
+  const t = raw.trim().toUpperCase().replace(/[\s-]/g, '');
+  return REFRIGERANTS.find((x) => x.id.toUpperCase() === t)?.id ?? raw.trim();
+}
+
 function refrigerantInfo(id?: string | null) {
   const t = (id ?? '').toUpperCase().replace(/\s/g, '');
   return REFRIGERANTS.find((x) => x.id.toUpperCase() === t);
@@ -568,6 +576,8 @@ export interface Site {
   reminder_confirm_sent_email?: string | null;
   reminder_confirm_sent_at?: string | null;
   reminder_unsub_email?: string | null;
+  /** Kundenportal „Mein Zuhause“ für die Kunden-E-Mail freigegeben (zuhause.sql) — nur mit E-Mail */
+  portal_enabled?: boolean | null;
 }
 
 export type ReminderState = 'confirmed' | 'pending' | 'queued' | 'unsubscribed' | 'none';
@@ -677,6 +687,8 @@ export interface Job {
 /** Einsatz inkl. Fotos + Unterschriften — nur für den Druck der Akte. */
 export interface JobWithPhotos extends Job {
   photo_urls: string[];
+  /** Beschriftung je Foto (gleicher Index wie photo_urls, foto-tags.sql), z. B. „Typenschild“ */
+  photo_tags?: string[] | null;
   signature: string | null;
   customer_signature: string | null;
   // GPS-Nachweis (gps-pruefnachweis.sql) — per withGpsProof ergänzt, fehlt bei älteren Datenbanken
@@ -839,6 +851,25 @@ export function warrantyLabel(w: WarrantyInfo): string | null {
   return w.active ? `Garantie bis ${fmtDay(w.until)}` : `Garantie abgelaufen (${fmtDay(w.until)})`;
 }
 
+/** Woher die Anfrage kam (service_request.source, helfer.sql/zuhause.sql) — wie die App (RequestsScreen). */
+export type RequestSource = 'pass' | 'reminder' | 'portal' | 'helper';
+
+/** „über …“-Text in der Anfrage; unbekannte Werte (neuere Datenbank) neutral. */
+export function requestSourceText(source: string | null | undefined): string {
+  switch (source) {
+    case 'reminder':
+      return 'die Wartungs-Erinnerung';
+    case 'portal':
+      return 'das Kundenportal „Mein Zuhause“';
+    case 'helper':
+      return 'den Installateur-Helfer (neuer Kunde)';
+    case 'pass':
+      return 'den QR-Anlagenpass';
+    default:
+      return 'eine Anfrage-Seite';
+  }
+}
+
 export const REQUEST_STATUS_LABELS: Record<RequestStatus, string> = {
   new: 'Neu',
   scheduled: 'Geplant',
@@ -859,7 +890,8 @@ export interface ServiceRequest {
   contact_phone: string | null;
   contact_email: string | null;
   preferred: string | null;
-  source: 'pass' | 'reminder';
+  /** pass = QR-Anlagenpass · reminder = Erinnerungsmail · portal = Kundenportal „Mein Zuhause“ · helper = Installateur-Helfer (neuer Kunde, ohne Objekt) */
+  source: RequestSource;
   status: RequestStatus;
   note: string | null;
   handled_by: string | null;

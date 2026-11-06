@@ -5,6 +5,7 @@
 // Beispieldaten: geld/demo.ts (nur über DemoArea geladen).
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRows } from '../fetchAll';
 import { articleNoOf, matchArticle, saleCents, type Article, type PricingRule } from './articles';
 import { defaultVatRate, totals, type InvoiceDraft, type InvoiceKind, type InvoiceProfile, type InvoiceLine, type Land, type MaterialLine } from './invoice';
 
@@ -73,7 +74,14 @@ export interface GeldData {
   inspection(id: string): Promise<InspectionForInvoice | null>;
   /** Neueste 500 Belege (wie die App) bzw. alle mit Belegdatum im Zeitraum [from, to). */
   invoices(range?: { from: string; to: string }): Promise<StoredInvoice[]>;
+  /**
+   * Für die Kacheln „offen / überfällig / bezahlt im Monat“: ALLE offenen Rechnungen und alle seit `paidSince` (ISO)
+   * bezahlten — vollständig, seitenweise (nicht nur aus den neuesten 500 Belegen der Liste).
+   */
+  tileInvoices(paidSince: string): Promise<StoredInvoice[]>;
   invoice(id: string): Promise<StoredInvoice | null>;
+  /** Stornorechnung zu einer stornierten Rechnung (cancels_id) — gezielt, nicht nur unter den neuesten 500 Belegen. */
+  creditFor(id: string): Promise<StoredInvoice | null>;
   /** Entwurf anlegen/ändern (nur Status „draft“, RLS invoice_insert/update). Liefert die ID. */
   saveDraft(input: DraftInput): Promise<string>;
   deleteDraft(id: string): Promise<void>;
@@ -367,7 +375,29 @@ export function supabaseGeld(sb: SupabaseClient): GeldData {
       }
       return out;
     },
+    async tileInvoices(paidSince) {
+      // fetchAllRows lädt bis zu einer LEEREN Seite — auch richtig, wenn max_rows im Projekt kleiner als 1.000 ist
+      const all = async (label: string, page: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string; code?: string } | null }>) => {
+        const { data, error } = await fetchAllRows<Row>(page);
+        if (error) dbError(label, error);
+        return data.map(fromRow);
+      };
+      const [open, paid] = await Promise.all([
+        all('Offene Rechnungen konnten nicht geladen werden', (a, b) =>
+          sb.from('invoice').select(LIST_COLS).eq('kind', 'invoice').eq('status', 'issued').order('due_at').order('id').range(a, b),
+        ),
+        all('Bezahlte Rechnungen konnten nicht geladen werden', (a, b) =>
+          sb.from('invoice').select(LIST_COLS).eq('kind', 'invoice').eq('status', 'paid').gte('paid_at', paidSince).order('paid_at', { ascending: false }).order('id').range(a, b),
+        ),
+      ]);
+      return [...open, ...paid];
+    },
     invoice: getInvoice,
+    async creditFor(id) {
+      const { data, error } = await sb.from('invoice').select(LIST_COLS).eq('kind', 'credit').eq('cancels_id', id).limit(1).maybeSingle();
+      if (error) dbError('Stornobeleg konnte nicht geladen werden', error);
+      return data ? fromRow(data as Row) : null;
+    },
     async saveDraft(inv) {
       const id = inv.id ?? crypto.randomUUID();
       const t = totals(inv.data);

@@ -32,6 +32,8 @@ export interface OrgSettingsInput {
   public_phone: string | null;
   public_email: string | null;
   website: string | null;
+  /** Link zu den Google-Bewertungen (https://…, anlagenpass.sql) */
+  review_url: string | null;
   maintenance_prices: Record<string, number>;
   reminder_mail: boolean;
   reminder_days: number;
@@ -46,6 +48,13 @@ export interface InstData {
   asset(id: string): Promise<Asset | null>;
   /** Letzte gültige Wartung/Inbetriebnahme je Anlage (asset_id → ISO-Zeitpunkt). */
   lastService(): Promise<Map<string, string>>;
+  /**
+   * Stand EINER Anlage aus vollständigen Server-Abfragen (nicht aus der gekappten Einsatzliste): letzte gültige
+   * Wartung/Inbetriebnahme, letzte Dichtheitskontrolle und Zahl der gültigen Einsätze.
+   */
+  assetStatus(assetId: string): Promise<{ lastService?: string; leak?: LeakInfo; validJobs: number }>;
+  /** Typenschild-Foto der Anlage (asset.photo_url) als anzeigbarer Link; null = keins. */
+  assetPhoto(assetId: string): Promise<string | null>;
   /** Letzte dokumentierte Dichtheitskontrolle je Anlage (F-Gas, measurements.leakResult nicht leer). */
   lastLeakCheck(): Promise<Map<string, LeakInfo>>;
   /** Nicht stornierte Einsätze ab einem Zeitpunkt (Kennzahl „diese Woche"). */
@@ -70,6 +79,8 @@ export interface InstData {
   saveOrgSettings(orgId: string, input: OrgSettingsInput): Promise<void>;
   reminders(limit: number): Promise<ReminderLog[]>;
   members(): Promise<Member[]>;
+  /** Kundenportal „Mein Zuhause“ je Objekt freigeben (nur Inhaber — RLS site_update; nur mit Kunden-E-Mail wie die App). */
+  setSitePortal(siteId: string, enabled: boolean): Promise<void>;
   /** CSV-Import (nur Inhaber — RLS site_insert/item_insert): neue Objekte bzw. Anlagen anlegen. */
   insertSites(rows: NewSite[]): Promise<void>;
   insertAssets(rows: NewAsset[]): Promise<void>;
@@ -84,6 +95,8 @@ export interface NewSite {
   operator_name: string | null;
   operator_contact: string | null;
   customer_email: string | null;
+  /** z. B. die Nachricht einer Helfer-Anfrage („Als Kunde anlegen“) */
+  notes?: string | null;
 }
 
 /** Neue Anlage aus dem Import. qr_token, retired, is_demo, created_at kommen per DB-Default. */
@@ -101,6 +114,12 @@ export interface NewAsset {
   interval_months: number | null;
   contract: boolean;
   contract_price: number | null;
+  // Kältekreis (F-Gas-Pflicht), Garantie, Leistung, Einbauort — optional, wie die Anlagendaten der App
+  power_kw?: string | null;
+  refrigerant?: string | null;
+  refrigerant_kg?: string | null;
+  warranty_until?: string | null;
+  location?: string | null;
 }
 
 // Spaltenlisten OHNE Base64-Spalten (Fotos, Unterschriften) — die nur im Druck laden!
@@ -120,6 +139,10 @@ const DEFECT_COLS =
 /** true, wenn die RPC (noch) nicht existiert — dann mit der Ersatzabfrage weiter. */
 const missingRpc = (e: { code?: string; message?: string } | null) =>
   !!e && (e.code === 'PGRST202' || /could not find the function|does not exist/i.test(e.message ?? ''));
+
+/** Server-Fehler „free_limit“ (Gratis-Grenze, haertung.sql) — gleicher Text wie die App (data/offline.ts). */
+export const FREE_LIMIT_MSG =
+  'Gratis-Tarif: höchstens 3 Anlagen in Betrieb. Mit InstallateurDex Pro sind es unbegrenzt viele — falls gerade gekauft: kurz warten und erneut importieren (Abo-Seite öffnen gleicht den Tarif ab).';
 
 /** Höchstzahl Einsätze bzw. Empfehlungen je gedruckter Akte (die neuesten) — Hinweis: akteLimitNote.ts */
 export const REPORT_JOB_LIMIT = 500;
@@ -220,6 +243,47 @@ export function supabaseData(sb: SupabaseClient): InstData {
       return map;
     },
 
+    async assetStatus(assetId) {
+      const [svc, leak, count] = await Promise.all([
+        sb
+          .from('inspection')
+          .select('started_at')
+          .eq('item_id', assetId)
+          .eq('canceled', false)
+          .in('type', SERVICE_TYPES)
+          .order('started_at', { ascending: false })
+          .limit(1),
+        // wie lastLeakCheck: Ergebnis eingetragen (Leerzeichen prüft der Client) — die jüngsten reichen
+        sb
+          .from('inspection')
+          .select('started_at, leak:measurements->>leakResult')
+          .eq('item_id', assetId)
+          .eq('canceled', false)
+          .not('measurements->>leakResult', 'is', null)
+          .neq('measurements->>leakResult', '')
+          .order('started_at', { ascending: false })
+          .limit(20),
+        sb.from('inspection').select('id', { count: 'exact', head: true }).eq('item_id', assetId).eq('canceled', false),
+      ]);
+      if (svc.error) fail('Wartungsstand konnte nicht geladen werden', svc.error);
+      if (leak.error) fail('Dichtheitskontrollen konnten nicht geladen werden', leak.error);
+      if (count.error) fail('Einsätze konnten nicht gezählt werden', count.error);
+      const l = ((leak.data ?? []) as { started_at: string; leak: string | null }[]).find((r) => String(r.leak ?? '').trim());
+      return {
+        lastService: (svc.data?.[0] as { started_at?: string } | undefined)?.started_at,
+        leak: l ? { at: l.started_at, open: isLeakFound(l.leak) } : undefined,
+        validJobs: count.count ?? 0,
+      };
+    },
+
+    async assetPhoto(assetId) {
+      const { data, error } = await sb.from('asset').select('photo_url').eq('id', assetId).maybeSingle();
+      if (error || !data) return null; // Anzeige-Komfort — nie die Seite blockieren
+      const signed = await signPhotos(sb, { photo_url: (data as { photo_url: string | null }).photo_url });
+      const u = signed.photo_url;
+      return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u) ? u : null;
+    },
+
     async lastLeakCheck() {
       // Wie leakInfoByItem in der App bzw. asset_leak_check in fgas.sql: nicht storniert, leakResult gefüllt;
       // mit Ergebnis der letzten Kontrolle („undicht" → Nachkontrolle nach 1 Monat).
@@ -295,20 +359,25 @@ export function supabaseData(sb: SupabaseClient): InstData {
     },
 
     async jobsForReport(filter) {
-      let q = sb
-        .from('inspection')
-        .select(`${JOB_COLS}, photo_urls, signature, customer_signature`)
-        // die NEUESTEN Einsätze (früher aufsteigend → es kamen die ältesten 500); Hinweis im Druck: akteLimitNote.ts
-        .order('started_at', { ascending: false })
-        .order('id', { ascending: false })
-        .limit(REPORT_JOB_LIMIT);
-      if (filter.siteId) q = q.eq('site_id', filter.siteId);
-      if (filter.itemId) q = q.eq('item_id', filter.itemId);
-      const { data, error } = await q;
+      const load = (cols: string) => {
+        let q = sb
+          .from('inspection')
+          .select(cols)
+          // die NEUESTEN Einsätze (früher aufsteigend → es kamen die ältesten 500); Hinweis im Druck: akteLimitNote.ts
+          .order('started_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(REPORT_JOB_LIMIT);
+        if (filter.siteId) q = q.eq('site_id', filter.siteId);
+        if (filter.itemId) q = q.eq('item_id', filter.itemId);
+        return q;
+      };
+      // photo_tags = Beschriftung je Foto (foto-tags.sql, wie das App-PDF); ältere Datenbank ohne Spalte → ohne weiter
+      let { data, error } = await load(`${JOB_COLS}, photo_urls, photo_tags, signature, customer_signature`);
+      if (error && /photo_tags/.test(error.message ?? '')) ({ data, error } = await load(`${JOB_COLS}, photo_urls, signature, customer_signature`));
       if (error) fail('Daten für die Akte konnten nicht geladen werden', error);
       // capPhotos erwartet aufsteigende Reihenfolge (behält die Fotos der jüngsten Einsätze)
       const rows = capPhotos(((data ?? []) as unknown as JobWithPhotos[]).reverse());
-      return (await withGpsProof(sb, 'inspection', await signPhotos(sb, rows))) as JobWithPhotos[];
+      return (await withGpsProof(sb, 'inspection', await signJobPhotos(sb, rows))) as JobWithPhotos[];
     },
 
     async defects(filter) {
@@ -422,6 +491,15 @@ export function supabaseData(sb: SupabaseClient): InstData {
       return fetchMembers(sb);
     },
 
+    async setSitePortal(siteId, enabled) {
+      // wie siteToRow in der App: Freigabe nur mit E-Mail (die Bedingung steht mit im Filter)
+      let q = sb.from('site').update({ portal_enabled: enabled }).eq('id', siteId);
+      if (enabled) q = q.not('customer_email', 'is', null).eq('is_demo', false);
+      const { data, error } = await q.select('id');
+      if (error) fail('Freigabe konnte nicht gespeichert werden', error);
+      if (!data?.length) throw new Error('Freigabe nicht gespeichert: nur der Inhaber kann das, und nur mit E-Mail des Kunden.');
+    },
+
     async insertSites(rows) {
       if (!rows.length) return;
       const { error } = await sb.from('site').insert(rows);
@@ -431,9 +509,28 @@ export function supabaseData(sb: SupabaseClient): InstData {
     async insertAssets(rows) {
       if (!rows.length) return;
       const { error } = await sb.from('asset').insert(rows);
+      // Gratis-Grenze am Server (haertung.sql asset_guard) — verständlich wie in der App
+      if (error && /free_limit/.test(`${error.message ?? ''} ${error.hint ?? ''}`)) throw new Error(FREE_LIMIT_MSG);
       if (error) fail('Anlagen konnten nicht angelegt werden', error);
     },
   };
+}
+
+/**
+ * Foto-Links signieren, OHNE die Zuordnung zu den Beschriftungen zu verlieren: signPhotos lässt nicht signierbare
+ * Fotos aus der Liste fallen — dann rutschten die photo_tags (gleicher Index) auf das falsche Foto. Deshalb je Foto
+ * einzeln (Feld photo_url bleibt als null stehen) und Foto + Beschriftung gemeinsam aussortieren.
+ */
+async function signJobPhotos(sb: SupabaseClient, rows: JobWithPhotos[]): Promise<JobWithPhotos[]> {
+  const flat = rows.flatMap((j) => (Array.isArray(j.photo_urls) ? j.photo_urls : []).map((u) => ({ photo_url: u })));
+  const signed = await signPhotos(sb, flat);
+  let k = 0;
+  return rows.map((j) => {
+    const urls = Array.isArray(j.photo_urls) ? j.photo_urls : [];
+    const tags = Array.isArray(j.photo_tags) ? j.photo_tags : null;
+    const pairs = urls.map((_, i) => ({ url: signed[k++]?.photo_url ?? null, tag: tags ? (tags[i] ?? '') : '' })).filter((x) => !!x.url);
+    return { ...j, photo_urls: pairs.map((x) => x.url as string), photo_tags: tags ? pairs.map((x) => x.tag) : null };
+  });
 }
 
 /** Fotos über alle Einsätze hinweg begrenzen (jüngste Einsätze zuerst) — der Bericht bleibt druckbar. */
@@ -444,7 +541,9 @@ function capPhotos(rows: JobWithPhotos[]): JobWithPhotos[] {
     const photos = Array.isArray(out[i].photo_urls) ? out[i].photo_urls : [];
     const keep = photos.slice(0, Math.max(0, left));
     left -= keep.length;
-    out[i] = { ...out[i], photo_urls: keep };
+    // Beschriftungen gehören per Index zu den Fotos → gleich weit kürzen
+    const tags = Array.isArray(out[i].photo_tags) ? (out[i].photo_tags as unknown[]).slice(0, keep.length).map((t) => (typeof t === 'string' ? t : '')) : null;
+    out[i] = { ...out[i], photo_urls: keep, photo_tags: tags };
   }
   return out;
 }

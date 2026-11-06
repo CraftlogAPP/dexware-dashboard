@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, fmtDateTime } from '../../lib/format';
@@ -8,7 +9,52 @@ import { buildDueRows, byDue } from '../portfolio';
 import { buildAkteHtml } from '../report';
 import { AkteLimitHinweis } from '../AkteLimitHinweis';
 import { akteLimitNote } from '../akteLimitNote';
-import { fmtEur, kindInfo, makerModel, reminderState } from '../types';
+import { fmtEur, kindInfo, makerModel, reminderState, type Site } from '../types';
+
+/**
+ * Kundenportal „Mein Zuhause“ (zuhause.sql) je Objekt freigeben — wie die App (SiteFormScreen): nur mit E-Mail des
+ * Kunden, nicht für Beispieldaten, nur der Inhaber (RLS site_update). Eine neue E-Mail setzt die Freigabe in der App
+ * zurück; hier wird die E-Mail nicht geändert.
+ */
+function PortalSwitch({ site, onChanged }: { site: Site; onChanged: () => void }) {
+  const { data, isOwner } = useInst();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const on = site.portal_enabled === true;
+  const email = (site.customer_email ?? '').trim();
+  if (!email) return <span className="muted">erst mit E-Mail des Kunden möglich (in der App beim Objekt)</span>;
+  if (site.is_demo) return <span className="muted">nicht bei Beispieldaten</span>;
+  if (!isOwner) return <span className={on ? '' : 'muted'}>{on ? `🏠 freigegeben für ${email}` : 'nicht freigegeben'}</span>;
+
+  async function toggle() {
+    setBusy(true);
+    setError(null);
+    try {
+      await data.setSitePortal(site.id, !on);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <label className="row" style={{ gap: 8, alignItems: 'flex-start', cursor: busy ? 'wait' : 'pointer' }}>
+        <input type="checkbox" checked={on} disabled={busy} onChange={() => void toggle()} style={{ marginTop: 3 }} />
+        <span>
+          {on ? <>🏠 freigegeben für <b>{email}</b></> : 'Kundenportal freigeben'}
+          <span className="small muted" style={{ display: 'block' }}>
+            Der Kunde meldet sich mit genau dieser E-Mail an (Code per Mail) und sieht Anlagen, Fristen, Einsätze und
+            Anfragen — ohne Unterschriften und Fotos. Den Zugang schickst du in der App beim Objekt.
+          </span>
+        </span>
+      </label>
+      {error && <div className="error-box small" style={{ marginTop: 6 }}>{error}</div>}
+    </>
+  );
+}
 
 export function SiteDetail() {
   const { id } = useParams<{ id: string }>();
@@ -204,6 +250,14 @@ export function SiteDetail() {
                           <span className="muted">keine E-Mail hinterlegt</span>
                         )}
                       </dd>
+                      {site.portal_enabled !== undefined && (
+                        <>
+                          <dt>Mein Zuhause</dt>
+                          <dd>
+                            <PortalSwitch site={site} onChanged={state.refresh} />
+                          </dd>
+                        </>
+                      )}
                       {site.notes && (
                         <>
                           <dt>Notizen</dt>

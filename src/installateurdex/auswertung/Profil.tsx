@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, Phone } from 'lucide-react';
-import { LoadGuard, useAsync } from '../../components/ui';
+import { LoadGuard, useAsync, useUnsavedGuard } from '../../components/ui';
 import { useInst } from '../context';
 import type { HelperListing } from './data';
 import './auswertung.css';
@@ -72,6 +72,14 @@ function ListingForm({ initial, onSaved }: { initial: HelperListing; onSaved: ()
     setOk(false);
     setL((cur) => ({ ...cur, ...p }));
   };
+  // Ungespeicherte Änderungen nicht beim Wegklicken verlieren
+  const tradesKey = (t: string[]) => [...t].sort().join(',');
+  const dirty =
+    l.zip.trim() !== saved.zip.trim() ||
+    l.city.trim() !== saved.city.trim() ||
+    l.blurb.trim() !== saved.blurb.trim() ||
+    tradesKey(l.trades) !== tradesKey(saved.trades);
+  useUnsavedGuard(dirty);
   const toggleTrade = (t: Trade) => set({ trades: l.trades.includes(t) ? l.trades.filter((x) => x !== t) : [...l.trades, t] });
 
   async function save(listed = l.listed) {
@@ -85,7 +93,7 @@ function ListingForm({ initial, onSaved }: { initial: HelperListing; onSaved: ()
     }
     if (listed && !l.hasContact) {
       setErr({
-        text: 'Kontakt fehlt: Damit Kunden dich erreichen, braucht es eine öffentliche Telefonnummer oder E-Mail (Einstellungen → Anlagenpass & Kunden).',
+        text: 'Kontakt fehlt: Damit Kunden dich erreichen, braucht es eine öffentliche Telefonnummer oder E-Mail (Einstellungen → Kontakt auf dem Anlagenpass).',
         settings: true,
       });
       return;

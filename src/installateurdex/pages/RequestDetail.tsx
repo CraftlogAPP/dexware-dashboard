@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { CalendarPlus } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { CalendarPlus, UserPlus } from 'lucide-react';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDateTime } from '../../lib/format';
 import { DueCell, RequestStatusBadge } from '../badges';
@@ -17,6 +17,8 @@ import {
   lastServiceFromJobs,
   makerModel,
   relTime,
+  requestSourceText,
+  validCustomerEmail,
   type RequestStatus,
   type ServiceRequest,
 } from '../types';
@@ -66,8 +68,7 @@ export function RequestDetail() {
                 </span>
               </div>
               <p className="muted" style={{ marginTop: 4 }}>
-                Eingegangen {relTime(r.created_at)} · {fmtDateTime(r.created_at)} · über{' '}
-                {r.source === 'reminder' ? 'die Erinnerungsmail' : 'den QR-Anlagenpass'}
+                Eingegangen {relTime(r.created_at)} · {fmtDateTime(r.created_at)} · über {requestSourceText(r.source)}
               </p>
               {r.kind === 'fault' && (
                 <div className="idx-fault-box">
@@ -156,11 +157,28 @@ export function RequestDetail() {
                           </>
                         )}
                       </dl>
-                    ) : (
+                    ) : site ? (
+                      <dl className="idx-dl">
+                        <dt>Objekt</dt>
+                        <dd>
+                          <Link to={`${base}/kunden/${site.id}`}>{site.name}</Link>
+                        </dd>
+                        <dt>Kunde</dt>
+                        <dd>{site.operator_name ?? '—'}</dd>
+                        <dt>Adresse</dt>
+                        <dd>{site.address || '—'}</dd>
+                        <dt>Kontakt (Objekt)</dt>
+                        <dd>
+                          <ContactValue value={site.operator_contact} />
+                        </dd>
+                      </dl>
+                    ) : r.asset_id || r.site_id ? (
                       <span className="muted">
-                        Die Anlage gibt es nicht mehr (gelöscht oder außer Betrieb genommen). Die Kontaktdaten der Anfrage
-                        bleiben erhalten.
+                        Die Anlage bzw. das Objekt gibt es nicht mehr (gelöscht oder außer Betrieb genommen). Die
+                        Kontaktdaten der Anfrage bleiben erhalten.
                       </span>
+                    ) : (
+                      <NewCustomer r={r} />
                     )}
                   </div>
                 </div>
@@ -185,6 +203,65 @@ export function RequestDetail() {
           );
         }}
       </LoadGuard>
+    </>
+  );
+}
+
+/**
+ * Anfrage ohne Objekt (Installateur-Helfer: neuer Kunde) — wie die App „＋ Als Kunde anlegen“: Objekt mit den
+ * Kontaktdaten der Anfrage anlegen (nur Inhaber, RLS site_insert), danach dort Adresse und Anlagen ergänzen.
+ */
+function NewCustomer({ r }: { r: ServiceRequest }) {
+  const { data, org, base, isOwner } = useInst();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const intro =
+    r.source === 'helper'
+      ? 'Neuer Kunde über den Installateur-Helfer — noch ohne Objekt in deinem Bestand.'
+      : 'Diese Anfrage hängt an keinem Objekt.';
+  if (!isOwner) return <span className="muted">{intro} Als Kunde anlegen kann ihn der Inhaber.</span>;
+
+  async function create() {
+    setBusy(true);
+    setError(null);
+    try {
+      const id = crypto.randomUUID();
+      const name = (r.contact_name ?? '').trim().slice(0, 120) || 'Neuer Kunde';
+      const email = (r.contact_email ?? '').trim();
+      await data.insertSites([
+        {
+          id,
+          org_id: org.id,
+          name,
+          address: '',
+          operator_name: r.contact_name?.trim() || null,
+          operator_contact: [r.contact_phone, r.contact_email].map((x) => (x ?? '').trim()).filter(Boolean).join(' · ') || null,
+          customer_email: email && validCustomerEmail(email) ? email : null,
+          notes: r.message?.trim() ? r.message.trim().slice(0, 1000) : null,
+        },
+      ]);
+      navigate(`${base}/kunden/${id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <p className="muted" style={{ marginTop: 0 }}>
+        {intro} Lege ihn als Kunden an — Name, Telefon, E-Mail und Nachricht werden übernommen, Adresse und Anlagen
+        ergänzt du danach.
+      </p>
+      <button type="button" className="btn small" onClick={() => void create()} disabled={busy}>
+        <UserPlus className="i" aria-hidden /> {busy ? 'Lege an …' : 'Als Kunde anlegen'}
+      </button>
+      {error && (
+        <div className="error-box" style={{ marginTop: 10 }}>
+          {error}
+        </div>
+      )}
     </>
   );
 }

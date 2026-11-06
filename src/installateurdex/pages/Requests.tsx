@@ -88,7 +88,9 @@ export function Requests() {
                 <div className="card empty">
                   {requests.length === 0
                     ? 'Noch keine Anfragen. Sobald ein Kunde über den QR-Anlagenpass eine Wartung anfragt oder eine Störung meldet, steht sie hier.'
-                    : `Keine Anfragen mit Status „${TAB_LABEL[tab]}".`}
+                    : tab === 'all'
+                      ? 'Keine Anfragen dieser Art.'
+                      : `Keine Anfragen mit Status „${TAB_LABEL[tab]}".`}
                 </div>
               ) : (
                 <div className="idx-req-list">

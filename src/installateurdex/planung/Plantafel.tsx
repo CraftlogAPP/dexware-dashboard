@@ -583,6 +583,10 @@ function ApptDialog({
   const close = () => {
     if (!busy) setDraft(() => null);
   };
+  // Startstand beim Öffnen merken: Chips (Was, Zeitfenster, Stand, Objekt) sind keine Eingabe-Ereignisse,
+  // deshalb vergleicht der Dialog selbst, ob sich etwas geändert hat (Rückfrage beim Schließen)
+  const [initial] = useState(() => JSON.stringify(draft));
+  const dirty = JSON.stringify(draft) !== initial;
 
   const site = draft.site_id ? sites.find((s) => s.id === draft.site_id) : undefined;
   const siteAssets = site ? assets.filter((a) => a.site_id === site.id && (!a.retired || a.id === draft.asset_id)) : [];
@@ -650,7 +654,7 @@ function ApptDialog({
 
   const title = !draft.id ? 'Neuer Termin' : canEdit ? 'Termin ändern' : 'Termin';
   return (
-    <Modal title={title} onClose={close}>
+    <Modal title={title} onClose={close} dirty={dirty}>
       <form
         className="pt-form"
         onSubmit={(ev) => {

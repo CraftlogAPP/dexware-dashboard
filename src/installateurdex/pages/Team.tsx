@@ -14,9 +14,7 @@ function DemoTeam() {
   const state = useAsync(() => data.members(), [data]);
   return (
     <>
-      <div className="section-head">
-        <h2>Team</h2>
-      </div>
+      <h1>Team</h1>
       <div className="info-box">
         Mit echtem Konto steht hier die Team-Verwaltung wie in allen Dashboards: Team-Code für neue Monteure, Mitglieder
         entfernen, Plätze laut Abo.

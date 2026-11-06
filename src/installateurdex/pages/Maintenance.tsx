@@ -6,7 +6,7 @@ import { toInputDate } from '../../lib/format';
 import { DueCell, LeakLine, WarrantyRiskBadge } from '../badges';
 import { downloadCsv, toCsv } from '../csv';
 import { useInst } from '../context';
-import { buildDueRows, byDue, type DueRow } from '../portfolio';
+import { buildDueRows, byDue, onlyDemo, type DueRow } from '../portfolio';
 import { DUE_BUCKET_LABELS, ITEM_KINDS, fmtDay, fmtEur, hasContractPrice, kindInfo, makerModel } from '../types';
 
 type Filter = 'due' | 'overdue' | 'd30' | 'd90' | 'never' | 'all';
@@ -52,12 +52,15 @@ const SORTS: Record<Sort, (a: DueRow, b: DueRow) => number> = {
 };
 
 export function Maintenance() {
-  const { data, org, base } = useInst();
+  const { data, org, base, isOwner } = useInst();
+  // Preise und Summen wie die Umsatzzahlen auf dem Start nur für den Inhaber.
+  const showPrices = isOwner;
   const [params, setParams] = useSearchParams();
   const filter = (FILTERS.some((f) => f.id === params.get('f')) ? params.get('f') : 'due') as Filter;
   const [kind, setKind] = useState('');
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<Sort>('due');
+  const [sortPick, setSort] = useState<Sort>('due');
+  const sort: Sort = !showPrices && sortPick === 'price' ? 'due' : sortPick;
   const [archived, setArchived] = useState(false);
   const [demoRows, setDemoRows] = useState(false);
 
@@ -94,8 +97,11 @@ export function Maintenance() {
   }
 
   const hasDemo = rows.some((r) => r.asset.is_demo);
+  // Gibt es nur Beispiel-Anlagen, rechnet der Start mit ihnen — dann hier auch zeigen (sonst führt die Kachel ins Leere).
+  const allDemo = onlyDemo(rows);
+  const showDemo = demoRows || allDemo;
   const base0 = rows.filter(
-    (r) => (archived || !r.archived) && (demoRows || !r.asset.is_demo) && (!onlyContract || r.asset.contract),
+    (r) => (archived || !r.archived) && (showDemo || !r.asset.is_demo) && (!onlyContract || r.asset.contract),
   );
   const q = query.trim().toLowerCase();
   const searched = base0.filter((r) => {
@@ -136,7 +142,10 @@ export function Maintenance() {
       r.archived ? 'archiviert' : DUE_BUCKET_LABELS[r.bucket],
       r.leak ? (r.leak.dueAt ? fmtDay(r.leak.dueAt) : 'noch keine dokumentiert') : '',
     ]);
-    downloadCsv(`Wartungsliste_${toInputDate(new Date())}.csv`, toCsv(header, body));
+    // Monteure: ohne Preisspalte (wie in der Liste)
+    const priceCol = header.indexOf('Preis');
+    const keep = <T,>(row: T[]) => (showPrices ? row : row.filter((_, i) => i !== priceCol));
+    downloadCsv(`Wartungsliste_${toInputDate(new Date())}.csv`, toCsv(keep(header), body.map(keep)));
   }
 
   return (
@@ -200,7 +209,7 @@ export function Maintenance() {
                     <option value="customer">Kunde</option>
                     <option value="site">Objekt</option>
                     <option value="kind">Anlagentyp</option>
-                    <option value="price">Preis (höchster zuerst)</option>
+                    {showPrices && <option value="price">Preis (höchster zuerst)</option>}
                   </select>
                 </label>
                 <label className="idx-check">
@@ -213,7 +222,13 @@ export function Maintenance() {
                 </label>
                 {hasDemo && (
                   <label className="idx-check">
-                    <input type="checkbox" checked={demoRows} onChange={(e) => setDemoRows(e.target.checked)} />
+                    <input
+                      type="checkbox"
+                      checked={showDemo}
+                      disabled={allDemo}
+                      title={allDemo ? 'Es gibt noch keine echten Anlagen — deshalb stehen die Beispiel-Anlagen hier.' : undefined}
+                      onChange={(e) => setDemoRows(e.target.checked)}
+                    />
                     Beispieldaten zeigen
                   </label>
                 )}
@@ -237,7 +252,7 @@ export function Maintenance() {
                           <th className="idx-hide-sm">Hersteller / Modell</th>
                           <th className="idx-hide-sm">Letzte Wartung</th>
                           <th>Vertrag</th>
-                          <th className="idx-num">Preis</th>
+                          {showPrices && <th className="idx-num">Preis</th>}
                           <th aria-label="Termin einplanen" />
                         </tr>
                       </thead>
@@ -290,10 +305,12 @@ export function Maintenance() {
                             <td className="muted wrap idx-hide-sm">{makerModel(r.asset) || '—'}</td>
                             <td className="muted idx-hide-sm">{r.last ? fmtDay(new Date(r.last)) : '—'}</td>
                             <td>{r.asset.contract ? <span className="badge green">🤝 Vertrag</span> : <span className="muted">—</span>}</td>
-                            <td className="idx-num">
-                              {r.price !== undefined ? fmtEur(r.price) : <span className="muted">—</span>}
-                              {hasContractPrice(r.asset) && <span className="idx-sub">laut Vertrag</span>}
-                            </td>
+                            {showPrices && (
+                              <td className="idx-num">
+                                {r.price !== undefined ? fmtEur(r.price) : <span className="muted">—</span>}
+                                {hasContractPrice(r.asset) && <span className="idx-sub">laut Vertrag</span>}
+                              </td>
+                            )}
                             <td>
                               {!r.asset.retired && (
                                 <Link
@@ -312,8 +329,14 @@ export function Maintenance() {
                     </table>
                   </div>
                   <p className="idx-sum">
-                    <b>{list.length}</b> {list.length === 1 ? 'Anlage' : 'Anlagen'} · Summe der Preise <b>{fmtEur(sum)}</b>
-                    {unpriced > 0 && (
+                    <b>{list.length}</b> {list.length === 1 ? 'Anlage' : 'Anlagen'}
+                    {showPrices && (
+                      <>
+                        {' '}
+                        · Summe der Preise <b>{fmtEur(sum)}</b>
+                      </>
+                    )}
+                    {showPrices && unpriced > 0 && (
                       <>
                         {' '}
                         · {unpriced} ohne Preis — <Link to={`${base}/einstellungen#preise`}>Preise eintragen</Link>

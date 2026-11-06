@@ -172,7 +172,10 @@ export function demoGeld(): GeldData {
           ? invoices.filter((x) => x.issuedAt && x.issuedAt >= range.from && x.issuedAt < range.to)
           : [...invoices].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
       ),
+    tileInvoices: (paidSince) =>
+      wait(invoices.filter((x) => x.kind === 'invoice' && (x.status === 'issued' || (x.status === 'paid' && !!x.paidAt && x.paidAt >= paidSince)))),
     invoice: (id) => wait(find(id) ?? null),
+    creditFor: (id) => wait(invoices.find((x) => x.kind === 'credit' && x.cancelsId === id) ?? null),
     async saveDraft(inv) {
       const id = inv.id ?? crypto.randomUUID();
       const prev = find(id);

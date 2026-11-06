@@ -7,10 +7,10 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Copy, FileCode2, Mail, Plus, Printer, Search, Trash2, X } from 'lucide-react';
 import { Modal } from '../../components/form';
-import { LoadGuard, useAsync } from '../../components/ui';
+import { LoadGuard, useAsync, useUnsavedGuard } from '../../components/ui';
 import { openReportWindow } from '../../lib/print';
 import { useInst } from '../context';
-import { isProOrg } from '../types';
+import { isProOrg, mailHref } from '../types';
 import { catalogPrices, learnPrices, type StoredArticle, type StoredInvoice, type StoredProfile } from './api';
 import { DEFAULT_PRICING, saleCents, toInvoiceLine, type PricingRule } from './articles';
 import {
@@ -42,7 +42,7 @@ interface Loaded {
 export function Beleg() {
   const { id } = useParams();
   const [sp] = useSearchParams();
-  const { ext, org, data } = useInst();
+  const { ext, org, data, base } = useInst();
   const geld = ext.geld;
   const kind: InvoiceKind = sp.get('art') === 'angebot' ? 'quote' : 'invoice';
   const siteParam = sp.get('objekt') ?? '';
@@ -89,7 +89,17 @@ export function Beleg() {
     };
   }, [geld, id, fromQuote, siteParam, inspParam, kind, org.id]);
 
-  return <LoadGuard state={loaded}>{(l) => <Editor key={id ?? `neu-${kind}-${siteParam}-${fromQuote}-${inspParam}`} initial={l} />}</LoadGuard>;
+  return (
+    <>
+      {/* Beleg nicht gefunden o. Ä.: auch dann zurück zur Liste (der Editor hat seinen eigenen Link) */}
+      {loaded.error && (
+        <Link className="idx-back" to={`${base}/rechnungen`}>
+          <ArrowLeft className="i" aria-hidden /> Alle Rechnungen &amp; Angebote
+        </Link>
+      )}
+      <LoadGuard state={loaded}>{(l) => <Editor key={id ?? `neu-${kind}-${siteParam}-${fromQuote}-${inspParam}`} initial={l} />}</LoadGuard>
+    </>
+  );
 }
 
 type Notice = { tone: 'ok' | 'error'; text: ReactNode } | null;
@@ -121,21 +131,14 @@ function Editor({ initial }: { initial: Loaded }) {
   const issues = editable ? validate(draft, profile) : [];
   const docProfile = (stored?.profile as StoredProfile | undefined) ?? profile;
 
-  // Nichts verlieren: ungespeicherte Änderungen beim Schließen/Neuladen ansprechen
-  useEffect(() => {
-    if (!dirty) return;
-    const h = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-    };
-    window.addEventListener('beforeunload', h);
-    return () => window.removeEventListener('beforeunload', h);
-  }, [dirty]);
+  // Nichts verlieren: ungespeicherte Änderungen beim Schließen/Neuladen UND bei Klicks auf Links im Portal ansprechen
+  useUnsavedGuard(dirty);
 
-  // Stornierte Rechnung ↔ Stornorechnung verlinken
+  // Stornierte Rechnung ↔ Stornorechnung verlinken — gezielt per ID bzw. cancels_id (nicht nur unter den neuesten 500)
   const related = useAsync(async () => {
     if (!stored || !(stored.status === 'canceled' || stored.kind === 'credit')) return null;
-    const list = await geld.invoices();
-    return stored.kind === 'credit' ? (list.find((x) => x.id === stored.cancelsId) ?? null) : (list.find((x) => x.kind === 'credit' && x.cancelsId === stored.id) ?? null);
+    if (stored.kind === 'credit') return stored.cancelsId ? await geld.invoice(stored.cancelsId) : null;
+    return geld.creditFor(stored.id);
   }, [geld, stored?.id, stored?.status]);
 
   // ---- Bearbeiten ----
@@ -300,8 +303,10 @@ function Editor({ initial }: { initial: Loaded }) {
     });
   const sendMail = () => {
     const m = reminder();
-    if (!m || !r.email) return;
-    window.location.href = `mailto:${r.email}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
+    // mailHref lässt nur schlichte Adressen zu — eine Eingabe wie „a@b.at?cc=…“ brächte sonst weitere Empfänger in die Mail
+    const href = m && r.email ? mailHref(r.email, m.subject, m.body) : null;
+    if (!href) return;
+    window.location.href = href;
     void recordReminder();
   };
   const copyReminder = async () => {
@@ -643,7 +648,7 @@ function Editor({ initial }: { initial: Loaded }) {
               </p>
               {remLevel < 3 ? (
                 <div className="row">
-                  {r.email && (
+                  {r.email && mailHref(r.email) && (
                     <button type="button" className="btn small" onClick={sendMail} disabled={!!busy}>
                       <Mail className="i" aria-hidden /> {REMINDER_LABELS[remLevel]} per E-Mail
                     </button>

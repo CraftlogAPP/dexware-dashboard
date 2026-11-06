@@ -578,6 +578,12 @@ export function createDemoStore(onOrgChange: (org: InstOrg) => void): DemoStore 
       return wait(map, 80);
     },
     lastLeakCheck: () => wait(leakInfoFromJobs(JOBS), 80),
+    assetStatus: (assetId) => {
+      const mine = JOBS.filter((j) => j.item_id === assetId);
+      const svc = mine.filter((j) => !j.canceled && SERVICE_TYPES.includes(j.type)).sort(byDateDesc)[0];
+      return wait({ lastService: svc?.started_at, leak: leakInfoFromJobs(mine).get(assetId), validJobs: mine.filter((j) => !j.canceled).length }, 60);
+    },
+    assetPhoto: () => wait(null, 40),
     jobsSince: (from) =>
       wait(
         JOBS.filter((j) => !j.canceled && j.started_at >= from.toISOString())
@@ -657,10 +663,16 @@ export function createDemoStore(onOrgChange: (org: InstOrg) => void): DemoStore 
     },
     reminders: (limit) => wait(REMINDERS.slice(0, limit)),
     members: () => wait(MEMBERS),
+    setSitePortal: async (siteId, enabled) => {
+      const s = SITES.find((x) => x.id === siteId);
+      if (!s || (enabled && !s.customer_email)) throw new Error('Freigabe nicht gespeichert: nur mit E-Mail des Kunden.');
+      s.portal_enabled = enabled;
+      await wait(null, 200);
+    },
     // Import: im Speicher anhängen (bis zum Neuladen der Seite), Defaults wie in der Datenbank.
     insertSites: async (rows) => {
       for (const r of rows) {
-        SITES.push({ ...r, lat: null, lng: null, notes: null, active: true, is_demo: false, created_at: new Date().toISOString(), reminder_opt_in: false });
+        SITES.push({ ...r, lat: null, lng: null, notes: r.notes ?? null, active: true, is_demo: false, created_at: new Date().toISOString(), reminder_opt_in: false });
       }
       await wait(null, 200);
     },
@@ -668,13 +680,14 @@ export function createDemoStore(onOrgChange: (org: InstOrg) => void): DemoStore 
       for (const r of rows) {
         ASSETS.push({
           ...r,
-          warranty_until: null,
           warranty_note: null,
           remote_service: null,
-          power_kw: null,
-          refrigerant: null,
-          refrigerant_kg: null,
-          location: null,
+          ...r,
+          warranty_until: r.warranty_until ?? null,
+          power_kw: r.power_kw ?? null,
+          refrigerant: r.refrigerant ?? null,
+          refrigerant_kg: r.refrigerant_kg ?? null,
+          location: r.location ?? null,
           qr_token: hex(ASSETS.length + 40),
           notes: null,
           retired: false,

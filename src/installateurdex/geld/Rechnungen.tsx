@@ -4,7 +4,7 @@
 // Unterseiten: neu, firmendaten, :id (Beleg.tsx, Firmendaten.tsx).
 
 import { useMemo, useState } from 'react';
-import { Link, Route, Routes, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
 import { Download, FilePlus2, FileText, Settings2 } from 'lucide-react';
 import { Modal } from '../../components/form';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
@@ -19,7 +19,7 @@ import { deDay, errText, isOverdue, kindLabel, localDay } from './util';
 import './geld.css';
 
 export function Rechnungen() {
-  const { isOwner } = useInst();
+  const { isOwner, base } = useInst();
   if (!isOwner) {
     return (
       <>
@@ -37,6 +37,8 @@ export function Rechnungen() {
       <Route path="neu" element={<Beleg />} />
       <Route path="firmendaten" element={<Firmendaten />} />
       <Route path=":id" element={<Beleg />} />
+      {/* unbekannte Unterpfade (z. B. /rechnungen/x/y) → zur Liste statt leerer Seite */}
+      <Route path="*" element={<Navigate to={`${base}/rechnungen`} replace />} />
     </Routes>
   );
 }
@@ -112,15 +114,21 @@ function Liste() {
   const [query, setQuery] = useState('');
   const [exportOpen, setExportOpen] = useState(false);
 
-  // Kacheln immer aus den neuesten 500 Belegen (wie die App), die Liste ggf. aus dem gewählten Zeitraum.
+  // Kacheln aus einer eigenen, vollständigen Abfrage (alle offenen + im Monat bezahlten Rechnungen) — die Liste aus den
+  // neuesten 500 Belegen bzw. dem gewählten Zeitraum. Früher kamen auch die Kacheln nur aus den neuesten 500.
   const latest = useAsync(() => geld.invoices(), [geld]);
+  const monthStart = (() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), 1).toISOString(); // lokaler Monatsbeginn als Zeitpunkt
+  })();
+  const tiles = useAsync(() => geld.tileInvoices(monthStart), [geld, monthStart]);
   const ranged = useAsync(async () => {
     if (zeitraum === 'latest') return null;
     const { ref, p } = periodOf(zeitraum);
     const { from, to } = periodRange(ref, p);
     return geld.invoices({ from, to });
   }, [geld, zeitraum]);
-  useLiveRefresh([latest.refresh, ranged.refresh], 60000);
+  useLiveRefresh([latest.refresh, ranged.refresh, tiles.refresh], 60000);
 
   function setParam(key: 'f' | 'z', value: string, def: string) {
     const next = new URLSearchParams(params);
@@ -131,7 +139,9 @@ function Liste() {
 
   const all = latest.data ?? [];
   const today = localDay();
-  const invoices = all.filter((x) => x.kind === 'invoice');
+  // Vollständige Kachel-Daten; solange sie laden (oder bei Fehler), wie bisher aus den neuesten 500
+  const tileSource = tiles.data ?? all;
+  const invoices = tileSource.filter((x) => x.kind === 'invoice');
   const open = invoices.filter((x) => x.status === 'issued');
   const overdue = open.filter((x) => isOverdue(x, today));
   const month = today.slice(0, 7);
@@ -139,12 +149,16 @@ function Liste() {
 
   const source = zeitraum === 'latest' ? latest : ranged;
   const rows = useMemo(() => {
-    const list = (zeitraum === 'latest' ? latest.data : ranged.data) ?? [];
+    // „Neueste“: dazu alle offenen/im Monat bezahlten aus der Kachel-Abfrage — ein Klick auf „offen“ zeigt dann auch
+    // ältere offene Rechnungen, die nicht unter den neuesten 500 sind (gleiche Zahl wie die Kachel).
+    const base = (zeitraum === 'latest' ? latest.data : ranged.data) ?? [];
+    const extra = zeitraum === 'latest' ? (tiles.data ?? []).filter((t) => !base.some((x) => x.id === t.id)) : [];
+    const list = extra.length ? [...base, ...extra].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) : base;
     const q = query.trim().toLowerCase();
     return q
       ? list.filter((x) => [x.number, x.data?.recipient?.name, x.data?.cancels].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
       : list;
-  }, [zeitraum, latest.data, ranged.data, query]);
+  }, [zeitraum, latest.data, ranged.data, tiles.data, query]);
   const shown = rows.filter((x) => matches(x, filter));
   // Summe: nur ausgestellte Rechnungen + Stornorechnungen (Angebote/Entwürfe zählen nicht; Storno hebt das Original auf)
   const booked = shown.filter((x) => (x.kind === 'invoice' || x.kind === 'credit') && x.status !== 'draft');

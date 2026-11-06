@@ -9,7 +9,7 @@
 
 import { toCsv } from './csv';
 import type { NewAsset, NewSite } from './data';
-import { ITEM_KINDS, kindInfo, kindPrefix, validCustomerEmail, type Asset, type ItemKind, type Site } from './types';
+import { ITEM_KINDS, kindInfo, kindPrefix, refrigerantId, validCustomerEmail, type Asset, type ItemKind, type Site } from './types';
 
 // ---------------------------------------------------------------------------
 // Datei lesen
@@ -97,7 +97,12 @@ export type FieldKey =
   | 'buildYear'
   | 'installDate'
   | 'interval'
-  | 'contract';
+  | 'contract'
+  | 'power'
+  | 'refrigerant'
+  | 'refrigerantKg'
+  | 'warrantyUntil'
+  | 'location';
 
 export interface FieldDef {
   key: FieldKey;
@@ -124,9 +129,26 @@ export const FIELDS: FieldDef[] = [
   { key: 'installDate', label: 'In Betrieb seit', hint: 'TT.MM.JJJJ', group: 'asset', synonyms: ['inbetriebseit', 'inbetriebnahme', 'inbetriebnahmedatum', 'ibn', 'installiert', 'einbaudatum', 'montagedatum', 'einbau'] },
   { key: 'interval', label: 'Intervall (Monate)', hint: 'leer: Standard des Anlagentyps', group: 'asset', synonyms: ['intervall', 'intervallmonate', 'wartungsintervall', 'monate', 'wartungsintervallmonate'] },
   { key: 'contract', label: 'Vertrag', hint: 'ja/nein oder Vertragspreis in €', group: 'asset', synonyms: ['vertrag', 'wartungsvertrag', 'wv', 'vertragspreis'] },
+  { key: 'power', label: 'Leistung (kW)', group: 'asset', synonyms: ['leistung', 'leistungkw', 'kw', 'nennleistung', 'heizleistung', 'kaelteleistung'] },
+  { key: 'refrigerant', label: 'Kältemittel', hint: 'z. B. R32 — für die Dichtheitskontrolle (F-Gas)', group: 'asset', synonyms: ['kaeltemittel', 'kaeltemitteltyp', 'refrigerant', 'kmittel'] },
+  { key: 'refrigerantKg', label: 'Füllmenge (kg)', hint: 'Kältemittel-Füllmenge', group: 'asset', synonyms: ['fuellmenge', 'fuellmengekg', 'kaeltemittelmenge', 'kaeltemittelkg', 'kg'] },
+  { key: 'warrantyUntil', label: 'Garantie bis', hint: 'TT.MM.JJJJ', group: 'asset', synonyms: ['garantie', 'garantiebis', 'garantieende', 'gewaehrleistungbis', 'garantieablauf'] },
+  { key: 'location', label: 'Einbauort', hint: 'z. B. Heizraum Keller', group: 'asset', synonyms: ['einbauort', 'aufstellort', 'aufstellungsort', 'montageort', 'raum'] },
 ];
 
 export type Mapping = Partial<Record<FieldKey, number>>;
+
+/** Spalten, die eine Anlage ausmachen (Zeile mit irgendeinem davon = Anlage) */
+const ASSET_FIELDS: FieldKey[] = ['assetNo', 'kind', 'manufacturer', 'model', 'serial', 'buildYear', 'installDate', 'interval', 'contract', 'power', 'refrigerant', 'refrigerantKg', 'warrantyUntil', 'location'];
+
+/** „7“, „7,5 kW“, „1,2 kg“ → Zahl als Text wie in der App („7,5“); '' → null; ungültig → undefined. */
+function parseAmount(raw: string, unit: RegExp, max: number): string | null | undefined {
+  const s = raw.trim().replace(unit, '').trim();
+  if (!s) return null;
+  if (!/^\d+([.,]\d{1,3})?$/.test(s)) return undefined;
+  const n = Number(s.replace(',', '.'));
+  return n > 0 && n < max ? s.replace('.', ',') : undefined;
+}
 
 /** Für Vergleiche: klein, Umlaute ausgeschrieben, ß → ss. */
 export function norm(s: string): string {
@@ -241,7 +263,8 @@ function validDate(y: number, m: number, d: number): string | null {
 }
 
 /** TT.MM.JJJJ · T.M.JJ · JJJJ-MM-TT · MM/JJJJ · JJJJ · Excel-Seriennummer → yyyy-mm-dd. */
-export function parseDate(raw: string, now = new Date()): { value: string | null; error?: string; note?: string } {
+/** `future`: Datum darf in der Zukunft liegen (Garantie bis) — zweistellige Jahre dann bis 30 Jahre voraus. */
+export function parseDate(raw: string, now = new Date(), future = false): { value: string | null; error?: string; note?: string } {
   const s = raw.trim();
   if (!s) return { value: null };
   let iso: string | null = null;
@@ -249,7 +272,7 @@ export function parseDate(raw: string, now = new Date()): { value: string | null
   let m: RegExpExecArray | null;
   if ((m = /^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})$/.exec(s))) {
     let y = Number(m[3]);
-    if (m[3].length === 2) y += y <= now.getFullYear() % 100 ? 2000 : 1900;
+    if (m[3].length === 2) y += y <= (now.getFullYear() % 100) + (future ? 30 : 0) ? 2000 : 1900;
     iso = validDate(y, Number(m[2]), Number(m[1]));
   } else if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T].*)?$/.exec(s))) {
     iso = validDate(Number(m[1]), Number(m[2]), Number(m[3]));
@@ -268,7 +291,7 @@ export function parseDate(raw: string, now = new Date()): { value: string | null
   const y = Number(iso.slice(0, 4));
   const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   if (y < 1950) return { value: null, error: `Datum „${s}" liegt zu weit zurück` };
-  if (iso > today) return { value: null, error: `Datum „${s}" liegt in der Zukunft` };
+  if (!future && iso > today) return { value: null, error: `Datum „${s}" liegt in der Zukunft` };
   return { value: iso, note };
 }
 
@@ -413,7 +436,7 @@ export function buildPlan(input: PlanInput): Plan {
     }
 
     // Anlage?
-    const assetCells = (['assetNo', 'kind', 'manufacturer', 'model', 'serial', 'buildYear', 'installDate', 'interval', 'contract'] as FieldKey[]).some(
+    const assetCells = (ASSET_FIELDS as FieldKey[]).some(
       (f) => get(row, f) !== '',
     );
     const wantAsset = assetCells && !input.sitesOnly;
@@ -422,6 +445,11 @@ export function buildPlan(input: PlanInput): Plan {
     let interval: number | null = null;
     let contract = { contract: false, price: null as number | null };
     let buildYear: string | null = null;
+    let power: string | null = null;
+    let refrigerant: string | null = null;
+    let refrigerantKg: string | null = null;
+    let warrantyUntil: string | null = null;
+    const location = get(row, 'location').slice(0, 80) || null;
     const serial = get(row, 'serial').slice(0, 80);
     if (wantAsset) {
       const kText = get(row, 'kind');
@@ -445,6 +473,21 @@ export function buildPlan(input: PlanInput): Plan {
       const c = parseContract(get(row, 'contract'));
       if (c.error) errors.push(c.error);
       else contract = c;
+      const pw = parseAmount(get(row, 'power'), /kw$/i, 10000);
+      if (pw === undefined) errors.push(`Leistung „${get(row, 'power')}" ungültig (Zahl in kW)`);
+      else power = pw;
+      const rf = get(row, 'refrigerant');
+      if (rf) refrigerant = refrigerantId(rf).slice(0, 20);
+      const kg = parseAmount(get(row, 'refrigerantKg'), /kg$/i, 10000);
+      if (kg === undefined) errors.push(`Füllmenge „${get(row, 'refrigerantKg')}" ungültig (Zahl in kg)`);
+      else refrigerantKg = kg;
+      if (refrigerantKg && !refrigerant) notes.push('Füllmenge ohne Kältemittel — für die Dichtheitskontrolle das Kältemittel ergänzen');
+      const w = parseDate(get(row, 'warrantyUntil'), new Date(), true);
+      if (w.error) errors.push(w.error.replace(/^Datum/, 'Garantie-Datum'));
+      else {
+        warrantyUntil = w.value;
+        if (w.note) notes.push(`Garantie bis: ${w.note}`);
+      }
     }
 
     const key = siteKey(customer, address, siteName);
@@ -571,6 +614,11 @@ export function buildPlan(input: PlanInput): Plan {
       interval_months: interval,
       contract: contract.contract,
       contract_price: contract.contract ? contract.price : null,
+      power_kw: power,
+      refrigerant,
+      refrigerant_kg: refrigerantKg,
+      warranty_until: warrantyUntil,
+      location,
     });
     out.push(plan);
   });
@@ -597,7 +645,7 @@ export function kindValues(rows: string[][], hasHeader: boolean, mapping: Mappin
   const i = mapping.kind;
   const data = hasHeader ? rows.slice(1) : rows;
   const counts = new Map<string, number>();
-  const assetCols: FieldKey[] = ['assetNo', 'kind', 'manufacturer', 'model', 'serial', 'buildYear', 'installDate', 'interval', 'contract'];
+  const assetCols: FieldKey[] = ASSET_FIELDS;
   for (const r of data) {
     // nur Zeilen mit Anlage
     if (!assetCols.some((f) => mapping[f] !== undefined && (r[mapping[f]!] ?? '').trim() !== '')) continue;
@@ -612,11 +660,11 @@ export function kindValues(rows: string[][], hasHeader: boolean, mapping: Mappin
 /** Muster-CSV (Semikolon, UTF-8 mit BOM) — die Überschriften erkennt der Import von selbst. */
 export function sampleCsv(): string {
   return toCsv(
-    ['Kunde', 'Objekt', 'Straße', 'PLZ', 'Ort', 'Telefon', 'E-Mail', 'Anlagen-Nr.', 'Typ', 'Hersteller', 'Modell', 'Seriennr.', 'Baujahr', 'In Betrieb seit', 'Intervall (Monate)', 'Vertrag'],
+    ['Kunde', 'Objekt', 'Straße', 'PLZ', 'Ort', 'Telefon', 'E-Mail', 'Anlagen-Nr.', 'Typ', 'Hersteller', 'Modell', 'Seriennr.', 'Baujahr', 'In Betrieb seit', 'Intervall (Monate)', 'Vertrag', 'Leistung (kW)', 'Kältemittel', 'Füllmenge (kg)', 'Garantie bis', 'Einbauort'],
     [
-      ['Familie Muster', 'EFH Muster', 'Musterweg 1', '7000', 'Musterstadt', '0660 0000000', 'muster@example.com', 'WP-001', 'Luft/Wasser-Wärmepumpe', 'Musterwerk', 'AirHeat 9', 'MW-123', '2023', '15.04.2023', '12', 'ja'],
-      ['Familie Muster', 'EFH Muster', 'Musterweg 1', '7000', 'Musterstadt', '', '', '', 'Warmwasserspeicher', 'Musterwerk', 'Speicher 300 l', '', '2015', '', '24', 'nein'],
-      ['Hausverwaltung Beispiel', 'Wohnanlage Beispielgasse 5', 'Beispielgasse 5', '7100', 'Beispielort', '', 'verwaltung@example.com', 'GT-001', 'Gastherme', 'Musterwerk', 'Condens 35', 'MW-C35-1', '2016', '01.10.2016', '12', '190'],
+      ['Familie Muster', 'EFH Muster', 'Musterweg 1', '7000', 'Musterstadt', '0660 0000000', 'muster@example.com', 'WP-001', 'Luft/Wasser-Wärmepumpe', 'Musterwerk', 'AirHeat 9', 'MW-123', '2023', '15.04.2023', '12', 'ja', '9', 'R32', '1,8', '15.04.2028', 'Garten Nordseite'],
+      ['Familie Muster', 'EFH Muster', 'Musterweg 1', '7000', 'Musterstadt', '', '', '', 'Warmwasserspeicher', 'Musterwerk', 'Speicher 300 l', '', '2015', '', '24', 'nein', '', '', '', '', 'Heizraum'],
+      ['Hausverwaltung Beispiel', 'Wohnanlage Beispielgasse 5', 'Beispielgasse 5', '7100', 'Beispielort', '', 'verwaltung@example.com', 'GT-001', 'Gastherme', 'Musterwerk', 'Condens 35', 'MW-C35-1', '2016', '01.10.2016', '12', '190', '35', '', '', '', 'Heizraum Keller'],
     ],
   );
 }

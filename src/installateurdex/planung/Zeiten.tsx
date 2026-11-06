@@ -94,13 +94,13 @@ export function Zeiten() {
           // Monteur: nur eigene (RLS liefert ohnehin nur diese — hier zusätzlich, auch für die Beispieldaten)
           const visible = isOwner ? all : all.filter((e) => e.user_id === me);
           const memberOf = (id: string) => team.find((m) => m.userId === id);
-          const nameOf = (e: TimeEntry) => e.user_name?.trim() || memberOf(e.user_id)?.name || 'Ohne Namen';
+          // Wer es war, kommt aus der Mitgliederliste (user_id → Konto). Der Freitext user_name stammt vom Handy und ist
+          // frei wählbar — nur Rückfall für ehemalige Mitglieder, sonst könnte jemand Zeiten unter fremdem Namen führen.
+          const nameOf = (e: TimeEntry) => memberOf(e.user_id)?.name || e.user_name?.trim() || 'Ohne Namen';
           // Personen im Monat: Team-Reihenfolge, dann ehemalige mit Einträgen
           const people: { id: string; name: string; color?: string; m?: PlanMember }[] = [];
-          // Name wie App-Teamansicht: in der App hinterlegter Name (user_name), sonst aus der E-Mail
-          const appName = (id: string) => visible.find((e) => e.user_id === id && e.user_name?.trim())?.user_name?.trim();
           for (const m of team)
-            if (isOwner || m.userId === me) people.push({ id: m.userId, name: appName(m.userId) ?? m.name, color: m.color, m });
+            if (isOwner || m.userId === me) people.push({ id: m.userId, name: m.name, color: m.color, m });
           for (const e of visible)
             if (!people.some((p) => p.id === e.user_id)) people.push({ id: e.user_id, name: `${nameOf(e)} (ehemalig)` });
           const shown = person === 'all' ? visible : visible.filter((e) => e.user_id === person);
@@ -148,7 +148,9 @@ export function Zeiten() {
 
           const canEdit = () => isOwner;
           const canDelete = (e: TimeEntry) =>
-            !!me && e.user_id === me && Date.now() - Date.parse(e.created_at) < OWN_DELETE_HOURS * 3600_000;
+            !!me && e.user_id === me && Date.now() - Date.parse(e.created_at) < OWN_DELETE_HOURS * 3600_000 &&
+            // vom Inhaber korrigiert → nicht mehr selbst löschbar (RLS time_delete, zeit.sql)
+            (!e.edited_by || e.edited_by === e.user_id);
 
           return (
             <>
@@ -438,6 +440,14 @@ function EditDialog({
   const [confirmDel, setConfirmDel] = useState(false);
   const set = (p: Partial<Edit>) => setEdit((x) => (x ? { ...x, ...p } : x));
   const running = !edit.entry.ended_at;
+  // Geändert gegenüber dem Eintrag? (Art-Chips sind keine Eingabe-Ereignisse — deshalb ausdrücklich vergleichen)
+  const e0 = edit.entry;
+  const changed =
+    edit.kind !== e0.kind ||
+    edit.day !== dayOf(e0.started_at) ||
+    edit.start !== hhmm(e0.started_at) ||
+    edit.end !== (e0.ended_at ? hhmm(e0.ended_at) : '') ||
+    edit.note !== (e0.note ?? '');
   const close = () => {
     if (!busy) setEdit(null);
   };
@@ -448,13 +458,16 @@ function EditDialog({
     const s = parseHm(edit.start);
     const en = edit.end.trim() ? parseHm(edit.end) : null;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(edit.day) || !s || (edit.end.trim() && !en)) return setError('Bitte prüfen: Tag auswählen, Zeiten als HH:MM.');
+    if (en && en[0] === s[0] && en[1] === s[1]) return setError('Beginn und Ende sind gleich — bitte das Ende prüfen.');
     const start = atLocal(edit.day, s);
     let end = en ? atLocal(edit.day, en) : null;
     if (end && end <= start) {
-      // über Mitternacht (lokal, Sommerzeit-sicher)
+      // über Mitternacht (lokal, Sommerzeit-sicher) — nur nach Rückfrage, sonst würde ein Tippfehler (08:05–07:35)
+      // still als 23,5-Stunden-Eintrag gespeichert
       const next = parseDay(edit.day);
       next.setDate(next.getDate() + 1);
       end = atLocal(dayKey(next), en!);
+      if (!window.confirm(`Das Ende (${edit.end}) liegt vor dem Beginn (${edit.start}). Als Eintrag über Mitternacht speichern (${hm(Math.round((end.getTime() - start.getTime()) / 60000))})?`)) return;
     }
     if (!end && !running) return setError('Bitte das Ende eintragen.');
     if (end && end.getTime() - start.getTime() > MAX_ENTRY_MS) return setError('Ein Eintrag darf höchstens 24 Stunden dauern.');
@@ -483,7 +496,7 @@ function EditDialog({
   }
 
   return (
-    <Modal title={`Zeit korrigieren · ${who}`} onClose={close}>
+    <Modal title={`Zeit korrigieren · ${who}`} onClose={close} dirty={changed}>
       <form
         className="pt-form"
         onSubmit={(ev) => {
