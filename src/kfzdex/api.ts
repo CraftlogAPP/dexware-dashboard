@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fail, type OrgContextData } from '../lib/orgApi';
+import { fetchAllOf } from '../lib/completeQueries';
 import type {
   Driver,
   LicenseCheck,
@@ -50,18 +51,15 @@ export async function fetchOrgMembers(sb: SupabaseClient): Promise<OrgMember[]> 
   return (data ?? []) as OrgMember[];
 }
 
+// Fahrzeuge/Fahrer vollständig (seitenweise): Übersicht und Fälligkeiten zählen sonst ab 1.000 still zu wenig.
 export async function fetchVehicles(sb: SupabaseClient): Promise<Vehicle[]> {
-  const { data, error } = await sb.from('vehicle').select('*').order('plate');
+  const { data, error } = await fetchAllOf<Vehicle>(() => sb.from('vehicle').select('*'), [['plate']]);
   if (error) fail('Fahrzeuge konnten nicht geladen werden', error);
   return (data ?? []) as Vehicle[];
 }
 
 export async function fetchDrivers(sb: SupabaseClient): Promise<Driver[]> {
-  const { data, error } = await sb
-    .from('driver')
-    .select('*')
-    .order('active', { ascending: false })
-    .order('name');
+  const { data, error } = await fetchAllOf<Driver>(() => sb.from('driver').select('*'), [['active', false], ['name']]);
   if (error) fail('Fahrer konnten nicht geladen werden', error);
   return (data ?? []) as Driver[];
 }
