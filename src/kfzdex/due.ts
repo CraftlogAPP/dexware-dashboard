@@ -1,6 +1,7 @@
 // Fristen-Engine — 1:1 aus der KfzDex-App portiert (src/lib/due.ts),
 // nur auf die DB-Zeilentypen (snake_case) umgestellt.
 
+import { addMonthsLocalISO, parseLocalDate } from '../lib/format';
 import type { Driver, Vehicle } from './types';
 
 /** UVV-Prüffrist nach DGUV Vorschrift 70: mindestens jährlich. */
@@ -11,10 +12,9 @@ export const SOON_DAYS = 30;
 
 export type DueStatus = 'ok' | 'soon' | 'overdue' | 'missing';
 
+/** Monate addieren, Monatsende gekappt: 31.08. + 6 Monate = 28./29.02. (nicht 03.03.) — wie die App (src/lib/due.ts). */
 function addMonths(iso: string, months: number): Date {
-  const d = new Date(iso + 'T00:00:00');
-  d.setMonth(d.getMonth() + months);
-  return d;
+  return parseLocalDate(addMonthsLocalISO(iso, months));
 }
 
 function daysUntil(due: Date, today: Date): number {
