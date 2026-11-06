@@ -40,6 +40,13 @@ export interface AppConfig {
   emoji: string;
 }
 
+// InstallateurDex: eigenes Projekt (Frankfurt) — gleiche Werte wie InstallateurDex/mobile/.env.
+const INSTALLATEURDEX_SUPABASE: SupabaseConfig = {
+  url: 'https://hqudwsxvjhdwfleboklz.supabase.co',
+  anonKey:
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxdWR3c3h2amhkd2ZsZWJva2x6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4ODgyMjQsImV4cCI6MjEwOTQ2NDIyNH0.p5SvVCHjeNGDITr4bZqUgeN9FUXo_YHZo0UVeSYKl0k',
+};
+
 export const APPS: AppConfig[] = [
   {
     id: 'craftdex',
@@ -275,6 +282,17 @@ export const APPS: AppConfig[] = [
       anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sdW9jZ2x1cnB5bWRoaHpmeGpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MDgyNzEsImV4cCI6MjA5OTE4NDI3MX0.1m1IfBeSDOy7vODufezJ2p0_RhL2iaFMSRrxZN2SCds',
     },
+  },
+  {
+    id: 'installateurdex',
+    name: 'InstallateurDex',
+    tagline: 'Wartungen, Anlagenpass & Kundenanfragen für Installateure (Heizung, Wärmepumpe, Klima, Sanitär)',
+    status: 'dashboard',
+    emoji: '🔧',
+    theme: { accent: '#D9822B', onAccent: '#14181D', bg: '#0F1216' },
+    landingUrl: 'https://installateurdex.dexware.app',
+    revenueCat: 'goog_DOFgenvUDvWqRvosCnrBsaEkUcG',
+    supabase: INSTALLATEURDEX_SUPABASE,
   },
   // TurnDex bleibt bewusst draußen: auf Eis gelegt (kein freies Supabase-Projekt
   // verfügbar), darf in keiner öffentlichen Fläche auftauchen.

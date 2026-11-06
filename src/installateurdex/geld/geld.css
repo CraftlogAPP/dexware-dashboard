@@ -1,0 +1,339 @@
+/* Geld-Bereich (Rechnungen, Material) — nur eigene Klassen mit Präfix idx-geld-, Grundbausteine aus index.css /
+   installateurdex.css. Alle Selektoren beginnen mit .idx-scope. */
+
+/* ---------- Kacheln (anklickbar) ---------- */
+.idx-scope .idx-geld-tiles {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 560px) {
+  .idx-scope .idx-geld-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.idx-scope button.kpi.idx-geld-tile {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.idx-scope button.kpi.idx-geld-tile:hover {
+  border-color: var(--border-strong);
+}
+.idx-scope button.kpi.idx-geld-tile.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.idx-scope .kpi.idx-geld-green .kpi-value {
+  color: #86efac;
+}
+.idx-scope td.idx-geld-strike {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.idx-scope .idx-geld-export {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+@media (max-width: 420px) {
+  .idx-scope .idx-geld-export {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Formular-Raster ---------- */
+.idx-scope .idx-geld-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+.idx-scope .idx-geld-form > * {
+  min-width: 0;
+}
+.idx-scope .idx-geld-wide {
+  grid-column: 1 / -1;
+}
+.idx-scope .idx-geld-form .idx-check {
+  margin-bottom: 10px;
+}
+@media (max-width: 560px) {
+  .idx-scope .idx-geld-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Beleg ---------- */
+.idx-scope .idx-geld-cardhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  margin-bottom: 8px;
+}
+.idx-scope .idx-geld-cardhead h3.idx-card-title {
+  margin: 0;
+}
+
+/* Positionszeile: Desktop eine Zeile, Handy zwei Zeilen */
+.idx-scope .idx-geld-line {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) 76px 76px 104px 104px 40px;
+  grid-template-areas: 'pos text qty unit price sum del';
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.idx-scope .idx-geld-line > * {
+  min-width: 0;
+}
+.idx-scope .idx-geld-line .pos {
+  grid-area: pos;
+  text-align: center;
+}
+.idx-scope .idx-geld-line .text {
+  grid-area: text;
+}
+.idx-scope .idx-geld-line .qty {
+  grid-area: qty;
+}
+.idx-scope .idx-geld-line .unit {
+  grid-area: unit;
+}
+.idx-scope .idx-geld-line .price {
+  grid-area: price;
+}
+.idx-scope .idx-geld-line .sum {
+  grid-area: sum;
+  text-align: right;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.idx-scope .idx-geld-line .del {
+  grid-area: del;
+  text-align: right;
+}
+.idx-scope .idx-geld-line .del .btn {
+  padding: 0 8px;
+}
+.idx-scope .idx-geld-line input {
+  margin-top: 0;
+  padding: 8px 10px;
+  font-size: 14.5px;
+}
+.idx-scope .idx-geld-line .qty input,
+.idx-scope .idx-geld-line .price input {
+  text-align: right;
+}
+.idx-scope .idx-geld-line.missing .price input {
+  border-color: rgba(245, 158, 11, 0.7);
+}
+.idx-scope .idx-geld-line .l {
+  display: none;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 3px;
+}
+.idx-scope .idx-geld-linehead {
+  padding: 0 0 4px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.idx-scope .idx-geld-linehead .qty,
+.idx-scope .idx-geld-linehead .price {
+  text-align: right;
+}
+/* Schmale Karte (Handy, aber auch die linke Spalte am Laptop): zwei Zeilen je Position, Bezeichnung volle Breite */
+.idx-scope .idx-geld-lines {
+  container-type: inline-size;
+}
+@container (max-width: 720px) {
+  .idx-scope .idx-geld-linehead {
+    display: none;
+  }
+  .idx-scope .idx-geld-line {
+    grid-template-columns: 26px repeat(4, minmax(0, 1fr)) 40px;
+    grid-template-areas:
+      'pos text text text text del'
+      '. qty unit price sum sum';
+    gap: 6px 8px;
+    padding: 10px 0;
+  }
+  .idx-scope .idx-geld-line .l {
+    display: block;
+  }
+  .idx-scope .idx-geld-line .sum {
+    align-self: end;
+    padding-bottom: 9px;
+  }
+}
+@container (max-width: 420px) {
+  .idx-scope .idx-geld-line {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-areas:
+      'text text text del'
+      'qty unit price sum';
+  }
+  .idx-scope .idx-geld-line .pos {
+    display: none;
+  }
+  .idx-scope .idx-geld-line .text .l {
+    display: none;
+  }
+}
+
+.idx-scope .idx-geld-total-value {
+  margin: 2px 0 4px;
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 760;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.idx-scope .idx-geld-total {
+  border-top: 4px solid var(--accent);
+}
+.idx-scope .idx-geld-total.paid {
+  border-top-color: #22c55e;
+}
+.idx-scope .idx-geld-total.canceled {
+  border-top-color: var(--red);
+}
+.idx-scope .idx-geld-total.canceled .idx-geld-total-value {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.idx-scope .idx-geld-check.warn {
+  border-color: rgba(245, 158, 11, 0.55);
+}
+.idx-scope .idx-geld-check.ok {
+  border-color: rgba(34, 197, 94, 0.5);
+}
+.idx-scope .idx-geld-check .idx-list {
+  margin: 6px 0 8px;
+  font-size: 14px;
+}
+.idx-scope .idx-geld-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.idx-scope .idx-geld-actions > .btn {
+  width: 100%;
+}
+.idx-scope .btn.idx-geld-danger {
+  color: #fca5a5;
+}
+.idx-scope .btn.idx-geld-danger-solid {
+  background: var(--red);
+  color: #fff;
+  box-shadow: none;
+}
+.idx-scope .idx-geld-cancel {
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+/* Artikelauswahl */
+.idx-scope .idx-geld-picklist {
+  max-height: min(52vh, 460px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.idx-scope .idx-geld-pick {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.idx-scope .idx-geld-pick:hover {
+  border-color: var(--accent);
+}
+.idx-scope .idx-geld-pick .n {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.idx-scope .idx-geld-pick .p {
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ---------- Material ---------- */
+.idx-scope .idx-geld-progress {
+  height: 10px;
+  margin: 10px 0;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.idx-scope .idx-geld-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.3s ease-out;
+}
+.idx-scope .idx-geld-progress > span.full {
+  background: #22c55e;
+}
+.idx-scope .idx-geld-example {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+.idx-scope .idx-geld-accent {
+  color: var(--accent-text);
+}
+.idx-scope .idx-geld-sample {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+.idx-scope .idx-geld-sample-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 14px;
+}
+.idx-scope .idx-geld-sample-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.idx-scope .idx-geld-sample-row b {
+  white-space: nowrap;
+}

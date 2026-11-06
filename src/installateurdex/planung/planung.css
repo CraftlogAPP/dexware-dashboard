@@ -1,0 +1,462 @@
+/* Planung (Plantafel + Zeiten) — alle Selektoren unter .idx-scope. */
+
+/* ---------- Kopfleiste: Woche/Monat + Filter ---------- */
+.idx-scope .pt-toolbar {
+  margin: 14px 0 10px;
+}
+.idx-scope .pt-weeknav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.idx-scope .pt-weeklabel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 140px;
+  line-height: 1.25;
+}
+.idx-scope .pt-weeklabel .muted {
+  font-size: 12.5px;
+}
+.idx-scope .pt-spin {
+  width: 16px;
+  height: 16px;
+}
+.idx-scope .pt-filter {
+  margin: 10px 0 0;
+}
+.idx-scope .pt-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 6px;
+  flex: none;
+  vertical-align: 1px;
+}
+.idx-scope .pt-h3 {
+  margin: 22px 0 10px;
+  font-size: 13px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* ---------- Wochentafel (breit) ---------- */
+.idx-scope .pt-board-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.idx-scope .pt-board {
+  display: grid;
+}
+.idx-scope .pt-board > * {
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+.idx-scope .pt-corner,
+.idx-scope .pt-dayhead {
+  position: sticky;
+  top: 0;
+  background: color-mix(in oklab, var(--surface) 92%, #000);
+  z-index: 1;
+}
+.idx-scope .pt-dayhead {
+  display: flex;
+  flex-direction: column;
+  padding: 9px 10px;
+  font-size: 13.5px;
+}
+.idx-scope .pt-dayhead .muted {
+  font-size: 12px;
+}
+.idx-scope .pt-dayhead.today {
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+.idx-scope .pt-dayhead.today b {
+  color: var(--accent-text);
+}
+.idx-scope .pt-lanehead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  box-shadow: inset 4px 0 0 var(--lane, var(--muted));
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.idx-scope .pt-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  min-height: 74px;
+}
+.idx-scope .pt-cell.today {
+  background: color-mix(in oklab, var(--accent) 5%, transparent);
+}
+.idx-scope .pt-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  margin-top: auto;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.12s, border-color 0.12s, color 0.12s;
+}
+.idx-scope .pt-cell:hover .pt-add,
+.idx-scope .pt-add:focus-visible {
+  opacity: 1;
+}
+.idx-scope .pt-add:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.idx-scope .pt-add .i {
+  width: 15px;
+  height: 15px;
+}
+
+/* ---------- Terminkarte ---------- */
+.idx-scope .pt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  padding: 7px 9px 8px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--lane, var(--muted));
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.idx-scope button.pt-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-top-color: var(--border-strong);
+  border-right-color: var(--border-strong);
+  border-bottom-color: var(--border-strong);
+}
+.idx-scope .pt-card.done,
+.idx-scope .pt-card.canceled {
+  opacity: 0.62;
+}
+.idx-scope .pt-card.done .pt-time,
+.idx-scope .pt-card.done .pt-title,
+.idx-scope .pt-card.canceled .pt-title {
+  text-decoration: line-through;
+}
+.idx-scope .pt-card.req {
+  cursor: default;
+  border-style: dashed;
+  border-left-style: solid;
+}
+.idx-scope .pt-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.idx-scope .pt-time {
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.idx-scope .pt-title {
+  font-weight: 620;
+  overflow-wrap: anywhere;
+}
+.idx-scope .pt-sub {
+  color: var(--muted);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.idx-scope .pt-who {
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.idx-scope .pt-tag {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--muted);
+}
+.idx-scope .pt-tag.done {
+  color: #86efac;
+}
+.idx-scope .pt-tag.canceled {
+  color: #fca5a5;
+}
+.idx-scope .pt-clash {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 750;
+  color: #fca5a5;
+}
+.idx-scope .pt-clash .i {
+  width: 12px;
+  height: 12px;
+}
+.idx-scope .pt-card-acts {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.idx-scope .pt-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.idx-scope .pt-link:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Tagesansicht (schmal) ---------- */
+.idx-scope .pt-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.idx-scope .pt-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 7px 0 6px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.idx-scope .pt-pill .wd {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.idx-scope .pt-pill .num {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.idx-scope .pt-pill .dots {
+  display: flex;
+  gap: 3px;
+  height: 5px;
+}
+.idx-scope .pt-pill .dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.idx-scope .pt-pill.today {
+  border-color: var(--accent);
+}
+.idx-scope .pt-pill.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.idx-scope .pt-pill.on .wd {
+  color: var(--on-accent);
+}
+.idx-scope .pt-pill.on .dots i {
+  background: var(--on-accent);
+}
+.idx-scope .pt-daylist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.idx-scope .pt-daylist .pt-card {
+  font-size: 14px;
+  padding: 10px 12px;
+}
+.idx-scope .pt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+/* ---------- Dialoge ---------- */
+.idx-scope .pt-form fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.idx-scope .pt-form .field-like {
+  margin-bottom: 14px;
+}
+.idx-scope .pt-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.idx-scope .pt-picked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1.5px solid color-mix(in oklab, var(--accent) 60%, transparent);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+.idx-scope .pt-matches {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+}
+.idx-scope .pt-match {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.idx-scope .pt-match:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.idx-scope .pt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -6px 0 14px;
+}
+.idx-scope .pt-chip {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.idx-scope .pt-chip:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.idx-scope .pt-chip.on {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.idx-scope .field-like .pt-chips {
+  margin: 6px 0 0;
+}
+.idx-scope .pt-when {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+@media (max-width: 480px) {
+  .idx-scope .pt-when {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .idx-scope .pt-when > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+.idx-scope .pt-actions {
+  margin-top: 14px;
+  gap: 8px;
+}
+.idx-scope .pt-danger {
+  background: var(--red);
+  color: #fff;
+}
+.idx-scope .pt-danger-text {
+  color: #fca5a5;
+}
+.idx-scope .pt-form fieldset:disabled .pt-chip,
+.idx-scope .pt-form fieldset:disabled .pt-link {
+  cursor: not-allowed;
+}
+
+/* ---------- Zeiten-Tabellen ---------- */
+.idx-scope .pt-num {
+  text-align: right;
+}
+.idx-scope tr.pt-click {
+  cursor: pointer;
+}
+.idx-scope tr.pt-click:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+.idx-scope .pt-dayrow td {
+  background: rgba(255, 255, 255, 0.025);
+  white-space: normal;
+}
+.idx-scope .pt-dayrow-in {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+}
+.idx-scope .pt-daytotal {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.idx-scope .pt-hint {
+  display: block;
+  margin-top: 4px;
+  color: #fcd34d;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.idx-scope .pt-badge {
+  margin-left: 8px;
+}
+.idx-scope .pt-times td.wrap {
+  min-width: 160px;
+}
+@media (max-width: 560px) {
+  .idx-scope .pt-times th,
+  .idx-scope .pt-times td {
+    padding: 9px 10px;
+  }
+}

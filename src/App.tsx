@@ -52,6 +52,9 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   hebedex: lazy(() =>
     import('./hebedex/HebedexArea').then((m) => ({ default: m.HebedexArea })),
   ),
+  installateurdex: lazy(() =>
+    import('./installateurdex/InstallateurdexArea').then((m) => ({ default: m.InstallateurdexArea })),
+  ),
 };
 
 // Design-Vorschau mit Beispieldaten — nur im Dev-Server, fehlt im Produktions-Build.

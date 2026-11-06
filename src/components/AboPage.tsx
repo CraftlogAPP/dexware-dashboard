@@ -13,7 +13,7 @@ import { LoadGuard, useAsync } from './ui';
  * Kündigung. Käufe & Kündigungen laufen über Google Play — das Dashboard
  * zeigt an und verlinkt dorthin.
  */
-export function AboPage() {
+export function AboPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { app, session } = useAppAuth();
   const state = useAsync(
     () => loadAboInfo(app, session!),
@@ -23,7 +23,8 @@ export function AboPage() {
   return (
     <>
       <div className="section-head">
-        <h2>Abo &amp; Tarif</h2>
+        {/* embedded: unter dem Betriebs-Tarif (InstallateurDex) — hier nur das eigene Store-Abo */}
+        <h2>{embedded ? 'Dein Store-Abo' : <>Abo &amp; Tarif</>}</h2>
       </div>
       <LoadGuard state={state}>{(info) => <AboContent info={info} />}</LoadGuard>
     </>
@@ -149,6 +150,9 @@ function fmtDate(iso: string): string {
 
 /** Teamgrößen-Stufe aus der Produkt-ID (seit 03.11.2026: *_team_* bis 50, *_teamxl_* bis 100). */
 function tierLabel(productId: string): string {
+  // InstallateurDex: *_team3_* / *_team5_* / *_team10_* = bis 3/5/10 Monteure (Inhaber eingerechnet).
+  const n = /_team(\d+)_/i.exec(productId);
+  if (n) return `Team ${n[1]} · bis ${n[1]} Monteure · `;
   if (/teamxl/i.test(productId)) return 'Team XL · bis 100 Mitarbeiter · ';
   if (/_team_/i.test(productId)) return 'Team · bis 50 Mitarbeiter · ';
   if (/suite/i.test(productId)) return '';

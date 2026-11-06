@@ -1,0 +1,936 @@
+/* InstallateurDex-Betriebsportal — nur eigene Klassen (Präfix idx-), Grundbausteine aus index.css.
+   Markenzeichen: Verlauf Kupfer → Eisblau (Wärme aus Kälte). */
+
+.idx-scope {
+  --idx-copper: #d9822b;
+  --idx-ice: #3ba7e0;
+}
+
+/* ---------- Beispieldaten-Hinweis ---------- */
+.idx-demo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 9px 16px;
+  font-size: 13.5px;
+  color: #fde7cf;
+  background: color-mix(in oklab, var(--idx-copper) 16%, transparent);
+  border-bottom: 1px solid color-mix(in oklab, var(--idx-copper) 40%, transparent);
+}
+.idx-demo-banner b {
+  color: #fff;
+}
+.idx-demo-banner a {
+  color: #fde7cf;
+  text-decoration: underline;
+}
+
+/* ---------- Navigation: Zähler ---------- */
+.idx-nav-count {
+  margin-left: auto;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  color: var(--on-accent);
+  background: var(--accent);
+}
+@media (max-width: 760px) {
+  .idx-nav-count {
+    margin-left: 4px;
+  }
+}
+
+/* ---------- Start: Wartungspotenzial ---------- */
+.idx-hero {
+  position: relative;
+  margin: 18px 0 14px;
+  padding: 22px 24px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in oklab, var(--idx-copper) 45%, transparent);
+  background:
+    linear-gradient(120deg, color-mix(in oklab, var(--idx-copper) 22%, transparent), color-mix(in oklab, var(--idx-ice) 14%, transparent)),
+    var(--card);
+  overflow: hidden;
+}
+.idx-hero-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.idx-hero-value {
+  margin-top: 4px;
+  font-size: 46px;
+  line-height: 1.05;
+  font-weight: 760;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(90deg, #f3b06b, #8fd3f7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.idx-hero-sub {
+  margin-top: 6px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.idx-hero-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin-top: 12px;
+  font-size: 13.5px;
+}
+.idx-hero-split b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.idx-hero .btn {
+  margin-top: 14px;
+}
+@media (max-width: 760px) {
+  .idx-hero {
+    padding: 18px;
+  }
+  .idx-hero-value {
+    font-size: 38px;
+  }
+}
+
+/* KPI-Kachel als Link */
+a.kpi.idx-kpi-link {
+  display: block;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+a.kpi.idx-kpi-link:hover {
+  text-decoration: none;
+  border-color: var(--border-strong);
+}
+.kpi.idx-kpi-red .kpi-value {
+  color: #fca5a5;
+}
+.kpi.idx-kpi-amber .kpi-value {
+  color: #fcd34d;
+}
+.kpi.idx-kpi-accent .kpi-value {
+  color: var(--accent-text);
+}
+
+/* ---------- Filter-Reiter (Anfragen, Wartung) ---------- */
+.idx-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 14px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.idx-tabs button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font: 600 13.5px/1 inherit;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.idx-tabs button:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.idx-tabs button.on {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.idx-tabs .n {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+/* ---------- Anfragen ---------- */
+.idx-req-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+a.idx-req {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  background: var(--card);
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s;
+}
+a.idx-req:hover {
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.045);
+}
+a.idx-req.fault {
+  border-left-color: var(--red);
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.09), transparent 45%), var(--card);
+}
+a.idx-req.closed {
+  border-left-color: var(--border-strong);
+  opacity: 0.82;
+}
+.idx-req-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.idx-req.fault .idx-req-icon {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+.idx-req-icon .i {
+  width: 18px;
+  height: 18px;
+}
+.idx-req-main {
+  flex: 1;
+  min-width: 0;
+}
+.idx-req-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.idx-req-title {
+  font-weight: 650;
+}
+.idx-req-msg {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+.idx-req-meta {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.idx-req-side {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.idx-req-when {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.idx-req-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Vom Foto automatisch gelesen (KI) — gelb, „bitte prüfen" */
+.idx-ai-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 8px 0;
+  padding: 8px 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  background: rgba(250, 204, 21, 0.11);
+  color: #fde68a;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.idx-ai-note .i {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+.idx-ai-note b {
+  color: #fef3c7;
+}
+span.idx-ai-note {
+  margin: 6px 0 0;
+  padding: 4px 9px;
+}
+
+/* Foto vom Kunden (Detail) + groß */
+.idx-photo-btn {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: zoom-in;
+}
+.idx-photo-btn img {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+}
+.idx-photo-hint {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+}
+.idx-photo-hint .i {
+  width: 13px;
+  height: 13px;
+}
+.idx-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(2, 4, 10, 0.9);
+  animation: fade-in 0.15s ease both;
+}
+.idx-lightbox img {
+  max-width: 100%;
+  max-height: calc(100vh - 110px);
+  object-fit: contain;
+  border-radius: 10px;
+  background: #fff;
+}
+.idx-lightbox-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.idx-show-sm {
+  display: none;
+}
+@media (max-width: 560px) {
+  a.idx-req {
+    gap: 11px;
+    padding: 12px 13px;
+  }
+  .idx-req-when {
+    display: none;
+  }
+  .idx-req-thumb {
+    width: 48px;
+    height: 48px;
+  }
+  .idx-show-sm {
+    display: block;
+  }
+}
+
+/* Anfrage-Detail */
+.idx-fault-box {
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.09);
+  color: #fecaca;
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 10px 0;
+}
+.idx-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.idx-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.idx-contact .btn {
+  justify-content: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.idx-status-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 14px;
+}
+.idx-status-pick button {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font: 600 14px/1 inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+.idx-status-pick button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* ---------- Zwei Spalten (Detailseiten) ---------- */
+.idx-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.idx-cols > * {
+  min-width: 0;
+}
+@media (max-width: 960px) {
+  .idx-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.idx-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.card h3.idx-card-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* Stammdaten als Liste Label → Wert */
+.idx-dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 7px 16px;
+  margin: 0;
+  font-size: 14px;
+}
+.idx-dl dt {
+  color: var(--muted);
+}
+.idx-dl dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 420px) {
+  .idx-dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+  }
+  .idx-dl dd {
+    margin-bottom: 8px;
+  }
+}
+
+.idx-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.idx-head h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.idx-back {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+}
+
+/* ---------- Zeitstrahl (Anlagenakte) ---------- */
+.idx-timeline {
+  position: relative;
+  margin: 6px 0 0;
+  padding: 0 0 0 22px;
+  list-style: none;
+}
+.idx-timeline::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--idx-copper), var(--idx-ice));
+  opacity: 0.55;
+}
+.idx-tl-item {
+  position: relative;
+  margin-bottom: 14px;
+}
+.idx-tl-dot {
+  position: absolute;
+  left: -21px;
+  top: 16px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 45%, transparent);
+}
+.idx-tl-item.repair .idx-tl-dot {
+  background: var(--red);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
+}
+.idx-tl-item.canceled .idx-tl-dot {
+  background: var(--muted);
+  box-shadow: none;
+}
+.idx-tl-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 14px 16px;
+}
+.idx-tl-item.canceled .idx-tl-card {
+  opacity: 0.6;
+}
+.idx-tl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.idx-tl-date {
+  font-weight: 650;
+}
+.idx-tl-who {
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.idx-tl-section {
+  margin-top: 10px;
+  font-size: 14px;
+}
+.idx-tl-section > .lbl {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.idx-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.idx-reco {
+  border-left: 3px solid var(--amber);
+  background: rgba(245, 158, 11, 0.08);
+  padding: 8px 12px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.idx-storno {
+  color: #fca5a5;
+  font-weight: 650;
+  font-size: 13.5px;
+  margin-top: 6px;
+}
+
+/* Messwerte als Chips */
+.idx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.idx-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 13px;
+}
+.idx-chip .k {
+  color: var(--muted);
+}
+.idx-chip .v {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.idx-chip.odd {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.1);
+}
+.idx-chip.odd .v {
+  color: #fcd34d;
+}
+.idx-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.idx-list li {
+  margin: 2px 0;
+}
+
+/* Offene Empfehlungen */
+.idx-reco-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.idx-reco-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.idx-reco-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* ---------- Einstellungen ---------- */
+.idx-settings {
+  max-width: 820px;
+}
+.idx-price-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 4px 16px;
+}
+.idx-price-grid label.field {
+  margin-bottom: 10px;
+}
+.idx-euro {
+  position: relative;
+}
+.idx-euro input {
+  padding-right: 34px;
+}
+.idx-euro::after {
+  content: '€';
+  position: absolute;
+  right: 13px;
+  bottom: 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.idx-save-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 18px;
+  padding: 12px 0;
+  background: linear-gradient(180deg, transparent, var(--bg) 35%);
+}
+.idx-ok {
+  color: #86efac;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* ---------- Tabellen-Helfer ---------- */
+td.idx-num,
+th.idx-num {
+  text-align: right;
+}
+.idx-sub {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: normal;
+}
+@media (max-width: 760px) {
+  .idx-hide-sm {
+    display: none;
+  }
+}
+.idx-sum {
+  margin: 10px 2px 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.idx-sum b {
+  color: var(--text);
+}
+.idx-scope .filter-bar label.field {
+  margin-bottom: 0;
+}
+.idx-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.idx-check input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* Start: Wartungsverträge unter dem Potenzial */
+.idx-hero-contract {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in oklab, var(--idx-copper) 30%, transparent);
+  font-size: 14px;
+  color: var(--text);
+}
+.idx-hero-contract b {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Import ---------- */
+.idx-import {
+  max-width: 1100px;
+}
+.idx-map-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0 16px;
+}
+.idx-map-grid label.field {
+  margin-bottom: 12px;
+}
+.idx-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.idx-import-summary > span {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 13.5px;
+}
+.idx-import-summary b {
+  font-variant-numeric: tabular-nums;
+}
+.idx-import-summary .idx-import-err {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.09);
+  color: #fecaca;
+}
+tr.idx-row-err td {
+  background: rgba(239, 68, 68, 0.05);
+}
+.idx-import-done {
+  margin-top: 16px;
+  border-color: rgba(34, 197, 94, 0.4);
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.1), transparent 60%), var(--card);
+}
+
+/* Angebotsanfrage (quote) — grün abgesetzt */
+a.idx-req.quote {
+  border-left-color: var(--green);
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.08), transparent 45%), var(--card);
+}
+.idx-req.quote .idx-req-icon {
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+}
+.idx-quote-box {
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.09);
+  color: #bbf7d0;
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 10px 0;
+}
+
+/* ---------- Termine (Online-Terminwahl) ---------- */
+.idx-appt {
+  display: block;
+  margin: 6px 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.idx-appt.picked {
+  color: #86efac;
+}
+.idx-appt.proposed {
+  color: #fcd34d;
+}
+.idx-appt.expired {
+  color: #fca5a5;
+}
+.card > .idx-appt {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.idx-slot-list {
+  margin: 4px 0 10px;
+  padding-left: 18px;
+  font-size: 14px;
+}
+.idx-slot-list li {
+  margin: 3px 0;
+}
+.idx-slot-list li.chosen {
+  color: #86efac;
+}
+.idx-slot-list li.past {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.idx-link-box {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+}
+.idx-link-box input {
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.idx-slot-editor {
+  margin-top: 10px;
+}
+.idx-slot-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 10px;
+  padding: 10px 12px 4px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.idx-slot-row label.field {
+  margin-bottom: 8px;
+}
+.idx-slot-row input {
+  padding: 8px 10px;
+}
+.idx-slot-del {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  height: 28px;
+  padding: 0 8px;
+}
+.idx-slot-windows {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.idx-slot-windows button {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font: 600 12.5px/1 inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+.idx-slot-windows button.on {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+@media (max-width: 420px) {
+  .idx-slot-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .idx-slot-row label.field:first-child {
+    grid-column: 1 / -1;
+    padding-right: 34px;
+  }
+}
+
+/* Pflicht-Dichtheitskontrolle (F-Gas) — Zeile wie in der App */
+.idx-leak {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: normal;
+}
+.idx-leak.overdue {
+  color: #fca5a5;
+}
+.idx-leak.soon,
+.idx-leak.never {
+  color: #fcd34d;
+}
+
+/* Trenner in der Navigation (Arbeit · Geld & Auswertung · Verwaltung) */
+.idx-scope .app-nav .idx-nav-sep { display: block; height: 1px; margin: 8px 10px; background: var(--border); }
+@media (max-width: 760px) { .idx-scope .app-nav .idx-nav-sep { display: none; } }

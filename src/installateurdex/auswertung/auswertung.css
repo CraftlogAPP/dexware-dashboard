@@ -1,0 +1,419 @@
+/* Auswertungen + Öffentliches Profil (Bereich auswertung/) — nur eigene Klassen (aw-), alles unter .idx-scope. */
+
+.idx-scope .aw {
+  min-width: 0;
+}
+.idx-scope .aw-intro {
+  margin: -6px 0 0;
+}
+
+/* Reiter als Links (gleicher Look wie .idx-tabs) */
+.idx-scope .aw-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.idx-scope .aw-tabs a {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13.5px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.idx-scope .aw-tabs a:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.idx-scope .aw-tabs a.on {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+
+/* Kopf mit Ring (Garantie-Wächter) */
+.idx-scope .aw-hero {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.idx-scope .aw-ring {
+  position: relative;
+  flex: none;
+  width: 96px;
+  height: 96px;
+}
+.idx-scope .aw-ring svg {
+  display: block;
+}
+.idx-scope .aw-ring-bg {
+  stroke: rgba(255, 255, 255, 0.12);
+}
+.idx-scope .aw-ring-fg {
+  stroke: var(--idx-copper);
+  transition: stroke-dashoffset 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.idx-scope .aw-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1.15;
+}
+.idx-scope .aw-ring-center b {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) {
+  .idx-scope .aw-ring-fg {
+    transition: none;
+  }
+}
+
+/* Karten-Liste */
+.idx-scope .aw-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.idx-scope .aw-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  border-left: 4px solid var(--border-strong);
+}
+.idx-scope .aw-card.aw-tone-red {
+  border-left-color: var(--red);
+}
+.idx-scope .aw-card.aw-tone-amber {
+  border-left-color: var(--amber);
+}
+.idx-scope .aw-card.aw-tone-accent {
+  border-left-color: var(--idx-ice);
+}
+.idx-scope .aw-card.aw-done {
+  opacity: 0.65;
+}
+.idx-scope .aw-badge {
+  font-weight: 800;
+  font-size: 13px;
+}
+.idx-scope .aw-badge.aw-tone-red {
+  color: #fca5a5;
+}
+.idx-scope .aw-badge.aw-tone-amber {
+  color: #fcd34d;
+}
+.idx-scope .aw-badge.aw-tone-accent {
+  color: #93c5fd;
+}
+.idx-scope .aw-badge.aw-tone-muted {
+  color: var(--muted);
+}
+.idx-scope .aw-title {
+  font-weight: 700;
+  font-size: 15.5px;
+  overflow-wrap: anywhere;
+}
+.idx-scope .aw-sub {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.idx-scope .aw-reason {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+.idx-scope .aw-note {
+  margin: 0;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.idx-scope .aw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.idx-scope .aw-push {
+  margin-left: auto;
+}
+.idx-scope .aw-actions .idx-check {
+  height: 32px;
+  color: var(--muted);
+}
+.idx-scope .aw-actions .idx-check.aw-checked {
+  color: #86efac;
+}
+
+/* Radar: Alters-Kreis */
+.idx-scope .aw-radar-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.idx-scope .aw-age {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.05;
+}
+.idx-scope .aw-age b {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.idx-scope .aw-age span {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.idx-scope .aw-age.aw-tone-red {
+  border-color: var(--red);
+  color: #fca5a5;
+}
+.idx-scope .aw-age.aw-tone-amber {
+  border-color: var(--amber);
+  color: #fcd34d;
+}
+
+/* Kältemittel */
+.idx-scope .aw-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 4px 0 14px;
+}
+.idx-scope .aw-year {
+  width: 140px;
+  margin-bottom: 0;
+}
+.idx-scope .aw-week-text {
+  font-size: 20px;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+.idx-scope .aw-h {
+  margin: 20px 0 8px;
+  font-size: 16px;
+}
+.idx-scope .aw-leak-bad {
+  color: #fca5a5;
+  font-weight: 600;
+}
+
+/* Kundennachricht */
+.idx-scope .aw-msg {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.idx-scope .aw-msg-actions {
+  margin-top: 12px;
+}
+
+/* Öffentliches Profil */
+.idx-scope .aw-helper-title {
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.idx-scope .aw-switch-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.idx-scope .aw-switch {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 30px;
+  cursor: pointer;
+}
+.idx-scope .aw-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.idx-scope .aw-switch span {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--border-strong);
+  transition: background 0.15s;
+  pointer-events: none;
+}
+.idx-scope .aw-switch span::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+.idx-scope .aw-switch input:checked + span {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.idx-scope .aw-switch input:checked + span::after {
+  transform: translateX(22px);
+}
+.idx-scope .aw-switch input:focus-visible + span {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+.idx-scope .aw-switch input:disabled + span {
+  opacity: 0.6;
+}
+.idx-scope .aw-zip-row {
+  display: flex;
+  gap: 12px;
+}
+.idx-scope .aw-zip {
+  width: 110px;
+  flex: none;
+}
+.idx-scope .aw-label {
+  margin: 12px 0 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.idx-scope .aw-chips {
+  margin-bottom: 14px;
+}
+.idx-scope .aw-chip {
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.idx-scope .aw-chip.on {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.idx-scope .aw-warn {
+  color: #fcd34d;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.idx-scope .aw-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.idx-scope .aw-preview-name {
+  font-weight: 800;
+  font-size: 16px;
+}
+.idx-scope .aw-preview-text {
+  font-size: 15px;
+}
+.idx-scope .aw-preview-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.idx-scope .aw-pbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--idx-copper);
+  color: var(--idx-copper);
+  font-weight: 800;
+  font-size: 13.5px;
+}
+.idx-scope .aw-pbtn.on {
+  background: var(--idx-copper);
+  color: #fff;
+}
+.idx-scope .aw-pbtn .i {
+  width: 15px;
+  height: 15px;
+}
+
+@media (max-width: 560px) {
+  .idx-scope .aw-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .idx-scope .aw-helper-title {
+    font-size: 23px;
+  }
+  .idx-scope .aw-push {
+    margin-left: 0;
+  }
+}
+
+/* Anlagen-Seite: „So habt ihr das schon gelöst" */
+.idx-scope .aw-fix-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.idx-scope .aw-fix-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 10px;
+  border-left: 3px solid color-mix(in oklab, var(--green) 60%, transparent);
+  overflow-wrap: anywhere;
+}
+.idx-scope .aw-fix-text {
+  font-size: 14px;
+}
+.idx-scope .aw-fix-badge {
+  margin-left: 6px;
+}

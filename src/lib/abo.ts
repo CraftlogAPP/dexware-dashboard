@@ -160,10 +160,15 @@ export async function loadAboInfo(app: AppConfig, session: Session): Promise<Abo
     throw new Error('Abo-Status konnte nicht geladen werden — bitte später erneut versuchen.');
   }
 
-  const pro = better(
-    byUid ? toInfo(byUid, ENTITLEMENT_PRO) : null,
-    byDexId ? toInfo(byDexId, ENTITLEMENT_PRO) : null,
-  );
+  // Team-Stufen (InstallateurDex: team3/team5/team10) schalten Pro mit frei — wie isProActive() in der App,
+  // auch wenn ein Team-Produkt in RevenueCat nur am Team-Entitlement hängt.
+  const proOf = (sub: RcSubscriber | null) =>
+    sub
+      ? [ENTITLEMENT_PRO, ...Object.keys(sub.entitlements).filter((k) => /^team\d+$/.test(k))]
+          .map((k) => toInfo(sub, k))
+          .reduce<EntitlementInfo | null>((a, b) => better(a, b), null)
+      : null;
+  const pro = better(proOf(byUid), proOf(byDexId));
   const suite = better(
     byUid ? toInfo(byUid, ENTITLEMENT_SUITE) : null,
     byDexId ? toInfo(byDexId, ENTITLEMENT_SUITE) : null,
