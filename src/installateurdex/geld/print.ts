@@ -9,8 +9,10 @@ const DEFAULT_BRAND_COLOR = '#B5651D'; // wie App lib/branding.ts
 
 const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-const day = (iso?: string) => (iso ? iso.slice(0, 10).split('-').reverse().join('.') : '');
-const qty = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 3 });
+// Alles, was ins Druckfenster geht, wird maskiert — auch Zahlen/Daten (kommen aus jsonb, siehe api.ts normalizeDraft).
+const day = (iso?: string) => (iso ? esc(String(iso).slice(0, 10).split('-').reverse().join('.')) : '');
+const qty = (n: number) => esc(Number(n).toLocaleString('de-DE', { maximumFractionDigits: 3 }));
+const rate = (n: number) => esc(String(Number(n))); // wie App: Rohzahl (z. B. 8.1), aber garantiert eine Zahl
 const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /** wie App pdf/report.ts pdfFileName (ohne Endung — der Browser nimmt den Titel als Dateinamen) */
@@ -71,12 +73,12 @@ export function buildInvoiceHtml(doc: InvoiceDoc, branding: DocBranding): string
     .map(
       (l, i) =>
         `<tr><td class="pos">${i + 1}</td><td>${esc(l.text)}</td><td class="num">${qty(l.qty)} ${esc(l.unit)}</td><td class="num">${sgn(l.unitPriceCents)}</td>${
-          d.vatMode === 'normal' ? `<td class="num">${l.vatRate} %</td>` : ''
+          d.vatMode === 'normal' ? `<td class="num">${rate(l.vatRate)} %</td>` : ''
         }<td class="num">${sgn(lineNet(l))}</td></tr>`,
     )
     .join('');
   const vatRows =
-    d.vatMode === 'normal' ? t.byRate.map((g) => `<tr><td>zzgl. ${g.rate} % USt auf ${sgn(g.baseCents)}</td><td class="num">${sgn(g.vatCents)}</td></tr>`).join('') : '';
+    d.vatMode === 'normal' ? t.byRate.map((g) => `<tr><td>zzgl. ${rate(g.rate)} % USt auf ${sgn(g.baseCents)}</td><td class="num">${sgn(g.vatCents)}</td></tr>`).join('') : '';
   const sender = [p.legalName, p.street, `${p.zip} ${p.city}`].filter((x) => x?.trim()).map(esc).join(' · ');
   const name = fileBase(title, doc.number ?? 'Entwurf', r.name);
   // wie App shareInvoicePdf: EPC nur für ausgestellte Rechnungen (Nummer vorhanden), Betrag = zu zahlen

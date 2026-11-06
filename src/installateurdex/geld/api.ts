@@ -215,6 +215,58 @@ const LIST_COLS =
 type Row = Record<string, unknown>;
 const str = (v: unknown) => (v == null ? undefined : String(v));
 
+// invoice.data ist jsonb und kann per API mit beliebigem Inhalt geschrieben werden (z. B. von einem Teammitglied):
+// beim Laden auf echte Zahlen/Texte/Enums bringen, damit nichts Fremdes in Anzeige oder Druckfenster gelangt.
+const num = (v: unknown, fallback = 0) => {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : fallback;
+};
+const txt = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : typeof v === 'number' ? String(v) : '');
+const opt = (v: unknown) => (typeof v === 'string' ? v : undefined);
+const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
+  allowed.includes(v as T) ? (v as T) : fallback;
+const isoDay = (v: unknown) => (typeof v === 'string' && /^d{4}-d{2}-d{2}/.test(v) ? v.slice(0, 10) : undefined);
+const LINE_KINDS = ['labor', 'travel', 'material', 'flat', 'other'] as const;
+const LANDS = ['DE', 'AT', 'CH'] as const;
+
+export function normalizeDraft(raw: unknown): InvoiceDraft {
+  const d = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const r = (d.recipient && typeof d.recipient === 'object' ? d.recipient : {}) as Record<string, unknown>;
+  const lines = Array.isArray(d.lines) ? d.lines : [];
+  return {
+    kind: oneOf(d.kind, ['invoice', 'quote', 'credit'] as const, 'invoice'),
+    recipient: {
+      name: txt(r.name),
+      street: opt(r.street),
+      zip: opt(r.zip),
+      city: opt(r.city),
+      land: LANDS.includes(r.land as (typeof LANDS)[number]) ? (r.land as (typeof LANDS)[number]) : undefined,
+      uid: opt(r.uid),
+      email: opt(r.email),
+      private: r.private === true,
+    },
+    serviceDate: isoDay(d.serviceDate) ?? '',
+    serviceDateTo: isoDay(d.serviceDateTo),
+    lines: lines.map((x) => {
+      const l = (x && typeof x === 'object' ? x : {}) as Record<string, unknown>;
+      return {
+        kind: oneOf(l.kind, LINE_KINDS, 'other'),
+        text: txt(l.text),
+        qty: num(l.qty, 1),
+        unit: txt(l.unit),
+        unitPriceCents: Math.round(num(l.unitPriceCents)),
+        vatRate: num(l.vatRate),
+      };
+    }),
+    vatMode: oneOf(d.vatMode, ['normal', 'kleinunternehmer', 'reverseCharge'] as const, 'normal'),
+    notes: opt(d.notes),
+    partial: d.partial === true,
+    prepaidCents: d.prepaidCents == null ? undefined : Math.round(num(d.prepaidCents)),
+    cancels: opt(d.cancels),
+    cancelReason: opt(d.cancelReason),
+  };
+}
+
 function fromRow(r: Row): StoredInvoice {
   return {
     id: String(r.id),
@@ -230,7 +282,7 @@ function fromRow(r: Row): StoredInvoice {
     siteId: str(r.site_id),
     inspectionId: str(r.inspection_id),
     cancelsId: str(r.cancels_id),
-    data: r.data as InvoiceDraft,
+    data: normalizeDraft(r.data),
     profile: (r.profile as InvoiceProfile | null) ?? undefined,
     netCents: Number(r.net_cents ?? 0),
     vatCents: Number(r.vat_cents ?? 0),
