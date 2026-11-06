@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fmtDate } from '../lib/format';
 import { licenseDue, uvvDue, type DueInfo } from '../kfzdex/due';
 import type { Driver, Vehicle } from '../kfzdex/types';
-import { throwOnError } from './shared';
+import { loadAll } from './shared';
 import type { DueItem, DueResult } from './types';
 
 const STATE_LABEL: Record<DueInfo['status'], string> = {
@@ -20,15 +20,15 @@ function sortKey(due: DueInfo): number {
 // KfzDex: UVV-Prüfung je Fahrzeug (12 Monate) + Führerscheinkontrolle je aktivem
 // Fahrer (Intervall am Fahrer). Fällig = überfällig / bald fällig / noch nie.
 export async function kfzdexDue(sb: SupabaseClient): Promise<DueResult> {
+  // Vollständig (auch über 1.000 Fahrzeuge/Fahrer).
   const [vehicles, drivers] = await Promise.all([
-    sb.from('vehicle').select('id, plate, name, type, last_uvv'),
-    sb.from('driver').select('id, name, active, last_check, check_interval_months'),
+    loadAll<Vehicle>(sb, 'vehicle', 'id, plate, name, type, last_uvv'),
+    loadAll<Driver>(sb, 'driver', 'id, name, active, last_check, check_interval_months'),
   ]);
-  throwOnError(vehicles.error, drivers.error);
 
   const scored: (DueItem & { sort: number })[] = [];
 
-  for (const v of (vehicles.data ?? []) as Vehicle[]) {
+  for (const v of vehicles) {
     const due = uvvDue(v);
     if (due.status === 'ok') continue;
     scored.push({
@@ -40,7 +40,7 @@ export async function kfzdexDue(sb: SupabaseClient): Promise<DueResult> {
     });
   }
 
-  for (const d of (drivers.data ?? []) as Driver[]) {
+  for (const d of drivers) {
     if (!d.active) continue;
     const due = licenseDue(d);
     if (due.status === 'ok') continue;

@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { signPhotos } from '../lib/photos';
 import { withGpsProof } from '../lib/gpsProof';
 import { fail } from '../lib/orgApi';
+import { fetchAllOf, fetchLatestWindow } from '../lib/completeQueries';
+import { INSPECTION_LABELS } from './types';
 import type {
   CheckResult,
   Defect,
@@ -37,11 +39,7 @@ export async function fetchPlayground(
 }
 
 export async function fetchPlaygrounds(sb: SupabaseClient): Promise<Playground[]> {
-  const { data, error } = await sb
-    .from('playground')
-    .select('*')
-    .order('active', { ascending: false })
-    .order('name');
+  const { data, error } = await fetchAllOf(() => sb.from('playground').select('*'), [['active', false], ['name']]);
   if (error) fail('Spielplätze konnten nicht geladen werden', error);
   return (data ?? []) as Playground[];
 }
@@ -51,13 +49,10 @@ export async function fetchEquipment(
   sb: SupabaseClient,
   playgroundId?: string,
 ): Promise<Equipment[]> {
-  let q = sb
-    .from('equipment')
-    .select(EQUIPMENT_COLS)
-    .order('retired')
-    .order('name');
-  if (playgroundId) q = q.eq('playground_id', playgroundId);
-  const { data, error } = await q;
+  const { data, error } = await fetchAllOf(() => {
+    const q = sb.from('equipment').select(EQUIPMENT_COLS);
+    return playgroundId ? q.eq('playground_id', playgroundId) : q;
+  }, [['retired'], ['name']]);
   if (error) fail('Geräte konnten nicht geladen werden', error);
   return (data ?? []) as Equipment[];
 }
@@ -262,17 +257,22 @@ export interface InspMeta {
   canceled: boolean;
 }
 
-export async function fetchInspectionMeta(
-  sb: SupabaseClient,
-  opts: { limit?: number } = {},
-): Promise<InspMeta[]> {
-  const { data, error } = await sb
-    .from('inspection')
-    .select('id, playground_id, type, started_at, canceled')
-    .order('started_at', { ascending: false })
-    .limit(opts.limit ?? 2000);
+export async function fetchInspectionMeta(sb: SupabaseClient): Promise<InspMeta[]> {
+  // Vollständig: alle Prüfungen der letzten 396 Tage (längster Prüfabstand + Puffer) und je
+  // Einheit/Prüfart, die darin fehlt, die jüngste ältere — „letzte Prüfung" und Fälligkeit wie mit kompletter Historie.
+  const { data, error } = await fetchLatestWindow<InspMeta>({
+    sb,
+    table: 'inspection',
+    cols: 'id, playground_id, type, started_at, canceled',
+    dateCol: 'started_at',
+    unitCol: 'playground_id',
+    units: { table: 'playground' },
+    windowDays: 396,
+    types: Object.keys(INSPECTION_LABELS),
+    canceled: true,
+  });
   if (error) fail('Kontroll-Daten konnten nicht geladen werden', error);
-  return (data ?? []) as InspMeta[];
+  return data;
 }
 
 /** Einzelne Kontrolle inkl. Beweisfotos (Base64-Daten-URIs). */
@@ -300,15 +300,16 @@ export async function fetchDefects(
   sb: SupabaseClient,
   filter: DefectFilter = {},
 ): Promise<Defect[]> {
-  let q = sb
-    .from('defect')
-    .select(DEFECT_COLS)
-    .order('created_at', { ascending: false })
-    .limit(filter.limit ?? 500);
-  if (filter.playgroundId) q = q.eq('playground_id', filter.playgroundId);
-  if (filter.inspectionId) q = q.eq('inspection_id', filter.inspectionId);
-  if (filter.status) q = q.eq('status', filter.status);
-  const { data, error } = await q;
+  const build = () => {
+    let q = sb.from('defect').select(DEFECT_COLS);
+    if (filter.playgroundId) q = q.eq('playground_id', filter.playgroundId);
+    if (filter.inspectionId) q = q.eq('inspection_id', filter.inspectionId);
+    if (filter.status) q = q.eq('status', filter.status);
+    return q;
+  };
+  const { data, error } = filter.limit
+    ? await build().order('created_at', { ascending: false }).order('id', { ascending: false }).limit(filter.limit)
+    : await fetchAllOf(build, [['created_at', false], ['id', false]]);
   if (error) fail('Mängel konnten nicht geladen werden', error);
   return (data ?? []) as Defect[];
 }
@@ -323,13 +324,13 @@ export async function fetchInspectionsForReport(
   const end = new Date(to);
   end.setHours(23, 59, 59, 999);
   const query = (cols: string) =>
-    sb
+    fetchAllOf(() => sb
     .from('inspection')
     .select(cols)
     .eq('playground_id', playgroundId)
     .gte('started_at', from.toISOString())
-    .lte('started_at', end.toISOString())
-    .order('started_at');
+    .lte('started_at', end.toISOString()),
+    [['started_at']]);
   let { data, error } = await query(`${INSPECTION_COLS}, photo_urls, signature`);
   // Spalte signature (Update 2026-10-29) fehlt noch → Bericht ohne Unterschriftsbild.
   if (error && /signature|42703|PGRST204/i.test(`${error.code} ${error.message}`)) {
@@ -348,13 +349,13 @@ export async function fetchDefectsForReport(
 ): Promise<DefectWithPhotos[]> {
   const end = new Date(to);
   end.setHours(23, 59, 59, 999);
-  const { data, error } = await sb
+  const { data, error } = await fetchAllOf(() => sb
     .from('defect')
     .select(`${DEFECT_COLS}, photo_urls, resolution_photo_urls`)
     .eq('playground_id', playgroundId)
     .gte('created_at', from.toISOString())
-    .lte('created_at', end.toISOString())
-    .order('created_at');
+    .lte('created_at', end.toISOString()),
+    [['created_at']]);
   if (error) fail('Mängel für den Bericht konnten nicht geladen werden', error);
   return (await signPhotos(sb, data ?? [])) as DefectWithPhotos[];
 }

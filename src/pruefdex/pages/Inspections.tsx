@@ -121,7 +121,11 @@ export function Inspections() {
             <div className="card empty">Keine Prüfungen im gewählten Zeitraum.</div>
           ) : (
             <>
-              <p className="muted small">{inspections.length} Prüfungen</p>
+              <p className="muted small">
+                {inspections.length} Prüfungen
+                {/* Liste lädt höchstens die neuesten 500 (fetch…-Standardlimit) — dann Hinweis statt still gekürzt. */}
+                {inspections.length >= 500 ? ' — nur die neuesten 500 angezeigt, bitte den Zeitraum eingrenzen' : ''}
+              </p>
               <div className="table-wrap">
                 <table>
                   <thead>

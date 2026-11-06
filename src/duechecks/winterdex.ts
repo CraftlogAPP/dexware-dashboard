@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fmtDateTime } from '../lib/format';
-import { throwOnError } from './shared';
+import { fetchLatestWindow } from '../lib/completeQueries';
+import { loadAll, throwOnError } from './shared';
 import type { DueItem, DueResult } from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -17,26 +18,30 @@ function inSeason(d = new Date()): boolean {
 
 export async function winterdexDue(sb: SupabaseClient): Promise<DueResult> {
   if (!inSeason()) return { count: 0, items: [] };
-  const [properties, ops] = await Promise.all([
-    sb.from('property').select('id, name, active'),
-    sb
-      .from('operation')
-      .select('property_id, started_at, canceled')
-      .order('started_at', { ascending: false })
-      .limit(2000),
-  ]);
-  throwOnError(properties.error, ops.error);
+  // Vollständig (auch über 1.000 Zeilen): alle Objekte; Einsätze der letzten 7 Tage und je
+  // aktivem Objekt ohne Einsatz darin der jüngste ältere (für „Letzter Einsatz …").
+  const properties = (await loadAll(sb, 'property', 'id, name, active')).filter((p) => p.active);
+  const ops = await fetchLatestWindow<{ property_id: string; started_at: string; canceled: boolean }>({
+    sb,
+    table: 'operation',
+    cols: 'id, property_id, started_at, canceled',
+    dateCol: 'started_at',
+    unitCol: 'property_id',
+    units: properties.map((p) => p.id),
+    windowDays: 7,
+    canceled: true,
+  });
+  throwOnError(ops.error);
 
   const lastByProp = new Map<string, string>();
-  for (const o of ops.data ?? []) {
+  for (const o of ops.data) {
     if (o.canceled) continue;
     if (!lastByProp.has(o.property_id)) lastByProp.set(o.property_id, o.started_at);
   }
 
   const now = Date.now();
   const scored: (DueItem & { sort: number })[] = [];
-  for (const p of properties.data ?? []) {
-    if (!p.active) continue;
+  for (const p of properties) {
     const last = lastByProp.get(p.id);
     const ageMs = last ? now - new Date(last).getTime() : Infinity;
     if (ageMs > STALE_MS) {

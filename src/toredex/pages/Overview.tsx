@@ -50,7 +50,7 @@ export function Overview() {
       await Promise.all([
         fetchSites(client),
         fetchGates(client),
-        fetchInspectionMeta(client, { limit: 2000 }),
+        fetchInspectionMeta(client),
         fetchInspections(client, { limit: 10 }),
         fetchDefects(client, { status: 'open' }),
       ]);

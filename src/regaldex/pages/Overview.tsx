@@ -43,7 +43,7 @@ export function Overview() {
   const state = useAsync<OverviewData>(async () => {
     const [warehouses, meta, recentInspections, openDamages] = await Promise.all([
       fetchWarehouses(client),
-      fetchInspectionMeta(client, { limit: 2000 }),
+      fetchInspectionMeta(client),
       fetchInspections(client, { limit: 10 }),
       fetchDamages(client, { status: 'open' }),
     ]);

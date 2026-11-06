@@ -36,7 +36,9 @@ export function RouteDetail() {
 
   const runsState = useAsync(
     () =>
+      // Vollständig: Grundlage des Strecken-Nachweis-PDF (auch über 500/1.000 Fahrten im Zeitraum).
       fetchRuns(client, {
+        all: true,
         routeId: id,
         from: from ? parseLocalDate(from) : undefined,
         to: to ? parseLocalDate(to) : undefined,

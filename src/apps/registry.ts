@@ -38,6 +38,20 @@ export interface AppConfig {
   revenueCat?: string;
   /** Emoji als Kachel-Icon */
   emoji: string;
+  /**
+   * Team-Plätze, wenn die App andere Stufen hat als der Standard (Team bis 50 / Team XL bis 100, Ersatzwert 20).
+   * Ohne Angabe bleibt die Team-Seite wie bisher — nur Apps mit eigenem Modell setzen das (InstallateurDex: Team 3/5/10).
+   */
+  teamSeats?: {
+    /** Stufen-Text hinter „Mehr Plätze gibt es in der <App>-App unter Abo: “ */
+    tiers: string;
+    /** Anzeige bei 0 Plätzen (Pro gilt nur für den Inhaber) — wie der Text in der App */
+    solo: string;
+    /** Wort für die Plätze, z. B. „Plätzen für weitere Monteure“ */
+    seatsWord?: string;
+    /** Plätze, wenn der Server keinen Wert liefert */
+    fallbackLimit?: number;
+  };
 }
 
 // InstallateurDex: eigenes Projekt (Frankfurt) — gleiche Werte wie InstallateurDex/mobile/.env.
@@ -293,6 +307,13 @@ export const APPS: AppConfig[] = [
     landingUrl: 'https://installateurdex.dexware.app',
     revenueCat: 'goog_DOFgenvUDvWqRvosCnrBsaEkUcG',
     supabase: INSTALLATEURDEX_SUPABASE,
+    // Wie die App (TeamScreen + tarif-abgleich.sql): Pro = nur Inhaber, Team 3/5/10 = 2/4/9 weitere Monteure
+    teamSeats: {
+      tiers: 'Team 3, Team 5 oder Team 10 (2, 4 bzw. 9 weitere Monteure)',
+      solo: 'Pro gilt für dich allein — jeder weitere Monteur höchstens 4,99 € im Monat',
+      seatsWord: 'Plätzen für weitere Monteure',
+      fallbackLimit: 0,
+    },
   },
   // TurnDex bleibt bewusst draußen: auf Eis gelegt (kein freies Supabase-Projekt
   // verfügbar), darf in keiner öffentlichen Fläche auftauchen.

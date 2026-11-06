@@ -44,7 +44,7 @@ export function Overview() {
       await Promise.all([
         fetchSites(client),
         fetchScaffolds(client),
-        fetchInspectionMeta(client, { limit: 2000 }),
+        fetchInspectionMeta(client),
         fetchInspections(client, { limit: 10 }),
         fetchDamages(client, { status: 'open' }),
       ]);

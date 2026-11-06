@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fail } from '../lib/orgApi';
+import { fetchAllOf } from '../lib/completeQueries';
 import type {
   GeoPoint,
   PlaceType,
@@ -42,13 +43,14 @@ const TRIP_COLS = [
   'odometer_end_km:data->odometerEndKm',
 ].join(', ');
 
+// Alle Abfragen auf sync_items vollständig (seitenweise, PostgREST liefert je Abfrage höchstens 1.000 Zeilen);
+// item_id ist je Sammlung eindeutig und dient als letzter Sortierschlüssel.
 export async function fetchTripSummaries(sb: SupabaseClient): Promise<TripSummary[]> {
-  const { data, error } = await sb
-    .from('sync_items')
-    .select(TRIP_COLS)
-    .eq('collection', 'trips')
-    .eq('deleted', false)
-    .order('data->>startTime', { ascending: false });
+  const { data, error } = await fetchAllOf(
+    () => sb.from('sync_items').select(TRIP_COLS).eq('collection', 'trips').eq('deleted', false),
+    [['data->>startTime', false]],
+    'item_id',
+  );
   if (error) fail('Fahrten konnten nicht geladen werden', error);
   return (data ?? []) as unknown as TripSummary[];
 }
@@ -64,15 +66,19 @@ export async function fetchTripsForReport(
   from: Date,
   toExclusive: Date,
 ): Promise<TripSummary[]> {
-  const { data, error } = await sb
-    .from('sync_items')
-    .select(TRIP_COLS)
-    .eq('collection', 'trips')
-    .eq('deleted', false)
-    .eq('data->>vehicleId', vehicleId)
-    .gte('data->>startTime', from.toISOString())
-    .lt('data->>startTime', toExclusive.toISOString())
-    .order('data->>startTime', { ascending: true });
+  const { data, error } = await fetchAllOf(
+    () =>
+      sb
+        .from('sync_items')
+        .select(TRIP_COLS)
+        .eq('collection', 'trips')
+        .eq('deleted', false)
+        .eq('data->>vehicleId', vehicleId)
+        .gte('data->>startTime', from.toISOString())
+        .lt('data->>startTime', toExclusive.toISOString()),
+    [['data->>startTime', true]],
+    'item_id',
+  );
   if (error) fail('Fahrten konnten nicht geladen werden', error);
   return (data ?? []) as unknown as TripSummary[];
 }
@@ -292,14 +298,18 @@ export async function fetchTripsBefore(
   vehicleId: string,
   before: Date,
 ): Promise<TripSummary[]> {
-  const { data, error } = await sb
-    .from('sync_items')
-    .select(TRIP_COLS)
-    .eq('collection', 'trips')
-    .eq('deleted', false)
-    .eq('data->>vehicleId', vehicleId)
-    .lt('data->>startTime', before.toISOString())
-    .order('data->>startTime', { ascending: true });
+  const { data, error } = await fetchAllOf(
+    () =>
+      sb
+        .from('sync_items')
+        .select(TRIP_COLS)
+        .eq('collection', 'trips')
+        .eq('deleted', false)
+        .eq('data->>vehicleId', vehicleId)
+        .lt('data->>startTime', before.toISOString()),
+    [['data->>startTime', true]],
+    'item_id',
+  );
   if (error) fail('Fahrten konnten nicht geladen werden', error);
   return (data ?? []) as unknown as TripSummary[];
 }
@@ -492,13 +502,13 @@ async function fetchCollection<T>(
   collection: 'vehicles' | 'places',
   errorMsg: string,
 ): Promise<T[]> {
-  const { data, error } = await sb
-    .from('sync_items')
-    .select('data')
-    .eq('collection', collection)
-    .eq('deleted', false);
+  const { data, error } = await fetchAllOf<{ data: unknown }>(
+    () => sb.from('sync_items').select('data').eq('collection', collection).eq('deleted', false),
+    [],
+    'item_id',
+  );
   if (error) fail(errorMsg, error);
-  return (data ?? []).map((row) => row.data as T);
+  return data.map((row) => row.data as T);
 }
 
 export async function fetchVehicles(sb: SupabaseClient): Promise<Vehicle[]> {

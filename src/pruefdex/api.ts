@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { signPhotos } from '../lib/photos';
 import { withGpsProof } from '../lib/gpsProof';
 import { fail } from '../lib/orgApi';
+import { fetchAllOf, fetchLatestWindow } from '../lib/completeQueries';
 import type {
   Customer,
   Device,
@@ -36,7 +37,7 @@ async function withColumnFallback<R extends { error: { code?: string; message: s
 }
 
 export async function fetchCustomers(sb: SupabaseClient): Promise<Customer[]> {
-  const { data, error } = await sb.from('customer').select('*').order('name');
+  const { data, error } = await fetchAllOf(() => sb.from('customer').select('*'), [['name']]);
   if (error) fail('Kunden konnten nicht geladen werden', error);
   return (data ?? []) as Customer[];
 }
@@ -58,15 +59,16 @@ export async function fetchDevices(
   sb: SupabaseClient,
   opts: { customerId?: string; includeRetired?: boolean } = {},
 ): Promise<Device[]> {
-  const { data, error } = await withColumnFallback(() => {
-    let q = sb
-      .from('device')
-      .select(devCols())
-      .order('next_due_date', { ascending: true, nullsFirst: false })
-      .order('name');
-    if (opts.customerId) q = q.eq('customer_id', opts.customerId);
-    return q;
-  });
+  // Vollständig (auch über 1.000 Geräte) — Kennzahlen, Geräteliste und Prüflisten-PDF.
+  const { data, error } = await withColumnFallback(() =>
+    fetchAllOf(
+      () => {
+        const q = sb.from('device').select(devCols());
+        return opts.customerId ? q.eq('customer_id', opts.customerId) : q;
+      },
+      [['next_due_date', true, { nullsFirst: false }], ['name']],
+    ),
+  );
   if (error) fail('Geräte konnten nicht geladen werden', error);
   const list = (data ?? []) as unknown as Device[];
   return opts.includeRetired ? list : list.filter((d) => !d.retired);
@@ -266,17 +268,24 @@ export interface InspMeta {
   result: InspectionResult;
 }
 
-export async function fetchInspectionMeta(
-  sb: SupabaseClient,
-  opts: { limit?: number } = {},
-): Promise<InspMeta[]> {
+export async function fetchInspectionMeta(sb: SupabaseClient): Promise<InspMeta[]> {
+  // Vollständig: alle Prüfungen der letzten 2 Jahre + je Gerät ohne Prüfung darin die jüngste ältere
+  // („letzte Prüfung" im Prüflisten-PDF, Kennzahlen 30 Tage) — wie mit kompletter Historie.
   const { data, error } = await withColumnFallback(() =>
-    sb
-      .from('inspection')
-      .select(hasAppendOnly ? 'id, device_id, inspected_at, result, canceled' : 'id, device_id, inspected_at, result')
-      .order('inspected_at', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(opts.limit ?? 2000),
+    fetchLatestWindow<InspMeta & { canceled?: boolean }>({
+      sb,
+      table: 'inspection',
+      cols: hasAppendOnly
+        ? 'id, device_id, inspected_at, result, created_at, canceled'
+        : 'id, device_id, inspected_at, result, created_at',
+      dateCol: 'inspected_at',
+      dateOnly: true,
+      tieCols: ['created_at'],
+      unitCol: 'device_id',
+      units: { table: 'device' },
+      windowDays: 2 * 365 + 31,
+      canceled: hasAppendOnly,
+    }),
   );
   if (error) fail('Prüf-Daten konnten nicht geladen werden', error);
   // KPIs und „letzte Prüfung" nur aus gültigen (nicht stornierten) Prüfungen.

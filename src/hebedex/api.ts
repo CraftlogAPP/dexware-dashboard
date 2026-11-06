@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { signPhotos } from '../lib/photos';
 import { withGpsProof } from '../lib/gpsProof';
 import { fail } from '../lib/orgApi';
+import { fetchAllOf, fetchLatestWindow } from '../lib/completeQueries';
+import { INSPECTION_LABELS } from './types';
 import type {
   CheckResult,
   Defect,
@@ -34,11 +36,7 @@ export async function fetchSite(sb: SupabaseClient, id: string): Promise<Site | 
 }
 
 export async function fetchSites(sb: SupabaseClient): Promise<Site[]> {
-  const { data, error } = await sb
-    .from('site')
-    .select('*')
-    .order('active', { ascending: false })
-    .order('name');
+  const { data, error } = await fetchAllOf(() => sb.from('site').select('*'), [['active', false], ['name']]);
   if (error) fail('Standorte konnten nicht geladen werden', error);
   return (data ?? []) as Site[];
 }
@@ -48,9 +46,10 @@ export async function fetchItems(
   sb: SupabaseClient,
   siteId?: string,
 ): Promise<LiftingItem[]> {
-  let q = sb.from('lifting_item').select(ITEM_COLS).order('retired').order('name');
-  if (siteId) q = q.eq('site_id', siteId);
-  const { data, error } = await q;
+  const { data, error } = await fetchAllOf(() => {
+    const q = sb.from('lifting_item').select(ITEM_COLS);
+    return siteId ? q.eq('site_id', siteId) : q;
+  }, [['retired'], ['name']]);
   if (error) fail('Teile konnten nicht geladen werden', error);
   return (data ?? []) as LiftingItem[];
 }
@@ -276,17 +275,22 @@ export interface InspMeta {
   canceled: boolean;
 }
 
-export async function fetchInspectionMeta(
-  sb: SupabaseClient,
-  opts: { limit?: number } = {},
-): Promise<InspMeta[]> {
-  const { data, error } = await sb
-    .from('inspection')
-    .select('id, site_id, item_id, type, started_at, canceled')
-    .order('started_at', { ascending: false })
-    .limit(opts.limit ?? 2000);
+export async function fetchInspectionMeta(sb: SupabaseClient): Promise<InspMeta[]> {
+  // Vollständig: alle Prüfungen der letzten 1126 Tage (längster Prüfabstand + Puffer) und je
+  // Einheit/Prüfart, die darin fehlt, die jüngste ältere — „letzte Prüfung" und Fälligkeit wie mit kompletter Historie.
+  const { data, error } = await fetchLatestWindow<InspMeta>({
+    sb,
+    table: 'inspection',
+    cols: 'id, site_id, item_id, type, started_at, canceled',
+    dateCol: 'started_at',
+    unitCol: 'item_id',
+    units: { table: 'lifting_item' },
+    windowDays: 1126,
+    types: Object.keys(INSPECTION_LABELS),
+    canceled: true,
+  });
   if (error) fail('Prüf-Daten konnten nicht geladen werden', error);
-  return (data ?? []) as InspMeta[];
+  return data;
 }
 
 /** Einzelne Prüfung inkl. Beweisfotos (Base64-Daten-URIs). */
@@ -315,16 +319,17 @@ export async function fetchDefects(
   sb: SupabaseClient,
   filter: DefectFilter = {},
 ): Promise<Defect[]> {
-  let q = sb
-    .from('defect')
-    .select(DEFECT_COLS)
-    .order('created_at', { ascending: false })
-    .limit(filter.limit ?? 500);
-  if (filter.siteId) q = q.eq('site_id', filter.siteId);
-  if (filter.itemId) q = q.eq('item_id', filter.itemId);
-  if (filter.inspectionId) q = q.eq('inspection_id', filter.inspectionId);
-  if (filter.status) q = q.eq('status', filter.status);
-  const { data, error } = await q;
+  const build = () => {
+    let q = sb.from('defect').select(DEFECT_COLS);
+    if (filter.siteId) q = q.eq('site_id', filter.siteId);
+    if (filter.itemId) q = q.eq('item_id', filter.itemId);
+    if (filter.inspectionId) q = q.eq('inspection_id', filter.inspectionId);
+    if (filter.status) q = q.eq('status', filter.status);
+    return q;
+  };
+  const { data, error } = filter.limit
+    ? await build().order('created_at', { ascending: false }).order('id', { ascending: false }).limit(filter.limit)
+    : await fetchAllOf(build, [['created_at', false], ['id', false]]);
   if (error) fail('Mängel konnten nicht geladen werden', error);
   return (data ?? []) as Defect[];
 }
@@ -339,13 +344,13 @@ export async function fetchInspectionsForReport(
   const end = new Date(to);
   end.setHours(23, 59, 59, 999);
   const query = (cols: string) =>
-    sb
+    fetchAllOf(() => sb
     .from('inspection')
     .select(cols)
     .eq('site_id', siteId)
     .gte('started_at', from.toISOString())
-    .lte('started_at', end.toISOString())
-    .order('started_at');
+    .lte('started_at', end.toISOString()),
+    [['started_at']]);
   // Spalte signature gibt es bei HebeDex von Anfang an.
   const { data, error } = await query(`${INSPECTION_COLS}, photo_urls, signature`);
   if (error) fail('Berichtsdaten konnten nicht geladen werden', error);
@@ -361,13 +366,13 @@ export async function fetchDefectsForReport(
 ): Promise<DefectWithPhotos[]> {
   const end = new Date(to);
   end.setHours(23, 59, 59, 999);
-  const { data, error } = await sb
+  const { data, error } = await fetchAllOf(() => sb
     .from('defect')
     .select(`${DEFECT_COLS}, photo_urls, resolution_photo_urls`)
     .eq('site_id', siteId)
     .gte('created_at', from.toISOString())
-    .lte('created_at', end.toISOString())
-    .order('created_at');
+    .lte('created_at', end.toISOString()),
+    [['created_at']]);
   if (error) fail('Mängel für den Bericht konnten nicht geladen werden', error);
   return (await signPhotos(sb, data ?? [])) as DefectWithPhotos[];
 }

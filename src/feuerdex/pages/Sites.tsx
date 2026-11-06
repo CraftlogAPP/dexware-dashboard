@@ -29,7 +29,7 @@ export function Sites() {
     const [sites, extinguishers, meta, openDefects] = await Promise.all([
       fetchSites(client),
       fetchExtinguishers(client),
-      fetchInspectionMeta(client, { limit: 2000 }),
+      fetchInspectionMeta(client),
       fetchDefects(client, { status: 'open' }),
     ]);
     return { sites, extinguishers, lastBySite: lastInspectionBySite(meta), openDefects };

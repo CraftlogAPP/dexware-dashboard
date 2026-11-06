@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { signPhotos } from '../lib/photos';
 import { withGpsProof } from '../lib/gpsProof';
 import { fail } from '../lib/orgApi';
+import { fetchAllOf, fetchLatestWindow } from '../lib/completeQueries';
+import { INSPECTION_LABELS } from './types';
 import type {
   CheckResult,
   Damage,
@@ -37,11 +39,7 @@ export async function fetchWarehouse(
 }
 
 export async function fetchWarehouses(sb: SupabaseClient): Promise<Warehouse[]> {
-  const { data, error } = await sb
-    .from('warehouse')
-    .select('*')
-    .order('active', { ascending: false })
-    .order('name');
+  const { data, error } = await fetchAllOf(() => sb.from('warehouse').select('*'), [['active', false], ['name']]);
   if (error) fail('Lager konnten nicht geladen werden', error);
   return (data ?? []) as Warehouse[];
 }
@@ -51,9 +49,10 @@ export async function fetchRacks(
   sb: SupabaseClient,
   warehouseId?: string,
 ): Promise<Rack[]> {
-  let q = sb.from('rack').select(RACK_COLS).order('retired').order('name');
-  if (warehouseId) q = q.eq('warehouse_id', warehouseId);
-  const { data, error } = await q;
+  const { data, error } = await fetchAllOf(() => {
+    const q = sb.from('rack').select(RACK_COLS);
+    return warehouseId ? q.eq('warehouse_id', warehouseId) : q;
+  }, [['retired'], ['name']]);
   if (error) fail('Regalzeilen konnten nicht geladen werden', error);
   return (data ?? []) as Rack[];
 }
@@ -260,17 +259,22 @@ export interface InspMeta {
   canceled: boolean;
 }
 
-export async function fetchInspectionMeta(
-  sb: SupabaseClient,
-  opts: { limit?: number } = {},
-): Promise<InspMeta[]> {
-  const { data, error } = await sb
-    .from('inspection')
-    .select('id, warehouse_id, type, started_at, canceled')
-    .order('started_at', { ascending: false })
-    .limit(opts.limit ?? 2000);
+export async function fetchInspectionMeta(sb: SupabaseClient): Promise<InspMeta[]> {
+  // Vollständig: alle Prüfungen der letzten 396 Tage (längster Prüfabstand + Puffer) und je
+  // Einheit/Prüfart, die darin fehlt, die jüngste ältere — „letzte Prüfung" und Fälligkeit wie mit kompletter Historie.
+  const { data, error } = await fetchLatestWindow<InspMeta>({
+    sb,
+    table: 'inspection',
+    cols: 'id, warehouse_id, type, started_at, canceled',
+    dateCol: 'started_at',
+    unitCol: 'warehouse_id',
+    units: { table: 'warehouse' },
+    windowDays: 396,
+    types: Object.keys(INSPECTION_LABELS),
+    canceled: true,
+  });
   if (error) fail('Inspektions-Daten konnten nicht geladen werden', error);
-  return (data ?? []) as InspMeta[];
+  return data;
 }
 
 /** Einzelne Inspektion inkl. Beweisfotos (Base64-Daten-URIs). */
@@ -298,15 +302,16 @@ export async function fetchDamages(
   sb: SupabaseClient,
   filter: DamageFilter = {},
 ): Promise<Damage[]> {
-  let q = sb
-    .from('damage')
-    .select(DAMAGE_COLS)
-    .order('created_at', { ascending: false })
-    .limit(filter.limit ?? 500);
-  if (filter.warehouseId) q = q.eq('warehouse_id', filter.warehouseId);
-  if (filter.inspectionId) q = q.eq('inspection_id', filter.inspectionId);
-  if (filter.status) q = q.eq('status', filter.status);
-  const { data, error } = await q;
+  const build = () => {
+    let q = sb.from('damage').select(DAMAGE_COLS);
+    if (filter.warehouseId) q = q.eq('warehouse_id', filter.warehouseId);
+    if (filter.inspectionId) q = q.eq('inspection_id', filter.inspectionId);
+    if (filter.status) q = q.eq('status', filter.status);
+    return q;
+  };
+  const { data, error } = filter.limit
+    ? await build().order('created_at', { ascending: false }).order('id', { ascending: false }).limit(filter.limit)
+    : await fetchAllOf(build, [['created_at', false], ['id', false]]);
   if (error) fail('Schäden konnten nicht geladen werden', error);
   return (data ?? []) as Damage[];
 }
@@ -321,13 +326,13 @@ export async function fetchInspectionsForReport(
   const end = new Date(to);
   end.setHours(23, 59, 59, 999);
   const query = (cols: string) =>
-    sb
+    fetchAllOf(() => sb
     .from('inspection')
     .select(cols)
     .eq('warehouse_id', warehouseId)
     .gte('started_at', from.toISOString())
-    .lte('started_at', end.toISOString())
-    .order('started_at');
+    .lte('started_at', end.toISOString()),
+    [['started_at']]);
   let { data, error } = await query(`${INSPECTION_COLS}, photo_urls, signature`);
   // Spalte signature (Update 2026-10-29) fehlt noch → Bericht ohne Unterschriftsbild.
   if (error && /signature|42703|PGRST204/i.test(`${error.code} ${error.message}`)) {
@@ -346,13 +351,13 @@ export async function fetchDamagesForReport(
 ): Promise<DamageWithPhotos[]> {
   const end = new Date(to);
   end.setHours(23, 59, 59, 999);
-  const { data, error } = await sb
+  const { data, error } = await fetchAllOf(() => sb
     .from('damage')
     .select(`${DAMAGE_COLS}, photo_urls, resolution_photo_urls`)
     .eq('warehouse_id', warehouseId)
     .gte('created_at', from.toISOString())
-    .lte('created_at', end.toISOString())
-    .order('created_at');
+    .lte('created_at', end.toISOString()),
+    [['created_at']]);
   if (error) fail('Schäden für den Bericht konnten nicht geladen werden', error);
   return (await signPhotos(sb, data ?? [])) as DamageWithPhotos[];
 }

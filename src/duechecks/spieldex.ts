@@ -3,32 +3,20 @@ import {
   INSPECTION_INTERVAL_DAYS,
   INSPECTION_SHORT,
 } from '../spieldex/types';
-import { buildIntervalDue, throwOnError, type DueUnit } from './shared';
+import { buildIntervalDue, loadAll, loadDueMeta, type DueUnit } from './shared';
 import type { DueResult } from './types';
 
 // SpielDex: Kontrolle je Spielplatz (visuell 7 T / operativ 90 T /
 // Jahreshauptinspektion 365 T). Nur aktive Spielplätze.
 export async function spieldexDue(sb: SupabaseClient): Promise<DueResult> {
-  const [playgrounds, insp] = await Promise.all([
-    sb.from('playground').select('id, name, active'),
-    sb
-      .from('inspection')
-      .select('playground_id, type, started_at, canceled')
-      .order('started_at', { ascending: false })
-      .limit(2000),
-  ]);
-  throwOnError(playgrounds.error, insp.error);
+  // Vollständig (auch über 1.000 Zeilen): alle Objekte und die nötigen Prüfungen.
+  const playgrounds = await loadAll(sb, 'playground', 'id, name, active');
 
-  const units: DueUnit[] = (playgrounds.data ?? [])
+  const units: DueUnit[] = playgrounds
     .filter((p) => p.active)
     .map((p) => ({ id: p.id, label: p.name }));
 
-  const meta = (insp.data ?? []).map((i) => ({
-    unitId: i.playground_id as string,
-    type: i.type as string,
-    startedAt: i.started_at as string,
-    canceled: i.canceled as boolean,
-  }));
+  const meta = await loadDueMeta(sb, 'playground_id', units.map((u) => u.id), INSPECTION_INTERVAL_DAYS);
 
   return buildIntervalDue(
     units,

@@ -27,7 +27,7 @@ export function Overview() {
   const state = useAsync<OverviewData>(async () => {
     const [properties, meta, recentOps] = await Promise.all([
       fetchProperties(client),
-      fetchOperationMeta(client, { limit: 2000 }),
+      fetchOperationMeta(client),
       fetchOperations(client, { limit: 10 }),
     ]);
     return { properties, meta, recentOps };

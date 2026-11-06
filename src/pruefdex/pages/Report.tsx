@@ -29,7 +29,7 @@ export function Report() {
     try {
       const [devices, meta] = await Promise.all([
         fetchDevices(client, { customerId: customerId || undefined }),
-        fetchInspectionMeta(client, { limit: 2000 }),
+        fetchInspectionMeta(client),
       ]);
       const lastByDevice = lastInspectionByDevice(meta);
       const rows: DeviceRow[] = devices.map((device) => {

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { signPhotos } from '../lib/photos';
+import { fetchAllOf, fetchLatestWindow } from '../lib/completeQueries';
 import type { DutyTimes, Operation, OperationWithPhotos, Property } from './types';
 
 // Spaltenliste für Einsätze OHNE photo_urls (Base64-Fotos, nur im Detail laden!)
@@ -38,11 +39,7 @@ export async function fetchProperty(
 }
 
 export async function fetchProperties(sb: SupabaseClient): Promise<Property[]> {
-  const { data, error } = await sb
-    .from('property')
-    .select('*')
-    .order('active', { ascending: false })
-    .order('name');
+  const { data, error } = await fetchAllOf(() => sb.from('property').select('*'), [['active', false], ['name']]);
   if (error) fail('Objekte konnten nicht geladen werden', error);
   return (data ?? []) as Property[];
 }
@@ -85,19 +82,21 @@ export interface OpMeta {
   canceled: boolean;
 }
 
-export async function fetchOperationMeta(
-  sb: SupabaseClient,
-  opts: { from?: Date; limit?: number } = {},
-): Promise<OpMeta[]> {
-  let q = sb
-    .from('operation')
-    .select('id, property_id, started_at, canceled')
-    .order('started_at', { ascending: false })
-    .limit(opts.limit ?? 2000);
-  if (opts.from) q = q.gte('started_at', opts.from.toISOString());
-  const { data, error } = await q;
+export async function fetchOperationMeta(sb: SupabaseClient): Promise<OpMeta[]> {
+  // Vollständig: alle Einsätze der letzten 31 Tage (Kennzahlen 24 h / 7 Tage) + je Objekt ohne Einsatz
+  // darin der jüngste ältere („letzter Einsatz“) — wie mit kompletter Historie.
+  const { data, error } = await fetchLatestWindow<OpMeta>({
+    sb,
+    table: 'operation',
+    cols: 'id, property_id, started_at, canceled',
+    dateCol: 'started_at',
+    unitCol: 'property_id',
+    units: { table: 'property' },
+    windowDays: 31,
+    canceled: true,
+  });
   if (error) fail('Einsatz-Daten konnten nicht geladen werden', error);
-  return (data ?? []) as OpMeta[];
+  return data;
 }
 
 /** Einzelner Einsatz inkl. Beweisfotos (Base64-Daten-URIs). */
@@ -214,13 +213,18 @@ export async function fetchOperationsForReport(
 ): Promise<OperationWithPhotos[]> {
   const end = new Date(to);
   end.setHours(23, 59, 59, 999);
-  const { data, error } = await sb
-    .from('operation')
-    .select(`${await opCols(sb)}, photo_urls`)
-    .eq('property_id', propertyId)
-    .gte('started_at', from.toISOString())
-    .lte('started_at', end.toISOString())
-    .order('started_at');
+  const cols = `${await opCols(sb)}, photo_urls`;
+  // Vollständig (auch über 1.000 Einsätze im Zeitraum).
+  const { data, error } = await fetchAllOf(
+    () =>
+      sb
+        .from('operation')
+        .select(cols)
+        .eq('property_id', propertyId)
+        .gte('started_at', from.toISOString())
+        .lte('started_at', end.toISOString()),
+    [['started_at']],
+  );
   if (error) fail('Berichtsdaten konnten nicht geladen werden', error);
   return (await signPhotos(sb, data ?? [])) as unknown as OperationWithPhotos[];
 }

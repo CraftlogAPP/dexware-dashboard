@@ -3,6 +3,7 @@
 // einer Datenbank noch (gps-pruefnachweis.sql nicht eingespielt), bleibt alles wie bisher.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { IN_CHUNK } from './completeQueries';
 
 const PROOF_COLS =
   'id, gps_at, gps_mocked, end_lat, end_lng, end_accuracy_m, end_gps_at, end_mocked, distance_m, end_distance_m, received_at, entry_hash';
@@ -33,10 +34,11 @@ export async function withGpsProof<T>(sb: SupabaseClient, table: string, data: T
   const ids = rows.map((r) => r.id as string).filter(Boolean);
   if (!ids.length) return data;
   const byId = new Map<string, Record<string, unknown>>();
-  for (let i = 0; i < ids.length; i += 200) {
-    let { data: extra, error }: { data: unknown[] | null; error: unknown } = await sb.from(table).select(PROOF_COLS).in('id', ids.slice(i, i + 200));
+  // Häppchen à IN_CHUNK (150) ids — hält die URL des .in()-Filters kurz.
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    let { data: extra, error }: { data: unknown[] | null; error: unknown } = await sb.from(table).select(PROOF_COLS).in('id', ids.slice(i, i + IN_CHUNK));
     // PrüfDex hat keinen Bezugsort → ohne Abstandsspalten erneut
-    if (error) ({ data: extra, error } = await sb.from(table).select(PROOF_COLS_NO_DIST).in('id', ids.slice(i, i + 200)));
+    if (error) ({ data: extra, error } = await sb.from(table).select(PROOF_COLS_NO_DIST).in('id', ids.slice(i, i + IN_CHUNK)));
     if (error) return data; // Spalten fehlen (noch) → unverändert
     for (const e of (extra ?? []) as unknown as Record<string, unknown>[]) byId.set(e.id as string, e);
   }

@@ -26,7 +26,7 @@ export function Warehouses() {
   const state = useAsync<Data>(async () => {
     const [warehouses, meta, openDamages] = await Promise.all([
       fetchWarehouses(client),
-      fetchInspectionMeta(client, { limit: 2000 }),
+      fetchInspectionMeta(client),
       fetchDamages(client, { status: 'open' }),
     ]);
     return { warehouses, lastByWh: lastInspectionByWarehouse(meta), openDamages };

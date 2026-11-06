@@ -48,7 +48,7 @@ export function Overview() {
     const [sites, ladders, meta, recentInspections, openDefects] = await Promise.all([
       fetchSites(client),
       fetchLadders(client),
-      fetchInspectionMeta(client, { limit: 2000 }),
+      fetchInspectionMeta(client),
       fetchInspections(client, { limit: 10 }),
       fetchDefects(client, { status: 'open' }),
     ]);

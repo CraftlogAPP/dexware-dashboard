@@ -5,7 +5,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { ActionBadge, LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
 import { CoverageBadge } from '../RouteSketch';
-import { fetchRoutes, fetchRuns, fmtDistance, fmtPct, localDay, ROUTES_MISSING, type Route, type RunMeta } from '../routes';
+import { fetchRecentRuns, fetchRoutes, fetchRuns, fmtDistance, RUNS_LIST_LIMIT, fmtPct, localDay, ROUTES_MISSING, type Route, type RunMeta } from '../routes';
 
 const FREE = '__free';
 
@@ -21,7 +21,9 @@ export function Routes() {
 
   // Strecken + jüngste Fahrten (für „heute gefahren" / „letzte Fahrt") einmal laden.
   const base = useAsync<{ routes: Route[]; recent: RunMeta[] }>(async () => {
-    const [routes, recent] = await Promise.all([fetchRoutes(client), fetchRuns(client, { limit: 1000 })]);
+    // Vollständig: Fahrten der letzten 7 Tage + letzte Fahrt je Strecke (auch über 1.000 Fahrten).
+    const routes = await fetchRoutes(client);
+    const recent = await fetchRecentRuns(client, routes.map((r) => r.id));
     return { routes, recent };
   }, [client]);
 
@@ -178,7 +180,7 @@ export function Routes() {
                   </label>
                 </div>
               </div>
-              <LoadGuard state={runsState}>{(runs) => <RunTable runs={runs} linkPrefix="fahrten/" />}</LoadGuard>
+              <LoadGuard state={runsState}>{(runs) => <RunTable runs={runs} linkPrefix="fahrten/" limit={RUNS_LIST_LIMIT} />}</LoadGuard>
             </>
           );
         }}
@@ -188,11 +190,15 @@ export function Routes() {
 }
 
 /** Fahrten-Tabelle (auch auf der Strecken-Detailseite). */
-export function RunTable({ runs, linkPrefix, showRoute = true }: { runs: RunMeta[]; linkPrefix: string; showRoute?: boolean }) {
+/** `limit`: Liste ist auf so viele (neueste) Fahrten begrenzt — dann ein Hinweis statt still gekürzt. */
+export function RunTable({ runs, linkPrefix, showRoute = true, limit }: { runs: RunMeta[]; linkPrefix: string; showRoute?: boolean; limit?: number }) {
   if (runs.length === 0) return <div className="card empty">Keine Fahrten im gewählten Zeitraum.</div>;
   return (
     <>
-      <p className="muted small">{runs.length} Fahrten</p>
+      <p className="muted small">
+        {runs.length} Fahrten
+        {limit && runs.length >= limit ? ` — nur die neuesten ${limit} angezeigt, bitte den Zeitraum eingrenzen` : ''}
+      </p>
       <div className="table-wrap">
         <table>
           <thead>

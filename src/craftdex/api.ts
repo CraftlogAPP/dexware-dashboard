@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fail } from '../lib/orgApi';
+import { fetchAllOf } from '../lib/completeQueries';
 import type {
   MaterialCost,
   ProjectData,
@@ -31,11 +32,11 @@ const SUMMARY_COLS = [
 export async function fetchProjectSummaries(
   sb: SupabaseClient,
 ): Promise<ProjectSummary[]> {
-  const { data, error } = await sb
-    .from('projects')
-    .select(SUMMARY_COLS)
-    .eq('deleted', false)
-    .order('updated_at', { ascending: false });
+  // Vollständig (auch über 1.000 Aufträge) — Kennzahlen „Aufträge insgesamt“ und Stunden-Summe.
+  const { data, error } = await fetchAllOf(
+    () => sb.from('projects').select(SUMMARY_COLS).eq('deleted', false),
+    [['updated_at', false]],
+  );
   if (error) fail('Aufträge konnten nicht geladen werden', error);
   return (data ?? []) as unknown as ProjectSummary[];
 }

@@ -26,8 +26,30 @@ export interface Member {
   joined_at: string;
 }
 
-export function fail(msg: string, error: { message: string } | null): never {
-  throw new Error(`${msg}${error ? `: ${error.message}` : ''}`);
+/**
+ * Häufige Server-/Netzfehler verständlich auf Deutsch (alle Dashboards). Unbekannte Meldungen bleiben wie sie sind —
+ * Aufrufer, die z. B. auf fehlende Spalten prüfen, sehen weiter den Originaltext.
+ */
+export function readableDbError(error: { message: string; code?: string }): string {
+  const m = error.message ?? '';
+  if (/failed to fetch|networkerror|network request failed|load failed|fetch failed|timeout/i.test(m)) {
+    return 'keine Verbindung zum Server. Bitte Internet prüfen und erneut versuchen.';
+  }
+  if (error.code === '42501' || /row-level security|permission denied/i.test(m)) {
+    return 'dafür fehlt dir die Berechtigung (meist nur der Inhaber).';
+  }
+  if (error.code === 'PGRST301' || error.code === 'PGRST303' || /jwt expired|invalid jwt|not authenticated/i.test(m)) {
+    return 'deine Anmeldung ist abgelaufen. Bitte die Seite neu laden bzw. neu anmelden.';
+  }
+  return m;
+}
+
+export function fail(msg: string, error: { message: string; code?: string } | null): never {
+  if (!error) throw new Error(msg);
+  const text = readableDbError(error);
+  // Originalmeldung für die Fehlersuche in der Konsole, auf der Seite nur der verständliche Text
+  if (text !== error.message) console.error(`${msg}:`, error);
+  throw new Error(`${msg}: ${text}`);
 }
 
 /**
@@ -135,12 +157,12 @@ export async function fetchTeamCode(sb: SupabaseClient, renew = false): Promise<
  * Owner: Teamgröße mit dem Abo abgleichen (Server fragt RevenueCat: Pro 20 · Team 50 ·
  * Team XL 100 · größer per Vertrag). null = App hat noch keine Teamgrößen-Stufen.
  */
-export async function fetchSeats(sb: SupabaseClient): Promise<{ limit: number; members: number } | null> {
+export async function fetchSeats(sb: SupabaseClient, fallbackLimit = 20): Promise<{ limit: number; members: number } | null> {
   const { data, error } = await sb.rpc('sync_seat_limit');
   if (missingRpc(error)) return null;
   if (error) return null; // Anzeige ist Komfort — nie die Team-Seite blockieren
   const r = (Array.isArray(data) ? data[0] : data) as { seat_limit?: number; members?: number } | undefined;
-  return r ? { limit: r.seat_limit ?? 20, members: r.members ?? 0 } : null;
+  return r ? { limit: r.seat_limit ?? fallbackLimit, members: r.members ?? 0 } : null;
 }
 
 /** Owner: 7 Tage gültigen Beitrittscode erzeugen (Präfix je App, z. B. WD-/SD-/RD-). */

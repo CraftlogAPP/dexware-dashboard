@@ -27,7 +27,7 @@ export function Overview() {
     const [devices, customers, meta] = await Promise.all([
       fetchDevices(client),
       fetchCustomers(client),
-      fetchInspectionMeta(client, { limit: 2000 }),
+      fetchInspectionMeta(client),
     ]);
     return { devices, customers, meta };
   }, [client]);

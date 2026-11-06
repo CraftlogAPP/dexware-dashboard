@@ -877,6 +877,28 @@ select option {
     transform: translateY(8px) scale(0.98);
   }
 }
+/* Dialog bekommt beim Öffnen den Fokus (Tastatur) — ohne Rahmen um die ganze Karte */
+.modal-card:focus {
+  outline: none;
+}
+/* Klick neben einen Dialog mit Änderungen: nicht schließen, nur kurz wackeln */
+.modal-card.modal-nudge {
+  animation: modal-nudge 0.32s ease both;
+}
+@keyframes modal-nudge {
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
 .modal-head {
   display: flex;
   align-items: center;

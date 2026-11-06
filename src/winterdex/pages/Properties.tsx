@@ -24,7 +24,7 @@ export function Properties() {
   const state = useAsync<Data>(async () => {
     const [properties, meta] = await Promise.all([
       fetchProperties(client),
-      fetchOperationMeta(client, { limit: 2000 }),
+      fetchOperationMeta(client),
     ]);
     return { properties, lastByProp: lastOpByProperty(meta) };
   }, [client]);

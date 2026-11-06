@@ -28,10 +28,13 @@ export function TeamPage() {
   const team = useAsync<{ code: TeamCode | null; seats: { limit: number; members: number } | null }>(
     async () =>
       isOwner
-        ? { code: await fetchTeamCode(client), seats: await fetchSeats(client) }
+        ? { code: await fetchTeamCode(client), seats: await fetchSeats(client, app.teamSeats?.fallbackLimit) }
         : { code: null, seats: null },
-    [client, isOwner],
+    [client, isOwner, app.teamSeats?.fallbackLimit],
   );
+  // Eigene Team-Stufen der App (Registry) — sonst der bisherige Standard-Text
+  const tiers = app.teamSeats;
+  const solo = !!tiers && team.data?.seats?.limit === 0;
   const [renewBusy, setRenewBusy] = useState(false);
   // PrüfDex: Mitarbeiter heißen „Prüfer“; Betriebe ohne Land-Spalte (PrüfDex) nur mit Namen bearbeiten.
   const workerLabel = app.id === 'pruefdex' ? 'Prüfer' : 'Mitarbeiter';
@@ -172,17 +175,30 @@ export function TeamPage() {
             {team.data.seats && (
               <>
                 {' · '}
-                <b style={{ color: team.data.seats.members >= team.data.seats.limit ? 'var(--danger, #DC2626)' : undefined }}>
-                  {team.data.seats.members} von {team.data.seats.limit} Plätzen belegt
-                </b>
+                {solo ? (
+                  <b>{tiers!.solo}</b>
+                ) : (
+                  <b style={{ color: team.data.seats.members >= team.data.seats.limit ? 'var(--danger, #DC2626)' : undefined }}>
+                    {team.data.seats.members} von {team.data.seats.limit} {tiers?.seatsWord ?? 'Plätzen'} belegt
+                  </b>
+                )}
               </>
             )}
           </p>
           {team.data.seats && team.data.seats.members >= team.data.seats.limit - 2 && (
             <p className="small" style={{ marginBottom: 0 }}>
-              {team.data.seats.members >= team.data.seats.limit ? 'Dein Team ist voll. ' : 'Dein Team ist fast voll. '}
-              Mehr Plätze gibt es in der {app.name}-App unter Abo: <b>Team</b> (bis 50) oder{' '}
-              <b>Team XL</b> (bis 100). Größer: <a href="mailto:support@dexware.app">support@dexware.app</a>.
+              {solo ? 'Weitere Monteure brauchen ein Team-Abo. ' : team.data.seats.members >= team.data.seats.limit ? 'Dein Team ist voll. ' : 'Dein Team ist fast voll. '}
+              {tiers ? (
+                <>
+                  Mehr Plätze gibt es in der {app.name}-App unter Abo: <b>{tiers.tiers}</b>. Größer:{' '}
+                  <a href="mailto:support@dexware.app">support@dexware.app</a>.
+                </>
+              ) : (
+                <>
+                  Mehr Plätze gibt es in der {app.name}-App unter Abo: <b>Team</b> (bis 50) oder{' '}
+                  <b>Team XL</b> (bis 100). Größer: <a href="mailto:support@dexware.app">support@dexware.app</a>.
+                </>
+              )}
             </p>
           )}
         </div>

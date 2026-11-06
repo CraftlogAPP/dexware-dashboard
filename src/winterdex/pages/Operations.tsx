@@ -146,7 +146,11 @@ export function Operations() {
             <div className="card empty">Keine Einsätze im gewählten Zeitraum.</div>
           ) : (
             <>
-              <p className="muted small">{ops.length} Einsätze</p>
+              <p className="muted small">
+                {ops.length} Einsätze
+                {/* Liste lädt höchstens die neuesten 500 (fetch…-Standardlimit) — dann Hinweis statt still gekürzt. */}
+                {ops.length >= 500 ? ' — nur die neuesten 500 angezeigt, bitte den Zeitraum eingrenzen' : ''}
+              </p>
               <div className="table-wrap">
                 <table>
                   <thead>

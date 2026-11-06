@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fmtDate } from '../lib/format';
 import { dueStatus } from '../pruefdex/labels';
+import { fetchAllOf } from '../lib/completeQueries';
 import { throwOnError } from './shared';
 import type { DueItem, DueResult } from './types';
 
@@ -8,13 +9,15 @@ import type { DueItem, DueResult } from './types';
 // (Datum < heute) oder bald fällig (≤ 1 Monat) — analog Übersichts-Ampel.
 // Ausgesonderte Geräte zählen nicht (Spalte retired seit DB-Update 2026-10-29;
 // fehlt sie noch, wird ohne Filter gelesen).
+// Vollständig (auch über 1.000 Geräte/Kunden), seitenweise mit id-Sortierung.
 export async function pruefdexDue(sb: SupabaseClient): Promise<DueResult> {
   const base = 'id, name, next_due_date, customer_id';
+  const allDevices = (cols: string) => fetchAllOf<Record<string, any>>(() => sb.from('device').select(cols));
   const [withRetired, customers] = await Promise.all([
-    sb.from('device').select(`${base}, retired`),
-    sb.from('customer').select('id, name'),
+    allDevices(`${base}, retired`),
+    fetchAllOf<{ id: string; name: string }>(() => sb.from('customer').select('id, name')),
   ]);
-  const devices = withRetired.error ? await sb.from('device').select(base) : withRetired;
+  const devices = withRetired.error ? await allDevices(base) : withRetired;
   throwOnError(devices.error, customers.error);
 
   const custName = new Map((customers.data ?? []).map((c) => [c.id, c.name as string]));

@@ -3,32 +3,20 @@ import {
   INSPECTION_INTERVAL_DAYS,
   INSPECTION_SHORT,
 } from '../geruestdex/types';
-import { buildIntervalDue, throwOnError, type DueUnit } from './shared';
+import { buildIntervalDue, loadAll, loadDueMeta, type DueUnit } from './shared';
 import type { DueResult } from './types';
 
 // GerüstDex: Prüfung hängt an der Baustelle (Inaugenscheinnahme arbeitstäglich
 // 1 T / Prüfung durch befähigte Person 30 T). Nur aktive Baustellen.
 export async function geruestdexDue(sb: SupabaseClient): Promise<DueResult> {
-  const [sites, insp] = await Promise.all([
-    sb.from('site').select('id, name, active'),
-    sb
-      .from('inspection')
-      .select('site_id, type, started_at, canceled')
-      .order('started_at', { ascending: false })
-      .limit(2000),
-  ]);
-  throwOnError(sites.error, insp.error);
+  // Vollständig (auch über 1.000 Zeilen): alle Objekte und die nötigen Prüfungen.
+  const sites = await loadAll(sb, 'site', 'id, name, active');
 
-  const units: DueUnit[] = (sites.data ?? [])
+  const units: DueUnit[] = sites
     .filter((s) => s.active)
     .map((s) => ({ id: s.id, label: s.name }));
 
-  const meta = (insp.data ?? []).map((i) => ({
-    unitId: i.site_id as string,
-    type: i.type as string,
-    startedAt: i.started_at as string,
-    canceled: i.canceled as boolean,
-  }));
+  const meta = await loadDueMeta(sb, 'site_id', units.map((u) => u.id), INSPECTION_INTERVAL_DAYS);
 
   return buildIntervalDue(
     units,

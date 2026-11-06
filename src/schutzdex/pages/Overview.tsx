@@ -4,6 +4,7 @@ import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, fmtDateTime } from '../../lib/format';
 import {
+  countCompletionsSince,
   fetchAssignments,
   fetchBriefings,
   fetchCompletions,
@@ -18,6 +19,8 @@ interface OverviewData {
   briefings: Briefing[];
   assignments: Assignment[];
   completions: Completion[];
+  /** Nachweise der letzten 30 Tage — exakt per count. */
+  comp30Count: number;
 }
 
 export function Overview() {
@@ -25,13 +28,14 @@ export function Overview() {
   const { data: orgCtx } = useOrg();
 
   const state = useAsync<OverviewData>(async () => {
-    const [members, briefings, assignments, completions] = await Promise.all([
+    const [members, briefings, assignments, completions, comp30Count] = await Promise.all([
       fetchMembers(client),
       fetchBriefings(client),
       fetchAssignments(client),
-      fetchCompletions(client, { limit: 500 }),
+      fetchCompletions(client, { limit: 10 }),
+      countCompletionsSince(client, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
     ]);
-    return { members, briefings, assignments, completions };
+    return { members, briefings, assignments, completions, comp30Count };
   }, [client]);
 
   return (
@@ -45,17 +49,12 @@ export function Overview() {
       )}
 
       <LoadGuard state={state}>
-        {({ members, briefings, assignments, completions }) => {
+        {({ members, briefings, assignments, completions, comp30Count }) => {
           const activeMembers = members.filter((m) => m.aktiv);
           const memberNames = nameMap(members);
           const briefingTitles = briefingTitleMap(briefings);
           const open = assignments.filter((a) => a.status !== 'erledigt');
           const overdue = open.filter(isOverdue);
-          const now = Date.now();
-          const dayMs = 24 * 60 * 60 * 1000;
-          const comp30 = completions.filter(
-            (c) => now - new Date(c.abgeschlossen_am).getTime() <= 30 * dayMs,
-          );
           const recent = completions.slice(0, 10);
 
           return (
@@ -82,7 +81,7 @@ export function Overview() {
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Nachweise 30 Tage</div>
-                  <div className="kpi-value">{comp30.length}</div>
+                  <div className="kpi-value">{comp30Count}</div>
                   <div className="kpi-sub">unterschriebene Bestätigungen</div>
                 </div>
               </div>

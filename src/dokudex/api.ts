@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fail } from '../lib/orgApi';
+import { fetchAllOf } from '../lib/completeQueries';
 import type { DocType, DocumentData, DocumentSummary, Project } from './types';
 
 // Listen-Select: NUR skalare/kleine Felder aus dem data-jsonb — der volle
@@ -20,10 +21,12 @@ const DOC_COLS = [
 export async function fetchDocumentSummaries(
   sb: SupabaseClient,
 ): Promise<DocumentSummary[]> {
-  const { data, error } = await sb
-    .from('documents')
-    .select(DOC_COLS)
-    .order('data->>createdAt', { ascending: false });
+  // Vollständig (auch über 1.000 Dokumente) — Kennzahlen, Fristen-Liste, Dokumente je Projekt (auch beim Projekt-Löschen).
+  const { data, error } = await fetchAllOf(
+    () => sb.from('documents').select(DOC_COLS),
+    [['data->>createdAt', false]],
+    'client_id',
+  );
   if (error) fail('Dokumente konnten nicht geladen werden', error);
   return (data ?? []) as unknown as DocumentSummary[];
 }
@@ -152,9 +155,9 @@ export async function saveProject(
 }
 
 export async function fetchProjects(sb: SupabaseClient): Promise<Project[]> {
-  const { data, error } = await sb.from('projects').select('data');
+  const { data, error } = await fetchAllOf<{ data: unknown }>(() => sb.from('projects').select('data'), [], 'client_id');
   if (error) fail('Projekte konnten nicht geladen werden', error);
-  return (data ?? [])
+  return data
     .map((row) => row.data as Project)
     .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'de'));
 }

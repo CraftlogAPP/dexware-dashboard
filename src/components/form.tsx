@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 /**
@@ -8,25 +8,119 @@ import { X } from 'lucide-react';
  * der das App-kompatible Schreibformat baut (siehe api.ts je Bereich).
  */
 
+const FOCUSABLE =
+  'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+const FIELDS = 'input:not(:disabled):not([type="hidden"]):not([readonly]), select:not(:disabled), textarea:not(:disabled):not([readonly])';
+
+const visible = (el: HTMLElement) => el.getClientRects().length > 0;
+
+/**
+ * Dialog-Overlay für alle Dashboards.
+ * - Fokus springt beim Öffnen hinein (am Rechner ins erste Feld, am Handy auf den Dialog — sonst springt die Tastatur auf),
+ *   Tab bleibt im Dialog, beim Schließen geht der Fokus zurück.
+ * - Escape schließt; mit Änderungen erst nach Rückfrage.
+ * - Klick daneben schließt nur ohne Änderungen (sonst wackelt der Dialog kurz).
+ * „Änderungen": `dirty`, falls übergeben — sonst automatisch, sobald im Dialog etwas eingetippt/ausgewählt wurde
+ * (Suchfelder zählen nicht).
+ */
 export function Modal({
   title,
   onClose,
   children,
+  dirty,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Ungespeicherte Änderungen? Ohne Angabe: erkannt an Eingaben im Dialog. */
+  dirty?: boolean;
 }) {
+  const titleId = useId();
+  const cardRef = useRef<HTMLDivElement>(null);
+  const touched = useRef(false);
+  const [nudge, setNudge] = useState(false);
+  const hasChanges = () => dirty ?? touched.current;
+
+  useEffect(() => {
+    const card = cardRef.current;
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (card && !card.contains(document.activeElement)) {
+      const finePointer = window.matchMedia?.('(pointer: fine)').matches ?? true;
+      const field = finePointer ? [...card.querySelectorAll<HTMLElement>(FIELDS)].find(visible) : undefined;
+      (field ?? card).focus({ preventScroll: true });
+    }
+    return () => {
+      if (before && before.isConnected) before.focus({ preventScroll: true });
+    };
+  }, []);
+
+  function markTouched(e: { target: EventTarget }) {
+    const t = e.target as HTMLInputElement;
+    if (t.type === 'search' || t.readOnly) return;
+    touched.current = true;
+  }
+
+  function requestClose() {
+    if (hasChanges() && !window.confirm('Ungespeicherte Eingaben verwerfen?')) return;
+    onClose();
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'Escape') {
+      e.stopPropagation(); // nur der oberste Dialog
+      requestClose();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const card = cardRef.current;
+    if (!card) return;
+    const items = [...card.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(visible);
+    if (!items.length) {
+      e.preventDefault();
+      return;
+    }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || active === card || !card.contains(active))) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (active === last || !card.contains(active))) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
   return (
     <div
       className="modal-backdrop"
+      onKeyDown={onKeyDown}
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target !== e.currentTarget) return;
+        if (hasChanges()) {
+          // Nicht einfach verwerfen — kurz wackeln, Fokus bleibt im Dialog
+          e.preventDefault();
+          setNudge(true);
+          return;
+        }
+        onClose();
       }}
     >
-      <div className="modal-card" role="dialog" aria-modal="true">
+      <div
+        ref={cardRef}
+        className={`modal-card${nudge ? ' modal-nudge' : ''}`}
+        onAnimationEnd={(e) => {
+          if (e.target === e.currentTarget && nudge) setNudge(false);
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onInputCapture={markTouched}
+        onChangeCapture={markTouched}
+      >
         <div className="modal-head">
-          <h3>{title}</h3>
+          <h3 id={titleId}>{title}</h3>
           <button type="button" className="btn ghost small" onClick={onClose} aria-label="Schließen">
             <X className="i" aria-hidden />
           </button>
@@ -66,15 +160,21 @@ export function FormDialog({
   /** Wirft bei Fehler — die Meldung erscheint im Dialog. Bei Erfolg schließt der Dialog. */
   onSave: (values: FormValues) => Promise<void>;
 }) {
-  const [values, setValues] = useState<FormValues>(() => {
+  const [start] = useState<FormValues>(() => {
     const v: FormValues = {};
     for (const f of fields) {
       v[f.key] = initial[f.key] ?? (f.kind === 'checkbox' ? false : '');
     }
     return v;
   });
+  const [values, setValues] = useState<FormValues>(start);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dirty = fields.some((f) => values[f.key] !== start[f.key]);
+  // Während des Speicherns nicht schließen (sonst kommt die Fehlermeldung nie an)
+  const close = () => {
+    if (!busy) onClose();
+  };
 
   function set(key: string, val: string | boolean) {
     setValues((v) => ({ ...v, [key]: val }));
@@ -82,6 +182,7 @@ export function FormDialog({
 
   function submit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return; // Enter doppelt gedrückt
     // HTML-required lässt reine Leerzeichen durch — hier abfangen, bevor
     // getrimmte Leerwerte an die DB gehen (z. B. Storno-Grund-RPCs).
     for (const f of fields) {
@@ -102,7 +203,7 @@ export function FormDialog({
   }
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={close} dirty={dirty}>
       <form onSubmit={submit}>
         {error && <div className="error-box">{error}</div>}
         {fields.map((f) => (

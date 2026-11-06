@@ -26,7 +26,7 @@ export function Playgrounds() {
   const state = useAsync<Data>(async () => {
     const [playgrounds, meta, openDefects] = await Promise.all([
       fetchPlaygrounds(client),
-      fetchInspectionMeta(client, { limit: 2000 }),
+      fetchInspectionMeta(client),
       fetchDefects(client, { status: 'open' }),
     ]);
     return { playgrounds, lastByPg: lastInspectionByPlayground(meta), openDefects };

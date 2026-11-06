@@ -6,6 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fmtTime } from '../lib/format';
 import { signPhotos } from '../lib/photos';
+import { fetchAllOf, fetchLatestWindow } from '../lib/completeQueries';
 import type { OperationAction, WeatherSnapshot } from './types';
 
 export type LatLng = [number, number];
@@ -78,7 +79,7 @@ function fail(msg: string, error: { code?: string; message: string } | null): ne
 }
 
 export async function fetchRoutes(sb: SupabaseClient): Promise<Route[]> {
-  const { data, error } = await sb.from('route').select(ROUTE_LIST_COLS).order('active', { ascending: false }).order('name');
+  const { data, error } = await fetchAllOf(() => sb.from('route').select(ROUTE_LIST_COLS), [['active', false], ['name']]);
   if (error) fail('Strecken konnten nicht geladen werden', error);
   return (data ?? []) as Route[];
 }
@@ -97,23 +98,55 @@ export interface RunFilter {
   /** inklusive, lokale Tagesgrenze */
   to?: Date;
   limit?: number;
+  /** true = vollständig (seitenweise, ohne limit) — z. B. für das Strecken-Nachweis-PDF. */
+  all?: boolean;
 }
 
+/** Standard-Obergrenze der Fahrtenliste (ohne `all`). */
+export const RUNS_LIST_LIMIT = 500;
+
 export async function fetchRuns(sb: SupabaseClient, f: RunFilter = {}): Promise<RunMeta[]> {
-  let q = sb.from('route_run').select(RUN_META_COLS).order('started_at', { ascending: false }).limit(f.limit ?? 500);
-  if (f.routeId) q = q.eq('route_id', f.routeId);
-  // Frei = nie mit Vorlage gefahren. Fahrten einer später gelöschten Strecke haben route_id NULL,
-  // behalten aber route_name (ON DELETE SET NULL) — die gehören nicht hierher.
-  else if (f.free) q = q.is('route_id', null).is('route_name', null);
-  if (f.from) q = q.gte('started_at', f.from.toISOString());
-  if (f.to) {
-    const end = new Date(f.to);
-    end.setHours(23, 59, 59, 999);
-    q = q.lte('started_at', end.toISOString());
-  }
-  const { data, error } = await q;
+  const build = () => {
+    let q = sb.from('route_run').select(RUN_META_COLS);
+    if (f.routeId) q = q.eq('route_id', f.routeId);
+    // Frei = nie mit Vorlage gefahren. Fahrten einer später gelöschten Strecke haben route_id NULL,
+    // behalten aber route_name (ON DELETE SET NULL) — die gehören nicht hierher.
+    else if (f.free) q = q.is('route_id', null).is('route_name', null);
+    if (f.from) q = q.gte('started_at', f.from.toISOString());
+    if (f.to) {
+      const end = new Date(f.to);
+      end.setHours(23, 59, 59, 999);
+      q = q.lte('started_at', end.toISOString());
+    }
+    return q;
+  };
+  const { data, error } = f.all
+    ? await fetchAllOf(build, [['started_at', false], ['id', false]])
+    : await build()
+        .order('started_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(f.limit ?? RUNS_LIST_LIMIT);
   if (error) fail('Fahrten konnten nicht geladen werden', error);
   return (data ?? []) as unknown as RunMeta[];
+}
+
+/**
+ * Fahrten der letzten 7 Tage vollständig + je Strecke ohne Fahrt darin die jüngste ältere
+ * (Kennzahlen „heute gefahren“ / „Fahrten 7 Tage“ / „letzte Fahrt“) — wie mit kompletter Historie.
+ */
+export async function fetchRecentRuns(sb: SupabaseClient, routeIds: string[]): Promise<RunMeta[]> {
+  const { data, error } = await fetchLatestWindow<RunMeta>({
+    sb,
+    table: 'route_run',
+    cols: RUN_META_COLS,
+    dateCol: 'started_at',
+    unitCol: 'route_id',
+    units: routeIds,
+    windowDays: 8,
+    canceled: true,
+  });
+  if (error) fail('Fahrten konnten nicht geladen werden', error);
+  return data;
 }
 
 export async function fetchRun(sb: SupabaseClient, id: string): Promise<Run> {
