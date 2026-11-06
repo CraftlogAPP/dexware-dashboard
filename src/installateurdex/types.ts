@@ -32,9 +32,8 @@ export interface InstOrg extends Org {
   reminder_days?: number | null;
 }
 
-/** Wie die App (diktat.sql → dictation_allowance): Pro nur bis plan_until — abgelaufen = Gratis. */
+/** Wie Server und App (org_is_pro in diktat.sql): Pro nur bis plan_until — abgelaufen = Gratis. Die alte Spalte is_pro zählt nicht. */
 export function isProOrg(org: InstOrg): boolean {
-  if (org.is_pro === true) return true;
   if (org.plan !== 'pro') return false;
   return !org.plan_until || new Date(org.plan_until).getTime() > Date.now();
 }
