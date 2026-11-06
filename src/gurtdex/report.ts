@@ -24,6 +24,12 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/** Bildquelle (Unterschrift kommt roh aus der DB): nur data:image/… oder https://, maskiert — sonst nichts. */
+function imgSrc(u: string | null | undefined): string {
+  if (!u) return '';
+  return /^(data:image\/|https:\/\/)/.test(u) ? esc(u) : '';
+}
+
 function itemName(id: string | null, items: PsaItem[]): string {
   if (!id) return 'Standort allgemein';
   return items.find((e) => e.id === id)?.name ?? 'PSA-Artikel';
@@ -212,7 +218,7 @@ export function buildReportHtml(
     const fields = (names.length ? names : [''])
       .map((n) => {
         const sig = n ? sigOf(n) : undefined;
-        return `<div class="sig">${sig ? `<img class="sig-img" src="${sig}" alt="Unterschrift" />` : ''}<div class="sig-line"></div><div class="sig-label">${sig ? 'Elektronisch unterschrieben' : 'Datum, Unterschrift'}${n ? ` — ${esc(n)}` : ' der prüfenden Person'}</div></div>`;
+        return `<div class="sig">${imgSrc(sig) ? `<img class="sig-img" src="${imgSrc(sig)}" alt="Unterschrift" />` : ''}<div class="sig-line"></div><div class="sig-label">${sig ? 'Elektronisch unterschrieben' : 'Datum, Unterschrift'}${n ? ` — ${esc(n)}` : ' der prüfenden Person'}</div></div>`;
       })
       .join('');
     return `<div class="sign"><b>Bestätigung der prüfenden Person${names.length > 1 ? 'en' : ''}</b><div class="sig-grid">${fields}</div></div>`;
