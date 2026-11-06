@@ -110,7 +110,9 @@ function Editor({ initial }: { initial: Loaded }) {
   const navigate = useNavigate();
   const location = useLocation();
   const pro = isProOrg(org);
-  const handover = (location.state as { notice?: string } | null)?.notice;
+  const handoverState = location.state as { notice?: string; tone?: 'ok' | 'error' } | null;
+  const handover = handoverState?.notice;
+  const handoverTone = handoverState?.tone === 'error' ? 'error' : 'ok';
   const [profile, setProfile] = useState(initial.profile);
   const [stored, setStored] = useState(initial.stored);
   const [draft, setDraft] = useState(initial.draft);
@@ -119,7 +121,7 @@ function Editor({ initial }: { initial: Loaded }) {
   const nextKey = useRef(initial.draft.lines.length);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [notice, setNotice] = useState<Notice>(handover ? { tone: 'ok', text: handover } : null);
+  const [notice, setNotice] = useState<Notice>(handover ? { tone: handoverTone, text: handover } : null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [cancelText, setCancelText] = useState<string | null>(null);
 
@@ -233,14 +235,25 @@ function Editor({ initial }: { initial: Loaded }) {
     }
     if (!window.confirm(`${quote ? 'Angebot' : 'Rechnung'} ausstellen?\n\nDie Nummer wird vergeben. Danach lässt sich der Beleg nicht mehr ändern — nur stornieren.`)) return;
     void run('issue', async () => {
+      const wasNew = !stored;
       const id = await persist();
-      const fresh = await geld.profile(org.id, org.land, org.name); // Firmendaten frisch einfrieren
-      const number = await geld.issue(id, fresh);
-      setProfile(fresh);
+      // Gespeicherten Entwurf sofort übernehmen (wie saveOnly): scheitert das Ausstellen danach, speichert der nächste
+      // Klick in DENSELBEN Entwurf statt einen zweiten anzulegen.
+      adopt(await geld.invoice(id));
+      let number: string;
+      try {
+        const fresh = await geld.profile(org.id, org.land, org.name); // Firmendaten frisch einfrieren
+        number = await geld.issue(id, fresh);
+        setProfile(fresh);
+      } catch (e) {
+        // Neuer Beleg: Adresse auf den gespeicherten Entwurf setzen (Neuladen zeigt ihn, nicht ein leeres Formular)
+        if (wasNew) navigate(`${base}/rechnungen/${id}`, { replace: true, state: { notice: `Entwurf gespeichert, aber nicht ausgestellt: ${errText(e)}`, tone: 'error' } });
+        throw e;
+      }
       adopt(await geld.invoice(id));
       const text = `${quote ? 'Angebot' : 'Rechnung'} ${number} ausgestellt.`;
       setNotice({ tone: 'ok', text });
-      if (!stored) navigate(`${base}/rechnungen/${id}`, { replace: true, state: { notice: text } });
+      if (wasNew) navigate(`${base}/rechnungen/${id}`, { replace: true, state: { notice: text } });
     });
   };
 
