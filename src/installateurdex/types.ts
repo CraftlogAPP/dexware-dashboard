@@ -585,6 +585,19 @@ export interface Site {
   reminder_unsub_email?: string | null;
   /** Kundenportal „Mein Zuhause“ für die Kunden-E-Mail freigegeben (zuhause.sql) — nur mit E-Mail */
   portal_enabled?: boolean | null;
+  /** Wohnungen/Nutzungseinheiten im Gebäude (region.sql) — DE GModG §§ 60a–60c gelten ab 6 */
+  units?: number | null;
+}
+
+/** Letzte dokumentierte gesetzliche Überprüfung je Anlage (Messwert legalCheck, wie lib/recht.ts der App). */
+export function legalCheckFromJobs(jobs: Pick<Job, 'item_id' | 'started_at' | 'canceled' | 'measurements'>[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const j of jobs) {
+    if (j.canceled || !String(j.measurements?.legalCheck ?? '').trim()) continue;
+    const prev = map.get(j.item_id);
+    if (!prev || j.started_at > prev) map.set(j.item_id, j.started_at);
+  }
+  return map;
 }
 
 export type ReminderState = 'confirmed' | 'pending' | 'queued' | 'unsubscribed' | 'none';

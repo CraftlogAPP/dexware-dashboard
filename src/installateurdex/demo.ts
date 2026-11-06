@@ -9,6 +9,7 @@ import type { InstData, OrgSettingsInput } from './data';
 import {
   SERVICE_TYPES,
   leakInfoFromJobs,
+  legalCheckFromJobs,
   openFollowUpsFromJobs,
   type Asset,
   type CheckResult,
@@ -46,6 +47,9 @@ function buildOrg(): InstOrg {
     id: ORG_ID,
     name: 'Installateur Muster GmbH',
     land: 'AT',
+    // Bundesland + Prüfnummer (region.sql): zeigt im Beispiel die Pflicht-Überprüfung nach Bgld. HKG
+    region: 'bgld',
+    legal: { inspectionNo: 'BPR-0000 (Beispiel)' },
     address: 'Musterstraße 12, 7000 Musterstadt',
     created_at: ago(800),
     plan: 'pro',
@@ -271,7 +275,8 @@ export const JOBS: Job[] = [
   // Seestraße
   job('a-see-gt1', 'service', ago(705, 2), {
     checklist: ok('visual', 'burner', 'siphon', 'ignition', 'flue', 'gasTight', 'fluegasMeasure', 'expansion', 'safety', 'errors', 'function'),
-    measurements: { pressure: '1,7', flow: '62', return: '50', gasPressure: '20', co2: '9,1', co: '25', fluegas: '55', loss: '2,9' },
+    // legalCheck: Überprüfung nach Bgld. HKG (35 kW → alle 2 Jahre) → im Beispiel bald wieder fällig
+    measurements: { pressure: '1,7', flow: '62', return: '50', gasPressure: '20', co2: '9,1', co: '25', fluegas: '55', loss: '2,9', legalCheck: 'ohne Mängel' },
     work_minutes: 70,
   }),
   J_SEE_GT1,
@@ -578,6 +583,7 @@ export function createDemoStore(onOrgChange: (org: InstOrg) => void): DemoStore 
       return wait(map, 80);
     },
     lastLeakCheck: () => wait(leakInfoFromJobs(JOBS), 80),
+    lastLegalCheck: () => wait(legalCheckFromJobs(JOBS), 80),
     assetStatus: (assetId) => {
       const mine = JOBS.filter((j) => j.item_id === assetId);
       const svc = mine.filter((j) => !j.canceled && SERVICE_TYPES.includes(j.type)).sort(byDateDesc)[0];

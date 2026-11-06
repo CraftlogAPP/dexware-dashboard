@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { CalendarPlus, Download } from 'lucide-react';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { toInputDate } from '../../lib/format';
-import { DueCell, LeakLine, WarrantyRiskBadge } from '../badges';
+import { DueCell, LeakLine, LegalLine, WarrantyRiskBadge } from '../badges';
 import { downloadCsv, toCsv } from '../csv';
 import { useInst } from '../context';
 import { buildDueRows, byDue, onlyDemo, type DueRow } from '../portfolio';
@@ -65,18 +65,19 @@ export function Maintenance() {
   const [demoRows, setDemoRows] = useState(false);
 
   const state = useAsync(async () => {
-    const [sites, assets, lastService, lastLeak] = await Promise.all([
+    const [sites, assets, lastService, lastLeak, lastLegal] = await Promise.all([
       data.sites(),
       data.assets(),
       data.lastService(),
       data.lastLeakCheck(),
+      data.lastLegalCheck(),
     ]);
-    return { sites, assets, lastService, lastLeak };
+    return { sites, assets, lastService, lastLeak, lastLegal };
   }, [data]);
 
   const rows = useMemo(
     () =>
-      state.data ? buildDueRows(org, state.data.sites, state.data.assets, state.data.lastService, state.data.lastLeak) : [],
+      state.data ? buildDueRows(org, state.data.sites, state.data.assets, state.data.lastService, state.data.lastLeak, state.data.lastLegal) : [],
     [org, state.data],
   );
 
@@ -128,6 +129,7 @@ export function Maintenance() {
       'Vertrag',
       'Status',
       'Dichtheitskontrolle (F-Gas) fällig am',
+      'Pflicht-Überprüfung (Landesrecht)',
     ];
     const body = list.map((r) => [
       r.site?.operator_name ?? '',
@@ -141,6 +143,7 @@ export function Maintenance() {
       r.asset.contract ? 'ja' : 'nein',
       r.archived ? 'archiviert' : DUE_BUCKET_LABELS[r.bucket],
       r.leak ? (r.leak.dueAt ? fmtDay(r.leak.dueAt) : 'noch keine dokumentiert') : '',
+      r.legal ? `${r.legal.dueAt ? fmtDay(r.legal.dueAt) : r.legal.basis === 'unknown' ? 'letzte nicht dokumentiert' : 'Inbetriebnahme fehlt'} (${r.legal.rule.legalRef})${r.legalOwn ? '' : ' – Kunde hinweisen'}` : '',
     ]);
     // Monteure: ohne Preisspalte (wie in der Liste)
     const priceCol = header.indexOf('Preis');
@@ -158,8 +161,9 @@ export function Maintenance() {
       </div>
       <p className="muted" style={{ marginTop: 6 }}>
         Alle Anlagen mit nächster Wartung — berechnet wie in der App aus der letzten Wartung bzw. Inbetriebnahme und dem
-        Wartungsintervall. Bei Anlagen mit Pflicht-Dichtheitskontrolle (F-Gas-VO Art. 5) steht deren Frist darunter und
-        zählt in den Filtern mit. Der Export enthält genau die gefilterte Liste.
+        Wartungsintervall. Bei Anlagen mit Pflicht-Dichtheitskontrolle (F-Gas-VO Art. 5) oder Pflicht-Überprüfung nach
+        Landesrecht (Bundesland in den Einstellungen) steht deren Frist darunter und zählt in den Filtern mit — die
+        Landesprüfung nur, wenn dein Betrieb sie selbst machen darf. Der Export enthält genau die gefilterte Liste.
       </p>
 
       <LoadGuard state={state}>
@@ -262,6 +266,7 @@ export function Maintenance() {
                             <td>
                               <DueCell info={r.due} retired={r.asset.retired} />
                               <LeakLine leak={r.leak} compact />
+                              <LegalLine legal={r.legal} own={r.legalOwn} compact />
                             </td>
                             <td className="wrap">
                               <Link to={`${base}/anlagen/${r.asset.id}`}>{r.asset.name}</Link>

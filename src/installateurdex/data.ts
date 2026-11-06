@@ -57,6 +57,8 @@ export interface InstData {
   assetPhoto(assetId: string): Promise<string | null>;
   /** Letzte dokumentierte Dichtheitskontrolle je Anlage (F-Gas, measurements.leakResult nicht leer). */
   lastLeakCheck(): Promise<Map<string, LeakInfo>>;
+  /** Letzte gesetzliche Überprüfung nach Landesrecht je Anlage (Messwert legalCheck). */
+  lastLegalCheck(): Promise<Map<string, string>>;
   /** Nicht stornierte Einsätze ab einem Zeitpunkt (Kennzahl „diese Woche"). */
   jobsSince(from: Date): Promise<JobMeta[]>;
   jobs(filter: { siteId?: string; itemId?: string; limit?: number }): Promise<Job[]>;
@@ -307,6 +309,28 @@ export function supabaseData(sb: SupabaseClient): InstData {
       for (const r of data) {
         if (!String(r.leak ?? '').trim() || map.has(r.item_id)) continue;
         map.set(r.item_id, { at: r.started_at, open: isLeakFound(r.leak) });
+      }
+      return map;
+    },
+
+    async lastLegalCheck() {
+      // Wie lastLegalCheckByItem in der App (lib/recht.ts): nicht storniert, Messwert legalCheck gefüllt.
+      const { data, error } = await fetchAllRows<{ item_id: string; started_at: string; legal: string | null }>((from, to) =>
+        sb
+          .from('inspection')
+          .select('item_id, started_at, legal:measurements->>legalCheck')
+          .eq('canceled', false)
+          .not('measurements->>legalCheck', 'is', null)
+          .neq('measurements->>legalCheck', '')
+          .order('started_at', { ascending: false })
+          .order('id')
+          .range(from, to),
+      );
+      if (error) fail('Gesetzliche Überprüfungen konnten nicht geladen werden', error);
+      const map = new Map<string, string>();
+      for (const r of data) {
+        if (!String(r.legal ?? '').trim() || map.has(r.item_id)) continue;
+        map.set(r.item_id, r.started_at);
       }
       return map;
     },

@@ -21,6 +21,7 @@ import {
   type RequestStatus,
 } from './types';
 import type { ReminderState } from './types';
+import { legalDueLabel, ROLE_LABELS, type LegalDue } from './recht/recht';
 
 const BUCKET_CLASS: Record<DueBucket, string> = {
   overdue: 'badge red',
@@ -125,6 +126,21 @@ const REMINDER: Record<ReminderState, { cls: string; label: string; title: strin
   unsubscribed: { cls: 'badge', label: 'abbestellt', title: 'Der Kunde hat abbestellt — einschalten kann er die Erinnerungen nur selbst.' },
   none: { cls: 'badge', label: 'keine Zustimmung', title: '' },
 };
+
+/**
+ * Pflicht-Überprüfung nach Landesrecht (wie die Objekt-Zeile der App). own=false: der Betrieb darf sie nicht selbst
+ * machen (keine Berechtigung bzw. Rauchfangkehrer) → grau, nur Hinweis für den Kunden.
+ */
+export function LegalLine({ legal, own, compact }: { legal: LegalDue | null; own: boolean; compact?: boolean }) {
+  if (!legal) return null;
+  const cls = !own || legal.state === 'never' ? 'never' : legal.state;
+  return (
+    <span className={`idx-leak ${cls}`} title={`${legal.rule.title} — ${legal.rule.legalRef} · ${ROLE_LABELS[legal.rule.installerRole]}`}>
+      ⚖️ {legalDueLabel(legal)}
+      {!own && !compact && ' · Kunde hinweisen'}
+    </span>
+  );
+}
 
 /** Stand der Erinnerungsmail (Double-Opt-in), gleiche Stufen wie in der App. */
 export function ReminderBadge({ state }: { state: ReminderState }) {

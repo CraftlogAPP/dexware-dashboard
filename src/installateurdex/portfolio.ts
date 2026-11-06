@@ -17,6 +17,8 @@ import {
   type ItemKind,
   type Site,
 } from './types';
+import { legalDue, mayInspect, type LegalDue } from './recht/recht';
+import { toRechtAsset, toRechtSite } from './recht/shim';
 
 export interface DueRow {
   asset: Asset;
@@ -31,6 +33,13 @@ export interface DueRow {
   archived: boolean;
   /** Pflicht-Dichtheitskontrolle (F-Gas-VO Art. 5); null = keine Pflicht oder außer Betrieb */
   leak: LeakDueInfo | null;
+  /**
+   * Pflicht-Überprüfung nach Landesrecht (Bundesland des Betriebs, lib/recht.ts der App); nur wenn die letzten
+   * Prüfungen mitgegeben wurden (Wartungsliste, Objekt). null = keine Pflicht hinterlegt.
+   */
+  legal: LegalDue | null;
+  /** Darf der Betrieb diese Überprüfung selbst machen (Berechtigung)? Sonst nur Kundenhinweis — zählt nicht in „worst“. */
+  legalOwn: boolean;
   /**
    * Dringender von Wartung und Dichtheitskontrolle — für Kennzahlen, Filter und Sortierung (wie Radar und
    * Kacheln in der App). Eine noch nie dokumentierte Kontrolle ohne Datum zählt nicht. Das Wartungspotenzial
@@ -47,7 +56,10 @@ export function buildDueRows(
   assets: Asset[],
   lastService: Map<string, string>,
   lastLeak: Map<string, LeakInfo>,
+  lastLegal?: Map<string, string>,
 ): DueRow[] {
+  const land = org.land;
+  const region = org.region ?? null;
   const siteById = new Map(sites.map((s) => [s.id, s]));
   return assets.map((a) => {
     const site = siteById.get(a.site_id);
@@ -57,6 +69,12 @@ export function buildDueRows(
     const leak = a.retired ? null : leakDue(a, lastLeak.get(a.id));
     const lb = leak && leak.state !== 'never' ? dueBucket(leak) : null;
     const leakCounts = lb === 'overdue' || lb === 'd30' || lb === 'd90';
+    const legal = lastLegal && !a.retired ? legalDue(toRechtAsset(a), land, region, lastLegal.get(a.id), toRechtSite(site)) : null;
+    const legalOwn = !!legal && mayInspect(legal.rule, org.legal?.inspectionNo);
+    const gb = legal && legalOwn && legal.state !== 'never' ? dueBucket(legal) : null;
+    const legalCounts = gb === 'overdue' || gb === 'd30' || gb === 'd90';
+    let worst: DueBucket = leakCounts && BUCKET_ORDER[lb] < BUCKET_ORDER[bucket] ? lb : bucket;
+    if (legalCounts && BUCKET_ORDER[gb] < BUCKET_ORDER[worst]) worst = gb;
     return {
       asset: a,
       site,
@@ -66,7 +84,9 @@ export function buildDueRows(
       price: assetPrice(org, a),
       archived: a.retired || !site || !site.active,
       leak,
-      worst: leakCounts && BUCKET_ORDER[lb] < BUCKET_ORDER[bucket] ? lb : bucket,
+      legal,
+      legalOwn,
+      worst,
     };
   });
 }
@@ -75,7 +95,8 @@ export function buildDueRows(
 function soonest(r: DueRow): number {
   const m = r.due.dueAt?.getTime() ?? Infinity;
   const l = r.leak && r.leak.state !== 'never' && r.leak.dueAt ? r.leak.dueAt.getTime() : Infinity;
-  return Math.min(m, l);
+  const g = r.legal && r.legalOwn && r.legal.state !== 'never' && r.legal.dueAt ? r.legal.dueAt.getTime() : Infinity;
+  return Math.min(m, l, g);
 }
 
 /**

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, fmtDateTime } from '../../lib/format';
-import { DueCell, JobBadge, LeakLine, ReminderBadge, SeverityBadge, WarrantyRiskBadge } from '../badges';
+import { DueCell, JobBadge, LeakLine, LegalLine, ReminderBadge, SeverityBadge, WarrantyRiskBadge } from '../badges';
 import { useInst } from '../context';
 import { ContactValue, PrintButton, RequestCard } from '../parts';
 import { buildDueRows, byDue } from '../portfolio';
@@ -61,16 +61,17 @@ export function SiteDetail() {
   const { data, org, base } = useInst();
 
   const state = useAsync(async () => {
-    const [site, assets, lastService, lastLeak, jobs, defects, requests] = await Promise.all([
+    const [site, assets, lastService, lastLeak, lastLegal, jobs, defects, requests] = await Promise.all([
       data.site(id!),
       data.assets({ siteId: id }),
       data.lastService(),
       data.lastLeakCheck(),
+      data.lastLegalCheck(),
       data.jobs({ siteId: id, limit: 30 }),
       data.defects({ siteId: id }),
       data.requests({ siteId: id }),
     ]);
-    return { site, assets, lastService, lastLeak, jobs, defects, requests };
+    return { site, assets, lastService, lastLeak, lastLegal, jobs, defects, requests };
   }, [data, id]);
 
   return (
@@ -79,9 +80,9 @@ export function SiteDetail() {
         ← Kunden &amp; Objekte
       </Link>
       <LoadGuard state={state}>
-        {({ site, assets, lastService, lastLeak, jobs, defects, requests }) => {
+        {({ site, assets, lastService, lastLeak, lastLegal, jobs, defects, requests }) => {
           if (!site) return <div className="error-box">Objekt nicht gefunden.</div>;
-          const rows = buildDueRows(org, [site], assets, lastService, lastLeak).sort(
+          const rows = buildDueRows(org, [site], assets, lastService, lastLeak, lastLegal).sort(
             (a, b) => Number(a.asset.retired) - Number(b.asset.retired) || byDue(a, b),
           );
           const assetById = new Map(assets.map((a) => [a.id, a]));
@@ -165,6 +166,7 @@ export function SiteDetail() {
                                   <td>
                                     <DueCell info={r.due} retired={r.asset.retired} />
                                     <LeakLine leak={r.leak} />
+                                    <LegalLine legal={r.legal} own={r.legalOwn} />
                                   </td>
                                   <td className="idx-num">
                                     {r.price !== undefined && !r.asset.retired ? fmtEur(r.price) : <span className="muted">—</span>}
