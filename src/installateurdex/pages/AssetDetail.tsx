@@ -9,6 +9,7 @@ import { buildAkteHtml } from '../report';
 import { AkteLimitHinweis } from '../AkteLimitHinweis';
 import { akteLimitNote } from '../akteLimitNote';
 import { Fehlerverlauf } from '../auswertung/Fehlerverlauf';
+import { AnlagenSchema } from '../anlage/AnlagenSchema';
 import {
   PASS_BASE,
   checkLabel,
@@ -144,6 +145,11 @@ export function AssetDetail() {
                 die Garantie an regelmäßige Wartung — was genau gilt, regelt der Hersteller.
               </div>
             )}
+
+            {/* Schaubild wie in der App: Quelle → Gerät → Verbraucher, fließende Leitungen, Status-Licht, Kennzahlen */}
+            <div className="idx-schema-wrap">
+              <AnlagenSchema asset={asset} stand={{ lastService: last, leak: status.leak, defects: open }} />
+            </div>
 
             <div className="kpi-grid">
               <div className="kpi">

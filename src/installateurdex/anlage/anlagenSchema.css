@@ -1,0 +1,302 @@
+/* Anlagen-Schema (wie App AnlagenSchema.tsx) — Farben aus dem Portal-Theme, Leitungen: warm = Kupfer, kühl = Eisblau. */
+.idx-scope {
+  --as-warm: #d08a5c;
+  --as-cool: #7cc4ea;
+}
+
+/* ---------- Karte (Anlagenseite) ---------- */
+.idx-scope .as-card {
+  max-width: 600px;
+  padding: 16px 16px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.idx-scope .as-bare {
+  max-width: 600px;
+}
+
+/* ---------- Zeichnung ---------- */
+.idx-scope .as-draw {
+  --as-node: 62px;
+  --as-node-h: 52px;
+  --as-main: 70px;
+  --as-main-h: 60px;
+  --as-pipe: 5px;
+  --as-pipe-gap: 11px;
+  display: grid;
+  align-items: center;
+  column-gap: 0;
+  row-gap: 8px;
+}
+.idx-scope .as-draw.small {
+  --as-node: 34px;
+  --as-node-h: 30px;
+  --as-main: 40px;
+  --as-main-h: 34px;
+  --as-pipe: 3px;
+  --as-pipe-gap: 5px;
+  row-gap: 0;
+}
+.idx-scope .as-node {
+  position: relative;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--as-node);
+  height: var(--as-node-h);
+  border: 1px solid var(--border-strong);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--text);
+  z-index: 1;
+}
+.idx-scope .as-node.main {
+  width: var(--as-main);
+  height: var(--as-main-h);
+  border: 1.5px solid color-mix(in oklab, var(--text) 32%, transparent);
+  border-radius: 16px;
+  box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.6);
+}
+.idx-scope .as-draw.small .as-node {
+  border-radius: 8px;
+}
+.idx-scope .as-draw.small .as-node.main {
+  border-radius: 10px;
+  box-shadow: none;
+}
+.idx-scope .as-draw.dim .as-node {
+  opacity: 0.55;
+}
+.idx-scope .as-multi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0;
+}
+.idx-scope .as-multi .as-muted {
+  margin-top: -3px;
+  color: var(--muted);
+}
+
+/* Leitungen zwischen den Teilen */
+.idx-scope .as-link {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-width: 18px;
+}
+.idx-scope .as-pipes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--as-pipe-gap);
+  width: 100%;
+}
+.idx-scope .as-pipe {
+  --as-c: var(--muted);
+  position: relative;
+  display: block;
+  height: var(--as-pipe);
+  margin: 0 -2px;
+  border-radius: var(--as-pipe);
+  overflow: hidden;
+  background: color-mix(in oklab, var(--as-c) 30%, transparent);
+}
+.idx-scope .as-pipe.t-warm {
+  --as-c: var(--as-warm);
+}
+.idx-scope .as-pipe.t-cool {
+  --as-c: var(--as-cool);
+}
+.idx-scope .as-pipe.t-water {
+  --as-c: color-mix(in oklab, var(--as-cool) 62%, var(--muted));
+}
+.idx-scope .as-pipe.t-fuel {
+  --as-c: var(--muted);
+}
+.idx-scope .as-pipe.t-waste {
+  --as-c: color-mix(in oklab, var(--muted) 65%, var(--as-warm));
+}
+.idx-scope .as-draw.dim .as-pipe {
+  background: color-mix(in oklab, var(--as-c) 22%, transparent);
+}
+.idx-scope .as-pipe svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.idx-scope .as-pipe line {
+  stroke: var(--as-c);
+  stroke-width: 12;
+  stroke-dasharray: 7 7;
+}
+.idx-scope .as-draw.small .as-pipe line {
+  stroke-dasharray: 4 4;
+}
+/* Fließen: eine Strichlänge pro 1,7 s — ruhig, nicht hektisch */
+.idx-scope .as-pipe line.flow {
+  animation: as-flow 1.7s linear infinite;
+}
+.idx-scope .as-pipe.rev line.flow {
+  animation-direction: reverse;
+}
+@keyframes as-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .idx-scope .as-pipe line.flow {
+    animation: none;
+  }
+}
+.idx-scope .as-linetext {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: calc(50% + 14px);
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Beschriftungen unter den Teilen (dürfen breiter als die Kachel sein) */
+.idx-scope .as-label {
+  justify-self: center;
+  width: max-content;
+  max-width: 104px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--muted);
+}
+
+/* Status-Licht wie eine LED am Gerät */
+.idx-scope .as-led {
+  --as-l: var(--muted);
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--as-l);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--as-l) 22%, transparent);
+}
+.idx-scope .as-node .as-led {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 11px;
+  height: 11px;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--as-l) 24%, transparent), 0 0 0 5px var(--surface);
+}
+.idx-scope .as-draw.small .as-node .as-led {
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.idx-scope .tone-red {
+  --as-l: var(--red);
+}
+.idx-scope .tone-amber {
+  --as-l: var(--amber);
+}
+.idx-scope .tone-green {
+  --as-l: var(--green);
+}
+.idx-scope .tone-muted {
+  --as-l: var(--muted);
+}
+
+/* Hauptzeile, Hinweise, Kennzahlen */
+.idx-scope .as-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 15px;
+}
+.idx-scope .as-status.tone-red b,
+.idx-scope .as-status.tone-amber b {
+  color: color-mix(in oklab, var(--as-l) 75%, #fff);
+}
+.idx-scope .as-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding-left: 3px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.idx-scope .as-hint.tone-red,
+.idx-scope .as-hint.tone-amber {
+  color: color-mix(in oklab, var(--as-l) 75%, #fff);
+}
+.idx-scope .as-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--as-l);
+}
+.idx-scope .as-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.idx-scope .as-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.idx-scope .as-cell-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.idx-scope .as-cell-value {
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Einbau ---------- */
+.idx-scope .idx-schema-wrap {
+  margin: 14px 0 4px;
+}
+/* Kurzform (Objektseite, Anlagenliste) */
+.idx-scope .as-small {
+  width: 150px;
+  padding: 4px 2px;
+}
+.idx-scope td.idx-schema-cell {
+  width: 1%;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.idx-scope td.idx-schema-cell a {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.idx-scope td.idx-schema-cell a:hover .as-node {
+  border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+}

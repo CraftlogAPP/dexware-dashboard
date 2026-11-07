@@ -10,6 +10,7 @@ import { buildAkteHtml } from '../report';
 import { AkteLimitHinweis } from '../AkteLimitHinweis';
 import { akteLimitNote } from '../akteLimitNote';
 import { fmtEur, kindInfo, makerModel, reminderState, type Site } from '../types';
+import { AnlagenSchema } from '../anlage/AnlagenSchema';
 
 /**
  * Kundenportal „Mein Zuhause“ (zuhause.sql) je Objekt freigeben — wie die App (SiteFormScreen): nur mit E-Mail des
@@ -129,6 +130,7 @@ export function SiteDetail() {
                         <table>
                           <thead>
                             <tr>
+                              <th className="idx-hide-sm" aria-label="Schaubild" />
                               <th>Anlage</th>
                               <th>Nächste Wartung</th>
                               <th className="idx-num">Preis</th>
@@ -139,6 +141,16 @@ export function SiteDetail() {
                               const blocked = open.some((d) => d.item_id === r.asset.id && d.item_blocked);
                               return (
                                 <tr key={r.asset.id}>
+                                  {/* ruhiges Schaubild wie in der App (still, ohne Beschriftung) — groß auf der Anlagenseite */}
+                                  <td className="idx-hide-sm idx-schema-cell">
+                                    <Link to={`${base}/anlagen/${r.asset.id}`} tabIndex={-1}>
+                                      <AnlagenSchema
+                                        asset={r.asset}
+                                        stand={{ lastService: r.last, leak: lastLeak.get(r.asset.id), defects: open }}
+                                        size="small"
+                                      />
+                                    </Link>
+                                  </td>
                                   <td className="wrap">
                                     <Link to={`${base}/anlagen/${r.asset.id}`}>
                                       {kindInfo(r.asset.kind).emoji} {r.asset.name}
