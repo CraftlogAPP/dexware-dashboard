@@ -34,8 +34,11 @@ export interface AuswertungData {
   fgasJobs(year: number): Promise<FgasJob[]>;
   /** Fehlercode-Verlauf: gültige Wartungen/Reparaturen/Arbeitsberichte mit Text an diesen Anlagen (wie App pastFixes). */
   fixJobs(itemIds: string[]): Promise<FixJob[]>;
-  /** Wartungsvertrag bei einer Anlage vermerken (RLS item_update: nur Inhaber). */
-  markContract(assetId: string): Promise<void>;
+  /**
+   * Wartungsvertrag bei einer Anlage vermerken (RLS item_update: nur Inhaber). contractPrice = Preis je Wartung laut
+   * Vertrag (€, netto) — wie das Anlagenformular der App; ohne Angabe bleibt der bisherige Preis.
+   */
+  markContract(assetId: string, contractPrice?: number): Promise<void>;
   helperListing(orgId: string): Promise<HelperListing>;
   saveHelperListing(orgId: string, p: HelperListingInput): Promise<void>;
 }
@@ -99,8 +102,9 @@ export function supabaseAuswertung(sb: SupabaseClient): AuswertungData {
       return out;
     },
 
-    async markContract(assetId) {
-      const { data, error } = await sb.from('asset').update({ contract: true }).eq('id', assetId).select('id');
+    async markContract(assetId, contractPrice) {
+      const patch = contractPrice !== undefined && contractPrice > 0 ? { contract: true, contract_price: contractPrice } : { contract: true };
+      const { data, error } = await sb.from('asset').update(patch).eq('id', assetId).select('id');
       if (error) fail('Wartungsvertrag konnte nicht gespeichert werden', error);
       if (!data?.length) throw new Error('Nur der Inhaber kann das ändern.');
     },

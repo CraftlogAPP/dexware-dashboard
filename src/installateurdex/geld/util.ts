@@ -1,6 +1,7 @@
 // Kleine gemeinsame Helfer der Geld-Seiten (Eingabe-Umwandlung wie App InvoiceScreen/ArticlesScreen, Status-Abzeichen).
 
 import type { StoredInvoice } from './api';
+import { calendarDaysBetween } from './invoice';
 
 /** Kalendertag „JJJJ-MM-TT“ in LOKALER Zeit (wie App lib/dates.ts localDay — nie toISOString). */
 export function localDay(d: Date = new Date()): string {
@@ -30,6 +31,23 @@ export function splitAddress(a: string): { street?: string; zip?: string; city?:
 }
 
 export const isOverdue = (x: StoredInvoice, today = localDay()) => x.kind === 'invoice' && x.status === 'issued' && !!x.dueAt && x.dueAt < today;
+
+/** Altersstufen offener Posten (Tage über dem Zahlungsziel) — Cockpit-Balken und Filter `?f=overdue&alter=…` der Liste */
+export const AGE_BUCKETS = [
+  { id: '0-30', label: '0–30 Tage', max: 30 },
+  { id: '31-60', label: '31–60 Tage', max: 60 },
+  { id: '61-90', label: '61–90 Tage', max: 90 },
+  { id: '90+', label: 'über 90 Tage', max: Infinity },
+] as const;
+export type AgeId = (typeof AGE_BUCKETS)[number]['id'];
+export const isAgeId = (v: string | null | undefined): v is AgeId => AGE_BUCKETS.some((b) => b.id === v);
+
+/** Altersstufe einer überfälligen Rechnung; null = nicht überfällig */
+export function ageOf(x: StoredInvoice, today = localDay()): AgeId | null {
+  if (!isOverdue(x, today)) return null;
+  const days = calendarDaysBetween(x.dueAt!, today);
+  return AGE_BUCKETS.find((b) => days <= b.max)!.id;
+}
 
 export const kindLabel = (x: Pick<StoredInvoice, 'kind' | 'data'>) =>
   x.kind === 'quote' ? 'Angebot' : x.kind === 'credit' ? 'Stornorechnung' : x.data?.final && x.data.deductions?.length ? 'Schlussrechnung' : x.data?.partial ? 'Abschlagsrechnung' : 'Rechnung';

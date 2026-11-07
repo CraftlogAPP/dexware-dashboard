@@ -63,10 +63,16 @@ export function Beleg() {
       return { profile, stored: inv, draft: inv.data, siteId: inv.siteId, inspectionId: inv.inspectionId };
     }
     if (fromQuote) {
-      // Angebot → Rechnung: gleiche Positionen und Empfänger, Leistungsdatum heute (wie App)
+      // Angebot → Rechnung: gleiche Positionen und Empfänger, Leistungsdatum heute — wie App InvoiceScreen (fromQuoteId):
+      // Angebots-Einleitung und Herkunft (KI/Zeitbuch) gehören nicht auf die Rechnung, dafür merkt sie sich die Angebotsnummer
       const q = await geld.invoice(fromQuote);
       if (q) {
-        return { profile, stored: null, siteId: q.siteId, draft: { ...q.data, kind: 'invoice', serviceDate: localDay(), notes: q.number ? `Laut Angebot ${q.number}.` : q.data.notes } };
+        return {
+          profile,
+          stored: null,
+          siteId: q.siteId,
+          draft: { ...q.data, kind: 'invoice', serviceDate: localDay(), notes: q.number ? `Laut Angebot ${q.number}.` : q.data.notes, intro: undefined, source: undefined, fromQuote: q.number },
+        };
       }
     }
     // Rechnung aus Einsatz (wie App InvoiceScreen mit inspectionId): Arbeitszeit im Takt, Anfahrt, Material mit

@@ -99,6 +99,8 @@ export interface InvoiceDraft {
    */
   final?: boolean;
   deductions?: InvoiceDeduction[];
+  /** Rechnung aus einem Angebot: dessen Nummer (zählt das Angebot als angenommen — App lib/quoteFollowUp.ts) */
+  fromQuote?: string;
   /** Stornorechnung: Nummer der stornierten Rechnung + Grund */
   cancels?: string;
   cancelReason?: string;

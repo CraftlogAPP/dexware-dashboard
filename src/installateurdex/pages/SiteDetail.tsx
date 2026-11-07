@@ -59,7 +59,7 @@ function PortalSwitch({ site, onChanged }: { site: Site; onChanged: () => void }
 
 export function SiteDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, org, base } = useInst();
+  const { data, org, base, isOwner } = useInst();
 
   const state = useAsync(async () => {
     const [site, assets, lastService, lastLeak, lastLegal, jobs, defects, requests] = await Promise.all([
@@ -94,6 +94,12 @@ export function SiteDetail() {
             <>
               <div className="idx-head">
                 <h1>{site.name}</h1>
+                <div className="row">
+                {isOwner && assets.some((a) => !a.retired) && (
+                  <Link className="btn ghost small" to={`${base}/kunden/${site.id}/wartungsvertrag`}>
+                    🤝 Wartungsvertrag erstellen
+                  </Link>
+                )}
                 <PrintButton
                   label="Objekt-Akte drucken / PDF"
                   build={async () => {
@@ -105,6 +111,7 @@ export function SiteDetail() {
                     return buildAkteHtml({ org, site, assets, jobs: repJobs, defects: repDefects, lastService, limitNote: akteLimitNote(counts) });
                   }}
                 />
+                </div>
               </div>
               <AkteLimitHinweis siteId={site.id} />
               <p className="muted" style={{ marginTop: 4 }}>

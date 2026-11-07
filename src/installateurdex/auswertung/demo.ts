@@ -175,11 +175,14 @@ export function demoAuswertung(): AuswertungData {
           canceled: j.canceled,
         })),
       ),
-    markContract: async (assetId) => {
+    markContract: async (assetId, contractPrice) => {
       await wait(null, 300);
       // Beispieldaten: Vertrag gleich im Bestand vermerken, damit die Liste nach dem Neuladen stimmt
       const a = ASSETS.find((x) => x.id === assetId);
-      if (a) a.contract = true;
+      if (a) {
+        a.contract = true;
+        if (contractPrice !== undefined && contractPrice > 0) a.contract_price = contractPrice;
+      }
     },
     helperListing: () => wait(listing),
     saveHelperListing: async (_orgId, p) => {

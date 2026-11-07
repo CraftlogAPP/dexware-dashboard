@@ -335,6 +335,8 @@ export function normalizeDraft(raw: unknown): InvoiceDraft {
       : undefined,
     cancels: opt(d.cancels),
     cancelReason: opt(d.cancelReason),
+    // Rechnung aus einem Angebot: dessen Nummer (wie App data/invoices.ts normalizeDraft)
+    fromQuote: typeof d.fromQuote === 'string' && d.fromQuote.trim() ? d.fromQuote.trim().slice(0, 60) : undefined,
   };
 }
 

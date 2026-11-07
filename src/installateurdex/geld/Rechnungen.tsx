@@ -18,7 +18,7 @@ import { euro } from './invoice';
 import { invoiceBookCsv, periodRange, type Period } from './invoiceExport';
 import { accountingExport, BOOK_FORMAT_INFO, bookFormats, defaultBookFormat, missingAccountingSetup, type BookFormat } from './accountingExport';
 import { InvoiceBadge } from './parts';
-import { deDay, errText, isOverdue, kindLabel, localDay } from './util';
+import { AGE_BUCKETS, ageOf, deDay, errText, isAgeId, isOverdue, kindLabel, localDay } from './util';
 import './geld.css';
 
 export function Rechnungen() {
@@ -135,10 +135,12 @@ function Liste() {
   }, [geld, zeitraum]);
   useLiveRefresh([latest.refresh, ranged.refresh, tiles.refresh], 60000);
 
-  function setParam(key: 'f' | 'z', value: string, def: string) {
+  function setParam(key: 'f' | 'z' | 'alter', value: string, def: string) {
     const next = new URLSearchParams(params);
     if (value === def) next.delete(key);
     else next.set(key, value);
+    // Altersstufe gilt nur für „Überfällig“ — beim Wechsel des Status-Filters weg damit
+    if (key === 'f') next.delete('alter');
     setParams(next, { replace: true });
   }
 
@@ -164,7 +166,10 @@ function Liste() {
       ? list.filter((x) => [x.number, x.data?.recipient?.name, x.data?.cancels].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
       : list;
   }, [zeitraum, latest.data, ranged.data, tiles.data, query]);
-  const shown = rows.filter((x) => matches(x, filter));
+  // ?f=overdue&alter=31-60 (Cockpit „Offene Posten nach Alter“): nur Rechnungen dieser Altersstufe
+  const alterRaw = params.get('alter');
+  const alter = filter === 'overdue' && isAgeId(alterRaw) ? alterRaw : null;
+  const shown = rows.filter((x) => matches(x, filter) && (!alter || ageOf(x, today) === alter));
   // Summe: nur ausgestellte Rechnungen + Stornorechnungen (Angebote/Entwürfe zählen nicht; Storno hebt das Original auf)
   const booked = shown.filter((x) => (x.kind === 'invoice' || x.kind === 'credit') && x.status !== 'draft');
   const bookedNet = booked.reduce((s, x) => s + x.netCents, 0);
@@ -236,6 +241,19 @@ function Liste() {
                   ))}
                 </select>
               </label>
+              {filter === 'overdue' && (
+                <label className="field" style={{ minWidth: 180, flex: '0 1 220px' }}>
+                  Überfällig seit
+                  <select value={alter ?? ''} onChange={(e) => setParam('alter', e.target.value, '')}>
+                    <option value="">alle</option>
+                    {AGE_BUCKETS.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.label} ({rows.filter((x) => ageOf(x, today) === b.id).length})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
 
             <LoadGuard state={source as typeof latest}>

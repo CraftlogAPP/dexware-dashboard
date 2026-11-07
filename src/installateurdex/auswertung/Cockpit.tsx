@@ -383,10 +383,10 @@ function AgingBars({ aging, to, openTo }: { aging: ReturnType<typeof agingOf>; t
   return (
     <>
       <div className="ck-hbars">
-        {aging.buckets.map((b, i) => row(b.id, `${b.label} überfällig`, b.cents, b.count, `ck-age${i}`, to))}
+        {aging.buckets.map((b, i) => row(b.id, `${b.label} überfällig`, b.cents, b.count, `ck-age${i}`, `${to}&alter=${encodeURIComponent(b.id)}`))}
         {row('notdue', 'noch nicht fällig', aging.notDue.cents, aging.notDue.count, 'ck-age-ok', openTo)}
       </div>
-      <p className="ck-note">Klick öffnet die Rechnungsliste (überfällige bzw. alle offenen). Bei Schlussrechnungen zählt nur der Rest nach Abzug.</p>
+      <p className="ck-note">Klick öffnet die Rechnungsliste, gefiltert auf genau diese Stufe (bzw. alle offenen). Bei Schlussrechnungen zählt nur der Rest nach Abzug.</p>
       <SrTable
         caption="Offene Posten nach Alter"
         head={['Alter', 'Betrag', 'Rechnungen']}

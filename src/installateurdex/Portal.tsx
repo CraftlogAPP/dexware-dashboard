@@ -53,6 +53,7 @@ import { Rechnungen } from './geld/Rechnungen';
 import { Material } from './geld/Material';
 import { Auswertungen } from './auswertung/Auswertungen';
 import { Profil } from './auswertung/Profil';
+import { Wartungsvertrag } from './vertrag/Wartungsvertrag';
 import { Pruefpunkte } from './pruefpunkte/Pruefpunkte';
 // @route-import
 
@@ -67,6 +68,7 @@ export function PortalRoutes() {
         <Route path="wartung" element={<Maintenance />} />
         <Route path="kunden" element={<Customers />} />
         <Route path="kunden/:id" element={<SiteDetail />} />
+        <Route path="kunden/:id/wartungsvertrag" element={<Wartungsvertrag />} />
         <Route path="anlagen/:id" element={<AssetDetail />} />
         <Route path="einstellungen" element={<Settings />} />
         <Route path="import" element={<Import />} />

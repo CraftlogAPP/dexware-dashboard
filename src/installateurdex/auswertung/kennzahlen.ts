@@ -8,8 +8,8 @@
 
 import { buildBookings, resolveAccounting } from '../geld/accountingExport';
 import { openCents, type StoredInvoice } from '../geld/api';
-import { calendarDaysBetween, type Land } from '../geld/invoice';
-import { localDay } from '../geld/util';
+import type { Land } from '../geld/invoice';
+import { AGE_BUCKETS, ageOf, localDay, type AgeId } from '../geld/util';
 import type { Appt, PlanMember, TimeEntry, TimeTarget } from '../planung/logic';
 import { netMinutes, sollUntilToday, targetOf } from '../planung/zeitbuch';
 import { counts, type DueRow } from '../portfolio';
@@ -156,7 +156,8 @@ export function maintenanceForecast(rows: DueRow[], months: Month[], includeDemo
 // 3. Offene Posten nach Alter
 // ---------------------------------------------------------------------------
 export interface AgeBucket {
-  id: 'd30' | 'd60' | 'd90' | 'older';
+  /** wie der Filter der Rechnungsliste (`?f=overdue&alter=<id>`) */
+  id: AgeId;
   label: string;
   cents: number;
   count: number;
@@ -172,24 +173,20 @@ export interface Aging {
 
 /** Offene Rechnungen nach Tagen über dem Fälligkeitsdatum: 0–30, 31–60, 61–90, über 90 (Betrag = openCents, brutto). */
 export function agingOf(list: StoredInvoice[], today = localDay()): Aging {
-  const buckets: AgeBucket[] = [
-    { id: 'd30', label: '0–30 Tage', cents: 0, count: 0 },
-    { id: 'd60', label: '31–60 Tage', cents: 0, count: 0 },
-    { id: 'd90', label: '61–90 Tage', cents: 0, count: 0 },
-    { id: 'older', label: 'über 90 Tage', cents: 0, count: 0 },
-  ];
+  // gleiche Stufen und Grenzen wie der Altersfilter der Rechnungsliste (geld/util.ts ageOf)
+  const buckets: AgeBucket[] = AGE_BUCKETS.map((b) => ({ id: b.id, label: b.label, cents: 0, count: 0 }));
   const notDue = { cents: 0, count: 0 };
   for (const x of list) {
     if (x.kind !== 'invoice' || x.status !== 'issued') continue;
     const c = openCents(x);
     if (c <= 0) continue;
-    if (!x.dueAt || x.dueAt >= today) {
+    const age = ageOf(x, today);
+    if (!age) {
       notDue.cents += c;
       notDue.count += 1;
       continue;
     }
-    const days = calendarDaysBetween(x.dueAt, today);
-    const b = buckets[days <= 30 ? 0 : days <= 60 ? 1 : days <= 90 ? 2 : 3];
+    const b = buckets.find((y) => y.id === age)!;
     b.cents += c;
     b.count += 1;
   }
