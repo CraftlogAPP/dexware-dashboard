@@ -414,3 +414,111 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- Angebote nachfassen ---------- */
+.idx-scope .nf .kpi-grid {
+  margin-bottom: 12px;
+}
+.idx-scope .nf-days {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-bottom: 12px;
+}
+.idx-scope .nf-days .idx-tabs {
+  margin: 0;
+}
+.idx-scope .nf-h {
+  margin: 18px 0 10px;
+  font-size: 15px;
+}
+.idx-scope .nf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.idx-scope .nf-card {
+  padding: 12px 14px;
+}
+.idx-scope .nf-card.expired {
+  border-color: color-mix(in oklab, var(--amber) 55%, transparent);
+}
+.idx-scope .nf-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.idx-scope .nf-name {
+  font-weight: 700;
+  font-size: 15px;
+}
+.idx-scope .nf-sub {
+  display: block;
+}
+.idx-scope .nf-amount {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.idx-scope .nf-info {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.idx-scope .nf-info.warn {
+  color: #fcd34d;
+}
+.idx-scope .nf-actions {
+  margin-top: 10px;
+  gap: 6px;
+}
+.idx-scope .nf-ok {
+  color: #86efac;
+}
+.idx-scope .nf-no {
+  color: #fca5a5;
+}
+.idx-scope .nf-no.on {
+  background: color-mix(in oklab, var(--red) 14%, transparent);
+}
+.idx-scope .nf-link,
+.idx-scope .nf-more {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.idx-scope .nf-more {
+  margin-top: 16px;
+  font-weight: 650;
+}
+.idx-scope .nf-link:hover,
+.idx-scope .nf-more:hover {
+  text-decoration: underline;
+}
+.idx-scope .nf-text {
+  margin-top: 8px;
+}
+.idx-scope .nf-text summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+}
+.idx-scope .nf-text textarea {
+  width: 100%;
+  margin-top: 6px;
+  font-size: 13px;
+}
+.idx-scope .nf-reject {
+  margin-top: 10px;
+  max-width: 480px;
+}
+.idx-scope .nf-danger {
+  background: var(--red);
+  color: #fff;
+}

@@ -8,6 +8,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '../fetchAll';
 import type { AccountingSettings } from './accountingExport';
 import { articleNoOf, matchArticle, saleCents, type Article, type PricingRule } from './articles';
+import { isMissingTable, markFromRow, rowFromMark, type FollowUpMark, type FollowUpMarks, type FollowUpRow } from './nachfassLogik';
+import { localDay } from './util';
 import { defaultVatRate, totals, type InvoiceDeduction, type InvoiceDraft, type InvoiceKind, type InvoiceProfile, type InvoiceLine, type Land, type MaterialLine } from './invoice';
 
 export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'canceled';
@@ -126,6 +128,14 @@ export interface GeldData {
   writeArticleChunk(orgId: string, rows: Article[], upsert: boolean): Promise<void>;
   /** Artikel in eine Rechnung übernommen → „zuletzt verwendet“ (nur Inhaber darf, sonst still). */
   markUsed(id: string): Promise<void>;
+
+  /**
+   * Angebote nachfassen: Merker je Angebot aus quote_follow_up (NACHTRAG-ANGEBOTE-2026-11-07.sql), gemeinsam mit App und
+   * Team. null = Tabelle fehlt (42P01/PGRST205) → das Portal zeigt nur an, ohne Merker.
+   */
+  followUpMarks(): Promise<FollowUpMarks | null>;
+  /** Merker eines Angebots speichern (Upsert, ganzer Stand wie App updateFollowUpMark). */
+  setFollowUpMark(orgId: string, quoteId: string, mark: FollowUpMark): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -573,6 +583,26 @@ export function supabaseGeld(sb: SupabaseClient): GeldData {
     },
     async markUsed(id) {
       await sb.from('article').update({ used_at: new Date().toISOString() }).eq('id', id);
+    },
+    async followUpMarks() {
+      // seitenweise (1.000er-Grenze); fehlt die Tabelle → null (still, nur ansehen) — wie App data/quoteFollowUp.ts
+      const { data, error } = await fetchAllRows<FollowUpRow>((a, b) =>
+        sb.from('quote_follow_up').select('invoice_id, snooze_until, nudged_at, nudges, accepted_at').order('invoice_id').range(a, b),
+      );
+      if (error) {
+        if (isMissingTable(error)) return null;
+        dbError('Merker zum Nachfassen konnten nicht geladen werden', error);
+      }
+      const out: FollowUpMarks = {};
+      for (const r of data) out[r.invoice_id] = markFromRow(r, (d) => localDay(d));
+      return out;
+    },
+    async setFollowUpMark(orgId, quoteId, mark) {
+      const { error } = await sb.from('quote_follow_up').upsert(rowFromMark(quoteId, orgId, mark), { onConflict: 'invoice_id' });
+      if (!error) return;
+      if (isMissingTable(error)) throw new Error('Merker gehen erst, wenn das Nachfassen in der Datenbank eingerichtet ist (NACHTRAG-ANGEBOTE-2026-11-07.sql).');
+      if (error.code === '22023') throw new Error('Merker gehen nur bei ausgestellten Angeboten.');
+      dbError('Merker konnte nicht gespeichert werden', error);
     },
   };
 }

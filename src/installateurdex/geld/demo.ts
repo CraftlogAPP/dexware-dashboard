@@ -6,6 +6,7 @@ import { historyInvoices } from '../auswertung/cockpitDemo';
 import { searchArticles, type Article } from './articles';
 import { emptyProfile, ISSUE_ERROR, profileSnapshot, REMIND_ERROR, STATUS_ERROR, type Catalog, type GeldData, type StoredArticle, type StoredInvoice, type StoredProfile } from './api';
 import { addDaysYmd, formatNumber, totals, type InvoiceDraft, type InvoiceLine } from './invoice';
+import type { FollowUpMarks } from './nachfassLogik';
 
 const wait = <T,>(v: T, ms = 120): Promise<T> => new Promise((r) => setTimeout(() => r(structuredClone(v)), ms));
 const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -84,7 +85,18 @@ function buildInvoices(): StoredInvoice[] {
     recipient: { name: 'Hausverwaltung Berger', street: 'Seestraße 4', zip: '7100', city: 'Neusiedl', land: 'AT', email: 'verwaltung@example.com', private: false },
   });
   const steinerOld = draftFor('s-steiner', [L('labor', 'Arbeitszeit: Ölbrenner Reinigung', 1, 'h', 7800)], dayOffset(-60));
-  const novak = { ...draftFor('s-novak', [L('flat', 'Luft/Wasser-Wärmepumpe 9 kW inkl. Montage', 1, 'pauschal', 1489000), L('labor', 'Arbeitszeit: Hydraulik und Inbetriebnahme', 12, 'h', 7800)], dayOffset(-8)), kind: 'quote' as const };
+  const novak = { ...draftFor('s-novak', [L('flat', 'Luft/Wasser-Wärmepumpe 9 kW inkl. Montage', 1, 'pauschal', 1489000), L('labor', 'Arbeitszeit: Hydraulik und Inbetriebnahme', 12, 'h', 7800)], dayOffset(-15)), kind: 'quote' as const };
+  // Angebote nachfassen (Beispiele): 0001 angenommen (Rechnung „Laut Angebot“ in auswertung/cockpitDemo.ts), 0002 abgelehnt,
+  // 0003 offen und schon abgelaufen, 0004 offen und fällig, 0005 frisch (wartet noch)
+  const q = (siteId: string, lines: InvoiceLine[], ago: number, extra: Partial<InvoiceDraft> = {}) => ({ ...draftFor(siteId, lines, dayOffset(-ago - 1), extra), kind: 'quote' as const });
+  const quoteGruber = q('s-gruber', [L('labor', 'Arbeitszeit: Kondensatpumpe Büro tauschen', 1.5, 'h', 7800), L('travel', 'Anfahrt', 1, 'pauschal', 3500), L('material', 'Kondensatpumpe', 1, 'Stk', 11900)], 80, {
+    recipient: { name: 'Gruber KG', street: 'Marktplatz 1', zip: '7000', city: 'Musterstadt', land: 'AT', uid: 'ATU87654321', email: 'office@example.com', private: false },
+  });
+  const quoteLechner = q('s-lechner', [L('flat', 'Pelletkessel-Reinigung + Förderschnecke neu', 1, 'pauschal', 89000)], 60);
+  const quoteSteiner = q('s-steiner', [L('flat', 'Tausch Ölkessel gegen Gas-Brennwerttherme 25 kW inkl. Montage', 1, 'pauschal', 948000), L('labor', 'Arbeitszeit: Demontage + Entsorgung Öltank', 10, 'h', 7800)], 41);
+  const quoteSee = q('s-see', [L('flat', 'Hocheffizienzpumpen für 2 Heizkreise inkl. Montage', 1, 'pauschal', 132000)], 3, {
+    recipient: { name: 'Hausverwaltung Berger', street: 'Seestraße 4', zip: '7100', city: 'Neusiedl', land: 'AT', email: 'verwaltung@example.com', private: false },
+  });
   const steinerDraft = draftFor('s-steiner', [L('labor', 'Arbeitszeit: Störung Ölheizung', 1.25, 'h', 7800), L('travel', 'Anfahrt', 1, 'pauschal', 3500), L('material', 'Zündelektrode', 1, 'Stk', 0)], dayOffset(-1), {
     recipient: { name: 'Dr. Steiner', street: 'Bahnhofstraße 9', zip: '7000', city: 'Musterstadt', land: 'AT', private: false },
   });
@@ -114,7 +126,11 @@ function buildInvoices(): StoredInvoice[] {
       reminderLevel: 0,
     },
     issued('inv-0014', `RE-${year}-0014`, 's-see', berger, 4),
-    issued('an-0004', `AN-${year}-0004`, 's-novak', novak, 7),
+    issued('an-0005', `AN-${year}-0005`, 's-see', quoteSee, 3),
+    issued('an-0004', `AN-${year}-0004`, 's-novak', novak, 14),
+    issued('an-0003', `AN-${year}-0003`, 's-steiner', quoteSteiner, 41),
+    issued('an-0002', `AN-${year}-0002`, 's-lechner', quoteLechner, 60, { status: 'canceled', canceledReason: 'Abgelehnt: Kunde macht die Reinigung selbst' }),
+    issued('an-0001', `AN-${year}-0001`, 's-gruber', quoteGruber, 80),
     issued('inv-0013', `RE-${year}-0013`, 's-gruber', gruber, 28, { reminderLevel: 1, remindedAt: tsAgo(6) }),
     issued('inv-0012', `RE-${year}-0012`, 's-huber', huber, 38, { status: 'paid', paidAt: tsAgo(30, 9) }),
     credit,
@@ -156,7 +172,8 @@ export function demoGeld(): GeldData {
   let invoices = buildInvoices();
   let profile = structuredClone(PROFILE);
   let articles = buildArticles();
-  const seq: Record<string, number> = { invoice: 14, quote: 4, credit: 1 };
+  const seq: Record<string, number> = { invoice: 14, quote: 5, credit: 1 };
+  let followUp: FollowUpMarks = {};
   const find = (id: string) => invoices.find((x) => x.id === id);
 
   return {
@@ -332,6 +349,14 @@ export function demoGeld(): GeldData {
       const a = articles.find((x) => x.id === id);
       if (a) a.usedAt = new Date().toISOString();
       await wait(null, 0);
+    },
+    // Beispieldaten: so, als wäre quote_follow_up schon eingespielt (Merker bis zum Neuladen)
+    followUpMarks: () => wait(followUp),
+    async setFollowUpMark(_orgId, quoteId, mark) {
+      const v = find(quoteId);
+      if (!v || v.kind !== 'quote' || v.status === 'draft') throw new Error('Merker gehen nur bei ausgestellten Angeboten.');
+      followUp = { ...followUp, [quoteId]: { ...mark } };
+      await wait(null, 150);
     },
   };
 }

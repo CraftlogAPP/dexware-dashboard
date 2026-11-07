@@ -21,6 +21,9 @@ import {
   type Site,
 } from '../types';
 import type { Appt } from '../planung/logic';
+import { loadNachfassDaten, readFollowUpDays } from '../geld/nachfassDaten';
+import { followUps as quoteFollowUps } from '../geld/nachfassLogik';
+import { localDay } from '../geld/util';
 
 // Startseite des Betriebsportals (Vorschlag docs/VEREINFACHUNG-VORSCHLAG.md, Abschnitt 3.2):
 // 1. „Heute zu tun“ — Störungen, Anfragen, Termine heute, Folgeeinsätze; je Zeile genau eine Aktion
@@ -89,7 +92,9 @@ export function Start() {
     const planned = await ext.planung.appointments(today, new Date(today.getTime() + 60 * 86_400_000)).catch(() => [] as Appt[]);
     return { sites, assets, lastService, lastLeak, week, newRequests, openDefects, appointments: upcomingOf(planned, appointments), followUps };
   }, [data, ext, requestsVersion]);
-  useLiveRefresh([state.refresh]);
+  // Angebote nachfassen (nur Inhaber — Rechnungen & Angebote sind Inhaber-Sache): eigene, stille Abfrage, blockiert Start nicht
+  const nachfass = useAsync(async () => (isOwner ? loadNachfassDaten(ext.geld, true).catch(() => null) : null), [ext, isOwner, requestsVersion]);
+  useLiveRefresh([state.refresh, nachfass.refresh]);
 
   // „Zahlen“: standardmäßig offen, Zustand je Nutzer gemerkt
   const numbersKey = `idx-start-zahlen:${userKey}`;
@@ -214,10 +219,23 @@ export function Start() {
               action: { label: 'Einplanen', to: `${base}/plantafel?${plan.toString()}` },
             };
           };
+          // Angebote nachfassen — gleiche Regel wie die Seite „Nachfassen“ (geld/nachfassLogik.ts, Frist je Browser)
+          const quoteDue = nachfass.data ? quoteFollowUps(nachfass.data.all, nachfass.data.marks ?? {}, localDay(), readFollowUpDays()).due : [];
+          const quoteTodo: Todo[] = quoteDue.length
+            ? [{
+                key: 'nachfassen',
+                tone: 'accent',
+                icon: '💬',
+                title: <b>{quoteDue.length === 1 ? '1 Angebot nachfassen' : `${quoteDue.length} Angebote nachfassen`}</b>,
+                sub: `ältestes seit ${Math.max(...quoteDue.map((x) => x.ageDays))} Tagen offen · ${quoteDue.map((x) => x.quote.data.recipient?.name).filter(Boolean).slice(0, 3).join(', ')}`,
+                action: { label: 'Nachfassen', to: `${base}/rechnungen/nachfassen` },
+              }]
+            : [];
           const todos: Todo[] = [
             ...faults.map(reqTodo),
             ...todayAppts.map(apptTodo),
             ...otherRequests.map(reqTodo),
+            ...quoteTodo,
             ...openFollow.map(followTodo),
           ];
           const shownTodos = showAllTodos ? todos : todos.slice(0, TODO_LIMIT);

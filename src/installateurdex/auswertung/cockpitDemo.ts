@@ -43,6 +43,8 @@ interface Plan {
   /** bezahlt nach n Tagen; undefined = offen */
   paidAfter?: number;
   recipient?: InvoiceDraft['recipient'];
+  /** Rechnung aus einem Angebot (geld/demo.ts AN-…-0001): data.fromQuote + Hinweis „Laut Angebot …“ wie die App */
+  fromQuote?: string;
   /** Abschlags- bzw. Schlussrechnung (Wärmepumpe Novak) */
   role?: 'advance' | 'final';
 }
@@ -61,7 +63,7 @@ const PLANS: Plan[] = [
   // ältere offene (Altersstruktur): Rechnungsdatum vor 125 / 95 / 66 Tagen, Zahlungsziel 14 Tage
   { ago: 125, site: 's-lechner', lines: [L('labor', 'Arbeitszeit: Pelletförderung blockiert', 2.5, 'h', 7800), anfahrt(), L('material', 'Förderschnecke Lager', 1, 'Stk', 31900)] },
   { ago: 95, site: 's-see', recipient: BERGER, lines: [L('labor', 'Arbeitszeit: Druckabfall Heizung', 1.75, 'h', 7800), anfahrt(), L('material', 'Ausdehnungsgefäß 25 l', 1, 'Stk', 11900)] },
-  { ago: 66, site: 's-gruber', recipient: GRUBER, lines: [L('labor', 'Arbeitszeit: Kondensatpumpe Büro', 1.5, 'h', 7800), anfahrt(), L('material', 'Kondensatpumpe', 1, 'Stk', 11900)] },
+  { ago: 66, site: 's-gruber', recipient: GRUBER, fromQuote: `AN-${new Date().getFullYear()}-0001`, lines: [L('labor', 'Arbeitszeit: Kondensatpumpe Büro', 1.5, 'h', 7800), anfahrt(), L('material', 'Kondensatpumpe', 1, 'Stk', 11900)] },
 ];
 
 /** Kleine bezahlte Wartungsrechnungen zum Auffüllen der Nummern im laufenden Jahr */
@@ -107,6 +109,7 @@ export function historyInvoices(profile?: InvoiceProfile): StoredInvoice[] {
     const number = `RE-${y}-${String(n).padStart(4, '0')}`;
     const extra: Partial<InvoiceDraft> = { ...(p.recipient ? { recipient: p.recipient } : {}) };
     if (p.role === 'advance') extra.partial = true;
+    if (p.fromQuote) Object.assign(extra, { fromQuote: p.fromQuote, notes: `Laut Angebot ${p.fromQuote}.` });
     if (p.role === 'final') Object.assign(extra, { final: true, deductions: advance ? [deductionFromInvoice(advance)] : [] });
     const data = draftFor(p.site, p.lines, dayOffset(-p.ago - 2), extra);
     const t = totals(data);

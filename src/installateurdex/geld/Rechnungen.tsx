@@ -6,12 +6,15 @@
 
 import { useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
-import { Download, FilePlus2, FileText, Landmark, Settings2 } from 'lucide-react';
+import { Download, FilePlus2, FileText, Landmark, MessageSquareText, Settings2 } from 'lucide-react';
 import { Modal } from '../../components/form';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { useInst } from '../context';
 import { openCents, type StoredInvoice } from './api';
 import { Beleg } from './Beleg';
+import { Nachfassen } from './Nachfassen';
+import { loadNachfassDaten, readFollowUpDays } from './nachfassDaten';
+import { followUps } from './nachfassLogik';
 import { Firmendaten } from './Firmendaten';
 import { KontoauszugDialog } from './Kontoauszug';
 import { euro } from './invoice';
@@ -37,6 +40,7 @@ export function Rechnungen() {
   return (
     <Routes>
       <Route index element={<Liste />} />
+      <Route path="nachfassen" element={<Nachfassen />} />
       <Route path="neu" element={<Beleg />} />
       <Route path="firmendaten" element={<Firmendaten />} />
       <Route path=":id" element={<Beleg />} />
@@ -133,7 +137,10 @@ function Liste() {
     const { from, to } = periodRange(ref, p);
     return geld.invoices({ from, to });
   }, [geld, zeitraum]);
-  useLiveRefresh([latest.refresh, ranged.refresh, tiles.refresh], 60000);
+  // Angebote nachfassen: Zahl der fälligen für den Knopf oben (gleiche Regel wie die Seite „Nachfassen“)
+  const nachfass = useAsync(() => loadNachfassDaten(geld, true), [geld]);
+  useLiveRefresh([latest.refresh, ranged.refresh, tiles.refresh, nachfass.refresh], 60000);
+  const quoteDue = nachfass.data ? followUps(nachfass.data.all, nachfass.data.marks ?? {}, localDay(), readFollowUpDays()).due.length : 0;
 
   function setParam(key: 'f' | 'z' | 'alter', value: string, def: string) {
     const next = new URLSearchParams(params);
@@ -193,6 +200,9 @@ function Liste() {
           </Link>
           <Link className="btn ghost small" to={`${base}/rechnungen/neu?art=angebot`}>
             <FileText className="i" aria-hidden /> Neues Angebot
+          </Link>
+          <Link className={`btn small ${quoteDue ? '' : 'ghost'}`} to={`${base}/rechnungen/nachfassen`}>
+            <MessageSquareText className="i" aria-hidden /> Angebote nachfassen{quoteDue ? ` (${quoteDue})` : ''}
           </Link>
           <button type="button" className="btn ghost small" onClick={() => setExportOpen(true)} disabled={!invoices.some((x) => x.status !== 'draft') && zeitraum === 'latest'}>
             <Download className="i" aria-hidden /> Export für Steuerberater
