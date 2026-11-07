@@ -2,10 +2,70 @@
 //  - Kunde = site_id. Ort ohne Kunde (Werkstatt/Lager, Büro, Heimarbeit, Sonstiges) und Pause stehen als Kennzeichen
 //    vorn in der Notiz: „[Büro] [Pause 30 min] Angebote geschrieben“. Rest = Tätigkeit. note ≤ 300 Zeichen (zeit.sql).
 //  - Arbeitszeit = Dauer − Pause im Eintrag; alte Pausen-Einträge (kind break) zählen wie bisher nicht mit.
-//  - Hinweise: Pause (AT § 11 AZG / DE § 4 ArbZG), Höchstarbeitszeit (AT 12 h § 9 AZG / DE 10 h § 3 ArbZG),
-//    Ruhezeit 11 h (AT § 12 AZG / DE § 5 ArbZG).
+//  - Hinweise: Pause (AT § 11 AZG / DE § 4 ArbZG / CH Art. 15 ArG), Höchstarbeitszeit (AT 12 h § 9 AZG / DE 10 h § 3 ArbZG,
+//    CH keine Tagesgrenze), Ruhezeit 11 h (AT § 12 AZG / DE § 5 ArbZG / CH Art. 15a ArG).
+//  - Feiertage: AT bundesweit, DE bundesweit + Bundesland (org.region), CH schweizweit — wie App holidays().
 
-import { breakHint, dayKey, dayOf, hhmm, hm, KIND_LABEL, minutesOf, parseDay, type TimeEntry } from './logic';
+import { dayKey, dayOf, hhmm, hm, KIND_LABEL, minutesOf, parseDay, type TimeEntry } from './logic';
+
+export type LawLand = 'AT' | 'DE' | 'CH';
+export const lawLandOf = (land: string | null | undefined): LawLand => (land === 'DE' || land === 'CH' ? land : 'AT');
+const LAW = {
+  AT: { pause: '§ 11 AZG', rest: '§ 12 AZG', name: 'AZG' },
+  DE: { pause: '§ 4 ArbZG', rest: '§ 5 ArbZG', name: 'ArbZG' },
+  CH: { pause: 'Art. 15 ArG', rest: 'Art. 15a ArG', name: 'ArG' },
+} as const;
+export const lawName = (l: LawLand) => LAW[l].name;
+
+/** Mindestpause je Arbeitszeit — wie App pauseNeed. */
+export function pauseNeed(paid: number, land: LawLand): number {
+  if (land === 'CH') return paid > 9 * 60 ? 60 : paid > 7 * 60 ? 30 : paid > 5.5 * 60 ? 15 : 0;
+  return paid > 9 * 60 && land === 'DE' ? 45 : paid > 6 * 60 ? 30 : 0;
+}
+export function pauseHint(t: { paid: number; break: number }, land: LawLand): string | null {
+  const need = pauseNeed(t.paid, land);
+  return need > t.break ? `Bei ${hm(t.paid)} Arbeitszeit sind mindestens ${need} Minuten Pause vorgesehen (${LAW[land].pause}).` : null;
+}
+
+const two = (n: number) => String(n).padStart(2, '0');
+const addD = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+function easterSunday(y: number): Date {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(y, month - 1, day);
+}
+/** Gesetzliche Feiertage (JJJJ-MM-TT → Name) — gleiche Liste wie App lib/timeclock.ts holidays(). */
+export function holidays(year: number, land: string, region?: string | null): Map<string, string> {
+  const e = easterSunday(year);
+  const rel = (n: number) => dayKey(addD(e, n));
+  const fix = (m: number, d: number) => `${year}-${two(m)}-${two(d)}`;
+  const list: [string, string][] =
+    land === 'DE'
+      ? [[fix(1, 1), 'Neujahr'], [rel(-2), 'Karfreitag'], [rel(1), 'Ostermontag'], [fix(5, 1), 'Tag der Arbeit'], [rel(39), 'Christi Himmelfahrt'], [rel(50), 'Pfingstmontag'], [fix(10, 3), 'Tag der Deutschen Einheit'], [fix(12, 25), '1. Weihnachtstag'], [fix(12, 26), '2. Weihnachtstag']]
+      : land === 'CH'
+        ? [[fix(1, 1), 'Neujahr'], [rel(39), 'Auffahrt'], [fix(8, 1), 'Bundesfeier'], [fix(12, 25), 'Weihnachten']]
+        : [[fix(1, 1), 'Neujahr'], [fix(1, 6), 'Heilige Drei Könige'], [rel(1), 'Ostermontag'], [fix(5, 1), 'Staatsfeiertag'], [rel(39), 'Christi Himmelfahrt'], [rel(50), 'Pfingstmontag'], [rel(60), 'Fronleichnam'], [fix(8, 15), 'Mariä Himmelfahrt'], [fix(10, 26), 'Nationalfeiertag'], [fix(11, 1), 'Allerheiligen'], [fix(12, 8), 'Mariä Empfängnis'], [fix(12, 25), 'Christtag'], [fix(12, 26), 'Stefanitag']];
+  if (land === 'DE' && region) {
+    const r = region.toUpperCase();
+    const add = (on: boolean, k: string, name: string) => {
+      if (on) list.push([k, name]);
+    };
+    add(['BW', 'BY', 'ST'].includes(r), fix(1, 6), 'Heilige Drei Könige');
+    add((r === 'BE' && year >= 2019) || (r === 'MV' && year >= 2023), fix(3, 8), 'Internationaler Frauentag');
+    add(['BW', 'BY', 'HE', 'NW', 'RP', 'SL'].includes(r), rel(60), 'Fronleichnam');
+    add(['BY', 'SL'].includes(r), fix(8, 15), 'Mariä Himmelfahrt');
+    add(r === 'TH' && year >= 2019, fix(9, 20), 'Weltkindertag');
+    add(['BB', 'MV', 'SN', 'ST', 'TH'].includes(r) || (['HB', 'HH', 'NI', 'SH'].includes(r) && year >= 2018), fix(10, 31), 'Reformationstag');
+    add(['BW', 'BY', 'NW', 'RP', 'SL'].includes(r), fix(11, 1), 'Allerheiligen');
+    if (r === 'SN') {
+      const d22 = new Date(year, 10, 22);
+      list.push([dayKey(new Date(year, 10, 22 - ((d22.getDay() - 3 + 7) % 7))), 'Buß- und Bettag']);
+    }
+  }
+  return new Map(list);
+}
 
 export const NOTE_MAX = 300;
 
@@ -17,6 +77,13 @@ export const PLACES: { id: Place; label: string; icon: string }[] = [
   { id: 'sonst', label: 'Sonstiges', icon: '📌' },
 ];
 const placeInfo = (p: Place) => PLACES.find((x) => x.id === p)!;
+/** Kürzen nach Zeichen (Code Points wie Postgres char_length) — kein halbes Emoji */
+export const clampChars = (t: string, n: number) => {
+  const a = Array.from(t);
+  return a.length > n ? a.slice(0, Math.max(0, n)).join('') : t;
+};
+/** unsichtbare Markierung vor einer Tätigkeit, die mit „[“ beginnt (sonst würde „[Büro] privat“ zum Ort) — wie App */
+const GUARD = '\u200B';
 const PLACE_ALIASES: Record<string, Place> = {
   'werkstatt/lager': 'werkstatt',
   werkstatt: 'werkstatt',
@@ -51,15 +118,17 @@ export function parseNote(note?: string | null): NoteParts {
     else break;
     rest = rest.slice(m[0].length);
   }
-  return { place, pauseMin, text: rest.trim() };
+  return { place, pauseMin, text: rest.trim().replace(/^\u200B/, '') };
 }
 
 /** Ort, Pause, Tätigkeit → Notiz (wie App buildNote). */
 export function buildNote(p: Partial<NoteParts>): string | null {
   const pause = Math.max(0, Math.min(999, Math.round(p.pauseMin ?? 0)));
   const tags = [p.place ? `[${placeInfo(p.place).label}]` : '', pause > 0 ? `[Pause ${pause} min]` : ''].filter(Boolean).join(' ');
-  const room = NOTE_MAX - tags.length - (tags ? 1 : 0);
-  const text = (p.text ?? '').trim().slice(0, Math.max(0, room)).trim();
+  const room = NOTE_MAX - Array.from(tags).length - (tags ? 1 : 0);
+  let text = (p.text ?? '').trim();
+  if (text.startsWith('[')) text = GUARD + text;
+  text = clampChars(text, room).trim();
   return [tags, text].filter(Boolean).join(' ') || null;
 }
 
@@ -116,7 +185,7 @@ export function zTotals(entries: TimeEntry[], now = new Date()): ZTotals {
 const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 
 /** Hinweise je Tag einer Person (Pause, Höchstgrenze, Ruhezeit zum Vortag) — wie App lawHintsByDay. */
-export function lawHintsByDay(entries: TimeEntry[], land: 'AT' | 'DE', now = new Date()): Map<string, string[]> {
+export function lawHintsByDay(entries: TimeEntry[], land: LawLand, now = new Date()): Map<string, string[]> {
   const byDay = new Map<string, TimeEntry[]>();
   for (const e of entries) byDay.set(dayOf(e.started_at), [...(byDay.get(dayOf(e.started_at)) ?? []), e]);
   const out = new Map<string, string[]>();
@@ -125,17 +194,17 @@ export function lawHintsByDay(entries: TimeEntry[], land: 'AT' | 'DE', now = new
     const list = byDay.get(k)!;
     const t = zTotals(list, now);
     const hints: string[] = [];
-    const b = breakHint(t, land);
+    const b = pauseHint(t, land);
     if (b) hints.push(b);
     const max = land === 'DE' ? 600 : 720;
-    if (t.paid > max) hints.push(`${hm(t.paid)} an einem Tag — mehr als die Höchstgrenze von ${max / 60} Stunden (${land === 'DE' ? '§ 3 ArbZG' : '§ 9 AZG'}).`);
+    if (land !== 'CH' && t.paid > max) hints.push(`${hm(t.paid)} an einem Tag — mehr als die Höchstgrenze von ${max / 60} Stunden (${land === 'DE' ? '§ 3 ArbZG' : '§ 9 AZG'}).`);
     const prev = byDay.get(dayKey(addDays(parseDay(k), -1)));
     if (prev) {
       const lastEnd = prev.filter((e) => e.kind !== 'break' && e.ended_at).map((e) => e.ended_at!).sort().pop();
       const first = list.filter((e) => e.kind !== 'break').map((e) => e.started_at).sort()[0];
       if (lastEnd && first) {
         const gap = Math.round((Date.parse(first) - Date.parse(lastEnd)) / 60_000);
-        if (gap >= 0 && gap < 11 * 60) hints.push(`Nur ${hm(gap)} Ruhezeit seit dem Vortag — vorgesehen sind mindestens 11 Stunden (${land === 'DE' ? '§ 5 ArbZG' : '§ 12 AZG'}).`);
+        if (gap >= 0 && gap < 11 * 60) hints.push(`Nur ${hm(gap)} Ruhezeit seit dem Vortag — vorgesehen sind mindestens 11 Stunden (${LAW[land].rest}).`);
       }
     }
     if (hints.length) out.set(k, hints);
@@ -179,7 +248,7 @@ export function zeitbuchCsvRows(entries: TimeEntry[], nameOf: (e: TimeEntry) => 
       whereLabel(e, siteName).label,
       hhmm(e.started_at),
       e.ended_at ? hhmm(e.ended_at) : 'läuft',
-      String(pauseOf(e, now)),
+      String(e.kind === 'break' ? minutesOf(e, now) : pauseOf(e, now)),
       String(netMinutes(e, now)),
       activityOf(e),
       KIND_LABEL[e.kind],

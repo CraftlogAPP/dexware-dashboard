@@ -3,11 +3,17 @@
 
 import { isProOrg, type InstOrg } from '../types';
 import { dayKey, dayOf, hhmm, hm, MONTHS, parseDay, WD, type TimeEntry } from './logic';
-import { activityOf, lawHintsByDay, netMinutes, pauseOf, whereLabel, zTotals } from './zeitbuch';
+import { activityOf, holidays, lawHintsByDay, lawName, netMinutes, pauseOf, whereLabel, zTotals, type LawLand } from './zeitbuch';
 
 const DEFAULT_COLOR = '#B5651D';
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-const imgSrc = (u: string | null | undefined) => (u && /^(data:image\/|https:\/\/)/.test(u) ? esc(u) : '');
+/** Nur eingebettete Bilder oder der eigene Supabase-Speicher (wie App pdf/report.ts imgSrc) */
+const imgSrc = (u: string | null | undefined) => {
+  const s = String(u ?? '').trim();
+  if (/^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i.test(s)) return s;
+  if (/^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/(sign|public)\/[^\s"'<>`]+$/i.test(s)) return esc(s);
+  return '';
+};
 const deDay = (k: string) => k.split('-').reverse().join('.');
 
 function look(org: InstOrg) {
@@ -32,25 +38,27 @@ const css = (accent: string) => `
   footer{margin-top:16px;color:#8A9098;font-size:7pt;line-height:1.5} section{page-break-after:always} section:last-child{page-break-after:auto}`;
 
 /** Arbeitszeitbuch eines Monats: eine Seite je Person, jeder Kalendertag, Unterschriften Mitarbeiter/in + Arbeitgeber/in. */
-export function buildArbeitszeitbuchHtml(o: { org: InstOrg; month: Date; people: { name: string; entries: TimeEntry[] }[]; land: 'AT' | 'DE'; siteName: (id: string) => string | undefined }): string {
+export function buildArbeitszeitbuchHtml(o: { org: InstOrg; month: Date; people: { name: string; entries: TimeEntry[] }[]; land: LawLand; siteName: (id: string) => string | undefined }): string {
   const { accent, logo } = look(o.org);
   const now = new Date();
   const m0 = new Date(o.month.getFullYear(), o.month.getMonth(), 1);
   const title = `${o.land === 'AT' && m0.getMonth() === 0 ? 'Jänner' : MONTHS[m0.getMonth()]} ${m0.getFullYear()}`;
+  const hol = holidays(m0.getFullYear(), o.land, o.org.region);
   const sections = o.people.map((p) => {
     const hints = lawHintsByDay(p.entries, o.land, now);
     const t = zTotals(p.entries, now);
     const days: string[] = [];
     for (let d = new Date(m0); d.getMonth() === m0.getMonth(); d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) days.push(dayKey(d));
-    let workedDays = 0;
+    let workedDays = 0; // Tage mit Arbeitszeit > 0 (wie App)
     const rows = days
       .map((k) => {
         const dt = parseDay(k);
         const list = p.entries.filter((e) => dayOf(e.started_at) === k).sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at));
         const label = `<td class="day"${list.length > 1 ? ` rowspan="${list.length}"` : ''}>${WD[dt.getDay()]} ${deDay(k).slice(0, 6)}</td>`;
-        if (!list.length) return `<tr class="free">${label}<td colspan="7">${dt.getDay() === 0 || dt.getDay() === 6 ? 'frei' : '—'}</td></tr>`;
-        workedDays++;
+        const h = hol.get(k);
+        if (!list.length) return `<tr class="free">${label}<td colspan="7">${h ? `<b>${esc(h)}</b>` : dt.getDay() === 0 || dt.getDay() === 6 ? 'frei' : '—'}</td></tr>`;
         const dayTotal = zTotals(list, now).paid;
+        if (dayTotal > 0) workedDays++;
         return list
           .map((e, i) => {
             const w = whereLabel(e, o.siteName);
@@ -66,9 +74,9 @@ export function buildArbeitszeitbuchHtml(o: { org: InstOrg; month: Date; people:
       <div class="kpis"><div class="kpi acc">Arbeitszeit<b>${hm(t.paid)}</b></div><div class="kpi">Arbeitstage<b>${workedDays}</b></div><div class="kpi">Pausen<b>${hm(t.break)}</b></div></div>
       <table><thead><tr><th>Tag</th><th class="n">Beginn</th><th class="n">Ende</th><th class="n">Pause</th><th class="n">Zeit</th><th>Kunde / Ort</th><th>Tätigkeit</th><th class="n">Tag gesamt</th></tr></thead><tbody>${rows}</tbody>
       <tfoot><tr><td colspan="7" class="tot">Summe ${esc(title)}</td><td class="n tot">${hm(t.paid)}</td></tr></tfoot></table>
-      ${hintList ? `<div class="box"><b class="t">Hinweise Arbeitszeit (${o.land === 'DE' ? 'ArbZG' : 'AZG'})</b><ul>${hintList}</ul></div>` : ''}
+      ${hintList ? `<div class="box"><b class="t">Hinweise Arbeitszeit (${lawName(o.land)})</b><ul>${hintList}</ul></div>` : ''}
       <div class="sig"><div><div class="line"></div><div class="lab">Datum, Unterschrift Mitarbeiter/in</div></div><div><div class="line"></div><div class="lab">Datum, Unterschrift Arbeitgeber/in</div></div></div>
-      <footer>Arbeitszeitaufzeichnung ${o.land === 'DE' ? 'nach § 16 Abs. 2 ArbZG' : 'nach § 26 AZG'} — Beginn, Ende, Pausen und Dauer der Arbeitszeit je Tag. Arbeitszeit = Zeit ohne Pausen; Fahrten zum Kunden zählen zur Arbeitszeit.${p.entries.some((e) => e.edited_at) ? ' <span class="star">*</span> = vom Arbeitgeber korrigiert (mit Zeitpunkt gespeichert).' : ''} Hinweise ohne Gewähr, keine Rechtsberatung. Erstellt am ${deDay(dayKey(now))} im Betriebsportal von InstallateurDex.</footer>
+      <footer>${o.land === 'DE' ? 'Arbeitszeitaufzeichnung nach § 16 Abs. 2 ArbZG' : o.land === 'AT' ? 'Arbeitszeitaufzeichnung nach § 26 AZG' : 'Arbeitszeiterfassung'} — Beginn, Ende, Pausen und Dauer der Arbeitszeit je Tag. Arbeitszeit = Zeit ohne Pausen; Fahrten zum Kunden zählen zur Arbeitszeit.${p.entries.some((e) => e.edited_at) ? ' <span class="star">*</span> = vom Arbeitgeber korrigiert (mit Zeitpunkt gespeichert).' : ''} Hinweise ohne Gewähr, keine Rechtsberatung. Erstellt am ${deDay(dayKey(now))} im Betriebsportal von InstallateurDex.</footer>
     </section>`;
   });
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"/><title>Arbeitszeitbuch ${esc(title)}</title><style>${css(accent)}</style></head><body>${sections.join('') || '<p>Keine Zeiten.</p>'}</body></html>`;

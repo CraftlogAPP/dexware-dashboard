@@ -37,6 +37,9 @@ import {
   NOTE_MAX,
   PLACES,
   ZEITBUCH_CSV_HEADER,
+  holidays,
+  lawLandOf,
+  lawName,
   activityOf,
   buildNote,
   byWhere,
@@ -78,7 +81,8 @@ export function Zeiten() {
   const monthEnd = useMemo(() => new Date(month.getFullYear(), month.getMonth() + 1, 1), [month]);
   const now0 = new Date();
   const thisMonth = month.getFullYear() === now0.getFullYear() && month.getMonth() === now0.getMonth();
-  const land: 'AT' | 'DE' = (org as { land?: string | null }).land === 'DE' ? 'DE' : 'AT';
+  const land = lawLandOf((org as { land?: string | null }).land);
+  const hol = useMemo(() => holidays(month.getFullYear(), land, org.region), [month, land, org.region]);
   const monthTitle = `${land === 'AT' && month.getMonth() === 0 ? 'Jänner' : MONTHS[month.getMonth()]} ${month.getFullYear()}`;
 
   const fixed = useAsync(async () => {
@@ -103,7 +107,7 @@ export function Zeiten() {
         Das Zeitbuch aus der App: je Block Kunde oder Ort, Tätigkeit und Pause. Arbeitszeit = Dauer ohne Pausen, die Fahrt zum Kunden zählt mit.{' '}
         {isOwner
           ? 'Du siehst alle im Betrieb und kannst Einträge korrigieren — jede Korrektur wird vermerkt.'
-          : 'Du siehst deine eigenen Zeiten. Stempeln und korrigieren (bis 7 Tage) geht in der App; ältere Einträge korrigiert der Inhaber.'}
+          : 'Du siehst deine eigenen Zeiten. Stempeln und korrigieren (bis 6 Tage zurück) geht in der App; ältere Einträge korrigiert der Inhaber.'}
       </p>
 
       <LoadGuard state={fixed}>
@@ -155,7 +159,8 @@ export function Zeiten() {
               return {
                 ...p,
                 t: zTotals(list, now),
-                days: new Set(list.map((e) => dayOf(e.started_at))).size,
+                // Arbeitstage = Tage mit Arbeitszeit > 0 (wie App)
+                days: new Set(list.filter((e) => netMinutes(e, now) > 0).map((e) => dayOf(e.started_at))).size,
                 hints: hintsByPerson.get(p.id)?.size ?? 0,
                 running: list.some((e) => !e.ended_at),
                 count: list.length,
@@ -383,7 +388,7 @@ export function Zeiten() {
                         return (
                           <DayRows
                             key={`${g.day}|${g.userId}`}
-                            title={`${WD[d.getDay()]} ${deDate(d)}${person === 'all' && isOwner ? ` · ${p?.name ?? nameOf(g.entries[0])}` : ''}`}
+                            title={`${WD[d.getDay()]} ${deDate(d)}${hol.get(g.day) ? ` · ★ ${hol.get(g.day)}` : ''}${person === 'all' && isOwner ? ` · ${p?.name ?? nameOf(g.entries[0])}` : ''}`}
                             color={person === 'all' ? p?.color : undefined}
                             total={hm(g.t.paid)}
                             sub={`Pausen ${hm(g.t.break)}`}
@@ -436,8 +441,8 @@ export function Zeiten() {
                 </div>
               )}
               <p className="muted small" style={{ marginTop: 10 }}>
-                Hinweise nach {land === 'DE' ? 'ArbZG (§ 4 Pause, § 3 Höchstarbeitszeit, § 5 Ruhezeit)' : 'AZG (§ 11 Pause, § 9 Höchstarbeitszeit, § 12 Ruhezeit)'} — Land aus den Einstellungen,
-                ohne Gewähr. Arbeitszeitbuch und CSV enthalten genau die angezeigten Personen — Spalten wie in der App.
+                Hinweise nach {land === 'DE' ? 'ArbZG (§ 4 Pause, § 3 Höchstarbeitszeit, § 5 Ruhezeit)' : land === 'CH' ? 'ArG (Art. 15 Pause, Art. 15a Ruhezeit)' : 'AZG (§ 11 Pause, § 9 Höchstarbeitszeit, § 12 Ruhezeit)'} — Land{land === 'DE' && org.region ? ' und Bundesland (Feiertage)' : ''} aus den Einstellungen,
+                ohne Gewähr ({lawName(land)}). Arbeitszeitbuch und CSV enthalten genau die angezeigten Personen — Spalten wie in der App.
               </p>
 
               {edit && (
