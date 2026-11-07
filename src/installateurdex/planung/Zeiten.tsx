@@ -5,7 +5,7 @@
 // zeit.sql). Korrigieren: der Inhaber (jede fremde Korrektur vermerkt die Datenbank); Monteure stempeln in der App.
 
 import { useMemo, useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Download, Pencil } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Download, Pencil } from 'lucide-react';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { downloadCsv, toCsv } from '../csv';
@@ -47,8 +47,12 @@ import {
   netMinutes,
   parseNote,
   pauseOf,
+  MAX_WEEK_MINUTES,
+  parseWeekHours,
   sollUntilToday,
+  targetLabel,
   targetOf,
+  type WorkTarget,
   whereLabel,
   zTotals,
   zeitbuchCsvRows,
@@ -79,6 +83,8 @@ export function Zeiten() {
   });
   const [person, setPerson] = useState<string>('all');
   const [edit, setEdit] = useState<Edit | null>(null);
+  // Sollzeit setzen (Inhaber, Tabelle „Je Person“)
+  const [sollFor, setSollFor] = useState<{ id: string; name: string } | null>(null);
 
   const monthEnd = useMemo(() => new Date(month.getFullYear(), month.getMonth() + 1, 1), [month]);
   const now0 = new Date();
@@ -159,6 +165,8 @@ export function Zeiten() {
 
           const targetList = targets.data ?? null;
           const hasTargets = !!targetList?.some((t) => targetOf(t));
+          // Sollzeit setzen: nur Inhaber und nur, wenn die Tabelle time_target schon da ist (SQL vom 07.11.)
+          const canSetTargets = isOwner && targetList !== null;
           // „In Rechnung übernommen“ kennt der Server erst mit der SQL vom 07.11. — vorher keine Spalte
           const billedKnown = all.some((e) => e.billed_at !== undefined);
           const perPerson = people
@@ -307,6 +315,7 @@ export function Zeiten() {
                           {hasTargets && <th className="pt-num" title="Sollzeit bis heute (heute erst nach Feierabend voll), ohne Feiertage">Soll</th>}
                           {hasTargets && <th className="pt-num">Saldo</th>}
                           <th>Hinweise</th>
+                          {canSetTargets && <th>Sollzeit</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -337,6 +346,29 @@ export function Zeiten() {
                               </td>
                             )}
                             <td>{p.hints ? <span className="badge amber">⚠ an {p.hints} {p.hints === 1 ? 'Tag' : 'Tagen'}</span> : <span className="muted">—</span>}</td>
+                            {canSetTargets && (
+                              <td className="pt-soll-cell">
+                                {/* nur aktuelle Mitglieder — für ehemalige lehnt der Server ab (time_target_guard) */}
+                                {p.m ? (
+                                  <span className="pt-soll">
+                                    <span className="muted small">{targetLabel(targetOf(targetList?.find((t) => t.user_id === p.id)))}</span>
+                                    <button
+                                      type="button"
+                                      className="btn ghost small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSollFor({ id: p.id, name: p.name });
+                                      }}
+                                      aria-label={`Sollzeit für ${p.name} festlegen`}
+                                    >
+                                      <Clock className="i" aria-hidden /> Sollzeit
+                                    </button>
+                                  </span>
+                                ) : (
+                                  <span className="muted">—</span>
+                                )}
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -503,6 +535,19 @@ export function Zeiten() {
                     await ext.planung.deleteTimeEntry(edit.entry.id);
                     setEdit(null);
                     entries.reload();
+                  }}
+                />
+              )}
+
+              {sollFor && (
+                <SollDialog
+                  name={sollFor.name}
+                  target={targetOf(targetList?.find((t) => t.user_id === sollFor.id))}
+                  onClose={() => setSollFor(null)}
+                  onSave={async (t) => {
+                    await ext.planung.setTimeTarget(org.id, sollFor.id, t);
+                    setSollFor(null);
+                    targets.reload();
                   }}
                 />
               )}
@@ -745,6 +790,123 @@ function EditDialog({
           </button>
           <button type="submit" className="btn" disabled={busy}>
             {busy ? 'Speichert …' : 'Speichern'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Wochentage für die Auswahl: Mo … So (Werte wie getDay()) */
+const SOLL_DAYS: { d: number; label: string }[] = [
+  { d: 1, label: 'Mo' },
+  { d: 2, label: 'Di' },
+  { d: 3, label: 'Mi' },
+  { d: 4, label: 'Do' },
+  { d: 5, label: 'Fr' },
+  { d: 6, label: 'Sa' },
+  { d: 0, label: 'So' },
+];
+
+/** 2310 → „38,5“, 2295 → „38,25“; krumme Minuten als „38:10“ (beides versteht parseWeekHours) */
+const hoursText = (min: number) =>
+  Number.isInteger(min * 100 / 60) ? String(min / 60).replace('.', ',') : `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
+
+/**
+ * Sollzeit einer Person (Inhaber): Wochenstunden + Arbeitstage — gleiche Bedeutung wie in der App (Blatt „Sollzeit“,
+ * teamSoll.ts targetToRow): Soll verteilt sich gleichmäßig auf die Arbeitstage, Feiertage zählen nicht, höchstens 80 h.
+ */
+function SollDialog({
+  name,
+  target,
+  onClose,
+  onSave,
+}: {
+  name: string;
+  target: WorkTarget | null;
+  onClose: () => void;
+  onSave: (t: WorkTarget | null) => Promise<void>;
+}) {
+  const [hours, setHours] = useState(() => (target ? hoursText(target.weekMinutes) : '40'));
+  const [days, setDays] = useState<number[]>(() => (target ? [...target.days] : [1, 2, 3, 4, 5]));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const min = parseWeekHours(hours);
+  const perDay = min && days.length ? Math.round(min / days.length) : null;
+  const dirty = !target
+    ? true
+    : min !== target.weekMinutes || [...days].sort().join() !== [...target.days].sort().join();
+
+  const toggle = (d: number) => setDays((x) => (x.includes(d) ? x.filter((y) => y !== d) : [...x, d]));
+  const close = () => {
+    if (!busy) onClose();
+  };
+
+  async function run(t: WorkTarget | null) {
+    setError(null);
+    setBusy(true);
+    try {
+      await onSave(t);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
+  }
+
+  function save() {
+    if (min === null) return setError(`Wochenstunden prüfen: z. B. 40 oder 38,5 (höchstens ${MAX_WEEK_MINUTES / 60} h).`);
+    if (!days.length) return setError('Bitte mindestens einen Arbeitstag wählen.');
+    void run({ weekMinutes: min, days });
+  }
+
+  return (
+    <Modal title={`Sollzeit · ${name}`} onClose={close} dirty={dirty}>
+      <form
+        className="pt-form"
+        onSubmit={(ev) => {
+          ev.preventDefault();
+          if (!busy) save();
+        }}
+      >
+        {error && <div className="error-box">{error}</div>}
+        <fieldset disabled={busy}>
+          <label className="field">
+            Wochenstunden
+            <input
+              value={hours}
+              inputMode="decimal"
+              onChange={(e) => setHours(e.target.value)}
+              placeholder="z. B. 38,5"
+              aria-describedby="soll-hint"
+            />
+          </label>
+          <div className="field-like">
+            <span className="pt-label">Arbeitstage</span>
+            <div className="pt-chips" role="group" aria-label="Arbeitstage">
+              {SOLL_DAYS.map(({ d, label }) => (
+                <button key={d} type="button" className={`pt-chip ${days.includes(d) ? 'on' : ''}`} aria-pressed={days.includes(d)} onClick={() => toggle(d)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p id="soll-hint" className="muted small">
+            {perDay ? `Das sind ${hm(perDay)} je Arbeitstag. ` : ''}Das Soll verteilt sich gleichmäßig auf die Arbeitstage, Feiertage zählen nicht —
+            wie in der App. Das Saldo in „Je Person“ rechnet bis heute.
+          </p>
+        </fieldset>
+        <div className="row pt-actions">
+          {target && (
+            <button type="button" className="btn ghost small pt-danger-text" onClick={() => void run(null)} disabled={busy}>
+              Keine Sollzeit
+            </button>
+          )}
+          <span style={{ flex: 1 }} />
+          <button type="button" className="btn ghost" onClick={close} disabled={busy}>
+            Abbrechen
+          </button>
+          <button type="submit" className="btn" disabled={busy}>
+            {busy ? 'Speichert …' : 'Sollzeit speichern'}
           </button>
         </div>
       </form>

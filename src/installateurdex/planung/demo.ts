@@ -4,7 +4,8 @@
 import type { Role } from '../../lib/orgApi';
 import { REQUESTS } from '../demo';
 import type { PlanungData } from './data';
-import { addDays, weekStart, type Appt, type ApptInput, type PlanRequest, type TimeEntry, type TimeKind } from './logic';
+import { addDays, weekStart, type Appt, type ApptInput, type PlanRequest, type TimeEntry, type TimeKind, type TimeTarget } from './logic';
+import { targetToRow } from './zeitbuch';
 
 const ORG_ID = 'demo-org';
 const wait = <T,>(v: T, ms = 120): Promise<T> => new Promise((r) => setTimeout(() => r(structuredClone(v)), ms));
@@ -157,6 +158,10 @@ export function demoPlanung(): PlanungData {
   let seq = 0;
   // Ansicht Inhaber/Mitarbeiter — merkt sich myUserId, damit Ändern wie RLS appt_update geprüft wird
   let actor = 'u-owner';
+  let targets: TimeTarget[] = [
+    { user_id: 'u-max', week_minutes: 38 * 60 + 30, days: [1, 2, 3, 4, 5] },
+    { user_id: 'u-lisa', week_minutes: 20 * 60, days: [1, 2, 3, 4] },
+  ];
 
   return {
     myUserId: (role: Role) => {
@@ -202,11 +207,15 @@ export function demoPlanung(): PlanungData {
       times = times.filter((e) => e.id !== id);
       await wait(null);
     },
-    // Beispiel: Max 38,5 h (Mo–Fr), Lisa Teilzeit 20 h (Mo–Do), Inhaber ohne Sollzeit
-    timeTargets: () =>
-      wait([
-        { user_id: 'u-max', week_minutes: 38 * 60 + 30, days: [1, 2, 3, 4, 5] },
-        { user_id: 'u-lisa', week_minutes: 20 * 60, days: [1, 2, 3, 4] },
-      ]),
+    // Beispiel: Max 38,5 h (Mo–Fr), Lisa Teilzeit 20 h (Mo–Do), Inhaber ohne Sollzeit — änderbar bis zum Neuladen
+    timeTargets: () => wait(targets),
+    async setTimeTarget(_orgId, userId, target) {
+      await wait(null, 250);
+      // wie RLS time_target_insert/update: Inhaber für alle, sonst nur sich selbst; nur aktuelle Mitglieder (Trigger)
+      if (actor !== 'u-owner' && userId !== actor) throw new Error('Sollzeit nicht gespeichert: Dafür fehlt die Berechtigung.');
+      if (!NAMES[userId]) throw new Error('Sollzeit nicht gespeichert: Person gehört nicht zu diesem Betrieb.');
+      const row = { user_id: userId, ...targetToRow(target) };
+      targets = [...targets.filter((t) => t.user_id !== userId), row];
+    },
   };
 }

@@ -233,6 +233,8 @@ export function usePointerDrag<T>(handlers: DragHandlers<T>) {
 
   return {
     ghostRef,
+    /** true direkt nach dem Loslassen — der folgende Klick (z. B. auf eine freie Zelle) gehört noch zum Ziehen */
+    justDragged: () => suppressClick.current,
     bind: (item: T) => ({
       onPointerDown: (e: ReactPointerEvent<HTMLElement>) => onPointerDown(e, item),
       onClickCapture,

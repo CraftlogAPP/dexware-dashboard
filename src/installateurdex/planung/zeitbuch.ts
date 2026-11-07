@@ -266,6 +266,37 @@ export interface WorkTarget {
 export const targetOf = (t: { week_minutes: number | null; days: number[] } | undefined | null): WorkTarget | null =>
   t && typeof t.week_minutes === 'number' && t.week_minutes > 0 && Array.isArray(t.days) && t.days.length ? { weekMinutes: t.week_minutes, days: t.days } : null;
 
+/** Höchstwert wie in der Datenbank (time_target.week_minutes ≤ 4800 = 80 h) — wie App teamSoll.ts */
+export const MAX_WEEK_MINUTES = 80 * 60;
+
+/** Sollzeit → Zeile für den Upsert (null = „keine Sollzeit“: week_minutes null, keine Tage) — wie App teamSoll.ts targetToRow. */
+export function targetToRow(t: WorkTarget | null): { week_minutes: number | null; days: number[] } {
+  if (!t || !(t.weekMinutes > 0) || !t.days.length) return { week_minutes: null, days: [] };
+  const days = [...new Set(t.days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b);
+  return days.length ? { week_minutes: Math.min(MAX_WEEK_MINUTES, Math.max(1, Math.round(t.weekMinutes))), days } : { week_minutes: null, days: [] };
+}
+
+/** „40 h/Woche · Mo–Fr“, „38,5 h/Woche · Mo Di Mi Do“ — wie App teamSoll.ts targetLabel. */
+export function targetLabel(t: WorkTarget | null | undefined): string {
+  if (!t) return 'keine Sollzeit';
+  const SHORT = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const h = String(Math.round((t.weekMinutes / 60) * 100) / 100).replace('.', ',');
+  const order = WEEK_ORDER.filter((d) => t.days.includes(d));
+  const idx = order.map((d) => WEEK_ORDER.indexOf(d));
+  const run = order.length >= 3 && idx.every((v, i) => i === 0 || v === idx[i - 1] + 1);
+  const days = run ? `${SHORT[order[0]]}–${SHORT[order[order.length - 1]]}` : order.map((d) => SHORT[d]).join(' ');
+  return `${h} h/Woche · ${days}`;
+}
+
+/** „38,5“ / „38.5“ / „38:30“ → Minuten; null bei Unsinn (≤ 0 oder über 80 h). */
+export function parseWeekHours(s: string): number | null {
+  const v = s.trim();
+  const clock = v.match(/^(\d{1,2}):(\d{2})$/);
+  if (!clock && !/^\d{1,2}([.,]\d{1,2})?$/.test(v)) return null;
+  const min = clock ? +clock[1] * 60 + +clock[2] : Math.round(Number(v.replace(',', '.')) * 60);
+  return Number.isFinite(min) && min > 0 && min <= MAX_WEEK_MINUTES && (!clock || +clock[2] < 60) ? min : null;
+}
+
 /** Tagessoll in Minuten: Wochensoll gleichmäßig auf die Arbeitstage (Restminuten ab Montag), Feiertage 0 — wie App. */
 export function dayTarget(t: WorkTarget | null, d: Date, hol: Map<string, string>): number {
   if (!t || !t.days.length || t.weekMinutes <= 0) return 0;

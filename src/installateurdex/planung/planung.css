@@ -849,6 +849,43 @@
   border-radius: 50%;
   background: var(--red);
 }
+/* Zeiten „Je Person“: Sollzeit setzen */
+.idx-scope .pt-soll {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.idx-scope .pt-soll .btn .i {
+  width: 14px;
+  height: 14px;
+}
+
+/* Klick in eine freie Stelle legt einen Termin an */
+.idx-scope .pt-cell.pickable,
+.idx-scope .pt-tl-col.pickable {
+  cursor: copy;
+}
+.idx-scope .pt-cell.pickable:hover:not(:has(.pt-card:hover)) {
+  background: color-mix(in oklab, var(--accent) 4%, transparent);
+}
+.idx-scope .pt-tl-pick {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  z-index: 0;
+  display: flex;
+  align-items: flex-start;
+  padding: 3px 8px;
+  border: 1px dashed color-mix(in oklab, var(--accent) 55%, transparent);
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--accent) 7%, transparent);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
 .idx-scope .is-dragging .pt-tl-col,
 .idx-scope .is-dragging .pt-block {
   cursor: grabbing;

@@ -1018,6 +1018,19 @@ export function Plantafel() {
                       preview={tlPreview}
                       laneCls={tlLaneCls}
                       wrapRef={boardWrap}
+                      busy={!!move}
+                      canPick={(laneId) => { const m = memberOf(laneId); return !!m && canPlanFor(m.userId); }}
+                      onPick={(laneId, startMin) => {
+                        if (drag.justDragged() || moveRef.current) return;
+                        // 1 h Standarddauer, höchstens bis 23:59
+                        const end = Math.min(startMin + 60, 24 * 60 - 1);
+                        openNew({
+                          day,
+                          lane: laneId,
+                          startsAt: atLocal(day, [Math.floor(startMin / 60), startMin % 60]).toISOString(),
+                          endsAt: atLocal(day, [Math.floor(end / 60), end % 60]).toISOString(),
+                        });
+                      }}
                     />
                   </div>
                   {tlLanes.length === 0 && <div className="empty">Kein Team geladen.</div>}
@@ -1060,6 +1073,7 @@ export function Plantafel() {
                         card={(it) => card(it, false)}
                         droppable={lane.id !== 'req'}
                         dropState={(k) => dropState(k, lane.id)}
+                        ignoreClick={() => drag.justDragged() || !!moveRef.current}
                       />
                     ))}
                   </div>
@@ -1197,6 +1211,7 @@ function LaneRow({
   card,
   droppable,
   dropState,
+  ignoreClick,
 }: {
   lane: { id: string; label: string; color: string };
   cols: Date[];
@@ -1208,6 +1223,8 @@ function LaneRow({
   /** Zelle ist Ablagefläche fürs Verschieben (nicht die Zeile „Vom Kunden gewählt“) */
   droppable: boolean;
   dropState: (day: string) => { cls: string; slot: ReactNode } | null;
+  /** Klick gehört noch zum Ziehen — dann keinen neuen Termin öffnen */
+  ignoreClick: () => boolean;
 }) {
   const busyMin = items
     .filter((it) => it.type === 'appt' && it.status !== 'canceled')
@@ -1227,9 +1244,18 @@ function LaneRow({
         return (
           <div
             key={k}
-            className={`pt-cell ${k === todayKey ? 'today' : ''} ${ds?.cls ?? ''}`}
+            className={`pt-cell ${k === todayKey ? 'today' : ''} ${ds?.cls ?? ''}${canAdd ? ' pickable' : ''}`}
             data-drop-day={droppable ? k : undefined}
             data-drop-lane={droppable ? lane.id : undefined}
+            // Klick in eine freie Stelle der Zelle: neuer Termin an diesem Tag für diesen Monteur
+            onClick={
+              canAdd
+                ? (e) => {
+                    if (ignoreClick() || (e.target as HTMLElement).closest('.pt-card, .pt-add, button, a')) return;
+                    onAdd(k);
+                  }
+                : undefined
+            }
           >
             {list.map(card)}
             {ds?.slot}

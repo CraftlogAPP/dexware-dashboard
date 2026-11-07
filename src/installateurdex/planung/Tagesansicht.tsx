@@ -46,6 +46,9 @@ export function Tagesansicht({
   preview,
   laneCls,
   wrapRef,
+  canPick,
+  onPick,
+  busy,
 }: {
   day: string;
   isToday: boolean;
@@ -55,7 +58,15 @@ export function Tagesansicht({
   /** Hervorhebung einer Spalte beim Verschieben (drop-ok, drop-clash, drop-no) */
   laneCls: (laneId: string) => string;
   wrapRef?: Ref<HTMLDivElement>;
+  /** Darf in dieser Spalte per Klick ein neuer Termin entstehen? (Hervorhebung beim Überfahren) */
+  canPick?: (laneId: string) => boolean;
+  /** Klick/Tippen auf eine freie Stelle: Spalte und Beginn (Minuten, auf 15 min abgerundet) */
+  onPick?: (laneId: string, startMin: number) => void;
+  /** Während des Verschiebens keine Hervorhebung und kein Klick */
+  busy?: boolean;
 }) {
+  // Freie Stelle unter der Maus (nur Maus/Stift): zeigt, wo ein Klick einen Termin anlegt
+  const [hover, setHover] = useState<{ lane: string; min: number } | null>(null);
   // „Jetzt“ jede Minute neu
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -70,6 +81,13 @@ export function Tagesansicht({
   const hours = Array.from({ length: endH - startH + 1 }, (_, i) => startH + i);
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const showNow = isToday && nowMin >= min0 && nowMin <= endH * 60;
+
+  /** Minute (auf 15 min abgerundet) unter dem Zeiger in einer Spalte — null über einem Block oder Knopf */
+  const pickAt = (e: { clientY: number; target: EventTarget | null; currentTarget: HTMLElement }) => {
+    if ((e.target as HTMLElement).closest('.pt-block, button, a')) return null;
+    const m = min0 + (e.clientY - e.currentTarget.getBoundingClientRect().top) / TL_PPM;
+    return Math.min(24 * 60 - 15, Math.max(0, Math.floor(m / 15) * 15));
+  };
 
   const box = (s: number, e: number) => ({
     top: (s - min0) * TL_PPM,
@@ -99,11 +117,34 @@ export function Tagesansicht({
           const mine = blocks.filter((b) => b.lane === l.id);
           const cols = layoutColumns(mine.map((b) => ({ id: b.key, s: minuteOfDay(b.starts_at), e: endMinuteOn(b, day) })));
           const pv = preview && preview.lane === l.id ? preview : null;
+          const pickable = !!onPick && !!canPick?.(l.id);
+          const hv = pickable && !busy && hover?.lane === l.id ? hover.min : null;
           return (
             <div
               key={l.id}
-              className={`pt-tl-col ${laneCls(l.id)}`}
+              className={`pt-tl-col ${laneCls(l.id)}${pickable ? ' pickable' : ''}`}
               style={{ height }}
+              onClick={
+                pickable
+                  ? (e) => {
+                      if (busy) return;
+                      const m = pickAt(e);
+                      if (m !== null) onPick!(l.id, m);
+                    }
+                  : undefined
+              }
+              onPointerMove={
+                pickable
+                  ? (e) => {
+                      if (e.pointerType === 'touch' || busy) return;
+                      const m = pickAt(e);
+                      if (m === null) {
+                        if (hover) setHover(null);
+                      } else if (hover?.lane !== l.id || hover.min !== m) setHover({ lane: l.id, min: m });
+                    }
+                  : undefined
+              }
+              onPointerLeave={pickable ? () => setHover(null) : undefined}
               data-drop-day={l.droppable ? day : undefined}
               data-drop-lane={l.droppable ? l.id : undefined}
               data-drop-min0={l.droppable ? min0 : undefined}
@@ -133,6 +174,11 @@ export function Tagesansicht({
                     </div>
                   );
                 })()}
+              {hv !== null && (
+                <span className="pt-tl-pick" style={box(hv, Math.min(hv + 60, 24 * 60))} aria-hidden>
+                  + {two(Math.floor(hv / 60))}:{two(hv % 60)}
+                </span>
+              )}
               {showNow && <span className="pt-tl-now" style={{ top: (nowMin - min0) * TL_PPM }} aria-hidden />}
             </div>
           );

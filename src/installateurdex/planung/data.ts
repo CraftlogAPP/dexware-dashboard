@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Role } from '../../lib/orgApi';
 import { fetchAllRows } from '../fetchAll';
 import type { Appt, ApptInput, ApptStatus, PlanRequest, TimeEntry, TimePatch, TimeTarget } from './logic';
+import { targetToRow, type WorkTarget } from './zeitbuch';
 
 export interface PlanungData {
   /** Eigene Nutzer-ID (auth.uid()). `role` brauchen nur die Beispieldaten (Ansicht Inhaber/Mitarbeiter). */
@@ -29,6 +30,8 @@ export interface PlanungData {
   deleteTimeEntry(id: string): Promise<void>;
   /** Sollzeiten (Inhaber: alle im Betrieb, sonst die eigene). null = Tabelle fehlt noch (SQL vom 07.11. nicht eingespielt). */
   timeTargets(): Promise<TimeTarget[] | null>;
+  /** Sollzeit einer Person setzen (Upsert; null = keine Sollzeit). RLS: Inhaber für alle im Betrieb. */
+  setTimeTarget(orgId: string, userId: string, target: WorkTarget | null): Promise<void>;
 }
 
 const APPT_COLS =
@@ -204,6 +207,18 @@ export function supabasePlanung(sb: SupabaseClient): PlanungData {
         timeError('Sollzeiten konnten nicht geladen werden', error);
       }
       return (data ?? []) as TimeTarget[];
+    },
+
+    async setTimeTarget(orgId, userId, target) {
+      // Kein Löschen per Client: „keine Sollzeit“ = week_minutes null (time_target_guard bereinigt die Tage, setzt updated_*)
+      const { error } = await sb
+        .from('time_target')
+        .upsert({ org_id: orgId, user_id: userId, ...targetToRow(target) }, { onConflict: 'org_id,user_id' });
+      if (!error) return;
+      if (isMissing(error)) throw new Error('Sollzeit nicht gespeichert: Die Sollzeit ist in der Datenbank noch nicht eingerichtet (NACHTRAG-ZEITBUCH-2026-11-07.sql).');
+      if (error.code === '42501' && /Betrieb/.test(error.message)) throw new Error(`Sollzeit nicht gespeichert: ${error.message}.`);
+      if (error.code === '23514') throw new Error('Sollzeit nicht gespeichert: höchstens 80 Stunden je Woche.');
+      throw new Error(`Sollzeit nicht gespeichert: ${plain(error)}`);
     },
 
     async updateTimeEntry(id, patch) {
