@@ -2,7 +2,8 @@
 // (buildInvoiceHtml), Ausgabe über openReportWindow (src/lib/print.ts). Logo/Firmenfarbe nur mit Pro (wie App).
 // Bezahl-QR (EPC/GiroCode) wie App shareInvoicePdf: nur ausgestellte Rechnungen, nicht wenn bezahlt (geld/qr.ts).
 
-import { epcPayload, euro, legalNotes, lineNet, toCiiXml, totals, type InvoiceDraft, type InvoiceProfile } from './invoice';
+import { activeDeductions, deductionGross, epcPayload, euro, legalNotes, lineNet, toCiiXml, totals, type InvoiceDraft, type InvoiceProfile } from './invoice';
+import { toEbInterfaceXml } from './ebInterface';
 import { qrSvg } from './qr';
 
 const DEFAULT_BRAND_COLOR = '#B5651D'; // wie App lib/branding.ts
@@ -51,7 +52,7 @@ function imgSrc(u: string | null | undefined): string {
 }
 
 export function docTitle(d: InvoiceDraft): string {
-  return d.kind === 'quote' ? 'Angebot' : d.kind === 'credit' ? 'Stornorechnung' : d.partial ? 'Abschlagsrechnung' : 'Rechnung';
+  return d.kind === 'quote' ? 'Angebot' : d.kind === 'credit' ? 'Stornorechnung' : activeDeductions(d).length ? 'Schlussrechnung' : d.partial ? 'Abschlagsrechnung' : 'Rechnung';
 }
 
 export function buildInvoiceHtml(doc: InvoiceDoc, branding: DocBranding): string {
@@ -79,6 +80,23 @@ export function buildInvoiceHtml(doc: InvoiceDoc, branding: DocBranding): string
     .join('');
   const vatRows =
     d.vatMode === 'normal' ? t.byRate.map((g) => `<tr><td>zzgl. ${rate(g.rate)} % USt auf ${sgn(g.baseCents)}</td><td class="num">${sgn(g.vatCents)}</td></tr>`).join('') : '';
+  // Schlussrechnung (wie App pdf/invoice.ts): je Abschlagsrechnung Netto / USt / Brutto abziehen, darunter der Rest
+  const ded = activeDeductions(d);
+  const dedRows = ded
+    .map((x) => {
+      const parts = x.byRate
+        .map((pt) => (d.vatMode === 'normal' ? `netto ${sgn(-pt.netCents)} · USt ${rate(pt.rate)} % ${sgn(-pt.vatCents)}` : `netto ${sgn(-pt.netCents)}`))
+        .join('<br/>');
+      return `<tr class="ded"><td>abzüglich Abschlagsrechnung Nr. ${esc(x.number)}${x.issuedAt ? ` vom ${day(x.issuedAt)}` : ''}<div class="sub">${parts}</div></td><td class="num">${sgn(-deductionGross(x))}</td></tr>`;
+    })
+    .join('');
+  const restRows = ded.length
+    ? `<tr class="rest"><td>Restbetrag netto</td><td class="num">${sgn(t.restByRate.reduce((s, g) => s + g.baseCents, 0))}</td></tr>${
+        d.vatMode === 'normal' ? t.restByRate.map((g) => `<tr><td>verbleibende USt ${rate(g.rate)} % auf ${sgn(g.baseCents)}</td><td class="num">${sgn(g.vatCents)}</td></tr>`).join('') : ''
+      }${t.manualPrepaidCents > 0 ? `<tr><td>abzüglich weitere Zahlungen</td><td class="num">${sgn(-t.manualPrepaidCents)}</td></tr>` : ''}<tr class="total"><td>${
+        credit ? 'Gutschrift (Rest)' : t.dueCents < 0 ? 'Überzahlung' : 'Zu zahlen'
+      }</td><td class="num">${sgn(t.dueCents)}</td></tr>`
+    : '';
   const sender = [p.legalName, p.street, `${p.zip} ${p.city}`].filter((x) => x?.trim()).map(esc).join(' · ');
   const name = fileBase(title, doc.number ?? 'Entwurf', r.name);
   // wie App shareInvoicePdf: EPC nur für ausgestellte Rechnungen (Nummer vorhanden), Betrag = zu zahlen
@@ -104,7 +122,10 @@ export function buildInvoiceHtml(doc: InvoiceDoc, branding: DocBranding): string
   thead { display: table-header-group; } tr { break-inside: avoid; }
   .num { text-align: right; white-space: nowrap; } .pos { color: #8A9098; width: 18px; }
   table.sum { margin-left: auto; margin-top: 10px; min-width: 260px; border-collapse: collapse; break-inside: avoid; }
-  table.sum td { padding: 4px 4px; } table.sum .total td { font-size: 13pt; font-weight: 800; border-top: 2px solid ${accent}; padding-top: 8px; }
+  table.sum td { padding: 4px 4px; } table.sum .ded td { padding-top: 8px; } table.sum .sub { font-size: 8.5pt; color: #646B74; }
+  table.sum .rest td { border-top: 1px solid #ddd; padding-top: 8px; font-weight: 700; }
+  .intro { margin: 0 0 14px; line-height: 1.5; }
+  table.sum .total td { font-size: 13pt; font-weight: 800; border-top: 2px solid ${accent}; padding-top: 8px; }
   .notes { margin-top: 18px; font-size: 9pt; color: #3f454d; line-height: 1.5; }
   .pay { margin-top: 16px; padding: 10px 12px; background: #F6F4F1; border-radius: 8px; font-size: 9.5pt; line-height: 1.5; overflow: hidden; break-inside: avoid; }
   .qr { float: right; width: 92px; text-align: center; font-size: 7pt; color: #646B74; margin-left: 12px; } .qr svg { width: 92px; height: 92px; display: block; background: #fff; padding: 4px; }
@@ -126,30 +147,45 @@ ${stamp}
   ${!quote && !credit && doc.dueAt ? `<div>Fällig am<b>${day(doc.dueAt)}</b></div>` : ''}
   ${p.uid ? `<div>Unsere UID<b>${esc(p.uid)}</b></div>` : p.taxNumber ? `<div>Steuernummer<b>${esc(p.taxNumber)}</b></div>` : ''}
 </div>
+${d.intro?.trim() ? `<p class="intro">${esc(d.intro.trim()).replace(/\n/g, '<br/>')}</p>` : ''}
 <table class="lines"><thead><tr><th></th><th>Leistung / Material</th><th class="num">Menge</th><th class="num">Einzelpreis</th>${d.vatMode === 'normal' ? '<th class="num">USt</th>' : ''}<th class="num">Betrag</th></tr></thead><tbody>${rows}</tbody></table>
 <table class="sum">
   <tr><td>Summe netto</td><td class="num">${sgn(t.netCents)}</td></tr>
   ${vatRows}
-  <tr class="total"><td>${quote ? 'Angebotssumme' : credit ? 'Gutschrift gesamt' : 'Gesamtbetrag'}</td><td class="num">${sgn(t.grossCents)}</td></tr>
-  ${t.prepaidCents > 0 ? `<tr><td>abzüglich Abschläge</td><td class="num">− ${euro(t.prepaidCents)}</td></tr><tr class="total"><td>Zu zahlen</td><td class="num">${euro(t.dueCents)}</td></tr>` : ''}
+  <tr class="total"><td>${quote ? 'Angebotssumme' : credit ? 'Gutschrift gesamt' : ded.length ? 'Gesamtleistung brutto' : 'Gesamtbetrag'}</td><td class="num">${sgn(t.grossCents)}</td></tr>
+  ${ded.length ? `${dedRows}${restRows}` : t.prepaidCents > 0 && !quote ? `<tr><td>abzüglich Abschläge</td><td class="num">− ${euro(t.prepaidCents)}</td></tr><tr class="total"><td>Zu zahlen</td><td class="num">${euro(t.dueCents)}</td></tr>` : ''}
 </table>
 ${p.land === 'DE' && r.private && t.laborGrossCents > 0 && !quote ? `<div class="labor">Darin enthaltene Arbeits- und Fahrtkosten (§ 35a EStG): ${euro(t.laborGrossCents)} inkl. USt</div>` : ''}
 ${notes.length ? `<div class="notes">${notes.map(esc).join('<br/>')}</div>` : ''}
-${!quote && !credit && p.iban ? `<div class="pay">${epcSvg && doc.status !== 'paid' ? `<div class="qr">${epcSvg}<span>Mit der Banking-App scannen</span></div>` : ''}Bitte überweisen Sie ${euro(t.dueCents)}${doc.dueAt ? ` bis ${day(doc.dueAt)}` : ''} auf<br/><b>IBAN ${esc(p.iban)}</b>${p.bic ? ` · BIC ${esc(p.bic)}` : ''}<br/>Verwendungszweck: ${esc(doc.number ?? title)}</div>` : ''}
+${!quote && !credit && p.iban && t.dueCents > 0 ? `<div class="pay">${epcSvg && doc.status !== 'paid' ? `<div class="qr">${epcSvg}<span>Mit der Banking-App scannen</span></div>` : ''}Bitte überweisen Sie ${euro(t.dueCents)}${doc.dueAt ? ` bis ${day(doc.dueAt)}` : ''} auf<br/><b>IBAN ${esc(p.iban)}</b>${p.bic ? ` · BIC ${esc(p.bic)}` : ''}<br/>Verwendungszweck: ${esc(doc.number ?? title)}</div>` : ''}
 ${quote ? '<div class="notes">Wir freuen uns auf Ihren Auftrag. Preise gelten bei Auftragserteilung innerhalb der Gültigkeit.</div>' : ''}
 <footer>${esc(p.legalName)} · ${esc(p.street)} · ${esc(p.zip)} ${esc(p.city)}${p.uid ? ` · UID ${esc(p.uid)}` : ''}${p.taxNumber ? ` · St.-Nr. ${esc(p.taxNumber)}` : ''}${p.iban ? ` · IBAN ${esc(p.iban)}` : ''}<br/>Erstellt mit InstallateurDex</footer>
 </body></html>`;
 }
 
 /** E-Rechnung (EN 16931, CII-XML) als Datei herunterladen — wie App shareEInvoice (DE: XRechnung-Kennung). */
-export function downloadEInvoice(doc: InvoiceDoc, guideline: 'en16931' | 'xrechnung'): void {
+export function downloadEInvoice(doc: InvoiceDoc, guideline: 'en16931' | 'xrechnung', buyerReference?: string): void {
   if (!doc.number || !doc.issuedAt) throw new Error('Die E-Rechnung gibt es erst nach dem Ausstellen.');
-  const xmlText = toCiiXml(doc.draft, doc.profile, { number: doc.number, issueDate: doc.issuedAt, guideline });
+  const xmlText = toCiiXml(doc.draft, doc.profile, { number: doc.number, issueDate: doc.issuedAt, guideline, buyerReference: buyerReference?.trim() || undefined });
+  downloadXml(xmlText, `${fileBase('E-Rechnung', doc.number)}.xml`);
+}
+
+/**
+ * E-Rechnung im österreichischen Format ebInterface 6.1 (Bund/Länder/Gemeinden, Upload auf e-rechnung.gv.at) — wie App
+ * shareEbInterface. Auftragsreferenz und Lieferantennummer gibt der öffentliche Auftraggeber vor.
+ */
+export function downloadEbInterface(doc: InvoiceDoc, ids: { orderReference?: string; supplierId?: string } = {}): void {
+  if (!doc.number || !doc.issuedAt) throw new Error('Die E-Rechnung gibt es erst nach dem Ausstellen.');
+  const xmlText = toEbInterfaceXml(doc.draft, doc.profile, { number: doc.number, issueDate: doc.issuedAt, orderReference: ids.orderReference, supplierId: ids.supplierId });
+  downloadXml(xmlText, `${fileBase('ebInterface', doc.number)}.xml`);
+}
+
+function downloadXml(xmlText: string, fileName: string): void {
   const blob = new Blob([xmlText], { type: 'application/xml' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${fileBase('E-Rechnung', doc.number)}.xml`;
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   a.remove();

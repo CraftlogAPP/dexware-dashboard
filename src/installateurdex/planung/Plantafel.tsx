@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, CalendarPlus, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock, Plus, X } from 'lucide-react';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { useInst } from '../context';
@@ -28,6 +28,7 @@ import {
   deDate,
   forDay,
   hhmm,
+  hm,
   isoWeek,
   parseDay,
   parseHm,
@@ -41,18 +42,25 @@ import {
   type PlanRequest,
 } from './logic';
 import {
+  MIN_DUR,
   REQUEST_MOVE_HINT,
   apptInputOf,
   canAssignTo,
+  clampDur,
+  clampStart,
   clashesWith,
-  isSameSlot,
+  durationMin,
+  minuteOfDay,
   moveBlockReason,
   movedAppt,
+  sameSlot,
+  snapMinutes,
   stepTarget,
   type MoveActor,
   type MoveTarget,
 } from './verschieben';
 import { usePointerDrag, type DropSpot } from './ziehen';
+import { TL_PPM, Tagesansicht, type TlBlock, type TlLane } from './Tagesansicht';
 import './planung.css';
 
 /** Eine Karte auf der Tafel: eigener Termin oder vom Kunden gewählter Anfrage-Termin (wie App fromRequest). */
@@ -88,7 +96,15 @@ interface Override {
 interface MoveState {
   orig: Appt;
   mode: 'pointer' | 'key';
+  /** Ganzen Termin verschieben oder (Tagesansicht) die Unterkante = Dauer ändern */
+  kind: 'move' | 'resize';
   target: MoveTarget | null;
+  /** Tagesansicht: neuer Beginn (Minuten nach Mitternacht, im 15-min-Raster) — fehlt = Uhrzeit bleibt */
+  startMin?: number;
+  /** Tagesansicht: neue Dauer in Minuten — fehlt = Dauer bleibt */
+  durMin?: number;
+  /** Tagesansicht: wo der Block gegriffen wurde (Minuten ab Beginn), damit er nicht zum Zeiger springt */
+  grabMin?: number;
   /** Hervorgehobene Zeile der Wochentafel (Monteur-ID, „none“) — leer in der Tagesleiste */
   lane: string | null;
   /** Warum hier nicht abgelegt werden darf */
@@ -101,17 +117,28 @@ type Notice =
 
 /** Was die Zeiger-/Tastatur-Handler aus dem aktuellen Render brauchen. */
 interface MoveCtx {
-  spotTarget: (orig: Appt, spot: DropSpot) => { t: MoveTarget; lane: string | null; reason: string | null };
+  /** Tagesansicht mit Zeitachse aktiv */
+  timeline: boolean;
+  spotTarget:(orig: Appt, spot: DropSpot) => { t: MoveTarget; lane: string | null; reason: string | null };
   keyDays: string[];
   keyLanes: (orig: Appt) => (string | null)[];
   laneIdOf: (uid: string | null) => string | null;
   current: (id: string) => Appt | undefined;
 }
 
-const sameMove = (row: Appt, moved: Appt) =>
-  Date.parse(row.starts_at) === Date.parse(moved.starts_at) &&
-  Date.parse(row.ends_at) === Date.parse(moved.ends_at) &&
-  row.assigned_to === moved.assigned_to;
+const sameMove = sameSlot;
+
+/** Termin nach der laufenden Verschiebung (Tag/Monteur, in der Tagesansicht auch Uhrzeit und Dauer) */
+const planned = (m: MoveState, team: PlanMember[]) => (m.target ? movedAppt(m.orig, m.target, team, m.startMin, m.durMin) : null);
+
+const VIEW_KEY = 'idx-plantafel-ansicht';
+function readView(): 'week' | 'day' {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'day' ? 'day' : 'week';
+  } catch {
+    return 'week';
+  }
+}
 
 function useMedia(query: string): boolean {
   const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
@@ -134,6 +161,16 @@ export function Plantafel() {
   const [week, setWeek] = useState(() => weekStart(new Date()));
   const [day, setDay] = useState(() => dayKey(new Date()));
   const [filter, setFilter] = useState<string>('all');
+  // Woche (Tafel bzw. schmal Tagesliste) oder Tag mit Zeitachse — gemerkt je Browser
+  const [view, setViewState] = useState<'week' | 'day'>(readView);
+  const setView = (v: 'week' | 'day') => {
+    setViewState(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* privates Fenster o. Ä. — dann eben nicht gemerkt */
+    }
+  };
   const [draft, setDraft] = useState<Draft | null>(null);
 
   const weekEnd = useMemo(() => addDays(week, 7), [week]);
@@ -246,9 +283,10 @@ export function Plantafel() {
       else {
         const who = moved.assigned_to !== from.assigned_to ? ` · ${team.find((m) => m.userId === moved.assigned_to)?.name ?? moved.assigned_name ?? ''}` : '';
         const d = new Date(moved.starts_at);
+        const onlyEnd = !who && Date.parse(moved.starts_at) === Date.parse(from.starts_at);
         setNotice({
           kind: 'undo',
-          text: `Verschoben auf ${WD[d.getDay()]} ${deDate(d)} ${hhmm(moved.starts_at)}–${hhmm(moved.ends_at)}${who}`,
+          text: `${onlyEnd ? 'Dauer geändert:' : 'Verschoben auf'} ${WD[d.getDay()]} ${deDate(d)} ${hhmm(moved.starts_at)}–${hhmm(moved.ends_at)}${who}`,
           orig: from,
           moved,
         });
@@ -283,17 +321,40 @@ export function Plantafel() {
     setMove(null);
     if (!m.target) return;
     if (m.reason) return setNotice({ kind: 'info', text: m.reason });
-    if (isSameSlot(m.orig, m.target)) {
+    const moved = planned(m, team)!;
+    if (sameSlot(m.orig, moved)) {
       if (m.mode === 'key') setNotice({ kind: 'info', text: 'Termin bleibt, wo er ist.' });
       return;
     }
     if (m.mode === 'key') setFocusId(m.orig.id);
-    void saveMove(m.orig, movedAppt(m.orig, m.target, team));
+    void saveMove(m.orig, moved);
   }
 
-  const drag = usePointerDrag<Item>({
+  /** Zeigerposition → Ziel (Tag/Monteur, auf der Zeitachse auch Uhrzeit bzw. Dauer) */
+  function applySpot(m: MoveState, spot: DropSpot | null): MoveState {
+    const ctx = moveCtx.current;
+    if (m.kind === 'resize') {
+      // Unterkante: nur die Höhe zählt; außerhalb der Spalten bleibt der letzte Stand
+      if (!spot || spot.minute === undefined || !ctx) return m;
+      const s = minuteOfDay(m.orig.starts_at);
+      const end = Math.min(24 * 60, Math.round(spot.minute / MIN_DUR) * MIN_DUR);
+      return {
+        ...m,
+        target: { day: dayOf(m.orig.starts_at), assigned_to: m.orig.assigned_to },
+        lane: ctx.laneIdOf(m.orig.assigned_to),
+        reason: null,
+        durMin: Math.min(clampDur(end - s), 24 * 60 - s),
+      };
+    }
+    if (!spot || !ctx) return { ...m, target: null, lane: null, reason: null, startMin: undefined };
+    const r = ctx.spotTarget(m.orig, spot);
+    const startMin = spot.minute !== undefined && m.grabMin !== undefined ? clampStart(snapMinutes(spot.minute - m.grabMin)) : undefined;
+    return { ...m, target: r.t, lane: r.lane, reason: r.reason, startMin };
+  }
+
+  const drag = usePointerDrag<{ it: Item; resize?: boolean }>({
     scrollEl: () => boardWrap.current,
-    onStart(it) {
+    onStart({ it, resize }, _x, y, rect) {
       if (it.type === 'req') {
         setNotice({ kind: 'info', text: REQUEST_MOVE_HINT });
         return false;
@@ -304,25 +365,31 @@ export function Plantafel() {
         return false;
       }
       setNotice(null);
-      setMove({ orig: it.a, mode: 'pointer', target: null, lane: null, reason: null });
+      const timeline = !!moveCtx.current?.timeline;
+      setMove({
+        orig: it.a,
+        mode: 'pointer',
+        kind: resize && timeline ? 'resize' : 'move',
+        target: null,
+        lane: null,
+        reason: null,
+        grabMin: timeline && !resize ? Math.max(0, (y - rect.top) / TL_PPM) : undefined,
+      });
       return true;
     },
     onOver(spot) {
       const m = moveRef.current;
-      if (!m) return;
-      if (!spot || !moveCtx.current) return setMove({ ...m, target: null, lane: null, reason: null });
-      const r = moveCtx.current.spotTarget(m.orig, spot);
-      setMove({ ...m, target: r.t, lane: r.lane, reason: r.reason });
+      if (m) setMove(applySpot(m, spot));
     },
     onDrop(spot) {
       const m = moveRef.current;
       if (!m) return;
-      if (!spot || !moveCtx.current) {
+      const next = applySpot(m, spot);
+      if (!next.target) {
         setMove(null);
         return;
       }
-      const r = moveCtx.current.spotTarget(m.orig, spot);
-      finishMove({ ...m, target: r.t, lane: r.lane, reason: r.reason });
+      finishMove(next);
     },
     onCancel() {
       setMove(null);
@@ -347,6 +414,7 @@ export function Plantafel() {
       return;
     }
     const k = e.key;
+    if (ctx.timeline) return onTimelineKey(e, a, active);
     const dir =
       k === 'ArrowLeft' ? (e.shiftKey ? 'lane-' : 'day-')
       : k === 'ArrowRight' ? (e.shiftKey ? 'lane+' : 'day+')
@@ -369,13 +437,70 @@ export function Plantafel() {
     }
     const t = stepTarget(t0, dir, ctx.keyDays, ctx.keyLanes(a)) ?? t0;
     setNotice((n) => (n?.kind === 'error' ? null : n));
-    setMove({ orig: active?.orig ?? a, mode: 'key', target: t, lane: ctx.laneIdOf(t.assigned_to), reason: null });
+    setMove({ orig: active?.orig ?? a, mode: 'key', kind: 'move', target: t, lane: ctx.laneIdOf(t.assigned_to), reason: null });
+  }
+
+  /**
+   * Tagesansicht: Hoch/Runter = 15 min früher/später (mit Umschalt 1 Stunde), Alt+Hoch/Runter = Dauer ±15 min,
+   * Links/Rechts (auch mit Umschalt) = Monteur. Enter/Escape wie in der Woche (oben in onCardKey).
+   */
+  function onTimelineKey(e: KeyboardEvent<HTMLElement>, a: Appt, active: MoveState | null) {
+    const ctx = moveCtx.current!;
+    const k = e.key;
+    const vertical = k === 'ArrowUp' || k === 'ArrowDown';
+    if (!vertical && k !== 'ArrowLeft' && k !== 'ArrowRight') return;
+    if (e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+    if (!active) {
+      const reason = moveBlockReason(a, actor);
+      if (reason) return setNotice({ kind: 'info', text: reason });
+    }
+    const base: MoveState = active ?? {
+      orig: a,
+      mode: 'key',
+      kind: 'move',
+      target: { day: dayOf(a.starts_at), assigned_to: a.assigned_to },
+      lane: ctx.laneIdOf(a.assigned_to),
+      reason: null,
+      startMin: minuteOfDay(a.starts_at),
+      durMin: durationMin(a),
+    };
+    const t0 = base.target ?? { day: dayOf(a.starts_at), assigned_to: a.assigned_to };
+    const start = base.startMin ?? minuteOfDay(a.starts_at);
+    const dur = base.durMin ?? durationMin(a);
+    const sign = k === 'ArrowUp' ? -1 : 1;
+    setNotice((n) => (n?.kind === 'error' ? null : n));
+    if (vertical && e.altKey) {
+      // Dauer, aber nicht über 24:00 hinaus
+      return setMove({ ...base, reason: null, durMin: Math.min(clampDur(dur + sign * MIN_DUR), 24 * 60 - start) });
+    }
+    if (vertical) {
+      const next = clampStart(start + sign * (e.shiftKey ? 60 : MIN_DUR));
+      return setMove({ ...base, reason: null, startMin: next, durMin: Math.min(dur, 24 * 60 - next) });
+    }
+    if (!isOwner) return setMove({ ...base, reason: 'Anderen Monteuren gibt nur der Inhaber Termine.' });
+    const t = stepTarget(t0, k === 'ArrowLeft' ? 'lane-' : 'lane+', ctx.keyDays, ctx.keyLanes(a)) ?? t0;
+    setMove({ ...base, target: t, lane: ctx.laneIdOf(t.assigned_to), reason: null });
   }
 
   function shiftWeek(n: number) {
     const w = n === 0 ? weekStart(new Date()) : addDays(week, 7 * n);
     setWeek(w);
     setDay(n === 0 ? dayKey(new Date()) : dayKey(w));
+  }
+
+  /** Tag zeigen (lädt die passende Woche mit) */
+  function goDay(k: string) {
+    setMove(null);
+    setDay(k);
+    const d = parseDay(k);
+    if (d < week || d >= weekEnd) setWeek(weekStart(d));
+  }
+
+  /** Pfeile/„Heute“ der Kopfleiste: in der Tagesansicht tageweise, sonst wochenweise */
+  function shiftNav(n: number) {
+    if (view !== 'day') return shiftWeek(n);
+    goDay(n === 0 ? todayKey : dayKey(addDays(parseDay(day), n)));
   }
 
   function defaultAssignee(lane?: string | null): string | null {
@@ -475,13 +600,99 @@ export function Plantafel() {
           const cols = days.filter((d, i) => i < 6 || forDay(shown, dayKey(d)).length > 0);
           const countFor = (uid: string) => appts.filter((a) => a.assigned_to === uid && a.status !== 'canceled').length;
 
+          /** Gemeinsame Eigenschaften einer Terminkarte (Wochentafel, Tagesliste, Zeitachse): Klick, Tastatur, Ziehen, Ansage */
+          const apptProps = (it: Item, a: Appt) => {
+            const s = a.site_id ? siteById.get(a.site_id) : undefined;
+            const label = `${hhmm(a.starts_at)}–${hhmm(a.ends_at)} ${a.title} ${s?.name ?? ''}`;
+            const movable = !moveBlockReason(a, actor);
+            const moving = move?.orig.id === a.id ? (move.mode === 'pointer' ? ' dragging' : ' moving') : '';
+            const saving = overrides.has(a.id) && !overrides.get(a.id)!.saved ? ' saving' : '';
+            return {
+              movable,
+              cls: `${a.status}${movable ? ' can-move' : ''}${moving}${saving}`,
+              props: {
+                type: 'button' as const,
+                'data-appt': a.id,
+                onClick: () => openEdit(a),
+                onKeyDown: (e: KeyboardEvent<HTMLElement>) => onCardKey(e, a),
+                onBlur: () => {
+                  if (moveRef.current?.mode === 'key' && moveRef.current.orig.id === a.id) setMove(null);
+                },
+                ...drag.bind({ it }),
+                'aria-label': `${label}, ${canEdit(a) ? 'bearbeiten' : 'ansehen'}`,
+                'aria-describedby': movable ? 'pt-move-help' : undefined,
+              },
+            };
+          };
+
+          /** Block auf der Zeitachse (Tagesansicht): Lage/Größe aus Tagesansicht.tsx, Unterkante ändert die Dauer */
+          const block = (it: Item, style: CSSProperties, compact: boolean) => {
+            if (it.type === 'req') {
+              const r = it.r;
+              return (
+                <div key={it.key} className={`pt-card pt-block req ${compact ? 'compact' : ''}`} style={style} title={REQUEST_MOVE_HINT} {...drag.bind({ it })}>
+                  <span className="pt-card-top">
+                    <span className="pt-time">{hhmm(it.starts_at)}</span>
+                    <span className="pt-title">{requestTitle(r.kind)}</span>
+                  </span>
+                  {!compact && (
+                    <span className="pt-card-acts">
+                      <button
+                        type="button"
+                        className="pt-link"
+                        onClick={() =>
+                          openNew({ site_id: r.site_id, asset_id: r.asset_id, request_id: r.id, title: requestTitle(r.kind), startsAt: it.starts_at, endsAt: it.ends_at })
+                        }
+                      >
+                        Einplanen
+                      </button>
+                    </span>
+                  )}
+                </div>
+              );
+            }
+            const a = it.a;
+            const s = a.site_id ? siteById.get(a.site_id) : undefined;
+            const asset = a.asset_id ? assetById.get(a.asset_id) : undefined;
+            const who = memberOf(a.assigned_to);
+            const p = apptProps(it, a);
+            return (
+              <button
+                key={it.key}
+                {...p.props}
+                className={`pt-card pt-block ${p.cls}${compact ? ' compact' : ''}${clash.has(a.id) ? ' has-clash' : ''}`}
+                style={{ ...style, '--lane': who?.color ?? 'var(--muted)' } as CSSProperties}
+              >
+                <span className="pt-card-top">
+                  <span className="pt-time">{compact ? hhmm(a.starts_at) : `${hhmm(a.starts_at)}–${hhmm(a.ends_at)}`}</span>
+                  {compact && <span className="pt-title">{a.title}</span>}
+                  {clash.has(a.id) && (
+                    <span className="pt-clash" title="Dieser Monteur hat zur selben Zeit einen anderen Termin">
+                      <AlertTriangle className="i" aria-hidden />
+                      {compact ? '' : ' Überschneidung'}
+                    </span>
+                  )}
+                  {a.status !== 'planned' && !compact && <span className={`pt-tag ${a.status}`}>{APPT_STATUS_LABELS[a.status]}</span>}
+                </span>
+                {!compact && (
+                  <span className="pt-title">
+                    {a.title}
+                    {asset ? ` · ${asset.name}` : ''}
+                  </span>
+                )}
+                {!compact && s && <span className="pt-sub">{siteLabel(s)}</span>}
+                {p.movable && <span className="pt-resize" {...drag.bind({ it, resize: true })} title="Ziehen ändert die Dauer" aria-hidden />}
+              </button>
+            );
+          };
+
           const card = (it: Item, showWho: boolean) => {
             if (it.type === 'req') {
               const r = it.r;
               const s = r.site_id ? siteById.get(r.site_id) : undefined;
               const asset = r.asset_id ? assetById.get(r.asset_id) : undefined;
               return (
-                <div key={it.key} className="pt-card req" title={REQUEST_MOVE_HINT} {...drag.bind(it)}>
+                <div key={it.key} className="pt-card req" title={REQUEST_MOVE_HINT} {...drag.bind({ it })}>
                   <div className="pt-card-top">
                     <span className="pt-time">
                       {hhmm(it.starts_at)}–{hhmm(it.ends_at)}
@@ -520,25 +731,9 @@ export function Plantafel() {
             const s = a.site_id ? siteById.get(a.site_id) : undefined;
             const asset = a.asset_id ? assetById.get(a.asset_id) : undefined;
             const who = memberOf(a.assigned_to);
-            const label = `${hhmm(a.starts_at)}–${hhmm(a.ends_at)} ${a.title} ${s?.name ?? ''}`;
-            const movable = !moveBlockReason(a, actor);
-            const moving = move?.orig.id === a.id ? (move.mode === 'pointer' ? ' dragging' : ' moving') : '';
+            const p = apptProps(it, a);
             return (
-              <button
-                key={it.key}
-                type="button"
-                data-appt={a.id}
-                className={`pt-card ${a.status}${movable ? ' can-move' : ''}${moving}${overrides.has(a.id) && !overrides.get(a.id)!.saved ? ' saving' : ''}`}
-                style={{ '--lane': who?.color ?? 'var(--muted)' } as CSSProperties}
-                onClick={() => openEdit(a)}
-                onKeyDown={(e) => onCardKey(e, a)}
-                onBlur={() => {
-                  if (moveRef.current?.mode === 'key' && moveRef.current.orig.id === a.id) setMove(null);
-                }}
-                {...drag.bind(it)}
-                aria-label={`${label}, ${canEdit(a) ? 'bearbeiten' : 'ansehen'}`}
-                aria-describedby={movable ? 'pt-move-help' : undefined}
-              >
+              <button key={it.key} {...p.props} className={`pt-card ${p.cls}`} style={{ '--lane': who?.color ?? 'var(--muted)' } as CSSProperties}>
                 <span className="pt-card-top">
                   <span className="pt-time">
                     {hhmm(a.starts_at)}–{hhmm(a.ends_at)}
@@ -582,7 +777,9 @@ export function Plantafel() {
 
           // ---------- Verschieben: Ziele, Vorschau, Ansage ----------
           const laneIdOf = (uid: string | null) => (memberOf(uid) ? uid : 'none');
+          const timeline = view === 'day';
           moveCtx.current = {
+            timeline,
             spotTarget(orig, spot) {
               // Tagesleiste (schmal): nur der Tag ändert sich
               if (!spot.lane) return { t: { day: spot.day, assigned_to: orig.assigned_to }, lane: null, reason: null };
@@ -598,21 +795,21 @@ export function Plantafel() {
                 reason: canAssignTo(orig, spot.lane, actor) ? null : 'Anderen Monteuren gibt nur der Inhaber Termine.',
               };
             },
-            keyDays: (wide ? cols : days).map(dayKey),
+            keyDays: timeline ? [day] : (wide ? cols : days).map(dayKey),
             keyLanes(orig) {
-              const ids = wide ? lanes.filter((l) => l.member).map((l) => l.id) : team.map((m) => m.userId);
+              const ids = wide || timeline ? lanes.filter((l) => l.member).map((l) => l.id) : team.map((m) => m.userId);
               const ok: (string | null)[] = ids.filter((id) => canAssignTo(orig, id, actor));
               if (!memberOf(orig.assigned_to)) ok.push(orig.assigned_to);
               return ok;
             },
-            laneIdOf: (uid) => (wide ? laneIdOf(uid) : null),
+            laneIdOf: (uid) => (wide || timeline ? laneIdOf(uid) : null),
             current: (id) => appts.find((a) => a.id === id),
           };
           const preview =
             move?.target && !move.reason
               ? (() => {
-                  const moved = movedAppt(move.orig, move.target, team);
-                  return { moved, same: isSameSlot(move.orig, move.target), clash: clashesWith(appts, moved) };
+                  const moved = planned(move, team)!;
+                  return { moved, same: sameSlot(move.orig, moved), clash: clashesWith(appts, moved) };
                 })()
               : null;
           /** Zielzelle hervorheben (Tafel: Tag + Zeile, Tagesleiste: nur Tag) */
@@ -642,43 +839,117 @@ export function Plantafel() {
             if (!move) return '';
             const keys = move.mode === 'key' ? ' Enter legt ab, Escape bricht ab.' : '';
             if (!move.target)
-              return `${wide ? 'Termin auf einen Tag in der Tafel ziehen.' : 'Termin auf einen Tag oben ziehen.'}${move.mode === 'pointer' ? ' Escape bricht ab.' : ''}`;
+              return `${timeline ? 'Termin in eine Monteur-Spalte ziehen.' : wide ? 'Termin auf einen Tag in der Tafel ziehen.' : 'Termin auf einen Tag oben ziehen.'}${move.mode === 'pointer' ? ' Escape bricht ab.' : ''}`;
             if (move.reason) return `${move.reason}${keys}`;
-            if (!preview || preview.same) return `Hier steht der Termin schon.${keys}`;
+            if (!preview || preview.same) return `${move.kind === 'resize' ? 'Dauer bleibt.' : 'Hier steht der Termin schon.'}${keys}`;
             const d = new Date(preview.moved.starts_at);
             const who =
-              preview.moved.assigned_to !== move.orig.assigned_to || !wide
+              preview.moved.assigned_to !== move.orig.assigned_to || (!wide && !timeline)
                 ? `, ${memberOf(preview.moved.assigned_to)?.name ?? preview.moved.assigned_name ?? 'nicht zugeteilt'}`
                 : '';
             const clashTxt = preview.clash.length
               ? ` Überschneidung mit ${preview.clash.map((o) => `${hhmm(o.starts_at)}–${hhmm(o.ends_at)} ${o.title}`).join(', ')} — Ablegen geht trotzdem.`
               : '';
-            return `Nach ${WD[d.getDay()]} ${deDate(d)} ${hhmm(preview.moved.starts_at)}–${hhmm(preview.moved.ends_at)}${who}.${clashTxt}${keys}`;
+            const span = `${hhmm(preview.moved.starts_at)}–${hhmm(preview.moved.ends_at)}`;
+            if (move.kind === 'resize') return `Dauer: ${span} (${hm(durationMin(preview.moved))}).${clashTxt}${keys}`;
+            return `Nach ${WD[d.getDay()]} ${deDate(d)} ${span}${who}.${clashTxt}${keys}`;
           })();
           const ghostWho = move ? memberOf(move.orig.assigned_to) : undefined;
+
+          // ---------- Tagesansicht: Spalten = Monteure (+ Nicht zugeteilt / Kundentermine, wenn an dem Tag vorhanden) ----------
+          const dayItems = forDay(shown, day);
+          const tlLanes: TlLane[] = lanes
+            .filter((l) => l.member || dayItems.some(l.match))
+            .map((l) => {
+              const min = dayItems
+                .filter((it) => it.type === 'appt' && it.status !== 'canceled' && l.match(it))
+                .reduce((sum, it) => sum + Math.max(0, Date.parse(it.ends_at) - Date.parse(it.starts_at)) / 60_000, 0);
+              return {
+                id: l.id,
+                label: l.label,
+                color: l.color,
+                droppable: l.id !== 'req',
+                sub: l.member ? (min ? `${hm(Math.round(min))} verplant` : 'frei') : undefined,
+              };
+            });
+          const tlBlocks: TlBlock[] = dayItems.flatMap((it) => {
+            const lane = lanes.find((l) => l.match(it));
+            return lane ? [{ key: it.key, lane: lane.id, starts_at: it.starts_at, ends_at: it.ends_at, render: (st: CSSProperties, c: boolean) => block(it, st, c) }] : [];
+          });
+          const tlPreview =
+            timeline && move?.target && preview && !preview.same && move.target.day === day && move.lane
+              ? {
+                  lane: move.lane,
+                  starts_at: preview.moved.starts_at,
+                  ends_at: preview.moved.ends_at,
+                  cls: preview.clash.length ? 'clash' : '',
+                  label: (
+                    <>
+                      <span className="pt-time">
+                        {hhmm(preview.moved.starts_at)}–{hhmm(preview.moved.ends_at)}
+                      </span>
+                      <span className="pt-title">{preview.moved.title}</span>
+                    </>
+                  ),
+                }
+              : null;
+          const tlLaneCls = (laneId: string) => {
+            if (!timeline || !move?.target || move.lane !== laneId) return '';
+            if (move.reason || !preview) return 'drop-no';
+            return preview.clash.length && !preview.same ? 'drop-clash' : 'drop-ok';
+          };
+          const dayDate = parseDay(day);
 
           return (
             <>
               <div className="pt-toolbar">
                 <div className="pt-weeknav">
-                  <button type="button" className="btn ghost small" onClick={() => shiftWeek(-1)} aria-label="Vorige Woche">
+                  <div className="pt-viewswitch" role="group" aria-label="Ansicht">
+                    <button type="button" className={view === 'week' ? 'on' : ''} aria-pressed={view === 'week'} onClick={() => setView('week')}>
+                      <CalendarDays className="i" aria-hidden /> Woche
+                    </button>
+                    <button
+                      type="button"
+                      className={view === 'day' ? 'on' : ''}
+                      aria-pressed={view === 'day'}
+                      onClick={() => {
+                        setMove(null);
+                        setView('day');
+                      }}
+                    >
+                      <Clock className="i" aria-hidden /> Tag
+                    </button>
+                  </div>
+                  <button type="button" className="btn ghost small" onClick={() => shiftNav(-1)} aria-label={timeline ? 'Voriger Tag' : 'Vorige Woche'}>
                     <ChevronLeft className="i" aria-hidden />
                   </button>
                   <div className="pt-weeklabel">
-                    <b>KW {isoWeek(week)}</b>
-                    <span className="muted">
-                      {deDate(days[0])} – {deDate(days[6])}
-                      {days[0].getFullYear()}
-                    </span>
+                    {timeline ? (
+                      <>
+                        <b>
+                          {WD[dayDate.getDay()]} {deDate(dayDate)}
+                          {dayDate.getFullYear()}
+                        </b>
+                        <span className="muted">KW {isoWeek(dayDate)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <b>KW {isoWeek(week)}</b>
+                        <span className="muted">
+                          {deDate(days[0])} – {deDate(days[6])}
+                          {days[0].getFullYear()}
+                        </span>
+                      </>
+                    )}
                   </div>
-                  <button type="button" className="btn ghost small" onClick={() => shiftWeek(1)} aria-label="Nächste Woche">
+                  <button type="button" className="btn ghost small" onClick={() => shiftNav(1)} aria-label={timeline ? 'Nächster Tag' : 'Nächste Woche'}>
                     <ChevronRight className="i" aria-hidden />
                   </button>
                   <button
                     type="button"
                     className="btn ghost small"
-                    onClick={() => shiftWeek(0)}
-                    disabled={dayKey(week) === dayKey(weekStart(new Date()))}
+                    onClick={() => shiftNav(0)}
+                    disabled={timeline ? day === todayKey : dayKey(week) === dayKey(weekStart(new Date()))}
                   >
                     Heute
                   </button>
@@ -716,7 +987,42 @@ export function Plantafel() {
                 </div>
               )}
 
-              {wide ? (
+              {timeline ? (
+                <>
+                  {!wide && (
+                    <div className="pt-strip">
+                      {days.map((d) => {
+                        const k = dayKey(d);
+                        return (
+                          <button
+                            key={k}
+                            type="button"
+                            className={`pt-pill ${k === day ? 'on' : ''} ${k === todayKey ? 'today' : ''}`}
+                            onClick={() => goDay(k)}
+                            aria-pressed={k === day}
+                            aria-label={`${WD[d.getDay()]} ${d.getDate()}.`}
+                          >
+                            <span className="wd">{WD[d.getDay()]}</span>
+                            <span className="num">{d.getDate()}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className={move?.mode === 'pointer' ? 'is-dragging' : undefined}>
+                    <Tagesansicht
+                      day={day}
+                      isToday={day === todayKey}
+                      lanes={tlLanes}
+                      blocks={tlBlocks}
+                      preview={tlPreview}
+                      laneCls={tlLaneCls}
+                      wrapRef={boardWrap}
+                    />
+                  </div>
+                  {tlLanes.length === 0 && <div className="empty">Kein Team geladen.</div>}
+                </>
+              ) : wide ? (
                 <div className={`pt-board-wrap${move?.mode === 'pointer' ? ' is-dragging' : ''}`} ref={boardWrap}>
                   <div className="pt-board" style={{ gridTemplateColumns: `150px repeat(${cols.length}, minmax(0, 1fr))`, minWidth: 150 + cols.length * 150 }}>
                     <div className="pt-corner" />
@@ -725,10 +1031,20 @@ export function Plantafel() {
                       const n = forDay(shown, k).filter((it) => it.status !== 'canceled').length;
                       return (
                         <div key={k} className={`pt-dayhead ${k === todayKey ? 'today' : ''}`}>
-                          <b>
-                            {WD[d.getDay()]} {deDate(d)}
-                          </b>
-                          <span className="muted">{n ? `${n} ${n === 1 ? 'Termin' : 'Termine'}` : 'frei'}</span>
+                          <button
+                            type="button"
+                            className="pt-dayhead-btn"
+                            onClick={() => {
+                              goDay(k);
+                              setView('day');
+                            }}
+                            title="Tag mit Zeitachse öffnen"
+                          >
+                            <b>
+                              {WD[d.getDay()]} {deDate(d)}
+                            </b>
+                            <span className="muted">{n ? `${n} ${n === 1 ? 'Termin' : 'Termine'}` : 'frei'}</span>
+                          </button>
                         </div>
                       );
                     })}
@@ -798,9 +1114,11 @@ export function Plantafel() {
               )}
 
               <span id="pt-move-help" hidden>
-                Pfeiltaste links oder rechts verschiebt den Termin um einen Tag, mit Umschalt zu einem anderen Monteur. Enter legt ab, Escape bricht ab.
+                {timeline
+                  ? 'Pfeiltaste hoch oder runter verschiebt den Termin um 15 Minuten, mit Umschalt um eine Stunde; Alt mit hoch oder runter ändert die Dauer; links oder rechts wechselt den Monteur. Enter legt ab, Escape bricht ab.'
+                  : 'Pfeiltaste links oder rechts verschiebt den Termin um einen Tag, mit Umschalt zu einem anderen Monteur. Enter legt ab, Escape bricht ab.'}
               </span>
-              {move?.mode === 'pointer' && (
+              {move?.mode === 'pointer' && !timeline && (
                 <div
                   ref={drag.ghostRef}
                   className={`pt-drag-ghost ${preview?.clash.length ? 'clash' : ''} ${move.reason ? 'no' : ''}`}

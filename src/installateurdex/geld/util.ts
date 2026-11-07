@@ -32,6 +32,6 @@ export function splitAddress(a: string): { street?: string; zip?: string; city?:
 export const isOverdue = (x: StoredInvoice, today = localDay()) => x.kind === 'invoice' && x.status === 'issued' && !!x.dueAt && x.dueAt < today;
 
 export const kindLabel = (x: Pick<StoredInvoice, 'kind' | 'data'>) =>
-  x.kind === 'quote' ? 'Angebot' : x.kind === 'credit' ? 'Stornorechnung' : x.data?.partial ? 'Abschlagsrechnung' : 'Rechnung';
+  x.kind === 'quote' ? 'Angebot' : x.kind === 'credit' ? 'Stornorechnung' : x.data?.final && x.data.deductions?.length ? 'Schlussrechnung' : x.data?.partial ? 'Abschlagsrechnung' : 'Rechnung';
 
 export const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));

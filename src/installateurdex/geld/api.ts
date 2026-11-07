@@ -8,7 +8,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '../fetchAll';
 import type { AccountingSettings } from './accountingExport';
 import { articleNoOf, matchArticle, saleCents, type Article, type PricingRule } from './articles';
-import { defaultVatRate, totals, type InvoiceDraft, type InvoiceKind, type InvoiceProfile, type InvoiceLine, type Land, type MaterialLine } from './invoice';
+import { defaultVatRate, totals, type InvoiceDeduction, type InvoiceDraft, type InvoiceKind, type InvoiceProfile, type InvoiceLine, type Land, type MaterialLine } from './invoice';
 
 export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'canceled';
 
@@ -33,6 +33,14 @@ export interface StoredInvoice {
   vatCents: number;
   grossCents: number;
   createdAt: string;
+}
+
+/**
+ * Offener Betrag einer Rechnung (für „offen“/„überfällig“) — wie App data/invoices.ts openCents: bei Schlussrechnung und
+ * eingetragenen Zahlungen der Rest nach Abzug, sonst brutto. Nie negativ.
+ */
+export function openCents(x: StoredInvoice): number {
+  return x.kind === 'invoice' ? Math.max(0, totals(x.data).dueCents) : x.grossCents;
 }
 
 /** Firmendaten + mitlernende Materialpreise + Präfixe + Preisregel (org.invoice_profile) — wie App StoredProfile */
@@ -272,8 +280,31 @@ export function normalizeDraft(raw: unknown): InvoiceDraft {
     }),
     vatMode: oneOf(d.vatMode, ['normal', 'kleinunternehmer', 'reverseCharge'] as const, 'normal'),
     notes: opt(d.notes),
+    // Felder aus der App behalten — sonst gingen sie beim Speichern im Portal still verloren (wie App normalizeDraft)
+    intro: opt(d.intro),
+    source: d.source === 'ki' || d.source === 'zeitbuch' ? d.source : undefined,
     partial: d.partial === true,
     prepaidCents: d.prepaidCents == null ? undefined : Math.round(num(d.prepaidCents)),
+    // Schlussrechnung: abgezogene Abschlagsrechnungen — nur Zahlen, Nummer als Text, Datum nur JJJJ-MM-TT
+    final: d.final === true ? true : undefined,
+    deductions: Array.isArray(d.deductions)
+      ? d.deductions
+          .slice(0, 50)
+          .map((x): InvoiceDeduction => {
+            const o = (x && typeof x === 'object' ? x : {}) as Record<string, unknown>;
+            const parts = Array.isArray(o.byRate) ? o.byRate.slice(0, 10) : [];
+            return {
+              id: opt(o.id),
+              number: txt(o.number).slice(0, 60),
+              issuedAt: isoDay(o.issuedAt) ?? '',
+              byRate: parts.map((y) => {
+                const p = (y && typeof y === 'object' ? y : {}) as Record<string, unknown>;
+                return { rate: num(p.rate), netCents: Math.round(num(p.netCents)), vatCents: Math.round(num(p.vatCents)) };
+              }),
+            };
+          })
+          .filter((x) => x.number.trim() !== '')
+      : undefined,
     cancels: opt(d.cancels),
     cancelReason: opt(d.cancelReason),
   };

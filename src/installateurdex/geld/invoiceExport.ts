@@ -1,7 +1,7 @@
 // wie App mobile/src/lib/invoiceExport.ts — wortgleich übernommen (nur Importe angepasst). Änderungen IMMER in beiden Repos.
 // Rechnungsausgangsbuch als CSV für Steuerberatung/Buchhaltung (BMD, DATEV & Co. lesen Semikolon-CSV ein).
 // Rein (ohne RN) — getestet in scripts/test-invoice-export.js.
-import { totals, type InvoiceDraft } from './invoice';
+import { activeDeductions, totals, type InvoiceDraft } from './invoice';
 
 export interface ExportRow {
   kind: 'invoice' | 'quote' | 'credit';
@@ -66,13 +66,26 @@ export function invoiceBookCsv(rows: ExportRow[], from: string, to: string): str
     const t = totals(r.data);
     const vatMode = r.data.vatMode === 'kleinunternehmer' ? 'Kleinunternehmer' : r.data.vatMode === 'reverseCharge' ? 'Reverse Charge' : 'Normal';
     const groups = t.byRate.length ? t.byRate : [{ rate: 0, baseCents: 0, vatCents: 0 }];
+    const final = t.deductedByRate.length > 0;
     for (const g of groups) {
       out.push([
-        de(r.issuedAt), q(r.number), r.kind === 'credit' ? 'Stornorechnung' : r.data.partial ? 'Abschlagsrechnung' : 'Rechnung',
+        de(r.issuedAt), q(r.number), r.kind === 'credit' ? 'Stornorechnung' : final ? 'Schlussrechnung' : r.data.partial ? 'Abschlagsrechnung' : 'Rechnung',
         q(r.data.recipient.name), q(r.data.recipient.uid ?? ''), de(r.data.serviceDateTo || r.data.serviceDate),
         num(sign * g.baseCents), pct(g.rate), num(sign * g.vatCents), num(sign * (g.baseCents + g.vatCents)),
         vatMode, r.kind === 'credit' ? 'Storno' : STATUS[r.status] ?? r.status, deTs(r.paidAt), q(r.data.cancels ?? ''),
       ].join(';'));
+    }
+    // Schlussrechnung: je abgezogener Abschlagsrechnung und Steuersatz eine Gegenzeile (sonst doppelter Umsatz)
+    for (const x of activeDeductions(r.data)) {
+      for (const p of x.byRate) {
+        const net = Math.round(Number(p.netCents) || 0);
+        const vat = Math.round(Number(p.vatCents) || 0);
+        out.push([
+          de(r.issuedAt), q(r.number), 'Abzug Abschlagsrechnung', q(r.data.recipient.name), q(r.data.recipient.uid ?? ''), de(r.data.serviceDateTo || r.data.serviceDate),
+          num(-sign * net), pct(p.rate), num(-sign * vat), num(-sign * (net + vat)),
+          vatMode, r.kind === 'credit' ? 'Storno' : STATUS[r.status] ?? r.status, deTs(r.paidAt), q(x.number),
+        ].join(';'));
+      }
     }
   }
   return out.join('\r\n');

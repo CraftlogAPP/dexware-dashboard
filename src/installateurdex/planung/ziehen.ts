@@ -8,6 +8,8 @@ export interface DropSpot {
   day: string;
   /** Zeilen-ID (Monteur, „none“) — leer = Monteur bleibt (Tagesleiste) */
   lane: string;
+  /** Zeitachse: Minute nach Mitternacht unter dem Zeiger (Spalte trägt data-drop-min0 und data-drop-ppm) */
+  minute?: number;
 }
 
 const MOUSE_SLOP = 5;
@@ -19,14 +21,18 @@ const EDGE = 48;
 export function spotAt(x: number, y: number): DropSpot | null {
   const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-drop-day]');
   if (!el) return null;
-  return { day: el.dataset.dropDay ?? '', lane: el.dataset.dropLane ?? '' };
+  const spot: DropSpot = { day: el.dataset.dropDay ?? '', lane: el.dataset.dropLane ?? '' };
+  const min0 = Number(el.dataset.dropMin0);
+  const ppm = Number(el.dataset.dropPpm);
+  if (el.dataset.dropMin0 !== undefined && Number.isFinite(min0) && ppm > 0) spot.minute = min0 + (y - el.getBoundingClientRect().top) / ppm;
+  return spot;
 }
 
-const sameSpot = (a: DropSpot | null, b: DropSpot | null) => a?.day === b?.day && a?.lane === b?.lane;
+const sameSpot = (a: DropSpot | null, b: DropSpot | null) => a?.day === b?.day && a?.lane === b?.lane && a?.minute === b?.minute;
 
 export interface DragHandlers<T> {
-  /** Ziehen beginnt — false, wenn das Element nicht ziehbar ist (Hinweis zeigt der Aufrufer). */
-  onStart: (item: T, x: number, y: number) => boolean;
+  /** Ziehen beginnt — false, wenn das Element nicht ziehbar ist (Hinweis zeigt der Aufrufer). `rect` = Lage des Elements beim Drücken. */
+  onStart: (item: T, x: number, y: number, rect: DOMRect) => boolean;
   onOver: (spot: DropSpot | null) => void;
   onDrop: (spot: DropSpot | null) => void;
   onCancel: () => void;
@@ -46,6 +52,7 @@ interface Press<T> {
   spot: DropSpot | null;
   timer: number | null;
   raf: number | null;
+  rect: DOMRect;
 }
 
 export function usePointerDrag<T>(handlers: DragHandlers<T>) {
@@ -101,7 +108,7 @@ export function usePointerDrag<T>(handlers: DragHandlers<T>) {
   const begin = () => {
     const p = press.current;
     if (!p || p.dragging) return;
-    if (!h.current.onStart(p.item, p.x, p.y)) {
+    if (!h.current.onStart(p.item, p.x0, p.y0, p.rect)) {
       end(false);
       return;
     }
@@ -153,6 +160,7 @@ export function usePointerDrag<T>(handlers: DragHandlers<T>) {
       spot: null,
       timer: null,
       raf: null,
+      rect: e.currentTarget.getBoundingClientRect(),
     };
     press.current = p;
     if (touch) p.timer = window.setTimeout(begin, LONG_PRESS_MS);

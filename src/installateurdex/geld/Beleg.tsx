@@ -14,7 +14,11 @@ import { isProOrg, mailHref } from '../types';
 import { catalogPrices, learnPrices, type StoredArticle, type StoredInvoice, type StoredProfile } from './api';
 import { DEFAULT_PRICING, saleCents, toInvoiceLine, type PricingRule } from './articles';
 import {
+  activeDeductions,
+  advanceCandidates,
   calendarDaysBetween,
+  deductionFromInvoice,
+  deductionGross,
   euro,
   lineNet,
   linesFromInspection,
@@ -22,13 +26,15 @@ import {
   reminderText,
   totals,
   validate,
+  type AdvanceSource,
+  type InvoiceDeduction,
   type InvoiceDraft,
   type InvoiceKind,
   type InvoiceLine,
   type VatMode,
 } from './invoice';
 import { InvoiceBadge } from './parts';
-import { buildInvoiceHtml, docTitle, downloadEInvoice, type InvoiceDoc } from './print';
+import { buildInvoiceHtml, docTitle, downloadEbInterface, downloadEInvoice, type InvoiceDoc } from './print';
 import { centsText, deDay, deTs, errText, localDay, qtyText, splitAddress, toCents, toQty } from './util';
 
 interface Loaded {
@@ -124,6 +130,12 @@ function Editor({ initial }: { initial: Loaded }) {
   const [notice, setNotice] = useState<Notice>(handover ? { tone: handoverTone, text: handover } : null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [cancelText, setCancelText] = useState<string | null>(null);
+  /** E-Rechnung: Format-Auswahl aufgeklappt, Format und Kennungen des Auftraggebers (wie App) */
+  const [xmlOpen, setXmlOpen] = useState(false);
+  const [xmlFormat, setXmlFormat] = useState<'cii' | 'ebi'>('cii');
+  const [buyerRef, setBuyerRef] = useState('');
+  const [orderRef, setOrderRef] = useState('');
+  const [supplierId, setSupplierId] = useState('');
 
   const status = stored?.status ?? 'draft';
   const editable = status === 'draft';
@@ -132,6 +144,30 @@ function Editor({ initial }: { initial: Loaded }) {
   const t = totals(draft);
   const issues = editable ? validate(draft, profile) : [];
   const docProfile = (stored?.profile as StoredProfile | undefined) ?? profile;
+
+  // Schlussrechnung (wie App InvoiceScreen): Abschlagsrechnungen zum selben Objekt / Kunden, noch nirgends abgezogen.
+  // Nur bei Entwürfen geladen; scheitert das Laden, bleibt die Auswahl einfach weg (gewählte Abzüge bleiben erhalten).
+  const allInv = useAsync(async () => (editable ? geld.invoices() : null), [geld, editable]);
+  const advances: AdvanceSource[] = allInv.data && draft.kind === 'invoice' ? advanceCandidates(allInv.data, { id: stored?.id, siteId, recipientName: draft.recipient.name }) : [];
+  const chosen: InvoiceDeduction[] = draft.final ? (draft.deductions ?? []) : [];
+  const sameDed = (x: InvoiceDeduction, a: { id?: string; number?: string }) => (!!a.id && x.id === a.id) || x.number === a.number;
+  const isChosen = (a: AdvanceSource) => chosen.some((x) => sameDed(x, a));
+  const chosenElsewhere = chosen.filter((x) => !advances.some((a) => sameDed(x, a)));
+  const finalActive = activeDeductions(draft).length > 0;
+  const staleReason = (x: InvoiceDeduction): string | null => {
+    const list = allInv.data;
+    if (!list) return null;
+    const src = list.find((y) => sameDed(x, y));
+    if (src?.status === 'canceled') return 'storniert — bitte abwählen';
+    const usedIn = list.find((y) => y.id !== stored?.id && y.kind === 'invoice' && (y.status === 'issued' || y.status === 'paid') && activeDeductions(y.data).some((z) => sameDed(z, x)));
+    return usedIn ? `schon in Schlussrechnung ${usedIn.number ?? ''} abgezogen` : null;
+  };
+  if (editable && draft.final) {
+    for (const x of chosenElsewhere) {
+      const why = staleReason(x);
+      if (why) issues.push(`Abschlagsrechnung ${x.number}: ${why}.`);
+    }
+  }
 
   // Nichts verlieren: ungespeicherte Änderungen beim Schließen/Neuladen UND bei Klicks auf Links im Portal ansprechen
   useUnsavedGuard(dirty);
@@ -178,6 +214,11 @@ function Editor({ initial }: { initial: Loaded }) {
   const setVatMode = (m: VatMode) => setD({ vatMode: m, lines: draft.lines.map((l) => ({ ...l, vatRate: m === 'normal' ? profile.vatRate : 0 })) });
   const r = draft.recipient;
   const setR = (patch: Partial<InvoiceDraft['recipient']>) => setD({ recipient: { ...r, ...patch } });
+  const makeFinal = () => setD({ final: true, partial: false, deductions: advances.map(deductionFromInvoice) });
+  const noFinal = () => setD({ final: false, deductions: undefined });
+  const toggleAdvance = (a: AdvanceSource) =>
+    setD({ deductions: isChosen(a) ? chosen.filter((x) => !sameDed(x, a)) : [...chosen, deductionFromInvoice(a)] });
+  const dropDeduction = (x: InvoiceDeduction) => setD({ deductions: chosen.filter((y) => y !== x) });
 
   function adopt(next: StoredInvoice | null) {
     if (!next) return;
@@ -294,7 +335,8 @@ function Editor({ initial }: { initial: Loaded }) {
   };
   const xml = () => {
     try {
-      downloadEInvoice(doc(), docProfile.land === 'DE' ? 'xrechnung' : 'en16931');
+      if (xmlFormat === 'ebi') downloadEbInterface(doc(), { orderReference: orderRef, supplierId });
+      else downloadEInvoice(doc(), docProfile.land === 'DE' ? 'xrechnung' : 'en16931', buyerRef);
     } catch (e) {
       setNotice({ tone: 'error', text: errText(e) });
     }
@@ -357,8 +399,10 @@ function Editor({ initial }: { initial: Loaded }) {
           ? 'Angebot (Entwurf)'
           : 'Neues Angebot'
         : stored
-          ? 'Rechnung (Entwurf)'
-          : 'Neue Rechnung';
+          ? `${finalActive ? 'Schlussrechnung' : 'Rechnung'} (Entwurf)`
+          : finalActive
+            ? 'Neue Schlussrechnung'
+            : 'Neue Rechnung';
   const missingPrices = draft.lines.filter((l) => l.unitPriceCents <= 0 && l.kind !== 'other').length;
   const sgn = (c: number) => euro(credit ? -c : c);
   const showsVat = draft.vatMode === 'normal';
@@ -393,6 +437,86 @@ function Editor({ initial }: { initial: Loaded }) {
                   {label}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Schlussrechnung: Abschlagsrechnungen abziehen (§ 14 Abs. 5 UStG / § 11 Abs. 1 Z 4 UStG) — wie App */}
+          {editable && draft.kind === 'invoice' && !draft.partial && !draft.final && advances.length > 0 && (
+            <div className="card idx-geld-check ok">
+              <b>
+                📑 {advances.length === 1 ? '1 Abschlagsrechnung' : `${advances.length} Abschlagsrechnungen`} zu diesem Kunden
+              </b>
+              <p className="small muted" style={{ margin: '4px 0 10px' }}>
+                Zusammen {euro(advances.reduce((s, a) => s + deductionGross(deductionFromInvoice(a)), 0))} brutto. Als Schlussrechnung stehen hier die ganze Leistung
+                und darunter die Abzüge — mit Netto und Umsatzsteuer.
+              </p>
+              <button type="button" className="btn small" onClick={makeFinal}>
+                Als Schlussrechnung
+              </button>
+            </div>
+          )}
+          {((editable && draft.final) || (!editable && finalActive)) && (
+            <div className={`card idx-geld-check ${t.dueCents < 0 ? 'warn' : 'ok'}`}>
+              <b>📑 Schlussrechnung{editable ? ' — diese Abschläge abziehen' : ''}</b>
+              <div className="idx-geld-deds">
+                {editable ? (
+                  <>
+                    {advances.map((a) => {
+                      const on = isChosen(a);
+                      return (
+                        <label key={a.id} className="idx-geld-ded">
+                          <input type="checkbox" checked={on} onChange={() => toggleAdvance(a)} />
+                          <span>
+                            {a.number} · {deDay(a.issuedAt)}
+                            <span className="idx-sub">{a.status === 'paid' ? 'bezahlt' : 'noch offen — bleibt eigene Forderung'}</span>
+                          </span>
+                          <b>− {euro(deductionGross(deductionFromInvoice(a)))}</b>
+                        </label>
+                      );
+                    })}
+                    {chosenElsewhere.map((x) => (
+                      <label key={`x-${x.number}`} className="idx-geld-ded">
+                        <input type="checkbox" checked onChange={() => dropDeduction(x)} />
+                        <span>
+                          {x.number} · {deDay(x.issuedAt)}
+                          <span className={`idx-sub ${staleReason(x) ? 'idx-geld-bad' : ''}`}>{staleReason(x) ?? 'gerade nicht in der Liste'}</span>
+                        </span>
+                        <b>− {euro(deductionGross(x))}</b>
+                      </label>
+                    ))}
+                    {advances.length === 0 && chosenElsewhere.length === 0 && (
+                      <p className="small muted" style={{ margin: 0 }}>
+                        Keine passende Abschlagsrechnung gefunden (gleiches Objekt oder gleicher Kundenname).
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  activeDeductions(draft).map((x) => (
+                    <div key={x.number} className="idx-geld-ded">
+                      <span>
+                        Abschlagsrechnung {x.number} · {deDay(x.issuedAt)}
+                      </span>
+                      <b>
+                        {credit ? '+' : '−'} {euro(deductionGross(x))}
+                      </b>
+                    </div>
+                  ))
+                )}
+              </div>
+              <p className="small muted" style={{ margin: '8px 0 2px' }}>
+                Leistung {euro(t.grossCents)} − Abschläge {euro(t.deductedGrossCents)}
+                {t.manualPrepaidCents > 0 ? ` − weitere ${euro(t.manualPrepaidCents)}` : ''}
+              </p>
+              <b className={t.dueCents < 0 ? 'idx-geld-bad' : ''}>
+                {t.dueCents < 0 ? `Überzahlung ${euro(-t.dueCents)} — so nicht ausstellbar` : `Restbetrag ${euro(t.dueCents)}`}
+              </b>
+              {editable && (
+                <div style={{ marginTop: 8 }}>
+                  <button type="button" className="btn ghost small" onClick={noFinal}>
+                    Doch keine Schlussrechnung
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -584,23 +708,41 @@ function Editor({ initial }: { initial: Loaded }) {
                   </div>
                   <div className="idx-geld-form" style={{ marginTop: 10 }}>
                     <label className="idx-check idx-geld-wide">
-                      <input type="checkbox" checked={!!draft.partial} onChange={(e) => setD({ partial: e.target.checked })} />
+                      <input
+                        type="checkbox"
+                        checked={!!draft.partial}
+                        onChange={(e) => setD(e.target.checked ? { partial: true, final: false, deductions: undefined } : { partial: false })}
+                      />
                       Abschlagsrechnung
                     </label>
-                    <MoneyField label="Bereits bezahlte Abschläge brutto (€)" cents={draft.prepaidCents ?? 0} onChange={(c) => setD({ prepaidCents: c })} />
+                    <MoneyField label={draft.final ? 'Sonst schon bezahlt brutto (€)' : 'Bereits bezahlte Abschläge brutto (€)'} cents={draft.prepaidCents ?? 0} onChange={(c) => setD({ prepaidCents: c })} />
                   </div>
                 </>
               )}
+              <label className="field">
+                Einleitung (über den Positionen)
+                <textarea rows={2} value={draft.intro ?? ''} placeholder="z. B. Vielen Dank für Ihre Anfrage. Gerne bieten wir an:" onChange={(e) => setD({ intro: e.target.value })} />
+              </label>
               <label className="field">
                 Hinweis auf dem Beleg
                 <textarea rows={3} value={draft.notes ?? ''} placeholder="z. B. Vielen Dank für Ihren Auftrag!" onChange={(e) => setD({ notes: e.target.value })} />
               </label>
             </div>
           ) : (
-            draft.notes && (
+            (draft.notes || draft.intro) && (
               <div className="card">
-                <h3 className="idx-card-title">Hinweis</h3>
-                <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{draft.notes}</p>
+                {draft.intro && (
+                  <>
+                    <h3 className="idx-card-title">Einleitung</h3>
+                    <p style={{ margin: '0 0 10px', whiteSpace: 'pre-wrap' }}>{draft.intro}</p>
+                  </>
+                )}
+                {draft.notes && (
+                  <>
+                    <h3 className="idx-card-title">Hinweis</h3>
+                    <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{draft.notes}</p>
+                  </>
+                )}
               </div>
             )
           )}
@@ -712,10 +854,62 @@ function Editor({ initial }: { initial: Loaded }) {
                 <button type="button" className="btn ghost" onClick={print}>
                   <Printer className="i" aria-hidden /> Drucken / PDF
                 </button>
-                {!quote && status !== 'canceled' && (
-                  <button type="button" className="btn ghost" onClick={xml}>
+                {!quote && status !== 'canceled' && !xmlOpen && (
+                  <button type="button" className="btn ghost" onClick={() => setXmlOpen(true)}>
                     <FileCode2 className="i" aria-hidden /> E-Rechnung (XML)
                   </button>
+                )}
+                {!quote && status !== 'canceled' && xmlOpen && (
+                  <div className="idx-geld-cancel">
+                    <b>E-Rechnung — welches Format?</b>
+                    <div className="idx-status-pick" role="radiogroup" aria-label="Format der E-Rechnung" style={{ margin: '8px 0' }}>
+                      {(
+                        [
+                          ['cii', docProfile.land === 'DE' ? 'XRechnung (DE)' : 'EN 16931 (CII)'],
+                          ['ebi', 'ebInterface (AT)'],
+                        ] as ['cii' | 'ebi', string][]
+                      ).map(([k, label]) => (
+                        <button key={k} type="button" role="radio" aria-checked={xmlFormat === k} className={xmlFormat === k ? 'on' : ''} onClick={() => setXmlFormat(k)}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {xmlFormat === 'cii' ? (
+                      <>
+                        <p className="small muted" style={{ margin: '0 0 8px' }}>
+                          Für Firmenkunden und Buchhaltungsprogramme (XRechnung/ZUGFeRD-Daten).
+                        </p>
+                        {docProfile.land === 'DE' && (
+                          <label className="field">
+                            Leitweg-ID (nur bei Behörden)
+                            <input value={buyerRef} maxLength={100} placeholder="z. B. 04011000-1234512345-35" onChange={(e) => setBuyerRef(e.target.value)} />
+                          </label>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="small muted" style={{ margin: '0 0 8px' }}>
+                          Für Bund, Länder und Gemeinden in Österreich (Upload auf e-rechnung.gv.at). Die Nummern bekommst du vom Auftraggeber.
+                        </p>
+                        <label className="field">
+                          Auftragsreferenz / Bestellnummer
+                          <input value={orderRef} maxLength={100} placeholder="beim Bund Pflicht" onChange={(e) => setOrderRef(e.target.value)} />
+                        </label>
+                        <label className="field">
+                          Lieferantennummer (falls vergeben)
+                          <input value={supplierId} maxLength={100} onChange={(e) => setSupplierId(e.target.value)} />
+                        </label>
+                      </>
+                    )}
+                    <div className="row">
+                      <button type="button" className="btn" onClick={xml}>
+                        <FileCode2 className="i" aria-hidden /> Herunterladen
+                      </button>
+                      <button type="button" className="btn ghost" onClick={() => setXmlOpen(false)}>
+                        Schließen
+                      </button>
+                    </div>
+                  </div>
                 )}
                 {quote && status === 'issued' && (
                   <Link className="btn ghost" to={`${base}/rechnungen/neu?ausAngebot=${stored?.id}`}>

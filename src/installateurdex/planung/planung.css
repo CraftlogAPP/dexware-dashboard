@@ -605,6 +605,261 @@
   width: 15px;
   height: 15px;
 }
+/* ---------- Umschalter Woche / Tag ---------- */
+.idx-scope .pt-viewswitch {
+  display: inline-flex;
+  padding: 3px;
+  margin-right: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  background: var(--surface2);
+}
+.idx-scope .pt-viewswitch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.idx-scope .pt-viewswitch button:hover {
+  color: var(--text);
+}
+.idx-scope .pt-viewswitch button.on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.idx-scope .pt-viewswitch .i {
+  width: 16px;
+  height: 16px;
+}
+/* Tageskopf der Woche: Klick öffnet den Tag */
+.idx-scope .pt-dayhead {
+  padding: 0;
+}
+.idx-scope .pt-dayhead-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.idx-scope .pt-dayhead-btn:hover b {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+.idx-scope .pt-dayhead-btn .muted {
+  font-size: 12px;
+}
+
+/* ---------- Tagesansicht mit Zeitachse ---------- */
+.idx-scope .pt-tl-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.idx-scope .pt-tl {
+  display: grid;
+}
+.idx-scope .pt-tl-corner,
+.idx-scope .pt-tl-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: color-mix(in oklab, var(--surface) 92%, #000);
+  border-bottom: 1px solid var(--border);
+}
+.idx-scope .pt-tl-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 9px 10px;
+  border-left: 1px solid var(--border);
+  box-shadow: inset 0 3px 0 var(--lane, var(--muted));
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+.idx-scope .pt-tl-head .muted {
+  font-size: 12px;
+}
+.idx-scope .pt-tl-gutter {
+  position: relative;
+}
+.idx-scope .pt-tl-hour {
+  position: absolute;
+  right: 8px;
+  transform: translateY(-50%);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.idx-scope .pt-tl-hour:first-child {
+  transform: none;
+  margin-top: 3px;
+}
+.idx-scope .pt-tl-hour:last-child {
+  transform: translateY(-100%);
+}
+.idx-scope .pt-tl-col {
+  position: relative;
+  border-left: 1px solid var(--border);
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.idx-scope .pt-tl-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--border);
+  pointer-events: none;
+}
+.idx-scope .pt-tl-col.drop-ok {
+  background: color-mix(in oklab, var(--accent) 6%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.idx-scope .pt-tl-col.drop-clash {
+  background: color-mix(in oklab, var(--amber) 8%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--amber) 65%, transparent);
+}
+.idx-scope .pt-tl-col.drop-no {
+  background: color-mix(in oklab, var(--red) 7%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--red) 50%, transparent);
+  cursor: not-allowed;
+}
+.idx-scope .pt-card.pt-block {
+  position: absolute;
+  z-index: 1;
+  gap: 1px;
+  padding: 4px 8px 6px;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--lane, var(--muted)) 16%, var(--surface));
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+.idx-scope button.pt-card.pt-block:hover {
+  z-index: 2;
+  background: color-mix(in oklab, var(--lane, var(--muted)) 24%, var(--surface));
+}
+.idx-scope .pt-card.pt-block.compact {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.idx-scope .pt-card.pt-block.compact .pt-card-top {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.idx-scope .pt-card.pt-block.has-clash {
+  border-top-color: color-mix(in oklab, var(--amber) 70%, transparent);
+  border-right-color: color-mix(in oklab, var(--amber) 70%, transparent);
+  border-bottom-color: color-mix(in oklab, var(--amber) 70%, transparent);
+}
+.idx-scope .pt-card.pt-block.req {
+  background: color-mix(in oklab, var(--muted) 10%, var(--surface));
+}
+.idx-scope .pt-card.pt-block.moving {
+  z-index: 4;
+}
+/* Unterkante: Dauer ziehen */
+.idx-scope .pt-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 9px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.idx-scope .pt-resize::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 26px;
+  height: 3px;
+  margin-left: -13px;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--text) 35%, transparent);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.idx-scope .pt-block:hover .pt-resize::after,
+.idx-scope .pt-block:focus-visible .pt-resize::after {
+  opacity: 1;
+}
+@media (hover: none) {
+  .idx-scope .pt-resize {
+    height: 16px;
+  }
+  .idx-scope .pt-resize::after {
+    opacity: 0.8;
+  }
+}
+/* Vorschau in der Zielspalte */
+.idx-scope .pt-tl-preview {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 8px;
+  overflow: hidden;
+  border: 1.5px dashed color-mix(in oklab, var(--accent) 80%, transparent);
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--accent) 18%, var(--surface));
+  font-size: 12.5px;
+  pointer-events: none;
+}
+.idx-scope .pt-tl-preview.clash {
+  border-color: var(--amber);
+  background: color-mix(in oklab, var(--amber) 18%, var(--surface));
+}
+/* „Jetzt“-Linie */
+.idx-scope .pt-tl-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  border-top: 2px solid var(--red);
+  pointer-events: none;
+}
+.idx-scope .pt-tl-now::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red);
+}
+.idx-scope .is-dragging .pt-tl-col,
+.idx-scope .is-dragging .pt-block {
+  cursor: grabbing;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .idx-scope .pt-tl-col,
+  .idx-scope .pt-resize::after {
+    transition: none;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .idx-scope .pt-movebar,
   .idx-scope .pt-movebar.show {

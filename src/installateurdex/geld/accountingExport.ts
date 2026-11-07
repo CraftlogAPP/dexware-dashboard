@@ -206,11 +206,14 @@ export function buildBookings(rows: BookRow[], from: string, to: string, land: L
       });
     };
     for (const g of t.byRate) push(sign * (g.baseCents + g.vatCents), sign * g.vatCents, g.rate, credit ? `Storno ${number}` : number);
-    if (t.prepaidCents > 0 && t.byRate.length) {
+    // Schlussrechnung: Abschlagsrechnungen je Steuersatz genau mit ihrem Netto + USt zurückbuchen
+    for (const g of t.deductedByRate) push(-sign * (g.netCents + g.vatCents), -sign * g.vatCents, g.rate, `Abzug Abschläge ${number}`);
+    // frei eingetragene Zahlungen (ohne ausgewählte Abschlagsrechnung): USt aus dem Hauptsatz herausgerechnet
+    if (t.manualPrepaidCents > 0 && t.byRate.length) {
       const main = [...t.byRate].sort((a, b) => b.baseCents - a.baseCents)[0];
       const rate = mode === 'normal' ? main.rate : 0;
-      const vat = Math.round((t.prepaidCents * rate) / (100 + rate));
-      push(-sign * t.prepaidCents, -sign * vat, main.rate, `Abzug Abschläge ${number}`);
+      const vat = Math.round((t.manualPrepaidCents * rate) / (100 + rate));
+      push(-sign * t.manualPrepaidCents, -sign * vat, main.rate, `Abzug Abschläge ${number}`);
     }
   }
   for (const rate of unknown) warnings.push(`Für ${rate} % USt ist kein Erlöskonto hinterlegt — gebucht auf das Konto für den Normalsatz. Bitte in den Rechnungsdaten unter „Buchhaltung“ ergänzen oder mit dem Steuerberater klären.`);

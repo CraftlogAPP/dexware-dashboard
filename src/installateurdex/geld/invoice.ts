@@ -60,6 +60,23 @@ export interface InvoiceLine {
   vatRate: number; // %
 }
 
+/** Netto + USt einer Abschlagsrechnung bei einem Steuersatz (Cent) */
+export interface DeductionPart {
+  rate: number;
+  netCents: number;
+  vatCents: number;
+}
+
+/** Abgezogene Abschlagsrechnung — Beträge beim Auswählen aus dem ausgestellten Beleg übernommen (eingefroren). */
+export interface InvoiceDeduction {
+  /** ID der Abschlagsrechnung (nur zum Wiederfinden, steht nicht auf dem Beleg) */
+  id?: string;
+  number: string;
+  /** Rechnungsdatum JJJJ-MM-TT */
+  issuedAt: string;
+  byRate: DeductionPart[];
+}
+
 export interface InvoiceDraft {
   kind: InvoiceKind;
   recipient: InvoiceParty;
@@ -68,10 +85,20 @@ export interface InvoiceDraft {
   lines: InvoiceLine[];
   vatMode: VatMode;
   notes?: string;
+  /** Einleitungstext über den Positionen (z. B. „Vielen Dank für Ihre Anfrage …“) — Schlusstext steht in notes */
+  intro?: string;
+  /** Entwurf kam von außen (KI-Assistent / Zeitbuch) — nur Anzeige „bitte prüfen“, nicht auf dem Beleg */
+  source?: 'ki' | 'zeitbuch';
   /** Nur Abschlags-/Teilrechnung: Hinweis + Typcode 326 */
   partial?: boolean;
-  /** schon bezahlte Abschläge (Cent, brutto) — werden in der Schlussrechnung abgezogen */
+  /** sonst schon bezahlte Beträge (Cent, brutto, frei eingetragen) — werden vom Rechnungsbetrag abgezogen */
   prepaidCents?: number;
+  /**
+   * Schlussrechnung (DE § 14 Abs. 5 UStG, AT § 11 Abs. 1 Z 4 UStG): listet die gesamte Leistung und zieht die
+   * ausgewählten Abschlagsrechnungen je Steuersatz (Netto + USt) wieder ab. Abzüge wirken nur mit `final: true`.
+   */
+  final?: boolean;
+  deductions?: InvoiceDeduction[];
   /** Stornorechnung: Nummer der stornierten Rechnung + Grund */
   cancels?: string;
   cancelReason?: string;
@@ -134,9 +161,35 @@ export interface InvoiceTotals {
   byRate: { rate: number; baseCents: number; vatCents: number }[];
   /** DE § 35a EStG: Arbeits- + Fahrtkosten (brutto) — Steuerermäßigung für Privatkunden */
   laborGrossCents: number;
+  /** alles schon Bezahlte/Abgezogene brutto: Abschlagsrechnungen + frei eingetragene Zahlungen */
   prepaidCents: number;
+  /** zu zahlen = grossCents − prepaidCents (negativ = Überzahlung, validate meldet das) */
   dueCents: number;
+  /** Schlussrechnung: abgezogene Abschlagsrechnungen, je Steuersatz zusammengefasst */
+  deductedByRate: DeductionPart[];
+  deductedNetCents: number;
+  deductedVatCents: number;
+  deductedGrossCents: number;
+  /** Rest je Steuersatz nach dem Abzug (Leistung − Abschläge) */
+  restByRate: { rate: number; baseCents: number; vatCents: number }[];
+  /** frei eingetragene Zahlungen brutto (Feld prepaidCents) */
+  manualPrepaidCents: number;
 }
+
+/** Ganze Cent aus beliebigem Wert (jsonb kann alles enthalten) */
+const cents = (v: unknown) => {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? n : 0;
+};
+
+/** Die Abzüge, die auf diesem Beleg wirken: nur Schlussrechnung (auch deren Storno), nie beim Angebot. */
+export function activeDeductions(d: InvoiceDraft): InvoiceDeduction[] {
+  if (!d.final || d.kind === 'quote' || !Array.isArray(d.deductions)) return [];
+  return d.deductions.filter((x) => x && typeof x.number === 'string' && x.number.trim() && Array.isArray(x.byRate));
+}
+
+/** Brutto einer abgezogenen Abschlagsrechnung */
+export const deductionGross = (x: InvoiceDeduction) => x.byRate.reduce((s, p) => s + cents(p.netCents) + cents(p.vatCents), 0);
 
 /** Summen je Steuersatz (Steuer je Satz auf die Summe gerundet — wie in EN 16931 vorgesehen). */
 export function totals(d: InvoiceDraft): InvoiceTotals {
@@ -152,8 +205,92 @@ export function totals(d: InvoiceDraft): InvoiceTotals {
   const grossCents = netCents + vatCents;
   const laborNet = d.lines.filter((l) => l.kind === 'labor' || l.kind === 'travel').reduce((s, l) => s + lineNet(l), 0);
   const laborGrossCents = noVat ? laborNet : round(laborNet * (1 + (d.lines.find((l) => l.kind === 'labor')?.vatRate ?? 0) / 100));
-  const prepaidCents = Math.max(0, d.prepaidCents ?? 0);
-  return { netCents, vatCents, grossCents, byRate, laborGrossCents, prepaidCents, dueCents: grossCents - prepaidCents };
+  // Schlussrechnung: Abschläge je Steuersatz (Beträge exakt wie auf den Abschlagsrechnungen, nicht neu gerechnet)
+  const ded = new Map<number, { netCents: number; vatCents: number }>();
+  for (const x of activeDeductions(d)) {
+    for (const p of x.byRate) {
+      const r = noVat ? 0 : Number(p?.rate) || 0;
+      const cur = ded.get(r) ?? { netCents: 0, vatCents: 0 };
+      ded.set(r, { netCents: cur.netCents + cents(p?.netCents), vatCents: cur.vatCents + cents(p?.vatCents) });
+    }
+  }
+  const deductedByRate = [...ded.entries()].sort((a, b) => b[0] - a[0]).map(([rate, v]) => ({ rate, ...v }));
+  const deductedNetCents = deductedByRate.reduce((s, g) => s + g.netCents, 0);
+  const deductedVatCents = deductedByRate.reduce((s, g) => s + g.vatCents, 0);
+  const deductedGrossCents = deductedNetCents + deductedVatCents;
+  const rates = [...new Set([...byRate.map((g) => g.rate), ...deductedByRate.map((g) => g.rate)])].sort((a, b) => b - a);
+  const restByRate = rates.map((rate) => {
+    const g = byRate.find((x) => x.rate === rate);
+    const x = ded.get(rate);
+    return { rate, baseCents: (g?.baseCents ?? 0) - (x?.netCents ?? 0), vatCents: (g?.vatCents ?? 0) - (x?.vatCents ?? 0) };
+  });
+  const manualPrepaidCents = Math.max(0, cents(d.prepaidCents ?? 0));
+  const prepaidCents = deductedGrossCents + manualPrepaidCents;
+  return {
+    netCents, vatCents, grossCents, byRate, laborGrossCents, prepaidCents, dueCents: grossCents - prepaidCents,
+    deductedByRate, deductedNetCents, deductedVatCents, deductedGrossCents, restByRate, manualPrepaidCents,
+  };
+}
+
+/** Abzug aus einer ausgestellten Abschlagsrechnung bauen (Netto + USt je Steuersatz, wie auf deren Beleg). */
+export function deductionFromInvoice(src: { id?: string; number?: string; issuedAt?: string; data: InvoiceDraft }): InvoiceDeduction {
+  const t = totals({ ...src.data, final: false });
+  return {
+    id: src.id,
+    number: src.number ?? '',
+    issuedAt: (src.issuedAt ?? '').slice(0, 10),
+    byRate: t.byRate.filter((g) => g.baseCents !== 0 || g.vatCents !== 0).map((g) => ({ rate: g.rate, netCents: g.baseCents, vatCents: g.vatCents })),
+  };
+}
+
+/** Beleg in der Liste (StoredInvoice-Ausschnitt) — für die Auswahl der Abschlagsrechnungen */
+export interface AdvanceSource {
+  id: string;
+  kind: InvoiceKind;
+  status: string;
+  number?: string;
+  issuedAt?: string;
+  siteId?: string;
+  data: InvoiceDraft;
+}
+
+const normName = (s: unknown) => (typeof s === 'string' ? s.trim().toLowerCase().replace(/\s+/g, ' ') : '');
+
+/**
+ * Abschlagsrechnungen, die eine Schlussrechnung abziehen kann: ausgestellt oder bezahlt (nicht storniert), zum selben
+ * Objekt oder (ohne Objekt) zum selben Kundennamen, und noch in keiner anderen gültigen Schlussrechnung abgezogen.
+ */
+export function advanceCandidates(all: AdvanceSource[], target: { id?: string; siteId?: string; recipientName?: string }): AdvanceSource[] {
+  const name = normName(target.recipientName);
+  const used = new Set<string>();
+  for (const y of all) {
+    if (y.id === target.id || y.kind !== 'invoice' || !(y.status === 'issued' || y.status === 'paid')) continue;
+    for (const x of activeDeductions(y.data)) {
+      if (x.id) used.add(`id:${x.id}`);
+      used.add(`nr:${x.number}`);
+    }
+  }
+  return all
+    .filter((x) => x.kind === 'invoice' && x.data.partial === true && !x.data.final && (x.status === 'issued' || x.status === 'paid') && !!x.number && x.id !== target.id)
+    .filter((x) => (target.siteId && x.siteId === target.siteId) || (!!name && normName(x.data.recipient?.name) === name))
+    .filter((x) => !used.has(`id:${x.id}`) && !used.has(`nr:${x.number}`))
+    .sort((a, b) => (a.issuedAt ?? '').localeCompare(b.issuedAt ?? '') || (a.number ?? '').localeCompare(b.number ?? ''));
+}
+
+const deDate = (ymdStr: string) => (/^\d{4}-\d{2}-\d{2}/.test(ymdStr) ? ymdStr.slice(0, 10).split('-').reverse().join('.') : '');
+const pctText = (rate: number) => String(Number(rate) || 0).replace('.', ',');
+
+/**
+ * Textzeilen zu den Abzügen (E-Rechnung: Hinweise; § 14 Abs. 5 UStG verlangt die abgezogenen Teilentgelte UND die
+ * darauf entfallende Steuer). Das PDF zeigt dieselben Angaben als Tabelle.
+ */
+export function deductionNotes(d: InvoiceDraft): string[] {
+  const noVat = d.vatMode !== 'normal';
+  return activeDeductions(d).map((x) => {
+    const parts = x.byRate.map((p) => (noVat ? `netto ${euro(cents(p.netCents))}` : `netto ${euro(cents(p.netCents))} + ${pctText(p.rate)} % USt ${euro(cents(p.vatCents))}`));
+    const date = deDate(x.issuedAt);
+    return `Abzüglich Abschlagsrechnung ${x.number}${date ? ` vom ${date}` : ''}: ${parts.join(', ')} = brutto ${euro(deductionGross(x))}.`;
+  });
 }
 
 export const euro = (cents: number) =>
@@ -177,6 +314,13 @@ export function legalNotes(d: InvoiceDraft, p: InvoiceProfile): string[] {
     out.push('Sie sind gesetzlich verpflichtet, diese Rechnung zwei Jahre aufzubewahren (§ 14b Abs. 1 Satz 5 UStG).');
   }
   if (d.partial) out.push('Abschlagsrechnung — die Schlussrechnung folgt nach Fertigstellung.');
+  if (activeDeductions(d).length) {
+    out.push(
+      at
+        ? 'Schlussrechnung über die gesamte Leistung: Die Teilentgelte aus den Abschlagsrechnungen und die darauf entfallende Umsatzsteuer sind abgezogen (§ 11 Abs. 1 Z 4 UStG).'
+        : 'Schlussrechnung über die gesamte Leistung: Die Abschlagsrechnungen und die darauf entfallende Umsatzsteuer sind abgezogen (§ 14 Abs. 5 UStG).'
+    );
+  }
   return out;
 }
 
@@ -209,7 +353,22 @@ export function validate(d: InvoiceDraft, p: InvoiceProfile): string[] {
     if (d.recipient.private) issues.push('Reverse Charge gilt nur gegenüber Unternehmern.');
   }
   if (d.vatMode === 'kleinunternehmer' && !p.kleinunternehmer) issues.push('Kleinunternehmer-Regelung ist in den Einstellungen nicht aktiviert.');
-  if (t.prepaidCents > t.grossCents) issues.push('Abschläge sind höher als die Rechnungssumme.');
+  if (d.final) {
+    const ded = activeDeductions(d);
+    if (d.partial) issues.push('Eine Rechnung ist entweder Abschlags- oder Schlussrechnung — bitte eins davon ausschalten.');
+    if (!ded.length) issues.push('Schlussrechnung: bitte mindestens eine Abschlagsrechnung zum Abziehen auswählen.');
+    const nrs = ded.map((x) => x.number);
+    if (new Set(nrs).size !== nrs.length) issues.push('Schlussrechnung: eine Abschlagsrechnung ist doppelt ausgewählt.');
+    if (d.vatMode !== 'normal' && t.deductedVatCents !== 0) issues.push('Die Abschläge enthalten Umsatzsteuer, diese Rechnung aber nicht — bitte Steuerart prüfen.');
+    for (const g of t.restByRate) {
+      if (t.dueCents >= 0 && (g.baseCents < 0 || g.vatCents < 0)) {
+        issues.push(`Bei ${pctText(g.rate)} % USt ziehen die Abschläge mehr ab, als die Leistung enthält — bitte Positionen und Steuersätze prüfen.`);
+      }
+    }
+  }
+  if (t.dueCents < 0) {
+    issues.push(`Überzahlung: Abschläge und Zahlungen (${euro(t.prepaidCents)}) sind höher als die Gesamtleistung (${euro(t.grossCents)}) — ${euro(-t.dueCents)} zu viel. Bitte Auswahl oder Positionen prüfen; zu viel Bezahltes gibst du mit einer Gutschrift zurück.`);
+  }
   return issues;
 }
 
@@ -221,7 +380,7 @@ const xml = (s: unknown) =>
 const amt = (cents: number) => (cents / 100).toFixed(2);
 const qtyStr = (n: number) => String(Math.round(n * 10000) / 10000);
 const ymd = (iso: string) => iso.slice(0, 10).replace(/-/g, '');
-const country = (l?: Land) => (l === 'DE' ? 'DE' : 'AT');
+const country = (l?: Land) => (l === 'DE' ? 'DE' : l === 'CH' ? 'CH' : 'AT');
 
 /** „JJJJ-MM-TT“ + n Kalendertage (reine Datumsrechnung, keine Zeitzone) */
 export function addDaysYmd(ymdStr: string, n: number): string {
@@ -255,6 +414,11 @@ function vatCategory(mode: VatMode): { code: string; reason?: string; reasonCode
   return { code: 'S' };
 }
 
+/** Kategorie je Steuersatz: im Normalmodus 0 % = „Z“ (Nullsatz) — EN 16931 BR-S-05 verbietet „S“ mit 0 %. */
+function vatCategoryFor(mode: VatMode, rate: number): { code: string; reason?: string; reasonCode?: string } {
+  return mode === 'normal' && rate === 0 ? { code: 'Z' } : vatCategory(mode);
+}
+
 /**
  * CII-XML nach EN 16931. `guideline`: 'en16931' (allgemein, z. B. ZUGFeRD EN16931) oder 'xrechnung' (DE, mit
  * Käuferreferenz BT-10 — bei Behörden die Leitweg-ID).
@@ -282,7 +446,7 @@ export function toCiiXml(
       </ram:SpecifiedLineTradeAgreement>
       <ram:SpecifiedLineTradeDelivery><ram:BilledQuantity unitCode="${unitCode(l.unit)}">${qtyStr(l.qty)}</ram:BilledQuantity></ram:SpecifiedLineTradeDelivery>
       <ram:SpecifiedLineTradeSettlement>
-        <ram:ApplicableTradeTax><ram:TypeCode>VAT</ram:TypeCode><ram:CategoryCode>${cat.code}</ram:CategoryCode><ram:RateApplicablePercent>${rate}</ram:RateApplicablePercent></ram:ApplicableTradeTax>
+        <ram:ApplicableTradeTax><ram:TypeCode>VAT</ram:TypeCode><ram:CategoryCode>${vatCategoryFor(d.vatMode, rate).code}</ram:CategoryCode><ram:RateApplicablePercent>${rate}</ram:RateApplicablePercent></ram:ApplicableTradeTax>
         <ram:SpecifiedTradeSettlementLineMonetarySummation><ram:LineTotalAmount>${amt(lineNet(l))}</ram:LineTotalAmount></ram:SpecifiedTradeSettlementLineMonetarySummation>
       </ram:SpecifiedLineTradeSettlement>
     </ram:IncludedSupplyChainTradeLineItem>`;
@@ -295,7 +459,7 @@ export function toCiiXml(
         <ram:CalculatedAmount>${amt(g.vatCents)}</ram:CalculatedAmount>
         <ram:TypeCode>VAT</ram:TypeCode>${cat.reason ? `\n        <ram:ExemptionReason>${xml(cat.reason)}</ram:ExemptionReason>` : ''}
         <ram:BasisAmount>${amt(g.baseCents)}</ram:BasisAmount>
-        <ram:CategoryCode>${cat.code}</ram:CategoryCode>${cat.reasonCode ? `\n        <ram:ExemptionReasonCode>${cat.reasonCode}</ram:ExemptionReasonCode>` : ''}
+        <ram:CategoryCode>${vatCategoryFor(d.vatMode, g.rate).code}</ram:CategoryCode>${cat.reasonCode ? `\n        <ram:ExemptionReasonCode>${cat.reasonCode}</ram:ExemptionReasonCode>` : ''}
         <ram:RateApplicablePercent>${g.rate}</ram:RateApplicablePercent>
       </ram:ApplicableTradeTax>`
     )
@@ -310,11 +474,20 @@ export function toCiiXml(
         </ram:PostalTradeAddress>${x.email ? `\n        <ram:URIUniversalCommunication><ram:URIID schemeID="EM">${xml(x.email)}</ram:URIID></ram:URIUniversalCommunication>` : ''}${
           x.uid ? `\n        <ram:SpecifiedTaxRegistration><ram:ID schemeID="VA">${xml(x.uid)}</ram:ID></ram:SpecifiedTaxRegistration>` : ''
         }${x.taxNumber ? `\n        <ram:SpecifiedTaxRegistration><ram:ID schemeID="FC">${xml(x.taxNumber)}</ram:ID></ram:SpecifiedTaxRegistration>` : ''}`;
-  const notes = [...legalNotes(d, p), ...(d.notes?.trim() ? [d.notes.trim()] : [])]
+  const notes = [...legalNotes(d, p), ...deductionNotes(d), ...(d.notes?.trim() ? [d.notes.trim()] : [])]
     .map((n) => `\n    <ram:IncludedNote><ram:Content>${xml(n)}</ram:Content></ram:IncludedNote>`)
     .join('');
+  // BG-3 Vorherige Rechnung (BT-25 Nummer, BT-26 Datum): Storno → Original; Schlussrechnung → jede Abschlagsrechnung
+  const refs = [...(d.cancels ? [{ number: d.cancels, date: '' }] : []), ...activeDeductions(d).map((x) => ({ number: x.number, date: x.issuedAt }))]
+    .map(
+      (r) => `
+      <ram:InvoiceReferencedDocument><ram:IssuerAssignedID>${xml(r.number)}</ram:IssuerAssignedID>${
+        /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? `<ram:FormattedIssueDateTime><qdt:DateTimeString format="102">${ymd(r.date)}</qdt:DateTimeString></ram:FormattedIssueDateTime>` : ''
+      }</ram:InvoiceReferencedDocument>`
+    )
+    .join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
-<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100">
+<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:qdt="urn:un:unece:uncefact:data:standard:QualifiedDataType:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100">
   <rsm:ExchangedDocumentContext>
     <ram:GuidelineSpecifiedDocumentContextParameter><ram:ID>${guide}</ram:ID></ram:GuidelineSpecifiedDocumentContextParameter>
   </rsm:ExchangedDocumentContext>
@@ -359,10 +532,7 @@ export function toCiiXml(
         <ram:GrandTotalAmount>${amt(t.grossCents)}</ram:GrandTotalAmount>
         <ram:TotalPrepaidAmount>${amt(t.prepaidCents)}</ram:TotalPrepaidAmount>
         <ram:DuePayableAmount>${amt(t.dueCents)}</ram:DuePayableAmount>
-      </ram:SpecifiedTradeSettlementHeaderMonetarySummation>${
-        d.cancels ? `
-      <ram:InvoiceReferencedDocument><ram:IssuerAssignedID>${xml(d.cancels)}</ram:IssuerAssignedID></ram:InvoiceReferencedDocument>` : ''
-      }
+      </ram:SpecifiedTradeSettlementHeaderMonetarySummation>${refs}
     </ram:ApplicableHeaderTradeSettlement>
   </rsm:SupplyChainTradeTransaction>
 </rsm:CrossIndustryInvoice>

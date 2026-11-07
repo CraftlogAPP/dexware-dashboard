@@ -10,7 +10,7 @@ import { Download, FilePlus2, FileText, Settings2 } from 'lucide-react';
 import { Modal } from '../../components/form';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { useInst } from '../context';
-import type { StoredInvoice } from './api';
+import { openCents, type StoredInvoice } from './api';
 import { Beleg } from './Beleg';
 import { Firmendaten } from './Firmendaten';
 import { euro } from './invoice';
@@ -104,7 +104,8 @@ function periodOf(z: Exclude<Zeitraum, 'latest'>): { ref: Date; p: Period } {
   }
 }
 
-const sum = (xs: StoredInvoice[]) => xs.reduce((s, x) => s + x.grossCents, 0);
+// wie App: bei Schlussrechnungen ist nur der Rest nach Abzug der Abschläge offen (sonst zählten die Abschläge doppelt)
+const sum = (xs: StoredInvoice[]) => xs.reduce((s, x) => s + openCents(x), 0);
 const euroWhole = (c: number) => euro(c).replace(/,\d\d/, ''); // Kacheln wie in der App ohne Cent
 
 function Liste() {
@@ -272,7 +273,7 @@ function Liste() {
                                   <span className="idx-sub">{['', 'erinnert', '1. Mahnung', '2. Mahnung'][x.reminderLevel ?? 0]}</span>
                                 )}
                               </td>
-                              <td className={`idx-num ${x.status === 'canceled' ? 'idx-geld-strike' : ''}`}>{euro(x.grossCents)}</td>
+                              <td className={`idx-num ${x.status === 'canceled' ? 'idx-geld-strike' : ''}`}>{euro(x.kind === 'invoice' && x.status !== 'canceled' ? openCents(x) : x.grossCents)}</td>
                               <td>
                                 <InvoiceBadge x={x} />
                               </td>

@@ -337,3 +337,31 @@
 .idx-scope .idx-geld-sample-row b {
   white-space: nowrap;
 }
+
+/* ---------- Schlussrechnung: Abzüge der Abschlagsrechnungen (wie App) ---------- */
+.idx-scope .idx-geld-deds {
+  margin-top: 8px;
+}
+.idx-scope .idx-geld-ded {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.idx-scope .idx-geld-ded > span {
+  flex: 1;
+  min-width: 0;
+}
+.idx-scope .idx-geld-ded > b {
+  white-space: nowrap;
+}
+.idx-scope .idx-geld-ded input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.idx-scope .idx-geld-bad {
+  color: var(--red);
+}

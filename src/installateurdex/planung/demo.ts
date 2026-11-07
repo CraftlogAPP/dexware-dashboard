@@ -55,6 +55,9 @@ function buildAppointments(): Appt[] {
     appt('p-11', 'u-max', 4, [8, 0], [10, 0], 'Wartung', { site_id: 's-gruber', asset_id: 'a-gru-fi' }),
     appt('p-12', 'u-lisa', 4, [13, 0], [15, 0], 'Besichtigung', { site_id: 's-see', request_id: 'r-3', asset_id: 'a-see-gt1' }),
     appt('p-13', 'u-max', 5, [8, 0], [12, 0], 'Reparatur', { site_id: 's-novak', asset_id: 'a-nov-lu' }),
+    // Abends (Tagesansicht weitet die Zeitachse über 20 Uhr aus) und eine kurze Besichtigung (kompakter Block)
+    appt('p-14', 'u-lisa', 4, [18, 30], [21, 0], 'Störung', { site_id: 's-huber', asset_id: 'a-hub-wp', note: 'Notdienst: Wärmepumpe aus' }),
+    appt('p-15', 'u-owner', 4, [7, 30], [8, 0], 'Besichtigung', { site_id: 's-novak', created_by: 'u-owner' }),
     // nächste Woche
     appt('p-20', 'u-max', 7, [8, 0], [10, 0], 'Wartung', { site_id: 's-huber', asset_id: 'a-hub-wp' }),
     appt('p-21', 'u-lisa', 8, [10, 0], [12, 0], 'Wartung', { site_id: 's-see', asset_id: 'a-see-so' }),
