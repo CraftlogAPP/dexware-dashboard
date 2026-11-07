@@ -78,6 +78,8 @@ export interface TimePatch {
   started_at: string;
   ended_at: string | null;
   note: string | null;
+  /** Kunde (Zeitbuch) — null = ohne Kunde (ein Ort steht dann als Kennzeichen in der Notiz, siehe zeitbuch.ts) */
+  site_id?: string | null;
 }
 
 // ---------------------------------------------------------------------------

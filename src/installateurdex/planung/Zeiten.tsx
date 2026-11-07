@@ -1,7 +1,8 @@
-// Zeiten: Arbeitszeiten je Monteur und Monat — wie App mobile/src/screens/TimesScreen.tsx (Daten: data/time.ts,
-// Rechnen: lib/timeclock.ts). Arbeitszeit = Arbeit + Fahrt, ohne Pausen. Inhaber sieht alle, Monteure nur sich
-// (RLS time_select in zeit.sql). Korrigieren: der Inhaber (jede fremde Korrektur vermerkt die Datenbank);
-// Monteure stempeln und korrigieren in der App, weil ihre eigene Liste dort auf dem Handy liegt.
+// Zeiten = Zeitbuch (Arbeitszeitbuch) je Monteur und Monat — wie App mobile/src/screens/ZeitbuchScreen.tsx (Daten:
+// data/time.ts, Rechnen: lib/timeclock.ts; Regeln fürs Portal in ./zeitbuch.ts). Je Block: Kunde oder Ort
+// (Werkstatt/Lager, Büro, Heimarbeit, Sonstiges), Tätigkeit, Pause. Arbeitszeit = Dauer ohne Pausen; Fahrt gehört zur
+// Kundenzeit (alte Fahrt-/Pausen-Einträge bleiben lesbar). Inhaber sieht alle, Monteure nur sich (RLS time_select in
+// zeit.sql). Korrigieren: der Inhaber (jede fremde Korrektur vermerkt die Datenbank); Monteure stempeln in der App.
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Download, Pencil } from 'lucide-react';
@@ -9,6 +10,7 @@ import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { downloadCsv, toCsv } from '../csv';
 import { useInst } from '../context';
+import { PrintButton } from '../parts';
 import type { Site } from '../types';
 import {
   KIND_ICON,
@@ -16,29 +18,39 @@ import {
   MAX_ENTRY_MS,
   MONTHS,
   OWN_DELETE_HOURS,
-  TIME_CSV_HEADER,
   WD,
   atLocal,
-  breakHint,
   dayKey,
   dayOf,
   deDate,
   hhmm,
   hm,
-  minutesOf,
   parseDay,
   parseHm,
   planMembers,
-  timeCsvRows,
-  totalsOf,
   type PlanMember,
   type TimeEntry,
   type TimeKind,
   type TimePatch,
 } from './logic';
+import {
+  NOTE_MAX,
+  PLACES,
+  ZEITBUCH_CSV_HEADER,
+  activityOf,
+  buildNote,
+  byWhere,
+  lawHintsByDay,
+  netMinutes,
+  parseNote,
+  pauseOf,
+  whereLabel,
+  zTotals,
+  zeitbuchCsvRows,
+  type Place,
+} from './zeitbuch';
+import { buildArbeitszeitbuchHtml, buildStundenzettelHtml } from './zeitbuchDruck';
 import './planung.css';
-
-const NOTE_MAX = 300; // zeit.sql
 
 interface Edit {
   entry: TimeEntry;
@@ -46,8 +58,13 @@ interface Edit {
   day: string;
   start: string;
   end: string;
-  note: string;
+  /** '' = ohne Zuordnung, 'site:<id>', 'place:<ort>' */
+  where: string;
+  text: string;
+  pause: string;
 }
+
+const whereOf = (e: TimeEntry) => (e.site_id ? `site:${e.site_id}` : parseNote(e.note).place ? `place:${parseNote(e.note).place}` : '');
 
 export function Zeiten() {
   const { data, ext, org, isOwner, role } = useInst();
@@ -62,6 +79,7 @@ export function Zeiten() {
   const now0 = new Date();
   const thisMonth = month.getFullYear() === now0.getFullYear() && month.getMonth() === now0.getMonth();
   const land: 'AT' | 'DE' = (org as { land?: string | null }).land === 'DE' ? 'DE' : 'AT';
+  const monthTitle = `${land === 'AT' && month.getMonth() === 0 ? 'Jänner' : MONTHS[month.getMonth()]} ${month.getFullYear()}`;
 
   const fixed = useAsync(async () => {
     const [members, me, sites] = await Promise.all([data.members(), ext.planung.myUserId(role), data.sites().catch(() => [] as Site[])]);
@@ -82,7 +100,7 @@ export function Zeiten() {
         <h1>Zeiten</h1>
       </div>
       <p className="muted" style={{ marginTop: 6 }}>
-        Arbeitszeiten aus der Stempeluhr der App. Arbeitszeit = Arbeit + Fahrt, ohne Pausen.{' '}
+        Das Zeitbuch aus der App: je Block Kunde oder Ort, Tätigkeit und Pause. Arbeitszeit = Dauer ohne Pausen, die Fahrt zum Kunden zählt mit.{' '}
         {isOwner
           ? 'Du siehst alle im Betrieb und kannst Einträge korrigieren — jede Korrektur wird vermerkt.'
           : 'Du siehst deine eigenen Zeiten. Stempeln und korrigieren (bis 7 Tage) geht in der App; ältere Einträge korrigiert der Inhaber.'}
@@ -97,6 +115,7 @@ export function Zeiten() {
           // Wer es war, kommt aus der Mitgliederliste (user_id → Konto). Der Freitext user_name stammt vom Handy und ist
           // frei wählbar — nur Rückfall für ehemalige Mitglieder, sonst könnte jemand Zeiten unter fremdem Namen führen.
           const nameOf = (e: TimeEntry) => memberOf(e.user_id)?.name || e.user_name?.trim() || 'Ohne Namen';
+          const siteName = (id: string) => sites.find((s) => s.id === id)?.name;
           // Personen im Monat: Team-Reihenfolge, dann ehemalige mit Einträgen
           const people: { id: string; name: string; color?: string; m?: PlanMember }[] = [];
           for (const m of team)
@@ -105,11 +124,16 @@ export function Zeiten() {
             if (!people.some((p) => p.id === e.user_id)) people.push({ id: e.user_id, name: `${nameOf(e)} (ehemalig)` });
           const shown = person === 'all' ? visible : visible.filter((e) => e.user_id === person);
           const now = new Date();
-          const sum = totalsOf(shown, now);
+          const sum = zTotals(shown, now);
           const running = shown.filter((e) => !e.ended_at);
-          const siteName = (id: string | null) => (id ? sites.find((s) => s.id === id)?.name : undefined);
+          const groupsWhere = byWhere(shown, nameOf, now);
+          const atCustomers = groupsWhere.filter((g) => g.siteId).reduce((s, g) => s + g.minutes, 0);
 
-          // Tage × Person (neueste Tage zuerst, wie App totalsByDay)
+          // Hinweise je Person und Tag (Pause, Höchstgrenze, Ruhezeit)
+          const hintsByPerson = new Map<string, Map<string, string[]>>();
+          for (const p of people) hintsByPerson.set(p.id, lawHintsByDay(visible.filter((e) => e.user_id === p.id), land, now));
+
+          // Tage × Person (neueste Tage zuerst, wie App)
           const groups = new Map<string, { day: string; userId: string; entries: TimeEntry[] }>();
           for (const e of shown) {
             const k = `${dayOf(e.started_at)}|${e.user_id}`;
@@ -122,18 +146,17 @@ export function Zeiten() {
             return i < 0 ? 999 : i;
           };
           const dayGroups = [...groups.values()]
-            .map((g) => ({ ...g, entries: g.entries.sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at)), t: totalsOf(g.entries, now) }))
+            .map((g) => ({ ...g, entries: g.entries.sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at)), t: zTotals(g.entries, now) }))
             .sort((a, b) => b.day.localeCompare(a.day) || order(a.userId) - order(b.userId));
 
           const perPerson = people
             .map((p) => {
               const list = visible.filter((e) => e.user_id === p.id);
-              const days = dayGroups.filter((g) => g.userId === p.id);
               return {
                 ...p,
-                t: totalsOf(list, now),
+                t: zTotals(list, now),
                 days: new Set(list.map((e) => dayOf(e.started_at))).size,
-                hints: days.filter((g) => breakHint(g.t, land)).length,
+                hints: hintsByPerson.get(p.id)?.size ?? 0,
                 running: list.some((e) => !e.ended_at),
                 count: list.length,
               };
@@ -143,14 +166,32 @@ export function Zeiten() {
           const label = `${String(month.getMonth() + 1).padStart(2, '0')}-${month.getFullYear()}`;
           function exportCsv() {
             const who = person === 'all' ? '' : `_${(people.find((p) => p.id === person)?.name ?? 'Person').replace(/[^\wäöüÄÖÜß-]+/g, '-')}`;
-            downloadCsv(`Zeiten_${label}${who}.csv`, toCsv(TIME_CSV_HEADER, timeCsvRows(shown, nameOf, now)));
+            downloadCsv(`Zeitbuch_${label}${who}.csv`, toCsv(ZEITBUCH_CSV_HEADER, zeitbuchCsvRows(shown, nameOf, siteName, now)));
           }
+          const bookPeople = () =>
+            people
+              .filter((p) => person === 'all' || p.id === person)
+              .map((p) => ({ name: p.name, entries: visible.filter((e) => e.user_id === p.id) }))
+              .filter((p) => p.entries.length > 0);
 
           const canEdit = () => isOwner;
           const canDelete = (e: TimeEntry) =>
             !!me && e.user_id === me && Date.now() - Date.parse(e.created_at) < OWN_DELETE_HOURS * 3600_000 &&
             // vom Inhaber korrigiert → nicht mehr selbst löschbar (RLS time_delete, zeit.sql)
             (!e.edited_by || e.edited_by === e.user_id);
+          const openEdit = (e: TimeEntry) => {
+            const n = parseNote(e.note);
+            setEdit({
+              entry: e,
+              kind: e.kind,
+              day: dayOf(e.started_at),
+              start: hhmm(e.started_at),
+              end: e.ended_at ? hhmm(e.ended_at) : '',
+              where: whereOf(e),
+              text: n.text,
+              pause: n.pauseMin ? String(n.pauseMin) : '',
+            });
+          };
 
           return (
             <>
@@ -160,9 +201,7 @@ export function Zeiten() {
                     <ChevronLeft className="i" aria-hidden />
                   </button>
                   <div className="pt-weeklabel">
-                    <b>
-                      {MONTHS[month.getMonth()]} {month.getFullYear()}
-                    </b>
+                    <b>{monthTitle}</b>
                     <span className="muted">{thisMonth ? 'dieser Monat' : `${deDate(month)} – ${deDate(new Date(monthEnd.getTime() - 86_400_000))}`}</span>
                   </div>
                   <button type="button" className="btn ghost small" onClick={() => shiftMonth(1)} disabled={thisMonth} aria-label="Nächster Monat">
@@ -175,7 +214,15 @@ export function Zeiten() {
                   )}
                   {entries.loading && <span className="spinner pt-spin" aria-label="Lädt" />}
                   <span style={{ flex: 1 }} />
-                  <button type="button" className="btn small" onClick={exportCsv} disabled={entries.loading || shown.length === 0}>
+                  <PrintButton
+                    label={person === 'all' && isOwner ? 'Arbeitszeitbuch (alle) drucken / PDF' : 'Arbeitszeitbuch drucken / PDF'}
+                    build={async () => {
+                      const ppl = bookPeople();
+                      if (!ppl.length) throw new Error('In diesem Monat gibt es noch keine Zeiten.');
+                      return buildArbeitszeitbuchHtml({ org, month, people: ppl, land, siteName });
+                    }}
+                  />
+                  <button type="button" className="btn ghost small" onClick={exportCsv} disabled={entries.loading || shown.length === 0}>
                     <Download className="i" aria-hidden /> CSV (Excel)
                   </button>
                 </div>
@@ -208,11 +255,12 @@ export function Zeiten() {
                 <div className="kpi idx-kpi-accent">
                   <div className="kpi-label">Arbeitszeit</div>
                   <div className="kpi-value">{hm(sum.paid)}</div>
-                  <div className="kpi-sub">Arbeit {hm(sum.work)}</div>
+                  <div className="kpi-sub">ohne Pausen</div>
                 </div>
                 <div className="kpi idx-kpi-amber">
-                  <div className="kpi-label">davon Fahrt</div>
-                  <div className="kpi-value">{hm(sum.travel)}</div>
+                  <div className="kpi-label">bei Kunden</div>
+                  <div className="kpi-value">{hm(atCustomers)}</div>
+                  <div className="kpi-sub">{groupsWhere.filter((g) => g.siteId).length} Kunden</div>
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Pausen</div>
@@ -236,8 +284,6 @@ export function Zeiten() {
                         <tr>
                           <th>Person</th>
                           <th className="pt-num">Tage</th>
-                          <th className="pt-num">Arbeit</th>
-                          <th className="pt-num">Fahrt</th>
                           <th className="pt-num">Pausen</th>
                           <th className="pt-num">Arbeitszeit</th>
                           <th>Hinweise</th>
@@ -253,15 +299,57 @@ export function Zeiten() {
                               {p.id === me ? ' (ich)' : ''}
                             </td>
                             <td className="pt-num">{p.days}</td>
-                            <td className="pt-num">{hm(p.t.work)}</td>
-                            <td className="pt-num">{hm(p.t.travel)}</td>
                             <td className="pt-num">{hm(p.t.break)}</td>
                             <td className="pt-num">
                               <b>{hm(p.t.paid)}</b>
                             </td>
-                            <td>{p.hints ? <span className="badge amber">☕ {p.hints}× Pause zu kurz</span> : <span className="muted">—</span>}</td>
+                            <td>{p.hints ? <span className="badge amber">⚠ an {p.hints} {p.hints === 1 ? 'Tag' : 'Tagen'}</span> : <span className="muted">—</span>}</td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {groupsWhere.length > 0 && (
+                <>
+                  <h3 className="pt-h3">Je Kunde / Ort</h3>
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Kunde / Ort</th>
+                          <th className="pt-num">Tage</th>
+                          <th>Wer</th>
+                          <th className="pt-num">Stunden</th>
+                          <th aria-label="Stundenzettel" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupsWhere.map((g) => {
+                          const w = whereLabel(g.entries[0], siteName);
+                          const site = g.siteId ? sites.find((s) => s.id === g.siteId) : undefined;
+                          return (
+                            <tr key={g.key}>
+                              <td>
+                                {w.icon} {w.label}
+                                {site?.address ? <div className="muted small">{site.address}</div> : null}
+                              </td>
+                              <td className="pt-num">{g.days.size}</td>
+                              <td className="wrap">{[...g.people].join(', ')}</td>
+                              <td className="pt-num">
+                                <b>{hm(g.minutes)}</b>
+                              </td>
+                              <td className="pt-num">
+                                <PrintButton
+                                  label="Stundenzettel"
+                                  build={async () => buildStundenzettelHtml({ org, label: w.label, address: site?.address, entries: g.entries, nameOf })}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -271,25 +359,26 @@ export function Zeiten() {
               <h3 className="pt-h3">Einträge</h3>
               {!entries.loading && dayGroups.length === 0 ? (
                 <div className="empty">
-                  {thisMonth ? 'In diesem Monat noch keine Zeiten. Die Stempeluhr ist in der App auf der Übersicht.' : 'In diesem Monat keine Zeiten.'}
+                  {thisMonth ? 'In diesem Monat noch keine Zeiten. Gestempelt wird in der App (Tab „Zeit“ oder oben auf „Heute“).' : 'In diesem Monat keine Zeiten.'}
                 </div>
               ) : (
                 <div className="table-wrap">
                   <table className="pt-times">
                     <thead>
                       <tr>
-                        <th>Art</th>
                         <th>Beginn</th>
                         <th>Ende</th>
-                        <th className="pt-num">Dauer</th>
-                        <th>Notiz</th>
+                        <th className="pt-num">Pause</th>
+                        <th className="pt-num">Zeit</th>
+                        <th>Kunde / Ort</th>
+                        <th>Tätigkeit</th>
                         {isOwner && <th aria-label="Aktion" />}
                       </tr>
                     </thead>
                     <tbody>
                       {dayGroups.map((g) => {
                         const d = parseDay(g.day);
-                        const hint = breakHint(g.t, land);
+                        const hints = hintsByPerson.get(g.userId)?.get(g.day) ?? null;
                         const p = people.find((x) => x.id === g.userId);
                         return (
                           <DayRows
@@ -297,51 +386,48 @@ export function Zeiten() {
                             title={`${WD[d.getDay()]} ${deDate(d)}${person === 'all' && isOwner ? ` · ${p?.name ?? nameOf(g.entries[0])}` : ''}`}
                             color={person === 'all' ? p?.color : undefined}
                             total={hm(g.t.paid)}
-                            sub={`Fahrt ${hm(g.t.travel)} · Pausen ${hm(g.t.break)}`}
-                            hint={hint}
-                            cols={isOwner ? 6 : 5}
+                            sub={`Pausen ${hm(g.t.break)}`}
+                            hints={hints}
+                            cols={isOwner ? 7 : 6}
                           >
-                            {g.entries.map((e) => (
-                              <tr key={e.id}>
-                                <td>
-                                  {KIND_ICON[e.kind]} {KIND_LABEL[e.kind]}
-                                </td>
-                                <td>{hhmm(e.started_at)}</td>
-                                <td>{e.ended_at ? (dayOf(e.ended_at) !== g.day ? `${hhmm(e.ended_at)} (+1 Tag)` : hhmm(e.ended_at)) : <span className="badge green">läuft</span>}</td>
-                                <td className="pt-num">{hm(minutesOf(e, now))}</td>
-                                <td className="wrap">
-                                  {[e.note, siteName(e.site_id)].filter(Boolean).join(' · ') || <span className="muted">—</span>}
-                                  {e.edited_at && (
-                                    <span className="badge amber pt-badge" title={`Korrigiert am ${deDate(new Date(e.edited_at))} ${hhmm(e.edited_at)}`}>
-                                      korrigiert
-                                    </span>
-                                  )}
-                                </td>
-                                {isOwner && (
-                                  <td className="pt-num">
-                                    {canEdit() && (
-                                      <button
-                                        type="button"
-                                        className="btn ghost small"
-                                        onClick={() =>
-                                          setEdit({
-                                            entry: e,
-                                            kind: e.kind,
-                                            day: dayOf(e.started_at),
-                                            start: hhmm(e.started_at),
-                                            end: e.ended_at ? hhmm(e.ended_at) : '',
-                                            note: e.note ?? '',
-                                          })
-                                        }
-                                        aria-label={`${KIND_LABEL[e.kind]} ${hhmm(e.started_at)} von ${nameOf(e)} korrigieren`}
-                                      >
-                                        <Pencil className="i" aria-hidden /> <span className="hide-sm">Korrigieren</span>
-                                      </button>
+                            {g.entries.map((e) => {
+                              const w = whereLabel(e, siteName);
+                              const pz = pauseOf(e, now);
+                              return (
+                                <tr key={e.id}>
+                                  <td>{hhmm(e.started_at)}</td>
+                                  <td>{e.ended_at ? (dayOf(e.ended_at) !== g.day ? `${hhmm(e.ended_at)} (+1 Tag)` : hhmm(e.ended_at)) : <span className="badge green">läuft</span>}</td>
+                                  <td className="pt-num">{e.kind === 'break' ? `${KIND_ICON.break} Pause` : pz ? `${pz} min` : <span className="muted">—</span>}</td>
+                                  <td className="pt-num">{e.kind === 'break' ? '' : hm(netMinutes(e, now))}</td>
+                                  <td>
+                                    {e.kind === 'travel' ? `${KIND_ICON.travel} ` : ''}
+                                    {w.icon} {w.label}
+                                  </td>
+                                  <td className="wrap">
+                                    {activityOf(e) || <span className="muted">—</span>}
+                                    {e.edited_at && (
+                                      <span className="badge amber pt-badge" title={`Korrigiert am ${deDate(new Date(e.edited_at))} ${hhmm(e.edited_at)}`}>
+                                        korrigiert
+                                      </span>
                                     )}
                                   </td>
-                                )}
-                              </tr>
-                            ))}
+                                  {isOwner && (
+                                    <td className="pt-num">
+                                      {canEdit() && (
+                                        <button
+                                          type="button"
+                                          className="btn ghost small"
+                                          onClick={() => openEdit(e)}
+                                          aria-label={`${hhmm(e.started_at)} von ${nameOf(e)} korrigieren`}
+                                        >
+                                          <Pencil className="i" aria-hidden /> <span className="hide-sm">Korrigieren</span>
+                                        </button>
+                                      )}
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                            })}
                           </DayRows>
                         );
                       })}
@@ -350,8 +436,8 @@ export function Zeiten() {
                 </div>
               )}
               <p className="muted small" style={{ marginTop: 10 }}>
-                Pausen-Hinweis nach {land === 'DE' ? '§ 4 ArbZG' : '§ 11 AZG'} (Land aus den Einstellungen). Die CSV enthält genau die
-                angezeigten Einträge — Spalten wie der Monatsbericht der App.
+                Hinweise nach {land === 'DE' ? 'ArbZG (§ 4 Pause, § 3 Höchstarbeitszeit, § 5 Ruhezeit)' : 'AZG (§ 11 Pause, § 9 Höchstarbeitszeit, § 12 Ruhezeit)'} — Land aus den Einstellungen,
+                ohne Gewähr. Arbeitszeitbuch und CSV enthalten genau die angezeigten Personen — Spalten wie in der App.
               </p>
 
               {edit && (
@@ -361,6 +447,7 @@ export function Zeiten() {
                   who={nameOf(edit.entry)}
                   foreign={edit.entry.user_id !== me}
                   canDelete={canDelete(edit.entry)}
+                  sites={sites}
                   onSave={async (patch) => {
                     await ext.planung.updateTimeEntry(edit.entry.id, patch);
                     setEdit(null);
@@ -386,7 +473,7 @@ function DayRows({
   color,
   total,
   sub,
-  hint,
+  hints,
   cols,
   children,
 }: {
@@ -394,7 +481,7 @@ function DayRows({
   color?: string;
   total: string;
   sub: string;
-  hint: string | null;
+  hints: string[] | null;
   cols: number;
   children: ReactNode;
 }) {
@@ -410,7 +497,11 @@ function DayRows({
             <span className="muted small">{sub}</span>
             <b className="pt-daytotal">{total}</b>
           </span>
-          {hint && <span className="pt-hint">☕ {hint}</span>}
+          {hints?.map((h) => (
+            <span key={h} className="pt-hint">
+              ⚠ {h}
+            </span>
+          ))}
         </td>
       </tr>
       {children}
@@ -424,6 +515,7 @@ function EditDialog({
   who,
   foreign,
   canDelete,
+  sites,
   onSave,
   onDelete,
 }: {
@@ -432,6 +524,7 @@ function EditDialog({
   who: string;
   foreign: boolean;
   canDelete: boolean;
+  sites: Site[];
   onSave: (patch: TimePatch) => Promise<void>;
   onDelete: () => Promise<void>;
 }) {
@@ -440,21 +533,27 @@ function EditDialog({
   const [confirmDel, setConfirmDel] = useState(false);
   const set = (p: Partial<Edit>) => setEdit((x) => (x ? { ...x, ...p } : x));
   const running = !edit.entry.ended_at;
-  // Geändert gegenüber dem Eintrag? (Art-Chips sind keine Eingabe-Ereignisse — deshalb ausdrücklich vergleichen)
   const e0 = edit.entry;
+  const n0 = parseNote(e0.note);
+  // Geändert gegenüber dem Eintrag? (Art-Chips sind keine Eingabe-Ereignisse — deshalb ausdrücklich vergleichen)
   const changed =
     edit.kind !== e0.kind ||
     edit.day !== dayOf(e0.started_at) ||
     edit.start !== hhmm(e0.started_at) ||
     edit.end !== (e0.ended_at ? hhmm(e0.ended_at) : '') ||
-    edit.note !== (e0.note ?? '');
+    edit.where !== whereOf(e0) ||
+    edit.text !== n0.text ||
+    edit.pause !== (n0.pauseMin ? String(n0.pauseMin) : '');
   const close = () => {
     if (!busy) setEdit(null);
   };
+  // Archivierte Kunden nur zeigen, wenn der Eintrag schon dort hängt
+  const siteOptions = sites.filter((s) => s.active || `site:${s.id}` === edit.where).sort((a, b) => a.name.localeCompare(b.name));
+  const isBreak = edit.kind === 'break';
 
   async function save() {
     setError(null);
-    // wie App TimesScreen saveEdit
+    // wie App EntrySheet / lib/timeclock.ts checkEntry
     const s = parseHm(edit.start);
     const en = edit.end.trim() ? parseHm(edit.end) : null;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(edit.day) || !s || (edit.end.trim() && !en)) return setError('Bitte prüfen: Tag auswählen, Zeiten als HH:MM.');
@@ -473,10 +572,17 @@ function EditDialog({
     if (end && end.getTime() - start.getTime() > MAX_ENTRY_MS) return setError('Ein Eintrag darf höchstens 24 Stunden dauern.');
     if (!end && Date.now() - start.getTime() > MAX_ENTRY_MS) return setError('Läuft seit über 24 Stunden — bitte das Ende eintragen.');
     if (start.getTime() > Date.now()) return setError('Der Beginn liegt in der Zukunft.');
-    if (edit.note.length > NOTE_MAX) return setError(`Die Notiz darf höchstens ${NOTE_MAX} Zeichen lang sein.`);
+    const pause = edit.pause.trim() ? Number(edit.pause.trim()) : 0;
+    if (!Number.isInteger(pause) || pause < 0 || pause > 999) return setError('Pause bitte als ganze Minuten (0–999).');
+    const dur = Math.round(((end ?? new Date()).getTime() - start.getTime()) / 60000);
+    if (pause > 0 && end && pause >= dur) return setError('Die Pause ist länger als die ganze Zeit.');
+    const place = edit.where.startsWith('place:') ? (edit.where.slice(6) as Place) : undefined;
+    const site_id = edit.where.startsWith('site:') ? edit.where.slice(5) : null;
+    const note = buildNote({ place: site_id ? undefined : place, pauseMin: isBreak ? 0 : pause, text: edit.text });
+    if ((note ?? '').length > NOTE_MAX) return setError(`Tätigkeit zu lang (höchstens ${NOTE_MAX} Zeichen).`);
     setBusy(true);
     try {
-      await onSave({ kind: edit.kind, started_at: start.toISOString(), ended_at: end ? end.toISOString() : null, note: edit.note.trim() || null });
+      await onSave({ kind: edit.kind, started_at: start.toISOString(), ended_at: end ? end.toISOString() : null, note, site_id: isBreak ? e0.site_id : site_id });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -506,13 +612,16 @@ function EditDialog({
       >
         {error && <div className="error-box">{error}</div>}
         <fieldset disabled={busy}>
-          <div className="pt-chips" style={{ marginBottom: 12 }}>
-            {(['work', 'travel', 'break'] as TimeKind[]).map((k) => (
-              <button key={k} type="button" className={`pt-chip ${edit.kind === k ? 'on' : ''}`} onClick={() => set({ kind: k })}>
-                {KIND_ICON[k]} {KIND_LABEL[k]}
-              </button>
-            ))}
-          </div>
+          {e0.kind !== 'work' && (
+            // Alte Einträge (Fahrt/Pause) — neue Zeitbuch-Einträge sind immer „Arbeit“ mit Pause im Eintrag
+            <div className="pt-chips" style={{ marginBottom: 12 }}>
+              {(['work', 'travel', 'break'] as TimeKind[]).map((k) => (
+                <button key={k} type="button" className={`pt-chip ${edit.kind === k ? 'on' : ''}`} onClick={() => set({ kind: k })}>
+                  {KIND_ICON[k]} {KIND_LABEL[k]}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="pt-when">
             <label className="field">
               Tag
@@ -528,15 +637,44 @@ function EditDialog({
             </label>
           </div>
           {running && <p className="muted small" style={{ marginTop: -6 }}>Der Eintrag läuft noch. Mit einem Ende wird er abgeschlossen.</p>}
+          {!isBreak && (
+            <>
+              <label className="field">
+                Kunde / Ort
+                <select value={edit.where} onChange={(e) => set({ where: e.target.value })}>
+                  <option value="">— ohne Zuordnung —</option>
+                  <optgroup label="Ort">
+                    {PLACES.map((p) => (
+                      <option key={p.id} value={`place:${p.id}`}>
+                        {p.icon} {p.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Kunde">
+                    {siteOptions.map((s) => (
+                      <option key={s.id} value={`site:${s.id}`}>
+                        {s.name}
+                        {s.active ? '' : ' (archiviert)'}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              </label>
+              <label className="field">
+                Pause (Minuten, wird abgezogen)
+                <input type="number" min={0} max={999} step={5} value={edit.pause} placeholder="0" onChange={(e) => set({ pause: e.target.value })} />
+              </label>
+            </>
+          )}
           <label className="field">
-            Notiz (optional)
-            <input value={edit.note} maxLength={NOTE_MAX} placeholder="z. B. Baustelle Huber" onChange={(e) => set({ note: e.target.value })} />
+            {isBreak ? 'Notiz (optional)' : 'Tätigkeit'}
+            <input value={edit.text} maxLength={260} placeholder={isBreak ? '' : 'z. B. Therme gewartet'} onChange={(e) => set({ text: e.target.value })} />
           </label>
         </fieldset>
         <div className="info-box small">
           {foreign
-            ? `Die Korrektur wird mit Zeitpunkt vermerkt und erscheint beim nächsten Öffnen der Zeiten auch auf dem Handy von ${who} (ab der App-Version mit Zeiten-Abgleich). Ändern kann ${who} den Eintrag danach nicht mehr.`
-            : 'Gilt hier, in der Team-Ansicht und — beim nächsten Öffnen der Zeiten — auch in deiner Liste auf dem Handy (ab der App-Version mit Zeiten-Abgleich).'}
+            ? `Die Korrektur wird mit Zeitpunkt vermerkt und erscheint beim nächsten Öffnen des Zeitbuchs auch auf dem Handy von ${who}. Ändern kann ${who} den Eintrag danach nicht mehr.`
+            : 'Gilt hier, in der Team-Ansicht und — beim nächsten Öffnen des Zeitbuchs — auch in deiner Liste auf dem Handy.'}
         </div>
         <div className="row pt-actions">
           {canDelete &&
