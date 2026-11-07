@@ -6,7 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Role } from '../../lib/orgApi';
 import { fetchAllRows } from '../fetchAll';
-import type { Appt, ApptInput, ApptStatus, PlanRequest, TimeEntry, TimePatch } from './logic';
+import type { Appt, ApptInput, ApptStatus, PlanRequest, TimeEntry, TimePatch, TimeTarget } from './logic';
 
 export interface PlanungData {
   /** Eigene Nutzer-ID (auth.uid()). `role` brauchen nur die Beispieldaten (Ansicht Inhaber/Mitarbeiter). */
@@ -27,12 +27,19 @@ export interface PlanungData {
   timeEntries(from: Date, to: Date): Promise<TimeEntry[]>;
   updateTimeEntry(id: string, patch: TimePatch): Promise<void>;
   deleteTimeEntry(id: string): Promise<void>;
+  /** Sollzeiten (Inhaber: alle im Betrieb, sonst die eigene). null = Tabelle fehlt noch (SQL vom 07.11. nicht eingespielt). */
+  timeTargets(): Promise<TimeTarget[] | null>;
 }
 
 const APPT_COLS =
   'id, org_id, site_id, asset_id, request_id, assigned_to, assigned_name, title, note, starts_at, ends_at, status, created_by, created_at, updated_at';
 const REQ_COLS = 'id, site_id, asset_id, kind, status, contact_name, created_at, scheduled_at, scheduled_end';
 const TIME_COLS = 'id, org_id, user_id, user_name, kind, started_at, ended_at, site_id, note, edited_by, edited_at, created_at';
+// Seit NACHTRAG-ZEITBUCH-2026-11-07.sql: „in Rechnung übernommen“. Ältere Datenbank → einmal ohne, dann nicht mehr fragen.
+const TIME_COLS_BILLED = TIME_COLS + ', billed_at';
+let billedColumn = true;
+const isMissing = (e: PgError) =>
+  !!e && (['42P01', '42703', 'PGRST205', 'PGRST204'].includes(e.code ?? '') || /does not exist|could not find/i.test(e.message ?? ''));
 
 type PgError = { message: string; code?: string; details?: string | null; hint?: string | null } | null;
 
@@ -168,18 +175,35 @@ export function supabasePlanung(sb: SupabaseClient): PlanungData {
 
     async timeEntries(from, to) {
       // Monat × Team kann über 1.000 Zeilen haben → seitenweise, sonst wären Bericht und CSV still unvollständig
-      const { data, error } = await fetchAllRows<TimeEntry>((a, b) =>
-        sb
-          .from('time_entry')
-          .select(TIME_COLS)
-          .gte('started_at', from.toISOString())
-          .lt('started_at', to.toISOString())
-          .order('started_at', { ascending: true })
-          .order('id')
-          .range(a, b),
-      );
+      const load = (cols: string) =>
+        fetchAllRows<TimeEntry>((a, b) =>
+          sb
+            .from('time_entry')
+            .select(cols)
+            .gte('started_at', from.toISOString())
+            .lt('started_at', to.toISOString())
+            .order('started_at', { ascending: true })
+            .order('id')
+            .range(a, b),
+        );
+      if (billedColumn) {
+        const r = await load(TIME_COLS_BILLED);
+        if (!r.error) return r.data;
+        if (!isMissing(r.error)) timeError('Zeiten konnten nicht geladen werden', r.error);
+        billedColumn = false;
+      }
+      const { data, error } = await load(TIME_COLS);
       if (error) timeError('Zeiten konnten nicht geladen werden', error);
       return data;
+    },
+
+    async timeTargets() {
+      const { data, error } = await sb.from('time_target').select('user_id, week_minutes, days').limit(1000);
+      if (error) {
+        if (isMissing(error)) return null;
+        timeError('Sollzeiten konnten nicht geladen werden', error);
+      }
+      return (data ?? []) as TimeTarget[];
     },
 
     async updateTimeEntry(id, patch) {

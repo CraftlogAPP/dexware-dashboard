@@ -255,3 +255,48 @@ export function zeitbuchCsvRows(entries: TimeEntry[], nameOf: (e: TimeEntry) => 
       e.edited_at ? 'korrigiert' : '',
     ]);
 }
+
+// ---------------------------------------------------------------- Sollzeit (time_target) — wie App dayTarget/periodSummary
+
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+export interface WorkTarget {
+  weekMinutes: number;
+  days: number[];
+}
+export const targetOf = (t: { week_minutes: number | null; days: number[] } | undefined | null): WorkTarget | null =>
+  t && typeof t.week_minutes === 'number' && t.week_minutes > 0 && Array.isArray(t.days) && t.days.length ? { weekMinutes: t.week_minutes, days: t.days } : null;
+
+/** Tagessoll in Minuten: Wochensoll gleichmäßig auf die Arbeitstage (Restminuten ab Montag), Feiertage 0 — wie App. */
+export function dayTarget(t: WorkTarget | null, d: Date, hol: Map<string, string>): number {
+  if (!t || !t.days.length || t.weekMinutes <= 0) return 0;
+  if (!t.days.includes(d.getDay())) return 0;
+  if (hol.has(dayKey(d))) return 0;
+  const order = WEEK_ORDER.filter((x) => t.days.includes(x));
+  const n = order.length;
+  const base = Math.floor(t.weekMinutes / n);
+  return base + (order.indexOf(d.getDay()) < t.weekMinutes - base * n ? 1 : 0);
+}
+
+/**
+ * Soll eines Zeitraums bis heute — wie App periodSummary(until = heute): vergangene Tage voll, HEUTE erst nach
+ * Feierabend voll (vorher höchstens das schon Gearbeitete), künftige Tage gar nicht. entries = Zeiten DIESER Person.
+ */
+export function sollUntilToday(t: WorkTarget | null, from: Date, to: Date, entries: TimeEntry[], hol: Map<string, string>, now = new Date()): number {
+  if (!t) return 0;
+  const today = dayKey(now);
+  let soll = 0;
+  for (let d = new Date(from.getFullYear(), from.getMonth(), from.getDate()); d < to; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+    const k = dayKey(d);
+    if (k > today) break;
+    const s = dayTarget(t, d, hol);
+    if (!s) continue;
+    if (k < today) soll += s;
+    else {
+      const list = entries.filter((e) => dayOf(e.started_at) === k);
+      const done = list.length > 0 && list.every((e) => !!e.ended_at);
+      const ist = list.reduce((x, e) => x + netMinutes(e, now), 0);
+      soll += done ? s : Math.min(s, ist);
+    }
+  }
+  return soll;
+}

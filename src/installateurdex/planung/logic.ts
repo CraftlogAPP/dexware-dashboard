@@ -71,6 +71,16 @@ export interface TimeEntry {
   edited_by: string | null;
   edited_at: string | null;
   created_at: string;
+  /** In eine Rechnung übernommen (App, time_mark_billed) — fehlt, solange NACHTRAG-ZEITBUCH-2026-11-07.sql nicht eingespielt ist. */
+  billed_at?: string | null;
+}
+
+/** Sollzeit je Person (Tabelle time_target, NACHTRAG-ZEITBUCH-2026-11-07.sql). week_minutes null = keine Sollzeit. */
+export interface TimeTarget {
+  user_id: string;
+  week_minutes: number | null;
+  /** Arbeitstage als getDay()-Werte (Mo = 1 … So = 0) */
+  days: number[];
 }
 
 export interface TimePatch {

@@ -91,6 +91,8 @@ function buildTimes(): TimeEntry[] {
       edited_by: null,
       edited_at: null,
       created_at: (e ?? s).toISOString(),
+      // In Rechnung übernommen (SQL vom 07.11.): Bäckerei Gruber bis vor 4 Tagen schon abgerechnet, der Rest offen
+      billed_at: extra.site_id === 's-gruber' && e && e.getTime() < Date.now() - 4 * 86_400_000 ? e.toISOString() : null,
       ...extra,
     });
   };
@@ -188,5 +190,11 @@ export function demoPlanung(): PlanungData {
       times = times.filter((e) => e.id !== id);
       await wait(null);
     },
+    // Beispiel: Max 38,5 h (Mo–Fr), Lisa Teilzeit 20 h (Mo–Do), Inhaber ohne Sollzeit
+    timeTargets: () =>
+      wait([
+        { user_id: 'u-max', week_minutes: 38 * 60 + 30, days: [1, 2, 3, 4, 5] },
+        { user_id: 'u-lisa', week_minutes: 20 * 60, days: [1, 2, 3, 4] },
+      ]),
   };
 }

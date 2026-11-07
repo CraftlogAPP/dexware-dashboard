@@ -47,6 +47,8 @@ import {
   netMinutes,
   parseNote,
   pauseOf,
+  sollUntilToday,
+  targetOf,
   whereLabel,
   zTotals,
   zeitbuchCsvRows,
@@ -91,6 +93,8 @@ export function Zeiten() {
   }, [data, ext, role]);
 
   const entries = useAsync(() => ext.planung.timeEntries(month, monthEnd), [ext, month.getTime()]);
+  // Sollzeiten (SQL vom 07.11.) — fehlt die Tabelle noch oder schlägt das Laden fehl, bleibt Soll/Saldo einfach weg
+  const targets = useAsync(() => ext.planung.timeTargets().catch(() => null), [ext]);
   // laufende Einträge zählen mit — still jede Minute neu laden
   useLiveRefresh([entries.refresh], 60000);
 
@@ -153,12 +157,21 @@ export function Zeiten() {
             .map((g) => ({ ...g, entries: g.entries.sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at)), t: zTotals(g.entries, now) }))
             .sort((a, b) => b.day.localeCompare(a.day) || order(a.userId) - order(b.userId));
 
+          const targetList = targets.data ?? null;
+          const hasTargets = !!targetList?.some((t) => targetOf(t));
+          // „In Rechnung übernommen“ kennt der Server erst mit der SQL vom 07.11. — vorher keine Spalte
+          const billedKnown = all.some((e) => e.billed_at !== undefined);
           const perPerson = people
             .map((p) => {
               const list = visible.filter((e) => e.user_id === p.id);
+              const tgt = targetOf(targetList?.find((t) => t.user_id === p.id));
+              const t = zTotals(list, now);
+              const soll = tgt ? sollUntilToday(tgt, month, monthEnd, list, hol, now) : null;
               return {
                 ...p,
-                t: zTotals(list, now),
+                t,
+                soll,
+                saldo: soll === null ? null : t.paid - soll,
                 // Arbeitstage = Tage mit Arbeitszeit > 0 (wie App)
                 days: new Set(list.filter((e) => netMinutes(e, now) > 0).map((e) => dayOf(e.started_at))).size,
                 hints: hintsByPerson.get(p.id)?.size ?? 0,
@@ -291,6 +304,8 @@ export function Zeiten() {
                           <th className="pt-num">Tage</th>
                           <th className="pt-num">Pausen</th>
                           <th className="pt-num">Arbeitszeit</th>
+                          {hasTargets && <th className="pt-num" title="Sollzeit bis heute (heute erst nach Feierabend voll), ohne Feiertage">Soll</th>}
+                          {hasTargets && <th className="pt-num">Saldo</th>}
                           <th>Hinweise</th>
                         </tr>
                       </thead>
@@ -308,6 +323,19 @@ export function Zeiten() {
                             <td className="pt-num">
                               <b>{hm(p.t.paid)}</b>
                             </td>
+                            {hasTargets && <td className="pt-num">{p.soll === null ? <span className="muted">—</span> : hm(p.soll)}</td>}
+                            {hasTargets && (
+                              <td className="pt-num">
+                                {p.saldo === null ? (
+                                  <span className="muted">—</span>
+                                ) : (
+                                  <span style={{ color: p.saldo < 0 ? '#fca5a5' : p.saldo > 0 ? '#86efac' : undefined }}>
+                                    {p.saldo < 0 ? '−' : p.saldo > 0 ? '+' : '±'}
+                                    {hm(Math.abs(p.saldo))}
+                                  </span>
+                                )}
+                              </td>
+                            )}
                             <td>{p.hints ? <span className="badge amber">⚠ an {p.hints} {p.hints === 1 ? 'Tag' : 'Tagen'}</span> : <span className="muted">—</span>}</td>
                           </tr>
                         ))}
@@ -328,6 +356,7 @@ export function Zeiten() {
                           <th className="pt-num">Tage</th>
                           <th>Wer</th>
                           <th className="pt-num">Stunden</th>
+                          {billedKnown && <th title="In der App in eine Rechnung übernommen">Abgerechnet</th>}
                           <th aria-label="Stundenzettel" />
                         </tr>
                       </thead>
@@ -346,6 +375,18 @@ export function Zeiten() {
                               <td className="pt-num">
                                 <b>{hm(g.minutes)}</b>
                               </td>
+                              {billedKnown && (
+                                <td>
+                                  {(() => {
+                                    const done = g.entries.filter((e) => e.kind !== 'break' && e.ended_at);
+                                    const n = done.filter((e) => e.billed_at).length;
+                                    if (!g.siteId || !done.length) return <span className="muted">—</span>;
+                                    if (n === 0) return <span className="muted">offen</span>;
+                                    if (n === done.length) return <span className="badge green">✓ alle</span>;
+                                    return <span className="badge amber">{n} von {done.length}</span>;
+                                  })()}
+                                </td>
+                              )}
                               <td className="pt-num">
                                 <PrintButton
                                   label="Stundenzettel"
