@@ -220,11 +220,16 @@ export function demoGeld(): GeldData {
       });
       return wait(number);
     },
-    async setStatus(id, status, reason) {
+    async setStatus(id, status, reason, paidAt) {
       const v = find(id);
       if (!v) throw new Error(STATUS_ERROR('unknown'));
       if (status === 'paid' && v.status === 'issued' && v.kind === 'invoice') {
-        Object.assign(v, { status: 'paid', paidAt: new Date().toISOString() });
+        // wie NACHTRAG-ZAHLUNGSDATUM: Tag des Zahlungseingangs, nicht in der Zukunft, nicht vor dem Rechnungsdatum, 12:00 Ortszeit
+        const day = paidAt && /^\d{4}-\d{2}-\d{2}$/.test(paidAt) ? paidAt : null;
+        if (day && day > today()) throw new Error(STATUS_ERROR('paid_future'));
+        if (day && v.issuedAt && day < v.issuedAt.slice(0, 10)) throw new Error(STATUS_ERROR('paid_before_issue'));
+        const [y, m, d] = (day ?? '').split('-').map(Number);
+        Object.assign(v, { status: 'paid', paidAt: day ? new Date(y, m - 1, d, 12).toISOString() : new Date().toISOString() });
       } else if (status === 'issued' && v.status === 'paid') {
         Object.assign(v, { status: 'issued', paidAt: undefined });
       } else if (status === 'canceled' && (v.status === 'issued' || v.status === 'paid') && (v.kind === 'invoice' || v.kind === 'quote')) {

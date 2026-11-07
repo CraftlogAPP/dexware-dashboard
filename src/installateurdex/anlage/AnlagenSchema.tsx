@@ -2,7 +2,7 @@
 // Quelle → Gerät → Verbraucher, Vorlauf warm (Kupfer) und Rücklauf kühl (Eisblau) als gestrichelte Leitungen,
 // Status-Licht nach Wartungsstand, darunter Hauptzeile, Hinweise und 2–4 Kennzahlen. Logik in ./anlagenBild.ts.
 //
-// Bewegung: nur CSS (stroke-dashoffset), keine JS-Schleife. „Bewegung reduzieren“ → stehendes Bild (anlagenSchema.css).
+// Bewegung: nur CSS (stroke-dashoffset), keine JS-Schleife. „Bewegung reduzieren“ → stehendes Bild (schaubild.css).
 // Außer Betrieb / ausgesondert: Leitungen ohne Strichelung, Teile gedämpft (die Anlage läuft ja auch nicht).
 // Größen: „large“ (Anlagenseite, fließend) und „small“ (Objektseite, Liste: still, ohne Beschriftung).
 
@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 import type { Asset } from '../types';
 import { anlagenBild, type AnlagenBild, type AnlagenStand, type SchemaLine, type SchemaNode, type StatusTone } from './anlagenBild';
-import './anlagenSchema.css';
+import './schaubild.css';
 
 /** App-Symbole (MaterialCommunityIcons) → lucide */
 const ICONS: Record<string, ComponentType<LucideProps>> = {

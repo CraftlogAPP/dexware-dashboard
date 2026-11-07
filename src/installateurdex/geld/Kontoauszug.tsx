@@ -1,7 +1,8 @@
 // „Kontoauszug abgleichen“: camt.053/054 oder Bank-CSV im Browser lesen (die Datei wird NICHT hochgeladen), Zahlungs-
 // eingänge offenen Rechnungen zuordnen (Logik: geld/kontoabgleich.ts) und nach Bestätigung als bezahlt markieren — über
 // denselben Weg wie der Knopf „Als bezahlt markieren“ im Beleg (geld.setStatus → RPC invoice_set_status).
-// Der Server setzt dabei das Zahlungsdatum selbst (heute); ein Buchungsdatum lässt sich über die RPC nicht übergeben.
+// Zahlungsdatum = Buchungstag (paidDayFor). Ohne NACHTRAG-ZAHLUNGSDATUM am Server bucht api.ts ohne Datum (= heute)
+// und meldet das; der Dialog zeigt dann einen Hinweis.
 
 import { useMemo, useRef, useState } from 'react';
 import { Check, Download, FileUp, Sparkles } from 'lucide-react';
@@ -13,6 +14,7 @@ import {
   decodeStatement,
   matchStatement,
   MAX_FILE_BYTES,
+  paidDayFor,
   parseStatement,
   resultCsv,
   sampleStatementCsv,
@@ -48,6 +50,8 @@ export function KontoauszugDialog({ onClose, onChanged }: { onClose: () => void;
   const [working, setWorking] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE);
   const [otherLimit, setOtherLimit] = useState(50);
+  /** Server kennt das Zahlungsdatum noch nicht (NACHTRAG-ZAHLUNGSDATUM fehlt) → es gilt „heute“ */
+  const [dateIgnored, setDateIgnored] = useState(false);
 
   async function analyse(name: string, text: string) {
     setErr('');
@@ -111,7 +115,9 @@ export function KontoauszugDialog({ onClose, onChanged }: { onClose: () => void;
       const inv = s.invoice;
       if (!inv || p.has(inv.id) || d[s.tx.key] === 'ok') continue;
       try {
-        await geld.setStatus(inv.id, 'paid');
+        // Zahlungsdatum = Buchungstag (nicht vor dem Rechnungsdatum, nicht nach heute)
+        const res = await geld.setStatus(inv.id, 'paid', undefined, paidDayFor(s.tx.date, inv.issuedAt, localDay()));
+        if (res.paidDateIgnored) setDateIgnored(true);
         d[s.tx.key] = 'ok';
         p.add(inv.id);
         changed = true;
@@ -204,8 +210,14 @@ export function KontoauszugDialog({ onClose, onChanged }: { onClose: () => void;
             )}
           </div>
           <p className="small muted" style={{ margin: '0 0 10px' }}>
-            Als Zahlungsdatum setzt der Server den heutigen Tag (wie beim Knopf „Als bezahlt markieren“). Teilzahlungen werden nie automatisch übernommen.
+            Als Zahlungsdatum gilt der Buchungstag (frühestens das Rechnungsdatum). Teilzahlungen werden nie automatisch übernommen.
           </p>
+          {dateIgnored && (
+            <div className="info-box">
+              Datum = heute: Der Server kennt das Zahlungsdatum noch nicht (Datenbank-Update ausstehend). Die Rechnungen sind
+              trotzdem als bezahlt markiert, nur mit dem heutigen Tag statt dem Buchungstag.
+            </div>
+          )}
 
           {matched.slice(0, limit).map((s) => (
             <Row key={s.tx.key} s={s} state={done[s.tx.key]} paidBefore={!!s.invoice && s.kind !== 'paidAlready' && paid.has(s.invoice.id) && done[s.tx.key] !== 'ok'} usable={usable(s)} working={working === s.tx.key} disabled={!!working} onConfirm={() => confirmOne(s)} />

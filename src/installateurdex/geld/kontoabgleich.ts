@@ -48,9 +48,22 @@ export interface InvoiceRef {
   kind: string;
   status: string;
   number?: string;
+  /** Rechnungsdatum JJJJ-MM-TT */
+  issuedAt?: string;
   paidAt?: string;
   grossCents: number;
   data: InvoiceDraft;
+}
+
+/**
+ * Zahlungsdatum für „bezahlt“ aus dem Buchungstag: nie vor dem Rechnungsdatum (Vorauszahlung → Rechnungsdatum) und nie
+ * nach heute — so lehnt der Server (NACHTRAG-ZAHLUNGSDATUM) eine echte Buchung nie ab.
+ */
+export function paidDayFor(bookingDay: string, issuedAt: string | undefined, today: string): string {
+  let d = /^\d{4}-\d{2}-\d{2}$/.test(bookingDay) ? bookingDay : today;
+  const issued = issuedAt?.slice(0, 10);
+  if (issued && /^\d{4}-\d{2}-\d{2}$/.test(issued) && d < issued) d = issued;
+  return d > today ? today : d;
 }
 
 export interface Suggestion {

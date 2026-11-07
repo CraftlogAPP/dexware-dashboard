@@ -130,6 +130,8 @@ function Editor({ initial }: { initial: Loaded }) {
   const [notice, setNotice] = useState<Notice>(handover ? { tone: handoverTone, text: handover } : null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [cancelText, setCancelText] = useState<string | null>(null);
+  /** Tag des Zahlungseingangs für „Als bezahlt markieren“ (Standard heute) */
+  const [paidDay, setPaidDay] = useState(() => localDay());
   /** E-Rechnung: Format-Auswahl aufgeklappt, Format und Kennungen des Auftraggebers (wie App) */
   const [xmlOpen, setXmlOpen] = useState(false);
   const [xmlFormat, setXmlFormat] = useState<'cii' | 'ebi'>('cii');
@@ -301,7 +303,7 @@ function Editor({ initial }: { initial: Loaded }) {
   const changeStatus = (s: 'paid' | 'issued' | 'canceled', reason?: string) =>
     run(s, async () => {
       if (!stored) return;
-      const res = await geld.setStatus(stored.id, s, reason);
+      const res = await geld.setStatus(stored.id, s, reason, s === 'paid' ? paidDay : undefined);
       adopt(await geld.invoice(stored.id));
       setCancelText(null);
       if (res.creditId) {
@@ -314,7 +316,13 @@ function Editor({ initial }: { initial: Loaded }) {
             </>
           ),
         });
-      } else if (s === 'paid') setNotice({ tone: 'ok', text: 'Als bezahlt markiert.' });
+      } else if (s === 'paid')
+        setNotice({
+          tone: 'ok',
+          text: res.paidDateIgnored
+            ? 'Als bezahlt markiert — Datum = heute: Der Server kennt das Zahlungsdatum noch nicht (Datenbank-Update ausstehend).'
+            : `Als bezahlt markiert (Zahlung am ${deDay(paidDay)}).`,
+        });
       else if (s === 'issued') setNotice({ tone: 'ok', text: 'Zahlung zurückgenommen — die Rechnung ist wieder offen.' });
       else setNotice({ tone: 'ok', text: 'Storniert.' });
     });
@@ -847,9 +855,21 @@ function Editor({ initial }: { initial: Loaded }) {
             ) : (
               <>
                 {status === 'issued' && !quote && !credit && (
-                  <button type="button" className="btn" onClick={() => void changeStatus('paid')} disabled={!!busy}>
-                    {busy === 'paid' ? 'Einen Moment …' : 'Als bezahlt markieren'}
-                  </button>
+                  <>
+                    <label className="field" style={{ marginBottom: 0 }}>
+                      Zahlung eingegangen am
+                      <input
+                        type="date"
+                        value={paidDay}
+                        min={stored?.issuedAt?.slice(0, 10)}
+                        max={localDay()}
+                        onChange={(e) => e.target.value && setPaidDay(e.target.value)}
+                      />
+                    </label>
+                    <button type="button" className="btn" onClick={() => void changeStatus('paid')} disabled={!!busy}>
+                      {busy === 'paid' ? 'Einen Moment …' : 'Als bezahlt markieren'}
+                    </button>
+                  </>
                 )}
                 <button type="button" className="btn ghost" onClick={print}>
                   <Printer className="i" aria-hidden /> Drucken / PDF

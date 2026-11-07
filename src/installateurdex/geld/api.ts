@@ -98,7 +98,17 @@ export interface GeldData {
   deleteDraft(id: string): Promise<void>;
   /** RPC invoice_issue: Nummer + Summen + Firmendaten einfrieren. Liefert die Nummer. */
   issue(id: string, profile: StoredProfile): Promise<string>;
-  setStatus(id: string, status: 'paid' | 'issued' | 'canceled', reason?: string): Promise<{ creditId?: string; creditNumber?: string }>;
+  /**
+   * RPC invoice_set_status. `paidAt` (JJJJ-MM-TT, nur bei „paid“): Tag des Zahlungseingangs — braucht
+   * NACHTRAG-ZAHLUNGSDATUM-2026-11-07.sql. Kennt der Server das noch nicht, wird ohne Datum gebucht (= heute) und
+   * `paidDateIgnored` gesetzt.
+   */
+  setStatus(
+    id: string,
+    status: 'paid' | 'issued' | 'canceled',
+    reason?: string,
+    paidAt?: string,
+  ): Promise<{ creditId?: string; creditNumber?: string; paidDateIgnored?: boolean }>;
   remind(id: string): Promise<number>;
   profile(orgId: string, land: Land, fallbackName: string): Promise<StoredProfile>;
   /** Liest das aktuelle Profil frisch und schreibt nur die übergebenen Felder darüber (kein Überschreiben fremder Änderungen). */
@@ -161,7 +171,25 @@ export const ISSUE_ERROR = (code?: string) =>
       ? 'Ausstellen gibt es mit InstallateurDex Pro — der Server sieht für deinen Betrieb gerade kein aktives Abo. Falls du gerade gekauft hast: kurz warten und noch einmal versuchen.'
       : 'Das Ausstellen ging gerade nicht.';
 export const STATUS_ERROR = (code?: string) =>
-  code === 'reason' ? 'Bitte einen Storno-Grund angeben.' : code === 'unknown' ? 'Das darf nur der Inhaber.' : 'Dieser Statuswechsel ist nicht möglich.';
+  code === 'reason'
+    ? 'Bitte einen Storno-Grund angeben.'
+    : code === 'unknown'
+      ? 'Das darf nur der Inhaber.'
+      : code === 'paid_future'
+        ? 'Das Zahlungsdatum liegt in der Zukunft.'
+        : code === 'paid_before_issue'
+          ? 'Das Zahlungsdatum liegt vor dem Rechnungsdatum.'
+          : 'Dieser Statuswechsel ist nicht möglich.';
+
+/**
+ * Server ohne NACHTRAG-ZAHLUNGSDATUM: PostgREST findet die Funktion mit p_paid_at nicht (PGRST202), sie ist mehrdeutig
+ * (PGRST203) oder Postgres meldet „function … does not exist“ (42883). Dann ohne Datum wiederholen.
+ */
+export function isMissingPaidAtParam(e: { code?: string; message?: string } | null | undefined): boolean {
+  if (!e) return false;
+  if (e.code === 'PGRST202' || e.code === 'PGRST203' || e.code === '42883') return true;
+  return /could not find the function|function .*does not exist|best candidate function/i.test(e.message ?? '');
+}
 export const REMIND_ERROR = (code?: string) =>
   code === 'max' ? 'Die 2. Mahnung ist schon verschickt.' : code === 'not_due' ? 'Die Rechnung ist noch nicht fällig.' : 'Das ging gerade nicht.';
 
@@ -357,6 +385,8 @@ function dbError(prefix: string, e: { message?: string; code?: string } | null):
 }
 
 export function supabaseGeld(sb: SupabaseClient): GeldData {
+  /** Kennt der Server p_paid_at (NACHTRAG-ZAHLUNGSDATUM)? null = noch nicht ausprobiert */
+  let paidAtSupported: boolean | null = null;
   async function readProfile(orgId: string, land: Land, fallbackName: string): Promise<StoredProfile> {
     const { data, error } = await sb.from('org').select('invoice_profile, name').eq('id', orgId).maybeSingle();
     if (error) dbError('Rechnungsdaten konnten nicht geladen werden', error);
@@ -465,12 +495,20 @@ export function supabaseGeld(sb: SupabaseClient): GeldData {
       if (!r.number) throw new Error(ISSUE_ERROR(r.error));
       return r.number;
     },
-    async setStatus(id, status, reason) {
-      const { data, error } = await sb.rpc('invoice_set_status', { p_id: id, p_status: status, p_reason: reason ?? null });
-      if (error) dbError('Status konnte nicht geändert werden', error);
-      const r = (data ?? {}) as { ok?: boolean; error?: string; credit_id?: string; credit_number?: string };
+    async setStatus(id, status, reason, paidAt) {
+      const base = { p_id: id, p_status: status, p_reason: reason ?? null };
+      const wantDate = status === 'paid' && !!paidAt && /^\d{4}-\d{2}-\d{2}$/.test(paidAt);
+      let dateIgnored = wantDate && paidAtSupported === false; // einmal festgestellt → nicht bei jeder Zeile neu probieren
+      let res = await sb.rpc('invoice_set_status', wantDate && !dateIgnored ? { ...base, p_paid_at: paidAt } : base);
+      if (wantDate && !dateIgnored && isMissingPaidAtParam(res.error)) {
+        paidAtSupported = false;
+        dateIgnored = true;
+        res = await sb.rpc('invoice_set_status', base);
+      } else if (wantDate && !dateIgnored && !res.error) paidAtSupported = true;
+      if (res.error) dbError('Status konnte nicht geändert werden', res.error);
+      const r = (res.data ?? {}) as { ok?: boolean; error?: string; credit_id?: string; credit_number?: string };
       if (!r.ok) throw new Error(STATUS_ERROR(r.error));
-      return { creditId: r.credit_id, creditNumber: r.credit_number };
+      return { creditId: r.credit_id, creditNumber: r.credit_number, paidDateIgnored: dateIgnored || undefined };
     },
     async remind(id) {
       const { data, error } = await sb.rpc('invoice_remind', { p_id: id });
