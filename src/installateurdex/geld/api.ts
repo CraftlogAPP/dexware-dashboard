@@ -501,7 +501,7 @@ export function supabaseGeld(sb: SupabaseClient): GeldData {
       const send = async () => {
         const { data, error } = await sb.rpc('invoice_issue', { p_id: id, p_net: t.netCents, p_vat: t.vatCents, p_gross: t.grossCents, p_profile: profileSnapshot(profile) });
         if (error) dbError('Ausstellen nicht möglich', error);
-        return (data ?? {}) as { number?: string; error?: string };
+        return (data ?? {}) as { number?: string; error?: string; detail?: string };
       };
       let r = await send();
       // wie App: Server sagt „kein Pro“ (z. B. gerade gekauft, noch nicht abgeglichen) → Tarif einmal abgleichen, erneut senden
@@ -509,6 +509,8 @@ export function supabaseGeld(sb: SupabaseClient): GeldData {
         const { error: syncErr } = await sb.rpc('sync_seat_limit');
         if (!syncErr) r = await send();
       }
+      // Schlussrechnung: Server prüft die Abzüge (NACHTRAG-SCHLUSSRECHNUNG-2026-11-08) — wie App data/invoices.ts
+      if (r.error === 'deductions') throw new Error(`Schlussrechnung nicht ausgestellt: ${String(r.detail ?? 'ein Abzug passt nicht zu den Abschlagsrechnungen')}. Bitte die Abzüge prüfen.`);
       if (!r.number) throw new Error(ISSUE_ERROR(r.error));
       return r.number;
     },
