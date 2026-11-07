@@ -454,6 +454,168 @@
 .idx-scope .pt-times td.wrap {
   min-width: 160px;
 }
+
+/* ---------- Plantafel: Verschieben (Ziehen & Tastatur) ---------- */
+.idx-scope .pt-card.can-move {
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.idx-scope .pt-card.req {
+  -webkit-touch-callout: none;
+}
+.idx-scope .pt-card.dragging {
+  opacity: 0.35;
+  border-style: dashed;
+}
+.idx-scope .pt-card.moving {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.idx-scope .pt-card.saving {
+  opacity: 0.75;
+}
+.idx-scope .pt-board-wrap.is-dragging,
+.idx-scope .pt-board-wrap.is-dragging * {
+  cursor: grabbing;
+}
+.idx-scope .pt-cell,
+.idx-scope .pt-pill {
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.idx-scope .pt-cell.drop-ok,
+.idx-scope .pt-cell.drop-same {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 70%, transparent);
+}
+.idx-scope .pt-cell.drop-clash {
+  background: color-mix(in oklab, var(--amber) 14%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--amber) 75%, transparent);
+}
+.idx-scope .pt-cell.drop-no {
+  background: color-mix(in oklab, var(--red) 9%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--red) 55%, transparent);
+  cursor: not-allowed;
+}
+.idx-scope .pt-pill.drop-ok,
+.idx-scope .pt-pill.drop-same {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.idx-scope .pt-pill.drop-clash {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--amber) 60%, transparent);
+}
+.idx-scope .pt-pill.drop-no {
+  border-color: var(--red);
+}
+/* Platzhalter in der Zielzelle: so steht der Termin nach dem Ablegen */
+.idx-scope .pt-dropslot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px 8px;
+  border: 1.5px dashed color-mix(in oklab, var(--accent) 75%, transparent);
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  font-size: 13px;
+  pointer-events: none;
+}
+.idx-scope .pt-dropslot.clash {
+  border-color: var(--amber);
+  background: color-mix(in oklab, var(--amber) 12%, transparent);
+}
+.idx-scope .pt-dropslot .pt-clash {
+  color: #fcd34d;
+}
+/* Vorschau am Zeiger/Finger */
+.idx-scope .pt-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 220px;
+  padding: 7px 10px 8px;
+  border: 1px solid var(--border-strong);
+  border-left: 4px solid var(--lane, var(--muted));
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  box-shadow: var(--shadow-pop);
+  pointer-events: none;
+  transform: translate(-9999px, -9999px);
+  will-change: transform;
+}
+.idx-scope .pt-drag-ghost.clash {
+  border-color: var(--amber);
+  border-left-color: var(--amber);
+}
+.idx-scope .pt-drag-ghost.no {
+  opacity: 0.7;
+  border-color: color-mix(in oklab, var(--red) 70%, transparent);
+}
+/* Leiste unten: Ziel beim Verschieben, „Rückgängig“, Fehler */
+.idx-scope .pt-movebar {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  box-shadow: var(--shadow-pop);
+  transform: translate(-50%, 12px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s, transform 0.15s, visibility 0s linear 0.15s;
+}
+.idx-scope .pt-movebar.show {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.idx-scope .pt-movebar.error {
+  border-color: color-mix(in oklab, var(--red) 70%, transparent);
+  background: color-mix(in oklab, var(--red) 16%, var(--surface));
+}
+.idx-scope .pt-movebar .btn {
+  flex: none;
+}
+.idx-scope .pt-movebar-warn {
+  color: #fcd34d;
+}
+.idx-scope .pt-movebar-no {
+  color: #fca5a5;
+}
+.idx-scope .pt-movebar-x .i {
+  width: 15px;
+  height: 15px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .idx-scope .pt-movebar,
+  .idx-scope .pt-movebar.show {
+    transform: translate(-50%, 0);
+    transition: none;
+  }
+  .idx-scope .pt-cell,
+  .idx-scope .pt-pill {
+    transition: none;
+  }
+}
 @media (max-width: 560px) {
   .idx-scope .pt-times th,
   .idx-scope .pt-times td {

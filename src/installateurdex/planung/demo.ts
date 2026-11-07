@@ -152,9 +152,14 @@ export function demoPlanung(): PlanungData {
     return t >= from.getTime() && t < to.getTime();
   };
   let seq = 0;
+  // Ansicht Inhaber/Mitarbeiter — merkt sich myUserId, damit Ändern wie RLS appt_update geprüft wird
+  let actor = 'u-owner';
 
   return {
-    myUserId: (role: Role) => wait(role === 'owner' ? 'u-owner' : 'u-max', 10),
+    myUserId: (role: Role) => {
+      actor = role === 'owner' ? 'u-owner' : 'u-max';
+      return wait(actor, 10);
+    },
     appointments: (from, to) => wait(appts.filter((a) => inRange(a.starts_at, from, to)).sort((a, b) => a.starts_at.localeCompare(b.starts_at))),
     async createAppointment(_orgId, input: ApptInput) {
       seq += 1;
@@ -163,8 +168,12 @@ export function demoPlanung(): PlanungData {
       await wait(null);
     },
     async updateAppointment(id, input) {
+      await wait(null, 350); // etwas länger, damit „speichert …“ beim Verschieben sichtbar ist
+      const old = appts.find((a) => a.id === id);
+      // wie RLS appt_update: Inhaber alles, Mitarbeiter nur eigene und nur bei sich selbst (vorher und nachher)
+      if (!old || (actor !== 'u-owner' && (old.assigned_to !== actor || input.assigned_to !== actor)))
+        throw new Error('Termin nicht gespeichert: Keine Berechtigung oder der Eintrag wurde inzwischen gelöscht — bitte neu laden.');
       appts = appts.map((a) => (a.id === id ? { ...a, ...input, updated_at: new Date().toISOString() } : a));
-      await wait(null);
     },
     async setAppointmentStatus(id, status) {
       appts = appts.map((a) => (a.id === id ? { ...a, status } : a));

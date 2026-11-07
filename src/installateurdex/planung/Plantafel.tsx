@@ -2,10 +2,12 @@
 // Am PC als Wochentafel (Zeilen = Monteure, Spalten = Tage), schmal als Tagesleiste mit Terminliste.
 // Rechte genau wie RLS in plantafel.sql: alle sehen alles; der Inhaber plant für alle, Monteure nur für sich
 // (anlegen/ändern nur eigene, löschen nur selbst angelegte eigene). Vom Kunden gewählte Termine (Anfragen) erscheinen mit.
+// Verschieben: Karte ziehen (Maus, Stift, Finger mit kurzem Halten) oder per Tastatur (Pfeiltasten, Enter, Escape) —
+// Logik in verschieben.ts, Ziehen in ziehen.ts; gespeichert wird über updateAppointment, sofort angezeigt, mit „Rückgängig“.
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, CalendarPlus, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { useInst } from '../context';
@@ -38,6 +40,19 @@ import {
   type PlanMember,
   type PlanRequest,
 } from './logic';
+import {
+  REQUEST_MOVE_HINT,
+  apptInputOf,
+  canAssignTo,
+  clashesWith,
+  isSameSlot,
+  moveBlockReason,
+  movedAppt,
+  stepTarget,
+  type MoveActor,
+  type MoveTarget,
+} from './verschieben';
+import { usePointerDrag, type DropSpot } from './ziehen';
 import './planung.css';
 
 /** Eine Karte auf der Tafel: eigener Termin oder vom Kunden gewählter Anfrage-Termin (wie App fromRequest). */
@@ -60,6 +75,43 @@ interface Draft {
   assigned_to: string | null;
   status: ApptStatus;
 }
+
+/** Sofort angezeigte Verschiebung, bis der Server sie zurückmeldet. */
+interface Override {
+  moved: Appt;
+  /** Stand vor der Verschiebung */
+  base: Appt;
+  saved: boolean;
+}
+
+/** Laufende Verschiebung: mit Zeiger (Ziehen) oder Tastatur. */
+interface MoveState {
+  orig: Appt;
+  mode: 'pointer' | 'key';
+  target: MoveTarget | null;
+  /** Hervorgehobene Zeile der Wochentafel (Monteur-ID, „none“) — leer in der Tagesleiste */
+  lane: string | null;
+  /** Warum hier nicht abgelegt werden darf */
+  reason: string | null;
+}
+
+type Notice =
+  | { kind: 'undo'; text: string; orig: Appt; moved: Appt }
+  | { kind: 'info' | 'error'; text: string };
+
+/** Was die Zeiger-/Tastatur-Handler aus dem aktuellen Render brauchen. */
+interface MoveCtx {
+  spotTarget: (orig: Appt, spot: DropSpot) => { t: MoveTarget; lane: string | null; reason: string | null };
+  keyDays: string[];
+  keyLanes: (orig: Appt) => (string | null)[];
+  laneIdOf: (uid: string | null) => string | null;
+  current: (id: string) => Appt | undefined;
+}
+
+const sameMove = (row: Appt, moved: Appt) =>
+  Date.parse(row.starts_at) === Date.parse(moved.starts_at) &&
+  Date.parse(row.ends_at) === Date.parse(moved.ends_at) &&
+  row.assigned_to === moved.assigned_to;
 
 function useMedia(query: string): boolean {
   const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
@@ -130,6 +182,195 @@ export function Plantafel() {
   const canPlanFor = (uid: string | null) => isOwner || (!!me && uid === me);
   const canEdit = (a: Appt) => isOwner || (!!me && a.assigned_to === me);
   const canDelete = (a: Appt) => isOwner || (!!me && a.created_by === me && a.assigned_to === me);
+  const actor: MoveActor = { isOwner, me };
+
+  // ---------- Verschieben (Ziehen & Tastatur) ----------
+  const [overrides, setOverrides] = useState<Map<string, Override>>(() => new Map());
+  const [move, setMoveState] = useState<MoveState | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const boardWrap = useRef<HTMLDivElement | null>(null);
+  // Ref sofort mitführen: ein schnelles Loslassen kommt oft vor dem nächsten Render an
+  const moveRef = useRef<MoveState | null>(null);
+  const setMove = (m: MoveState | null) => {
+    moveRef.current = m;
+    setMoveState(m);
+  };
+  const moveCtx = useRef<MoveCtx | null>(null);
+
+  // Sofort-Anzeige aufräumen, sobald der Server den neuen Stand liefert (oder sich der Termin inzwischen anders geändert hat)
+  const rows = weekState.data?.appts;
+  useEffect(() => {
+    if (!rows) return;
+    setOverrides((m) => {
+      let n: Map<string, Override> | null = null;
+      for (const [id, o] of m) {
+        if (!o.saved) continue;
+        const row = rows.find((r) => r.id === id);
+        if (!row || row.updated_at !== o.base.updated_at || sameMove(row, o.moved)) {
+          n ??= new Map(m);
+          n.delete(id);
+        }
+      }
+      return n ?? m;
+    });
+  }, [rows]);
+
+  // Hinweise verschwinden von selbst (Fehler bleiben, bis man sie schließt)
+  useEffect(() => {
+    if (!notice || notice.kind === 'error') return;
+    const t = window.setTimeout(() => setNotice((n) => (n === notice ? null : n)), notice.kind === 'undo' ? 8000 : 5000);
+    return () => window.clearTimeout(t);
+  }, [notice]);
+
+  // Nach dem Verschieben per Tastatur bleibt der Fokus auf der Karte (sie steht jetzt in einer anderen Zelle)
+  useEffect(() => {
+    if (!focusId) return;
+    const el = document.querySelector<HTMLElement>(`[data-appt="${CSS.escape(focusId)}"]`);
+    if (el) {
+      el.focus();
+      setFocusId(null);
+    }
+  }, [focusId, overrides]);
+
+  async function saveMove(from: Appt, moved: Appt, undo = false) {
+    setOverrides((m) => new Map(m).set(from.id, { moved, base: from, saved: false }));
+    try {
+      await ext.planung.updateAppointment(from.id, apptInputOf(moved));
+      setOverrides((m) => {
+        const cur = m.get(from.id);
+        return cur?.moved === moved ? new Map(m).set(from.id, { ...cur, saved: true }) : m;
+      });
+      weekState.refresh();
+      if (undo) setNotice({ kind: 'info', text: 'Verschiebung rückgängig gemacht.' });
+      else {
+        const who = moved.assigned_to !== from.assigned_to ? ` · ${team.find((m) => m.userId === moved.assigned_to)?.name ?? moved.assigned_name ?? ''}` : '';
+        const d = new Date(moved.starts_at);
+        setNotice({
+          kind: 'undo',
+          text: `Verschoben auf ${WD[d.getDay()]} ${deDate(d)} ${hhmm(moved.starts_at)}–${hhmm(moved.ends_at)}${who}`,
+          orig: from,
+          moved,
+        });
+      }
+    } catch (err) {
+      // zurückspringen
+      setOverrides((m) => {
+        if (m.get(from.id)?.moved !== moved) return m;
+        const n = new Map(m);
+        n.delete(from.id);
+        return n;
+      });
+      weekState.refresh();
+      setNotice({ kind: 'error', text: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  function undoMove(n: Extract<Notice, { kind: 'undo' }>) {
+    const cur = moveCtx.current?.current(n.moved.id) ?? n.moved;
+    setNotice(null);
+    void saveMove(cur, {
+      ...cur,
+      starts_at: n.orig.starts_at,
+      ends_at: n.orig.ends_at,
+      assigned_to: n.orig.assigned_to,
+      assigned_name: n.orig.assigned_name,
+    }, true);
+  }
+
+  /** Verschiebung abschließen (Zeiger losgelassen bzw. Enter). */
+  function finishMove(m: MoveState) {
+    setMove(null);
+    if (!m.target) return;
+    if (m.reason) return setNotice({ kind: 'info', text: m.reason });
+    if (isSameSlot(m.orig, m.target)) {
+      if (m.mode === 'key') setNotice({ kind: 'info', text: 'Termin bleibt, wo er ist.' });
+      return;
+    }
+    if (m.mode === 'key') setFocusId(m.orig.id);
+    void saveMove(m.orig, movedAppt(m.orig, m.target, team));
+  }
+
+  const drag = usePointerDrag<Item>({
+    scrollEl: () => boardWrap.current,
+    onStart(it) {
+      if (it.type === 'req') {
+        setNotice({ kind: 'info', text: REQUEST_MOVE_HINT });
+        return false;
+      }
+      const reason = moveBlockReason(it.a, actor);
+      if (reason) {
+        setNotice({ kind: 'info', text: reason });
+        return false;
+      }
+      setNotice(null);
+      setMove({ orig: it.a, mode: 'pointer', target: null, lane: null, reason: null });
+      return true;
+    },
+    onOver(spot) {
+      const m = moveRef.current;
+      if (!m) return;
+      if (!spot || !moveCtx.current) return setMove({ ...m, target: null, lane: null, reason: null });
+      const r = moveCtx.current.spotTarget(m.orig, spot);
+      setMove({ ...m, target: r.t, lane: r.lane, reason: r.reason });
+    },
+    onDrop(spot) {
+      const m = moveRef.current;
+      if (!m) return;
+      if (!spot || !moveCtx.current) {
+        setMove(null);
+        return;
+      }
+      const r = moveCtx.current.spotTarget(m.orig, spot);
+      finishMove({ ...m, target: r.t, lane: r.lane, reason: r.reason });
+    },
+    onCancel() {
+      setMove(null);
+    },
+  });
+
+  function onCardKey(e: KeyboardEvent<HTMLElement>, a: Appt) {
+    const ctx = moveCtx.current;
+    if (!ctx) return;
+    const m = moveRef.current;
+    const active = m?.mode === 'key' && m.orig.id === a.id ? m : null;
+    if (active && e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setMove(null);
+      setNotice({ kind: 'info', text: 'Verschieben abgebrochen.' });
+      return;
+    }
+    if (active && e.key === 'Enter') {
+      e.preventDefault();
+      finishMove(active);
+      return;
+    }
+    const k = e.key;
+    const dir =
+      k === 'ArrowLeft' ? (e.shiftKey ? 'lane-' : 'day-')
+      : k === 'ArrowRight' ? (e.shiftKey ? 'lane+' : 'day+')
+      : k === 'ArrowUp' && (e.shiftKey || active) ? 'lane-'
+      : k === 'ArrowDown' && (e.shiftKey || active) ? 'lane+'
+      : null;
+    if (!dir || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+    if (!active) {
+      const reason = moveBlockReason(a, actor);
+      if (reason) return setNotice({ kind: 'info', text: reason });
+    }
+    const t0: MoveTarget = active?.target ?? { day: dayOf(a.starts_at), assigned_to: a.assigned_to };
+    if ((dir === 'lane-' || dir === 'lane+') && !isOwner) {
+      const text = 'Anderen Monteuren gibt nur der Inhaber Termine.';
+      // während des Verschiebens steht der Hinweis in der Leiste; der nächste Tag-Schritt räumt ihn wieder weg
+      if (active) setMove({ ...active, reason: text });
+      else setNotice({ kind: 'info', text });
+      return;
+    }
+    const t = stepTarget(t0, dir, ctx.keyDays, ctx.keyLanes(a)) ?? t0;
+    setNotice((n) => (n?.kind === 'error' ? null : n));
+    setMove({ orig: active?.orig ?? a, mode: 'key', target: t, lane: ctx.laneIdOf(t.assigned_to), reason: null });
+  }
 
   function shiftWeek(n: number) {
     const w = n === 0 ? weekStart(new Date()) : addDays(week, 7 * n);
@@ -170,6 +411,7 @@ export function Plantafel() {
   }
 
   function openEdit(a: Appt) {
+    setMove(null);
     setDraft({
       id: a.id,
       orig: a,
@@ -216,7 +458,8 @@ export function Plantafel() {
           const siteById = new Map(sites.map((s) => [s.id, s]));
           const assetById = new Map(assets.map((a) => [a.id, a]));
           const memberOf = (id: string | null) => team.find((m) => m.userId === id);
-          const appts = weekState.data?.appts ?? [];
+          // Verschobene Termine sofort an der neuen Stelle zeigen (bis der Server sie bestätigt)
+          const appts = (weekState.data?.appts ?? []).map((a) => overrides.get(a.id)?.moved ?? a);
           // wie App: Kundentermine nur, wenn noch kein Termin mit dieser Anfrage existiert
           const linked = new Set(appts.map((a) => a.request_id).filter(Boolean));
           const items: Item[] = [
@@ -238,7 +481,7 @@ export function Plantafel() {
               const s = r.site_id ? siteById.get(r.site_id) : undefined;
               const asset = r.asset_id ? assetById.get(r.asset_id) : undefined;
               return (
-                <div key={it.key} className="pt-card req">
+                <div key={it.key} className="pt-card req" title={REQUEST_MOVE_HINT} {...drag.bind(it)}>
                   <div className="pt-card-top">
                     <span className="pt-time">
                       {hhmm(it.starts_at)}–{hhmm(it.ends_at)}
@@ -278,14 +521,23 @@ export function Plantafel() {
             const asset = a.asset_id ? assetById.get(a.asset_id) : undefined;
             const who = memberOf(a.assigned_to);
             const label = `${hhmm(a.starts_at)}–${hhmm(a.ends_at)} ${a.title} ${s?.name ?? ''}`;
+            const movable = !moveBlockReason(a, actor);
+            const moving = move?.orig.id === a.id ? (move.mode === 'pointer' ? ' dragging' : ' moving') : '';
             return (
               <button
                 key={it.key}
                 type="button"
-                className={`pt-card ${a.status}`}
+                data-appt={a.id}
+                className={`pt-card ${a.status}${movable ? ' can-move' : ''}${moving}${overrides.has(a.id) && !overrides.get(a.id)!.saved ? ' saving' : ''}`}
                 style={{ '--lane': who?.color ?? 'var(--muted)' } as CSSProperties}
                 onClick={() => openEdit(a)}
+                onKeyDown={(e) => onCardKey(e, a)}
+                onBlur={() => {
+                  if (moveRef.current?.mode === 'key' && moveRef.current.orig.id === a.id) setMove(null);
+                }}
+                {...drag.bind(it)}
                 aria-label={`${label}, ${canEdit(a) ? 'bearbeiten' : 'ansehen'}`}
+                aria-describedby={movable ? 'pt-move-help' : undefined}
               >
                 <span className="pt-card-top">
                   <span className="pt-time">
@@ -327,6 +579,83 @@ export function Plantafel() {
           if (shown.some(orphan)) lanes.push({ id: 'none', label: 'Nicht zugeteilt', color: 'var(--muted)', match: orphan });
           if (shown.some((it) => it.type === 'req'))
             lanes.push({ id: 'req', label: 'Vom Kunden gewählt', color: 'var(--muted)', match: (it) => it.type === 'req' });
+
+          // ---------- Verschieben: Ziele, Vorschau, Ansage ----------
+          const laneIdOf = (uid: string | null) => (memberOf(uid) ? uid : 'none');
+          moveCtx.current = {
+            spotTarget(orig, spot) {
+              // Tagesleiste (schmal): nur der Tag ändert sich
+              if (!spot.lane) return { t: { day: spot.day, assigned_to: orig.assigned_to }, lane: null, reason: null };
+              if (spot.lane === 'none')
+                return {
+                  t: { day: spot.day, assigned_to: orig.assigned_to },
+                  lane: 'none',
+                  reason: memberOf(orig.assigned_to) ? 'Ein Termin braucht einen Monteur — bitte in dessen Zeile ablegen.' : null,
+                };
+              return {
+                t: { day: spot.day, assigned_to: spot.lane },
+                lane: spot.lane,
+                reason: canAssignTo(orig, spot.lane, actor) ? null : 'Anderen Monteuren gibt nur der Inhaber Termine.',
+              };
+            },
+            keyDays: (wide ? cols : days).map(dayKey),
+            keyLanes(orig) {
+              const ids = wide ? lanes.filter((l) => l.member).map((l) => l.id) : team.map((m) => m.userId);
+              const ok: (string | null)[] = ids.filter((id) => canAssignTo(orig, id, actor));
+              if (!memberOf(orig.assigned_to)) ok.push(orig.assigned_to);
+              return ok;
+            },
+            laneIdOf: (uid) => (wide ? laneIdOf(uid) : null),
+            current: (id) => appts.find((a) => a.id === id),
+          };
+          const preview =
+            move?.target && !move.reason
+              ? (() => {
+                  const moved = movedAppt(move.orig, move.target, team);
+                  return { moved, same: isSameSlot(move.orig, move.target), clash: clashesWith(appts, moved) };
+                })()
+              : null;
+          /** Zielzelle hervorheben (Tafel: Tag + Zeile, Tagesleiste: nur Tag) */
+          const dropState = (k: string, laneId: string | null): { cls: string; slot: ReactNode } | null => {
+            if (!move?.target || move.target.day !== k || (laneId !== null && move.lane !== laneId)) return null;
+            if (move.reason || !preview) return { cls: 'drop-no', slot: null };
+            if (preview.same) return { cls: 'drop-same', slot: null };
+            const c = preview.clash.length > 0;
+            return {
+              cls: c ? 'drop-clash' : 'drop-ok',
+              slot: (
+                <div className={`pt-dropslot ${c ? 'clash' : ''}`} aria-hidden>
+                  <span className="pt-time">
+                    {hhmm(preview.moved.starts_at)}–{hhmm(preview.moved.ends_at)}
+                  </span>
+                  <span className="pt-title">{preview.moved.title}</span>
+                  {c && (
+                    <span className="pt-clash">
+                      <AlertTriangle className="i" aria-hidden /> Überschneidung
+                    </span>
+                  )}
+                </div>
+              ),
+            };
+          };
+          const moveText = (() => {
+            if (!move) return '';
+            const keys = move.mode === 'key' ? ' Enter legt ab, Escape bricht ab.' : '';
+            if (!move.target)
+              return `${wide ? 'Termin auf einen Tag in der Tafel ziehen.' : 'Termin auf einen Tag oben ziehen.'}${move.mode === 'pointer' ? ' Escape bricht ab.' : ''}`;
+            if (move.reason) return `${move.reason}${keys}`;
+            if (!preview || preview.same) return `Hier steht der Termin schon.${keys}`;
+            const d = new Date(preview.moved.starts_at);
+            const who =
+              preview.moved.assigned_to !== move.orig.assigned_to || !wide
+                ? `, ${memberOf(preview.moved.assigned_to)?.name ?? preview.moved.assigned_name ?? 'nicht zugeteilt'}`
+                : '';
+            const clashTxt = preview.clash.length
+              ? ` Überschneidung mit ${preview.clash.map((o) => `${hhmm(o.starts_at)}–${hhmm(o.ends_at)} ${o.title}`).join(', ')} — Ablegen geht trotzdem.`
+              : '';
+            return `Nach ${WD[d.getDay()]} ${deDate(d)} ${hhmm(preview.moved.starts_at)}–${hhmm(preview.moved.ends_at)}${who}.${clashTxt}${keys}`;
+          })();
+          const ghostWho = move ? memberOf(move.orig.assigned_to) : undefined;
 
           return (
             <>
@@ -388,7 +717,7 @@ export function Plantafel() {
               )}
 
               {wide ? (
-                <div className="pt-board-wrap">
+                <div className={`pt-board-wrap${move?.mode === 'pointer' ? ' is-dragging' : ''}`} ref={boardWrap}>
                   <div className="pt-board" style={{ gridTemplateColumns: `150px repeat(${cols.length}, minmax(0, 1fr))`, minWidth: 150 + cols.length * 150 }}>
                     <div className="pt-corner" />
                     {cols.map((d) => {
@@ -413,6 +742,8 @@ export function Plantafel() {
                         canAdd={!!lane.member && canPlanFor(lane.member.userId)}
                         onAdd={(k) => openNew({ day: k, lane: lane.member?.userId })}
                         card={(it) => card(it, false)}
+                        droppable={lane.id !== 'req'}
+                        dropState={(k) => dropState(k, lane.id)}
                       />
                     ))}
                   </div>
@@ -424,11 +755,13 @@ export function Plantafel() {
                     {days.map((d) => {
                       const k = dayKey(d);
                       const n = forDay(shown, k).filter((it) => it.status !== 'canceled').length;
+                      const ds = dropState(k, null);
                       return (
                         <button
                           key={k}
                           type="button"
-                          className={`pt-pill ${k === day ? 'on' : ''} ${k === todayKey ? 'today' : ''}`}
+                          data-drop-day={k}
+                          className={`pt-pill ${k === day ? 'on' : ''} ${k === todayKey ? 'today' : ''} ${ds?.cls ?? ''}`}
                           onClick={() => setDay(k)}
                           aria-pressed={k === day}
                           aria-label={`${WD[d.getDay()]} ${d.getDate()}., ${n} Termine`}
@@ -444,7 +777,7 @@ export function Plantafel() {
                       );
                     })}
                   </div>
-                  <div className="pt-daylist">
+                  <div className="pt-daylist" data-drop-day={day}>
                     {forDay(shown, day).map((it) => card(it, team.length > 1))}
                     {!weekState.loading && forDay(shown, day).length === 0 && (
                       <div className="empty pt-empty">
@@ -463,6 +796,42 @@ export function Plantafel() {
                   </div>
                 </>
               )}
+
+              <span id="pt-move-help" hidden>
+                Pfeiltaste links oder rechts verschiebt den Termin um einen Tag, mit Umschalt zu einem anderen Monteur. Enter legt ab, Escape bricht ab.
+              </span>
+              {move?.mode === 'pointer' && (
+                <div
+                  ref={drag.ghostRef}
+                  className={`pt-drag-ghost ${preview?.clash.length ? 'clash' : ''} ${move.reason ? 'no' : ''}`}
+                  style={{ '--lane': ghostWho?.color ?? 'var(--muted)' } as CSSProperties}
+                  aria-hidden
+                >
+                  <span className="pt-time">
+                    {hhmm((preview?.moved ?? move.orig).starts_at)}–{hhmm((preview?.moved ?? move.orig).ends_at)}
+                  </span>
+                  <span className="pt-title">{move.orig.title}</span>
+                </div>
+              )}
+              <div className={`pt-movebar ${move || notice ? 'show' : ''} ${notice?.kind === 'error' && !move ? 'error' : ''}`} aria-live="polite">
+                {move ? (
+                  <span className={preview?.clash.length ? 'pt-movebar-warn' : move.reason ? 'pt-movebar-no' : ''}>{moveText}</span>
+                ) : notice ? (
+                  <>
+                    <span>{notice.text}</span>
+                    {notice.kind === 'undo' && (
+                      <button type="button" className="btn ghost small" onClick={() => undoMove(notice)}>
+                        Rückgängig
+                      </button>
+                    )}
+                    {notice.kind === 'error' && (
+                      <button type="button" className="btn ghost small pt-movebar-x" onClick={() => setNotice(null)} aria-label="Hinweis schließen">
+                        <X className="i" aria-hidden />
+                      </button>
+                    )}
+                  </>
+                ) : null}
+              </div>
 
               {draft && (
                 <ApptDialog
@@ -508,6 +877,8 @@ function LaneRow({
   canAdd,
   onAdd,
   card,
+  droppable,
+  dropState,
 }: {
   lane: { id: string; label: string; color: string };
   cols: Date[];
@@ -516,6 +887,9 @@ function LaneRow({
   canAdd: boolean;
   onAdd: (day: string) => void;
   card: (it: Item) => ReactNode;
+  /** Zelle ist Ablagefläche fürs Verschieben (nicht die Zeile „Vom Kunden gewählt“) */
+  droppable: boolean;
+  dropState: (day: string) => { cls: string; slot: ReactNode } | null;
 }) {
   const busyMin = items
     .filter((it) => it.type === 'appt' && it.status !== 'canceled')
@@ -531,9 +905,16 @@ function LaneRow({
       {cols.map((d) => {
         const k = dayKey(d);
         const list = forDay(items, k);
+        const ds = droppable ? dropState(k) : null;
         return (
-          <div key={k} className={`pt-cell ${k === todayKey ? 'today' : ''}`}>
+          <div
+            key={k}
+            className={`pt-cell ${k === todayKey ? 'today' : ''} ${ds?.cls ?? ''}`}
+            data-drop-day={droppable ? k : undefined}
+            data-drop-lane={droppable ? lane.id : undefined}
+          >
             {list.map(card)}
+            {ds?.slot}
             {canAdd && (
               <button type="button" className="pt-add" onClick={() => onAdd(k)} aria-label={`Termin am ${WD[d.getDay()]} ${deDate(d)} für ${lane.label} anlegen`}>
                 <Plus className="i" aria-hidden />
