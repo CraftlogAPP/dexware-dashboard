@@ -640,6 +640,30 @@
   width: 16px;
   height: 16px;
 }
+/* Finger/schmal: Umschalter in Tippgröße; auf dem Handy über die ganze Breite (Pfeile + Woche darunter in einer Zeile) */
+@media (pointer: coarse), (max-width: 600px) {
+  .idx-scope .pt-viewswitch button {
+    height: 40px;
+  }
+  .idx-scope .pt-add {
+    height: 40px;
+  }
+}
+@media (max-width: 600px) {
+  .idx-scope .pt-viewswitch {
+    flex: 1 1 100%;
+    margin-right: 0;
+  }
+  .idx-scope .pt-viewswitch button {
+    flex: 1;
+    justify-content: center;
+  }
+  .idx-scope .pt-weeklabel {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 /* Tageskopf der Woche: Klick öffnet den Tag */
 .idx-scope .pt-dayhead {
   padding: 0;

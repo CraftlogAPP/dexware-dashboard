@@ -112,7 +112,12 @@ export function SchemaDrawing({ bild, size = 'large', still = false }: { bild: A
   const { spec } = bild;
   const hasMid = !!spec.mid;
   const mode = !bild.flowing ? 'off' : still ? 'still' : 'flow';
-  const cols = hasMid ? 'var(--as-node) 1fr var(--as-main) 1fr var(--as-node)' : 'var(--as-node) 1fr var(--as-main)';
+  // Teile-Spalten so breit wie Kachel bzw. Beschriftung (schmal: nichts ragt über den Rand), Leitungen teilen sich den Rest
+  const part = (v: string) => `minmax(${v}, max-content)`;
+  const pipe = 'minmax(18px, 1fr)';
+  const cols = hasMid
+    ? [part('var(--as-node)'), pipe, part('var(--as-main)'), pipe, part('var(--as-node)')].join(' ')
+    : [part('var(--as-node)'), pipe, part('var(--as-main)')].join(' ');
   return (
     <div className={`as-draw ${size}${bild.flowing ? '' : ' dim'}`} style={{ gridTemplateColumns: cols } as CSSProperties}>
       <Node node={spec.left} size={size} />

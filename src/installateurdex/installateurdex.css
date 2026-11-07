@@ -1332,3 +1332,26 @@ a.idx-req.quote {
 .idx-scope .idx-kpi-arrow {
   color: var(--accent-text);
 }
+
+/* Tablet/Handy (Finger) und schmale Fenster: Tippflächen mindestens 40 px hoch — kleine Knöpfe, Filter-Reiter,
+   Chips und Text-Knöpfe. Am PC mit Maus bleibt die kompakte Größe. */
+@media (pointer: coarse), (max-width: 600px) {
+  .idx-scope .btn.small {
+    height: 40px;
+  }
+  .idx-scope .idx-tabs button {
+    height: 40px;
+  }
+  .idx-scope .pt-chip,
+  .idx-scope .wv-chip {
+    min-height: 40px;
+  }
+  .idx-scope .pt-link,
+  .idx-scope .wv-link,
+  .idx-scope .nf-link,
+  .idx-scope .nf-more {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+}

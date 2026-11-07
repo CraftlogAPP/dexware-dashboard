@@ -97,6 +97,19 @@
 .idx-scope .ck-chart {
   position: relative;
   padding-left: 46px;
+  container-type: inline-size;
+}
+/* nach der Breite des Diagramms (nicht des Fensters — Seitenleiste!): wenig Platz → Jahr und Werte über den Balken weg */
+@container (max-width: 560px) {
+  .idx-scope .ck-yr,
+  .idx-scope .ck-top {
+    display: none;
+  }
+}
+@container (max-width: 380px) {
+  .idx-scope .ck-xlabel {
+    font-size: 9.5px;
+  }
 }
 .idx-scope .ck-axis {
   position: absolute;
@@ -158,14 +171,6 @@
   font-weight: 650;
   fill: var(--muted);
   font-variant-numeric: tabular-nums;
-}
-@media (max-width: 640px) {
-  .idx-scope .ck-top {
-    display: none;
-  }
-  .idx-scope .ck-xlabel {
-    font-size: 9.5px;
-  }
 }
 
 /* Waagrechte Balken (offene Posten) */

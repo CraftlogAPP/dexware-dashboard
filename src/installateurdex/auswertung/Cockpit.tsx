@@ -91,7 +91,9 @@ function StackedBars({ items, format, height = 190 }: { items: BarItem[]; format
                 </text>
               )}
               <text x={`${i * band + band / 2}%`} y={height + 17} textAnchor="middle" className="ck-xlabel">
-                {it.label}
+                {/* „Dez 25“: Jahr nur, wenn Platz ist (schmal überlappen sonst die Beschriftungen) */}
+                {it.label.split(' ')[0]}
+                {it.label.includes(' ') && <tspan className="ck-yr"> {it.label.split(' ')[1]}</tspan>}
               </text>
             </g>
           );
