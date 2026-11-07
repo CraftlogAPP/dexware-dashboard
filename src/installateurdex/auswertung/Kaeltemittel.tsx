@@ -152,7 +152,7 @@ export function Kaeltemittel() {
               <p className="muted small">
                 Eigene Aufzeichnung des Fachbetriebs über Arbeiten an Anlagen mit Kältemitteln (Verordnung (EU) 2024/573) — aus den
                 unveränderlich dokumentierten Einsätzen (Prüfcode je Eintrag), stornierte Einträge nicht enthalten. CO₂e aus Füllmenge ×
-                GWP (Richtwert). Fristen je Anlage stehen in der <Link to={`${base}/wartung`}>Wartungsliste</Link>.
+                GWP (Richtwert). Fristen je Anlage stehen unter <Link to={`${base}/wartung`}>Fällige Wartungen</Link>.
               </p>
             </>
           );

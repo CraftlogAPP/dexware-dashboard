@@ -42,7 +42,7 @@ export function Garantie() {
         ];
         return (
           <>
-            <section className="idx-hero aw-hero" aria-label="Garantie-Wächter">
+            <section className="idx-hero aw-hero" aria-label="Garantie in Gefahr">
               <ShareRing share={share} label={`${Math.round(share * 100)} %`} empty={!r.active} />
               <div style={{ minWidth: 0 }}>
                 <div className="idx-hero-label">Zu tun</div>

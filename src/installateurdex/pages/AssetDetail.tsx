@@ -62,7 +62,7 @@ export function AssetDetail() {
       empty={
         <>
           <Link className="idx-back" to={`${base}/kunden`}>
-            ← Kunden &amp; Objekte
+            ← Kunden &amp; Anlagen
           </Link>
           <div className="error-box">Anlage nicht gefunden — sie wurde gelöscht oder der Link ist alt.</div>
         </>
@@ -95,7 +95,7 @@ export function AssetDetail() {
               </Link>
             ) : (
               <Link className="idx-back" to={`${base}/kunden`}>
-                ← Kunden &amp; Objekte
+                ← Kunden &amp; Anlagen
               </Link>
             )}
             <div className="idx-head">

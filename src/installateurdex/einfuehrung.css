@@ -1,0 +1,502 @@
+/* Einführung ins Betriebsportal (Einfuehrung.tsx) — Präfix ef-, Farben aus index.css + .idx-scope (Kupfer/Eisblau).
+   Grundzustand = Endzustand der Skizze; die Animationen spielen nur den Weg dorthin (bei „Bewegung reduzieren“ aus). */
+
+.ef-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(2, 4, 10, 0.72);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  overflow-y: auto;
+  animation: fade-in 0.2s ease both;
+}
+.ef-card {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  border-radius: 22px;
+  border: 1px solid color-mix(in oklab, var(--idx-copper) 35%, var(--border));
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  animation: pop-in 0.25s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.ef-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg) 70%, transparent);
+  color: var(--muted);
+  cursor: pointer;
+}
+.ef-close:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.ef-close:focus-visible,
+.ef-dots button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Bühne der Skizze */
+.ef-art {
+  padding: 18px 18px 6px;
+  background:
+    radial-gradient(420px 200px at 20% 0%, color-mix(in oklab, var(--idx-copper) 20%, transparent), transparent 70%),
+    radial-gradient(420px 220px at 90% 100%, color-mix(in oklab, var(--idx-ice) 16%, transparent), transparent 70%),
+    color-mix(in oklab, var(--bg) 60%, var(--surface));
+  border-bottom: 1px solid var(--border);
+}
+.ef-art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 290px;
+}
+
+.ef-body {
+  padding: 18px 26px 4px;
+}
+.ef-step {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: color-mix(in oklab, var(--idx-copper) 70%, #fff);
+}
+.ef-body h2 {
+  margin: 6px 0 6px;
+  font-size: 22px;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.ef-body p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--muted);
+  /* gleich hoch über alle Schritte (3 Zeilen), damit die Knöpfe nicht springen */
+  min-height: 4.65em;
+}
+
+.ef-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 26px 22px;
+}
+.ef-dots {
+  display: flex;
+  gap: 4px;
+}
+.ef-dots button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  position: relative;
+}
+.ef-dots button::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background 0.2s, inset 0.2s;
+}
+.ef-dots button.on::after {
+  inset: 8px 2px;
+  background: linear-gradient(90deg, var(--idx-copper), var(--idx-ice));
+}
+.ef-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 560px) {
+  .ef-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .ef-card {
+    max-height: 100vh;
+    border-radius: 20px 20px 0 0;
+  }
+  .ef-art {
+    padding: 14px 10px 4px;
+  }
+  .ef-body {
+    padding: 14px 18px 2px;
+  }
+  .ef-body h2 {
+    font-size: 20px;
+  }
+  .ef-body p {
+    font-size: 14.5px;
+  }
+  .ef-foot {
+    padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ---------- Bausteine der Skizzen ---------- */
+.ef-art .ef-scr {
+  fill: rgba(255, 255, 255, 0.035);
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 1.2;
+}
+.ef-art .ef-panel {
+  fill: rgba(255, 255, 255, 0.05);
+}
+.ef-art .ef-row {
+  fill: rgba(255, 255, 255, 0.06);
+  stroke: rgba(255, 255, 255, 0.08);
+}
+.ef-art .ef-soft {
+  fill: color-mix(in oklab, var(--idx-copper) 22%, transparent);
+}
+.ef-art .ef-sheet {
+  fill: color-mix(in oklab, var(--bg) 80%, #fff 6%);
+  stroke: color-mix(in oklab, var(--idx-copper) 45%, transparent);
+}
+.ef-art .ef-line {
+  fill: rgba(255, 255, 255, 0.16);
+}
+.ef-art .ef-line-strong {
+  fill: rgba(255, 255, 255, 0.34);
+}
+.ef-art .ef-cu {
+  fill: var(--idx-copper);
+}
+.ef-art .ef-ice {
+  fill: var(--idx-ice);
+}
+.ef-art .ef-red {
+  fill: var(--red);
+}
+.ef-art .ef-amber {
+  fill: var(--amber);
+}
+.ef-art .ef-green {
+  fill: var(--green);
+}
+.ef-art .ef-chip-red {
+  fill: rgba(239, 68, 68, 0.16);
+  stroke: rgba(239, 68, 68, 0.45);
+}
+.ef-art .ef-chip-amber {
+  fill: rgba(245, 158, 11, 0.14);
+  stroke: rgba(245, 158, 11, 0.45);
+}
+.ef-art .ef-hl {
+  fill: color-mix(in oklab, var(--idx-copper) 30%, transparent);
+  stroke: var(--idx-copper);
+  stroke-width: 1.4;
+}
+.ef-art .ef-base {
+  fill: rgba(255, 255, 255, 0.1);
+}
+.ef-art .ef-paper {
+  fill: #f4f1ec;
+}
+.ef-art .ef-ink {
+  fill: #1c2027;
+}
+.ef-art .ef-ink-soft {
+  fill: rgba(28, 32, 39, 0.25);
+}
+.ef-art .ef-ink-line {
+  fill: none;
+  stroke: rgba(28, 32, 39, 0.45);
+  stroke-width: 1.5;
+}
+.ef-art .ef-folder {
+  fill: color-mix(in oklab, var(--idx-ice) 30%, transparent);
+  stroke: var(--idx-ice);
+  stroke-width: 1.4;
+}
+.ef-art .ef-ring {
+  fill: none;
+  stroke: var(--idx-copper);
+  stroke-width: 2;
+}
+.ef-art .ef-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 10;
+}
+.ef-art .ef-ring-arc {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 10;
+  stroke-linecap: round;
+  /* Umfang 2π·78 ≈ 490: Endzustand 35 % übrig */
+  stroke-dasharray: 490;
+  stroke-dashoffset: 318;
+  animation: ef-ring 1.8s 0.3s cubic-bezier(0.3, 0.6, 0.2, 1) both;
+}
+.ef-art .ef-shield {
+  fill: color-mix(in oklab, var(--amber) 85%, #fff);
+}
+.ef-art .ef-stamp-box {
+  fill: rgba(34, 197, 94, 0.14);
+  stroke: #16a34a;
+  stroke-width: 1.6;
+}
+
+/* Text in den Skizzen */
+.ef-art .ef-t {
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  fill: var(--text);
+}
+.ef-art .ef-small {
+  font-size: 10px;
+}
+.ef-art .ef-big {
+  font-size: 34px;
+  font-weight: 800;
+}
+.ef-art .ef-strong {
+  font-size: 13.5px;
+  font-weight: 750;
+}
+.ef-art .ef-label {
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  fill: color-mix(in oklab, var(--idx-copper) 65%, #fff);
+}
+.ef-art .ef-muted {
+  fill: var(--muted);
+}
+.ef-art .ef-t-on {
+  fill: #fff;
+}
+.ef-art .ef-t-dark {
+  fill: #14181d;
+}
+.ef-art .ef-ink-text {
+  fill: #1c2027;
+}
+.ef-art .ef-stamp-text {
+  fill: #15803d;
+  font-weight: 800;
+}
+.ef-art .ef-cap {
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  fill: var(--muted);
+}
+
+/* Datenfluss (gestrichelte Linie, läuft dauerhaft) */
+.ef-art .ef-sync {
+  fill: none;
+  stroke: var(--idx-ice);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 2 9;
+  animation: ef-flow 1.1s linear infinite;
+}
+
+/* ---------- Bewegungen (Grundzustand = Ende) ---------- */
+.ef-art .ef-in,
+.ef-art .ef-in-l,
+.ef-art .ef-pop,
+.ef-art .ef-drop,
+.ef-art .ef-move,
+.ef-art .ef-stamp,
+.ef-art .ef-mark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-delay: var(--d, 0s);
+  animation-fill-mode: both;
+}
+.ef-art .ef-in {
+  animation-name: ef-in;
+  animation-duration: 0.5s;
+  animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.ef-art .ef-in-l {
+  animation-name: ef-in-l;
+  animation-duration: 0.5s;
+  animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.ef-art .ef-pop {
+  animation-name: ef-pop;
+  animation-duration: 0.45s;
+  animation-timing-function: cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.ef-art .ef-drop {
+  transform-origin: top;
+  animation-name: ef-drop;
+  animation-duration: 0.45s;
+  animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.ef-art .ef-mark {
+  transform-origin: top;
+  animation-name: ef-grow;
+  animation-duration: 0.5s;
+}
+.ef-art .ef-move {
+  animation-name: ef-move;
+  animation-duration: 1.1s;
+  animation-timing-function: cubic-bezier(0.5, 0, 0.2, 1);
+}
+.ef-art .ef-stamp {
+  animation-name: ef-stamp;
+  animation-duration: 0.4s;
+  animation-timing-function: cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+/* Dauerschleifen: „Mehr“ pulsiert, Mail fliegt, Export wandert */
+.ef-art .ef-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ef-pulse 1.6s var(--d, 0s) ease-in-out infinite;
+}
+.ef-art .ef-fly {
+  animation: ef-fly 3.2s var(--d, 0s) ease-in-out infinite both;
+}
+.ef-art .ef-file {
+  animation: ef-file 3.4s var(--d, 0s) ease-in-out infinite both;
+}
+
+@keyframes ef-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes ef-in-l {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+@keyframes ef-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+@keyframes ef-drop {
+  from {
+    opacity: 0;
+    transform: scaleY(0.4);
+  }
+}
+@keyframes ef-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes ef-move {
+  0% {
+    opacity: 0;
+    transform: translate(-226px, -26px);
+  }
+  15% {
+    opacity: 1;
+  }
+}
+@keyframes ef-stamp {
+  from {
+    opacity: 0;
+    transform: scale(1.8) rotate(-8deg);
+  }
+}
+@keyframes ef-flow {
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+@keyframes ef-ring {
+  from {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes ef-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.45;
+  }
+}
+@keyframes ef-fly {
+  0% {
+    opacity: 0;
+    transform: translate(-150px, 0);
+  }
+  15% {
+    opacity: 1;
+  }
+  60%,
+  85% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+}
+@keyframes ef-file {
+  0% {
+    opacity: 0;
+    transform: translate(-170px, 0);
+  }
+  15% {
+    opacity: 1;
+  }
+  60%,
+  85% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+}
+
+/* Bewegung reduzieren: alles steht sofort im Endzustand, nichts läuft in Schleife. */
+@media (prefers-reduced-motion: reduce) {
+  .ef-backdrop,
+  .ef-card,
+  .ef-art *,
+  .ef-dots button::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media print {
+  .ef-backdrop {
+    display: none !important;
+  }
+}

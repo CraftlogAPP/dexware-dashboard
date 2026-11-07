@@ -931,6 +931,404 @@ a.idx-req.quote {
   color: #fcd34d;
 }
 
-/* Trenner in der Navigation (Arbeit · Geld & Auswertung · Verwaltung) */
-.idx-scope .app-nav .idx-nav-sep { display: block; height: 1px; margin: 8px 10px; background: var(--border); }
-@media (max-width: 760px) { .idx-scope .app-nav .idx-nav-sep { display: none; } }
+/* ---------- Navigation in Gruppen (Portal.tsx) ---------- */
+/* Desktop: Seitenleiste mit beschrifteten Gruppen; „Einstellungen“ klappbar. Etwas breiter, damit
+   „Rechnungen & Angebote“ und „Kältemittel-Jahresbericht“ in eine Zeile passen. */
+.idx-scope .idx-nav {
+  width: 252px;
+}
+.idx-scope .idx-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.idx-scope .idx-nav-group + .idx-nav-group {
+  margin-top: 12px;
+}
+.idx-scope .idx-nav-title {
+  padding: 4px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--muted) 85%, var(--idx-copper));
+}
+.idx-scope .idx-nav-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 7px 12px;
+}
+.idx-scope .idx-nav-toggle:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+.idx-scope .idx-nav-toggle .i {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.2s;
+}
+.idx-scope .idx-nav-chev.up {
+  transform: rotate(180deg);
+}
+.idx-scope .idx-nav-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.idx-scope .idx-nav-sub[hidden] {
+  display: none;
+}
+.idx-scope .idx-nav-help {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 14px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.idx-scope .idx-nav-help:hover {
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--idx-copper) 60%, transparent);
+}
+.idx-scope .idx-nav-help .i {
+  color: var(--idx-copper);
+}
+.idx-scope .idx-nav .nav-footer {
+  margin-top: 14px;
+}
+.idx-scope .idx-nav-toggle:focus-visible,
+.idx-scope .idx-nav-help:focus-visible,
+.idx-scope .idx-nav a:focus-visible,
+.idx-scope .idx-mbar a:focus-visible,
+.idx-scope .idx-mbar button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* Nach den Gruppen schiebt sich der Fuß nach unten (Seitenleiste ist so hoch wie das Fenster) */
+.idx-scope .idx-nav-spacer {
+  flex: 1 0 0px;
+}
+
+/* Handy-Leiste: auf großen Bildschirmen aus */
+.idx-scope .idx-mbar,
+.idx-scope .idx-more-backdrop {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  /* 5 feste Einträge + „Mehr“ statt Scroll-Leiste */
+  .idx-scope .idx-mbar {
+    position: sticky;
+    top: 60px;
+    z-index: 12;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 2px;
+    padding: 6px 6px 5px;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in oklab, var(--bg) 90%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+  .idx-scope .idx-mbar a,
+  .idx-scope .idx-mbar button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 5px 2px 4px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .idx-scope .idx-mbar a.active,
+  .idx-scope .idx-mbar button.active {
+    color: var(--text);
+    background: var(--accent-soft);
+  }
+  .idx-scope .idx-mbar a.active .i,
+  .idx-scope .idx-mbar button.active .i {
+    color: var(--accent-text);
+  }
+  .idx-scope .idx-mbar-ico {
+    position: relative;
+    display: grid;
+    place-items: center;
+  }
+  .idx-scope .idx-mbar .i {
+    width: 20px;
+    height: 20px;
+  }
+  .idx-scope .idx-mbar-label {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .idx-scope .idx-mbar-count {
+    position: absolute;
+    top: -6px;
+    left: 13px;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    color: var(--on-accent);
+    background: var(--accent);
+  }
+
+  /* Volles Menü nur als „Mehr“-Tafel */
+  .idx-scope .idx-nav {
+    display: none;
+  }
+  .idx-scope .idx-nav.open {
+    position: fixed;
+    top: var(--idx-panel-top, 120px);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: auto;
+    height: auto;
+    padding: 12px 16px calc(20px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: var(--shadow-pop);
+    animation: fade-in 0.15s ease both;
+  }
+  .idx-scope .idx-nav.open a {
+    flex: none;
+    padding: 11px 12px;
+    font-size: 15px;
+  }
+  .idx-scope .idx-nav.open .nav-footer {
+    display: block;
+  }
+  .idx-scope .idx-nav.open .idx-nav-help {
+    margin-top: 10px;
+    padding: 11px 12px;
+  }
+  .idx-scope .idx-nav-count {
+    margin-left: auto;
+  }
+  .idx-scope .idx-more-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgba(2, 4, 10, 0.5);
+  }
+}
+
+@media print {
+  .idx-scope .idx-mbar,
+  .idx-scope .idx-more-backdrop {
+    display: none !important;
+  }
+}
+
+/* ---------- Start: „Heute zu tun“ (pages/Start.tsx) ---------- */
+.idx-scope .idx-today-kpis,
+.idx-scope .idx-due-kpis {
+  margin: 4px 0 14px;
+}
+.idx-scope .idx-todo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scroll-margin-top: 140px;
+}
+.idx-scope .idx-todo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+}
+.idx-scope .idx-todo-row.red {
+  border-left-color: var(--red);
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.09), transparent 60%), var(--card);
+}
+.idx-scope .idx-todo-row.amber {
+  border-left-color: var(--amber);
+}
+.idx-scope .idx-todo-row.accent {
+  border-left-color: var(--accent);
+}
+.idx-scope .idx-todo-icon {
+  flex: none;
+  width: 24px;
+  font-size: 18px;
+  text-align: center;
+}
+.idx-scope .idx-todo-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.idx-scope .idx-todo-title {
+  font-size: 14.5px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.idx-scope .idx-todo-title b {
+  font-weight: 650;
+}
+.idx-scope .idx-todo-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.idx-scope .idx-todo-act {
+  flex: none;
+  white-space: nowrap;
+}
+.idx-scope .idx-todo-more {
+  margin-top: 8px;
+}
+.idx-scope .idx-todo-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px 16px;
+  color: #86efac;
+  scroll-margin-top: 140px;
+}
+.idx-scope .idx-todo-empty .small {
+  color: var(--muted);
+}
+@media (max-width: 560px) {
+  .idx-scope .idx-todo-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .idx-scope .idx-todo-main {
+    flex-basis: calc(100% - 40px);
+  }
+  .idx-scope .idx-todo-act {
+    margin-left: 36px;
+  }
+}
+
+.idx-scope .idx-subhead {
+  margin: 18px 0 10px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+/* Einklappbare Abschnitte (Nächste Termine, Diese Woche, Zahlen) */
+.idx-scope .idx-fold {
+  margin-top: 14px;
+}
+.idx-scope .idx-fold > summary,
+.idx-scope .idx-fold-head button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+}
+.idx-scope .idx-fold > summary::-webkit-details-marker {
+  display: none;
+}
+.idx-scope .idx-fold > summary:hover,
+.idx-scope .idx-fold-head button:hover {
+  color: var(--accent-text);
+}
+.idx-scope .idx-fold > summary:focus-visible,
+.idx-scope .idx-fold-head button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.idx-scope .idx-fold-chev {
+  width: 16px;
+  height: 16px;
+  transform: rotate(-90deg);
+  transition: transform 0.2s;
+}
+.idx-scope .idx-fold[open] > summary .idx-fold-chev,
+.idx-scope .idx-fold-chev.up {
+  transform: none;
+}
+.idx-scope .idx-fold > .table-wrap,
+.idx-scope .idx-fold > .card {
+  margin-top: 8px;
+}
+.idx-scope .idx-numbers {
+  margin-top: 30px;
+}
+.idx-scope .idx-fold-head {
+  margin: 0;
+  font-size: inherit;
+}
+.idx-scope .idx-fold-head button {
+  width: 100%;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 17px;
+  text-align: left;
+}
+.idx-scope .idx-fold-hint {
+  margin-left: 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.idx-scope .idx-numbers .idx-hero {
+  margin-top: 10px;
+}
+.idx-scope .idx-numbers-kpis {
+  margin-top: 12px;
+}
+.idx-scope .idx-kpi-arrow {
+  color: var(--accent-text);
+}

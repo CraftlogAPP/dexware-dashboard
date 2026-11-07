@@ -60,7 +60,7 @@ export function Woche() {
                 <div className="kpi-label">Garantien gefährdet</div>
                 <div className="kpi-value">{w.warranty}</div>
                 <div className="kpi-sub">
-                  <Link to={`${base}/auswertungen/garantie`}>Zum Garantie-Wächter</Link>
+                  <Link to={`${base}/auswertungen/garantie`}>Zu „Garantie in Gefahr“</Link>
                 </div>
               </div>
               <div className="kpi">
@@ -116,7 +116,7 @@ export function Woche() {
                   </table>
                 </div>
                 <p className="muted small">
-                  Die Tour planst du in der <Link to={`${base}/wartung?f=due`}>Wartungsliste</Link> bzw. auf der{' '}
+                  Die Tour planst du unter <Link to={`${base}/wartung?f=due`}>Fällige Wartungen</Link> bzw. auf der{' '}
                   <Link to={`${base}/plantafel`}>Plantafel</Link>.
                 </p>
               </>

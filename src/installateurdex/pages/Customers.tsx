@@ -31,7 +31,7 @@ export function Customers() {
 
   return (
     <>
-      <h1>Kunden &amp; Objekte</h1>
+      <h1>Kunden &amp; Anlagen</h1>
       <p className="muted" style={{ marginTop: -6 }}>
         Jedes Objekt mit seinen Anlagen, fälligen Wartungen und offenen Empfehlungen. Objekte und Anlagen legt dein Team in
         der App an.

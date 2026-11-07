@@ -77,7 +77,7 @@ export function SiteDetail() {
   return (
     <>
       <Link className="idx-back" to={`${base}/kunden`}>
-        ← Kunden &amp; Objekte
+        ← Kunden &amp; Anlagen
       </Link>
       <LoadGuard state={state}>
         {({ site, assets, lastService, lastLeak, lastLegal, jobs, defects, requests }) => {

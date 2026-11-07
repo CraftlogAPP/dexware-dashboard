@@ -201,10 +201,10 @@ function ImportFlow({ sites, assets, onImported }: { sites: Site[]; assets: Asse
           </p>
           <div className="row">
             <Link className="btn small" to={`${base}/kunden`}>
-              Zu Kunden &amp; Objekte
+              Zu Kunden &amp; Anlagen
             </Link>
             <Link className="btn ghost small" to={`${base}/wartung?f=all`}>
-              Zur Wartungsliste
+              Zu den fälligen Wartungen
             </Link>
           </div>
         </div>

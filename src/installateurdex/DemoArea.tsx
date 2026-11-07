@@ -88,6 +88,7 @@ function DemoInstProvider({ app, role, plan, children }: { app: AppConfig; role:
       role,
       isOwner: role === 'owner',
       demo: true,
+      userKey: 'demo',
       base: `/app/${app.id}`,
       refreshOrg: () => {},
       requestsVersion,

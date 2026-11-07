@@ -29,7 +29,7 @@ export function Profil() {
   if (!isOwner) {
     return (
       <div className="aw">
-        <h1>Öffentliches Profil</h1>
+        <h1>Neue Kunden über den Helfer</h1>
         <div className="info-box">Den Eintrag im Installateur-Helfer ändert nur der Inhaber des Betriebs — wie in der App.</div>
       </div>
     );
@@ -42,7 +42,7 @@ function ProfilOwner() {
   const state = useAsync(() => ext.auswertung.helperListing(org.id), [ext, org.id]);
   return (
     <div className="aw">
-      <h1>Öffentliches Profil</h1>
+      <h1>Neue Kunden über den Helfer</h1>
       <LoadGuard state={state}>{(l) => <ListingForm initial={l} onSaved={state.refresh} />}</LoadGuard>
       <p className="muted small" style={{ marginTop: 16 }}>
         Telefonnummer und E-Mail für Kunden trägst du unter <Link to={`${base}/einstellungen`}>Einstellungen → Kontakt auf dem Anlagenpass</Link>{' '}

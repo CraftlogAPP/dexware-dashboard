@@ -12,10 +12,10 @@ import { Woche } from './Woche';
 import './auswertung.css';
 
 const TABS = [
-  { path: 'garantie', label: '🛡️ Garantie-Wächter', owner: false },
-  { path: 'heizungstausch', label: '🔥 Heizungstausch', owner: true },
+  { path: 'garantie', label: '🛡️ Garantie in Gefahr', owner: false },
+  { path: 'heizungstausch', label: '🔥 Tausch-Chancen', owner: true },
   { path: 'kaeltemittel', label: '❄️ Kältemittel-Jahresbericht', owner: true },
-  { path: 'woche', label: '📋 Diese Woche', owner: true },
+  { path: 'woche', label: '📊 Wochenbericht', owner: true },
 ] as const;
 
 const INTRO: Record<(typeof TABS)[number]['path'], string> = {
@@ -26,7 +26,7 @@ const INTRO: Record<(typeof TABS)[number]['path'], string> = {
 };
 
 function OwnerOnly() {
-  return <div className="info-box">Diese Auswertung sieht nur der Inhaber des Betriebs — wie in der App.</div>;
+  return <div className="info-box">Diesen Bericht sieht nur der Inhaber des Betriebs — wie in der App.</div>;
 }
 
 export function Auswertungen() {
@@ -43,9 +43,9 @@ export function Auswertungen() {
 
   return (
     <div className="aw">
-      <h1>Auswertungen</h1>
+      <h1>Berichte</h1>
       {tabs.length > 1 && (
-        <nav className="aw-tabs" aria-label="Auswertungen">
+        <nav className="aw-tabs" aria-label="Berichte">
           {tabs.map((t) => (
             <NavLink key={t.path} to={`${root}/${t.path}`} className={({ isActive }) => (isActive ? 'on' : '')}>
               {t.label}

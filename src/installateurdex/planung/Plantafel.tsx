@@ -449,13 +449,13 @@ export function Plantafel() {
                     {!weekState.loading && forDay(shown, day).length === 0 && (
                       <div className="empty pt-empty">
                         <b>Noch frei</b>
-                        <span className="muted">Termin anlegen — oder fällige Anlagen aus der Wartungsliste einplanen.</span>
+                        <span className="muted">Termin anlegen — oder fällige Anlagen aus „Fällige Wartungen“ einplanen.</span>
                         <div className="row" style={{ justifyContent: 'center' }}>
                           <button type="button" className="btn small" onClick={() => openNew()} disabled={!isOwner && !me}>
                             <Plus className="i" aria-hidden /> Termin
                           </button>
                           <Link className="btn ghost small" to={`${base}/wartung`}>
-                            Wartungsliste
+                            Fällige Wartungen
                           </Link>
                         </div>
                       </div>

@@ -21,6 +21,8 @@ export interface InstContext {
   role: Role;
   isOwner: boolean;
   demo: boolean;
+  /** Wer angemeldet ist (für Merk-Schalter je Nutzer im Browser, z. B. „Einführung gesehen“). */
+  userKey: string;
   /** Absoluter Pfad des Bereichs, z. B. /app/installateurdex */
   base: string;
   /** Betrieb neu laden (nach dem Speichern der Einstellungen). */
@@ -48,7 +50,8 @@ export function useRequestsVersion() {
 
 /** Echte Daten: innerhalb von AppArea + OrgProvider + OrgGate verwenden. */
 export function RealInstProvider({ app, children }: { app: AppConfig; children: ReactNode }) {
-  const { client } = useAppAuth();
+  const { client, session } = useAppAuth();
+  const userKey = session?.user.id ?? 'anon';
   const { data: orgCtx, refresh } = useOrg();
   const data = useMemo(() => supabaseData(client), [client]);
   const ext = useMemo(() => realExt(client), [client]);
@@ -64,13 +67,14 @@ export function RealInstProvider({ app, children }: { app: AppConfig; children: 
             role: orgCtx.role,
             isOwner: orgCtx.role === 'owner',
             demo: false,
+            userKey,
             base: `/app/${app.id}`,
             refreshOrg: refresh,
             requestsVersion,
             bumpRequests,
           }
         : null,
-    [app, data, ext, orgCtx, refresh, requestsVersion, bumpRequests],
+    [app, data, ext, orgCtx, refresh, requestsVersion, bumpRequests, userKey],
   );
   if (!value) return null; // OrgGate rendert davor Lade-/Fehlerzustand
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -154,7 +154,7 @@ export function Maintenance() {
   return (
     <>
       <div className="idx-head">
-        <h1>Wartungsliste</h1>
+        <h1>Fällige Wartungen</h1>
         <button type="button" className="btn small" onClick={exportCsv} disabled={!state.data || list.length === 0}>
           <Download className="i" aria-hidden /> CSV exportieren
         </button>

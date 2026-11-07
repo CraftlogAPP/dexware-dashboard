@@ -60,7 +60,7 @@ function PlanInfo() {
           </div>
           <p className="muted" style={{ marginBottom: 0 }}>
             {pro
-              ? 'Pro ist für deinen Betrieb aktiv: unbegrenzt Anlagen, PDFs ohne Wasserzeichen und im Firmen-Look, Rechnungen und Angebote ausstellen, Erinnerungsmails an Kunden, eigene Prüfpunkte, Messwerte und Pflichtangaben sowie das Diktier-Kontingent — für alle im Team.'
+              ? 'Pro ist für deinen Betrieb aktiv: unbegrenzt Anlagen, PDFs ohne Wasserzeichen und im Firmen-Look, Rechnungen und Angebote ausstellen, Erinnerungsmails an Kunden, eigene Prüfpunkte, Messwerte und Pflichtfelder je Einsatzart sowie das Diktier-Kontingent — für alle im Team.'
               : `Im Gratis-Tarif sind 3 Anlagen enthalten, PDFs tragen ein Wasserzeichen, Rechnungen und Angebote bleiben Entwürfe (Ausstellen ist Pro), Erinnerungsmails werden nicht verschickt und eigene Prüfpunkte gibt es mit Pro. ${
                   isOwner ? `Pro schließt du in der ${app.name}-App am Handy ab.` : 'Das Abo schließt der Inhaber des Betriebs in der App ab.'
                 }`}

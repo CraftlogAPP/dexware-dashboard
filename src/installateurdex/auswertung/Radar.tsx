@@ -59,8 +59,8 @@ export function Radar() {
         const count = (p: number) => list.filter((c) => c.priority === p).length;
         return (
           <>
-            <section className="idx-hero" aria-label="Heizungstausch-Radar">
-              <div className="idx-hero-label">🔥 Heizungstausch-Radar</div>
+            <section className="idx-hero" aria-label="Tausch-Chancen">
+              <div className="idx-hero-label">🔥 Tausch-Chancen</div>
               <div className="idx-hero-value">{list.length}</div>
               <div className="idx-hero-sub">
                 {list.length === 1 ? 'Anlage' : 'Anlagen'} reif für ein Gespräch · Öl {count(1)} · Gas {count(2)} · sonstige {count(3)}
@@ -69,7 +69,7 @@ export function Radar() {
 
             {list.length === 0 ? (
               <div className="card muted">
-                Keine Kandidaten. Der Radar braucht bei den Anlagen das Datum der Inbetriebnahme oder das Baujahr (Typenschild-Scan in
+                Keine Kandidaten. Die Tausch-Chancen brauchen bei den Anlagen das Datum der Inbetriebnahme oder das Baujahr (Typenschild-Scan in
                 der App trägt es ein): Öl und Gas ab 15 Jahren, andere Wärmeerzeuger ab 20 Jahren.
               </div>
             ) : (
