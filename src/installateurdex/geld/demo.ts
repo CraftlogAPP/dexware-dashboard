@@ -6,7 +6,7 @@ import { historyInvoices } from '../auswertung/cockpitDemo';
 import { searchArticles, type Article } from './articles';
 import { emptyProfile, ISSUE_ERROR, profileSnapshot, REMIND_ERROR, STATUS_ERROR, type Catalog, type GeldData, type StoredArticle, type StoredInvoice, type StoredProfile } from './api';
 import { addDaysYmd, formatNumber, totals, type InvoiceDraft, type InvoiceLine } from './invoice';
-import type { FollowUpMarks } from './nachfassLogik';
+import { mergeMarks, type FollowUpMarks } from './nachfassLogik';
 
 const wait = <T,>(v: T, ms = 120): Promise<T> => new Promise((r) => setTimeout(() => r(structuredClone(v)), ms));
 const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -355,8 +355,9 @@ export function demoGeld(): GeldData {
     async setFollowUpMark(_orgId, quoteId, mark) {
       const v = find(quoteId);
       if (!v || v.kind !== 'quote' || v.status === 'draft') throw new Error('Merker gehen nur bei ausgestellten Angeboten.');
-      followUp = { ...followUp, [quoteId]: { ...mark } };
-      await wait(null, 150);
+      const merged = mergeMarks(followUp[quoteId], mark); // wie am Server: zusammenführen statt überschreiben
+      followUp = { ...followUp, [quoteId]: merged };
+      return wait(merged, 150);
     },
   };
 }

@@ -1,4 +1,4 @@
-// Quelle: App InstallateurDex mobile/src/lib/quoteFollowUp.ts, Stand 07.11.2026 (Commit 74f28d3) — Texte und Logik 1:1, nichts angepasst
+// Quelle: App InstallateurDex mobile/src/lib/quoteFollowUp.ts, Stand 07.11.2026 (Commit 269e918) — Texte und Logik 1:1, nichts angepasst
 // (die Importe aus ./invoice heißen im Portal gleich: geld/invoice.ts). Datenweg im Portal: geld/api.ts
 // followUpMarks/setFollowUpMark (Tabelle quote_follow_up; fehlt sie → nur ansehen, ohne Merker).
 // Änderungen IMMER zuerst in der App, dann hier per Kopie nachziehen.
@@ -91,11 +91,16 @@ export function rowFromMark(invoiceId: string, orgId: string, m: FollowUpMark): 
   return { invoice_id: invoiceId, org_id: orgId, snooze_until: m.snoozeUntil ?? null, nudged_at: noon(m.nudgedAt), nudges: m.nudges ?? 0, accepted_at: noon(m.acceptedAt) };
 }
 
-/** Server ohne NACHTRAG-ANGEBOTE: Tabelle fehlt (Postgres 42P01, PostgREST PGRST205/PGRST204) */
+/**
+ * Server ohne NACHTRAG-ANGEBOTE: Tabelle fehlt (Postgres 42P01, PostgREST PGRST205 „Could not find the table“).
+ * NICHT bei PGRST002 („Could not query the database for the schema cache“, 503 während PostgREST lädt) — das ist
+ * vorübergehend und darf nicht bis zum Neustart als „Tabelle fehlt“ gelten.
+ */
 export function isMissingTable(e: { code?: string; message?: string } | null | undefined): boolean {
   if (!e) return false;
-  if (e.code === '42P01' || e.code === 'PGRST205' || e.code === 'PGRST204') return true;
-  return /could not find the table|relation .*quote_follow_up.* does not exist|schema cache/i.test(e.message ?? '');
+  if (e.code === '42P01' || e.code === 'PGRST205') return true;
+  if (e.code) return false;
+  return /could not find the table|relation .*quote_follow_up.* does not exist/i.test(e.message ?? '');
 }
 
 const isYmd = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s);

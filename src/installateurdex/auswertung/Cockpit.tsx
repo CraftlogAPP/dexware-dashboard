@@ -115,26 +115,29 @@ function Legend({ items }: { items: { cls: string; label: string }[] }) {
 
 /** Tabelle nur für Bildschirmleser (die Diagramme selbst sind aria-hidden). */
 function SrTable({ caption, head, rows }: { caption: string; head: string[]; rows: (string | number)[][] }) {
+  // Tabellen beachten overflow nicht zuverlässig → in einen versteckten Block packen (sonst rollt die Seite seitlich)
   return (
-    <table className="ck-sr">
-      <caption>{caption}</caption>
-      <thead>
-        <tr>
-          {head.map((h) => (
-            <th key={h} scope="col">
-              {h}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <tr key={i}>
-            {r.map((c, j) => (j === 0 ? <th key={j} scope="row">{c}</th> : <td key={j}>{c}</td>))}
+    <div className="ck-sr">
+      <table>
+        <caption>{caption}</caption>
+        <thead>
+          <tr>
+            {head.map((h) => (
+              <th key={h} scope="col">
+                {h}
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              {r.map((c, j) => (j === 0 ? <th key={j} scope="row">{c}</th> : <td key={j}>{c}</td>))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

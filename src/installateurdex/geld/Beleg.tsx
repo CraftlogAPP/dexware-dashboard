@@ -11,11 +11,15 @@ import { LoadGuard, useAsync, useUnsavedGuard } from '../../components/ui';
 import { openReportWindow } from '../../lib/print';
 import { useInst } from '../context';
 import { isProOrg, mailHref } from '../types';
-import { catalogPrices, learnPrices, type StoredArticle, type StoredInvoice, type StoredProfile } from './api';
+import { catalogPrices, learnPrices, type GeldData, type StoredArticle, type StoredInvoice, type StoredProfile } from './api';
 import { DEFAULT_PRICING, saleCents, toInvoiceLine, type PricingRule } from './articles';
 import {
   activeDeductions,
   advanceCandidates,
+  deductionIssues,
+  deductionProblem,
+  invoiceDraftFromQuote,
+  preselectAdvances,
   calendarDaysBetween,
   deductionFromInvoice,
   deductionGross,
@@ -36,6 +40,18 @@ import {
 import { InvoiceBadge } from './parts';
 import { buildInvoiceHtml, docTitle, downloadEbInterface, downloadEInvoice, type InvoiceDoc } from './print';
 import { centsText, deDay, deTs, errText, localDay, qtyText, splitAddress, toCents, toQty } from './util';
+
+/**
+ * Belege für die Schlussrechnung: die neuesten (wie die Liste) plus jede gewählte Abschlagsrechnung, die dort nicht
+ * vorkommt (Betriebe mit vielen Belegen) — gezielt per ID, damit eine echte, alte Abschlagsrechnung nicht als „nicht
+ * gefunden“ gilt. Wie App InvoiceScreen listWithDeductionSources. Wirft ohne Verbindung.
+ */
+async function listWithDeductionSources(geld: GeldData, d?: InvoiceDraft): Promise<StoredInvoice[]> {
+  const list = await geld.invoices();
+  const missing = (d ? activeDeductions(d) : []).filter((x) => !!x.id && !list.some((y) => y.id === x.id)).map((x) => x.id!);
+  const extra = (await Promise.all(missing.map((id) => geld.invoice(id)))).filter((x): x is StoredInvoice => !!x);
+  return extra.length ? [...list, ...extra] : list;
+}
 
 interface Loaded {
   profile: StoredProfile;
@@ -71,7 +87,8 @@ export function Beleg() {
           profile,
           stored: null,
           siteId: q.siteId,
-          draft: { ...q.data, kind: 'invoice', serviceDate: localDay(), notes: q.number ? `Laut Angebot ${q.number}.` : q.data.notes, intro: undefined, source: undefined, fromQuote: q.number },
+          // Abschlag/Schlussrechnung/Zahlungen des Angebots nie mitnehmen (invoice.ts invoiceDraftFromQuote, wie App)
+          draft: invoiceDraftFromQuote(q.data, q.number, localDay()),
         };
       }
     }
@@ -153,28 +170,22 @@ function Editor({ initial }: { initial: Loaded }) {
   const issues = editable ? validate(draft, profile) : [];
   const docProfile = (stored?.profile as StoredProfile | undefined) ?? profile;
 
-  // Schlussrechnung (wie App InvoiceScreen): Abschlagsrechnungen zum selben Objekt / Kunden, noch nirgends abgezogen.
-  // Nur bei Entwürfen geladen; scheitert das Laden, bleibt die Auswahl einfach weg (gewählte Abzüge bleiben erhalten).
-  const allInv = useAsync(async () => (editable ? geld.invoices() : null), [geld, editable]);
+  // Schlussrechnung (wie App InvoiceScreen): mit Objekt NUR Abschläge dieses Objekts, ohne Objekt nach Kundenname, noch
+  // nirgends abgezogen. Nur bei Entwürfen geladen; gewählte Abzüge, die nicht unter den neuesten Belegen sind, gezielt
+  // per ID dazu. Scheitert das Laden, kann keine Schlussrechnung ausgestellt werden (Blocker unten).
+  const allInv = useAsync(async () => (editable ? listWithDeductionSources(geld, initial.draft) : null), [geld, editable]);
   const advances: AdvanceSource[] = allInv.data && draft.kind === 'invoice' ? advanceCandidates(allInv.data, { id: stored?.id, siteId, recipientName: draft.recipient.name }) : [];
   const chosen: InvoiceDeduction[] = draft.final ? (draft.deductions ?? []) : [];
   const sameDed = (x: InvoiceDeduction, a: { id?: string; number?: string }) => (!!a.id && x.id === a.id) || x.number === a.number;
   const isChosen = (a: AdvanceSource) => chosen.some((x) => sameDed(x, a));
   const chosenElsewhere = chosen.filter((x) => !advances.some((a) => sameDed(x, a)));
   const finalActive = activeDeductions(draft).length > 0;
-  const staleReason = (x: InvoiceDeduction): string | null => {
-    const list = allInv.data;
-    if (!list) return null;
-    const src = list.find((y) => sameDed(x, y));
-    if (src?.status === 'canceled') return 'storniert — bitte abwählen';
-    const usedIn = list.find((y) => y.id !== stored?.id && y.kind === 'invoice' && (y.status === 'issued' || y.status === 'paid') && activeDeductions(y.data).some((z) => sameDed(z, x)));
-    return usedIn ? `schon in Schlussrechnung ${usedIn.number ?? ''} abgezogen` : null;
-  };
-  if (editable && draft.final) {
-    for (const x of chosenElsewhere) {
-      const why = staleReason(x);
-      if (why) issues.push(`Abschlagsrechnung ${x.number}: ${why}.`);
-    }
+  // Jeder gewählte Abzug wird gegen die echten Belege geprüft (wie App): nicht gefunden / storniert / anderswo abgezogen /
+  // Beträge passen nicht = Blocker. Ohne geladene Belege keine Schlussrechnung; beim Ausstellen wird frisch geladen.
+  const dedProblem = (x: InvoiceDeduction): string | null => (allInv.data ? deductionProblem(x, allInv.data, stored?.id) : null);
+  if (editable && draft.kind === 'invoice' && finalActive) {
+    if (!allInv.data) issues.push('Schlussrechnung: Die Abschlagsrechnungen konnten nicht geladen werden — ausstellen geht erst, wenn die Belege geladen sind.');
+    else issues.push(...deductionIssues(draft, allInv.data, stored?.id));
   }
 
   // Nichts verlieren: ungespeicherte Änderungen beim Schließen/Neuladen UND bei Klicks auf Links im Portal ansprechen
@@ -222,7 +233,8 @@ function Editor({ initial }: { initial: Loaded }) {
   const setVatMode = (m: VatMode) => setD({ vatMode: m, lines: draft.lines.map((l) => ({ ...l, vatRate: m === 'normal' ? profile.vatRate : 0 })) });
   const r = draft.recipient;
   const setR = (patch: Partial<InvoiceDraft['recipient']>) => setD({ recipient: { ...r, ...patch } });
-  const makeFinal = () => setD({ final: true, partial: false, deductions: advances.map(deductionFromInvoice) });
+  // Nur sicher passende Abschläge vorwählen (gleiches Objekt) — nie automatisch Abschläge eines anderen Objekts
+  const makeFinal = () => setD({ final: true, partial: false, deductions: preselectAdvances(advances, { siteId }).map(deductionFromInvoice) });
   const noFinal = () => setD({ final: false, deductions: undefined });
   const toggleAdvance = (a: AdvanceSource) =>
     setD({ deductions: isChosen(a) ? chosen.filter((x) => !sameDed(x, a)) : [...chosen, deductionFromInvoice(a)] });
@@ -284,6 +296,18 @@ function Editor({ initial }: { initial: Loaded }) {
     }
     if (!window.confirm(`${quote ? 'Angebot' : 'Rechnung'} ausstellen?\n\nDie Nummer wird vergeben. Danach lässt sich der Beleg nicht mehr ändern — nur stornieren.`)) return;
     void run('issue', async () => {
+      // Schlussrechnung: Abzüge unmittelbar vor dem Ausstellen gegen FRISCH geladene Belege prüfen (wie App) — z. B. hat
+      // eine zweite Schlussrechnung dieselbe Abschlagsrechnung schon abgezogen
+      if (draft.kind === 'invoice' && finalActive) {
+        let freshList: StoredInvoice[];
+        try {
+          freshList = await listWithDeductionSources(geld, draft);
+        } catch {
+          throw new Error('Die Abschlagsrechnungen müssen vor dem Ausstellen geprüft werden — das ging gerade nicht. Bitte noch einmal versuchen.');
+        }
+        const probs = deductionIssues(draft, freshList, stored?.id);
+        if (probs.length) throw new Error(`Abschläge bitte prüfen: ${probs.join(' ')}`);
+      }
       const wasNew = !stored;
       const id = await persist();
       // Gespeicherten Entwurf sofort übernehmen (wie saveOnly): scheitert das Ausstellen danach, speichert der nächste
@@ -493,14 +517,14 @@ function Editor({ initial }: { initial: Loaded }) {
                         <input type="checkbox" checked onChange={() => dropDeduction(x)} />
                         <span>
                           {x.number} · {deDay(x.issuedAt)}
-                          <span className={`idx-sub ${staleReason(x) ? 'idx-geld-bad' : ''}`}>{staleReason(x) ?? 'gerade nicht in der Liste'}</span>
+                          <span className={`idx-sub ${dedProblem(x) ? 'idx-geld-bad' : ''}`}>{dedProblem(x) ?? (allInv.data ? 'nicht passend zu diesem Objekt/Kunden' : 'gerade nicht prüfbar')}</span>
                         </span>
                         <b>− {euro(deductionGross(x))}</b>
                       </label>
                     ))}
                     {advances.length === 0 && chosenElsewhere.length === 0 && (
                       <p className="small muted" style={{ margin: 0 }}>
-                        Keine passende Abschlagsrechnung gefunden (gleiches Objekt oder gleicher Kundenname).
+                        Keine passende Abschlagsrechnung gefunden (gleiches Objekt; ohne Objekt: gleicher Kundenname).
                       </p>
                     )}
                   </>

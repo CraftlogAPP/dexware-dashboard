@@ -99,7 +99,7 @@ export interface InvoiceDraft {
    */
   final?: boolean;
   deductions?: InvoiceDeduction[];
-  /** Rechnung aus einem Angebot: dessen Nummer (zählt das Angebot als angenommen — App lib/quoteFollowUp.ts) */
+  /** Rechnung aus einem Angebot: dessen Nummer (zählt das Angebot als angenommen, lib/quoteFollowUp.ts) */
   fromQuote?: string;
   /** Stornorechnung: Nummer der stornierten Rechnung + Grund */
   cancels?: string;
@@ -234,6 +234,28 @@ export function totals(d: InvoiceDraft): InvoiceTotals {
   };
 }
 
+/**
+ * Angebot → Rechnung: gleiche Positionen und Empfänger, Leistungsdatum `serviceDate`, Hinweis „Laut Angebot …“,
+ * Verweis fromQuote. Einleitung/Herkunft des Angebots und alles zu Abschlag/Schlussrechnung/Zahlungen bleiben weg.
+ */
+export function invoiceDraftFromQuote(q: InvoiceDraft, quoteNumber: string | undefined, serviceDate: string): InvoiceDraft {
+  return {
+    ...q,
+    kind: 'invoice',
+    serviceDate,
+    notes: quoteNumber ? `Laut Angebot ${quoteNumber}.` : q.notes,
+    fromQuote: quoteNumber,
+    intro: undefined,
+    source: undefined,
+    partial: undefined,
+    final: undefined,
+    deductions: undefined,
+    prepaidCents: undefined,
+    cancels: undefined,
+    cancelReason: undefined,
+  };
+}
+
 /** Abzug aus einer ausgestellten Abschlagsrechnung bauen (Netto + USt je Steuersatz, wie auf deren Beleg). */
 export function deductionFromInvoice(src: { id?: string; number?: string; issuedAt?: string; data: InvoiceDraft }): InvoiceDeduction {
   const t = totals({ ...src.data, final: false });
@@ -259,8 +281,11 @@ export interface AdvanceSource {
 const normName = (s: unknown) => (typeof s === 'string' ? s.trim().toLowerCase().replace(/\s+/g, ' ') : '');
 
 /**
- * Abschlagsrechnungen, die eine Schlussrechnung abziehen kann: ausgestellt oder bezahlt (nicht storniert), zum selben
- * Objekt oder (ohne Objekt) zum selben Kundennamen, und noch in keiner anderen gültigen Schlussrechnung abgezogen.
+ * Abschlagsrechnungen, die eine Schlussrechnung abziehen kann: ausgestellt oder bezahlt (nicht storniert), noch in
+ * keiner anderen gültigen Schlussrechnung abgezogen, und
+ * - Schlussrechnung mit Objekt: NUR Abschläge desselben Objekts (eine Hausverwaltung hat oft mehrere Objekte unter
+ *   demselben Namen — die Abschläge von Objekt B gehören nicht in die Schlussrechnung von Objekt A),
+ * - Schlussrechnung ohne Objekt: Abschläge zum selben Kundennamen.
  */
 export function advanceCandidates(all: AdvanceSource[], target: { id?: string; siteId?: string; recipientName?: string }): AdvanceSource[] {
   const name = normName(target.recipientName);
@@ -274,9 +299,48 @@ export function advanceCandidates(all: AdvanceSource[], target: { id?: string; s
   }
   return all
     .filter((x) => x.kind === 'invoice' && x.data.partial === true && !x.data.final && (x.status === 'issued' || x.status === 'paid') && !!x.number && x.id !== target.id)
-    .filter((x) => (target.siteId && x.siteId === target.siteId) || (!!name && normName(x.data.recipient?.name) === name))
+    .filter((x) => (target.siteId ? x.siteId === target.siteId : !!name && normName(x.data.recipient?.name) === name))
     .filter((x) => !used.has(`id:${x.id}`) && !used.has(`nr:${x.number}`))
     .sort((a, b) => (a.issuedAt ?? '').localeCompare(b.issuedAt ?? '') || (a.number ?? '').localeCompare(b.number ?? ''));
+}
+
+/**
+ * Welche Kandidaten „Als Schlussrechnung“ automatisch vorwählt: mit Objekt alle (sind ohnehin nur dieses Objekt);
+ * ohne Objekt nur, wenn alle zum selben Objekt (oder alle zu keinem) gehören — sonst nichts, der Nutzer wählt selbst.
+ */
+export function preselectAdvances(cands: AdvanceSource[], target: { siteId?: string }): AdvanceSource[] {
+  if (target.siteId) return cands.filter((x) => x.siteId === target.siteId);
+  const sites = new Set(cands.map((x) => x.siteId ?? ''));
+  return sites.size <= 1 ? cands : [];
+}
+
+/**
+ * Prüft einen gewählten Abzug gegen die echten Belege (frisch geladen). null = in Ordnung, sonst der Grund — dann darf
+ * die Schlussrechnung nicht ausgestellt werden: unbekannte, nicht ausgestellte, stornierte oder schon anderswo
+ * abgezogene Abschlagsrechnung, oder Beträge, die nicht (mehr) zur Abschlagsrechnung passen.
+ */
+export function deductionProblem(x: InvoiceDeduction, all: AdvanceSource[], selfId?: string): string | null {
+  const src = all.find((y) => y.kind === 'invoice' && ((!!x.id && y.id === x.id) || (!!x.number && y.number === x.number)));
+  if (!src) return 'nicht gefunden';
+  if (src.status === 'canceled') return 'storniert';
+  if (src.status !== 'issued' && src.status !== 'paid') return 'nicht ausgestellt';
+  if (src.data.partial !== true) return 'ist keine Abschlagsrechnung';
+  const usedIn = all.find((y) => y.id !== selfId && y.kind === 'invoice' && (y.status === 'issued' || y.status === 'paid') && activeDeductions(y.data).some((z) => (!!x.id && z.id === x.id) || z.number === x.number));
+  if (usedIn) return `schon in Schlussrechnung ${usedIn.number ?? ''} abgezogen`.trim();
+  const real = deductionFromInvoice(src);
+  const norm = (d: InvoiceDeduction) => JSON.stringify([...d.byRate].map((p) => [Number(p.rate), cents(p.netCents), cents(p.vatCents)]).sort((a, b) => b[0] - a[0]));
+  if (norm(real) !== norm(x) || (src.issuedAt ?? '').slice(0, 10) !== x.issuedAt) return 'Beträge oder Datum passen nicht zur Abschlagsrechnung'; // fehlermuster-ok: issued_at ist ein Datum (date), kein Zeitstempel
+  return null;
+}
+
+/** Alle Probleme der gewählten Abzüge als Meldungen (für validate-Ergebnis / Ausstellen) */
+export function deductionIssues(d: InvoiceDraft, all: AdvanceSource[], selfId?: string): string[] {
+  return activeDeductions(d)
+    .map((x) => {
+      const why = deductionProblem(x, all, selfId);
+      return why ? `Abschlagsrechnung ${x.number}: ${why} — bitte abwählen oder prüfen.` : null;
+    })
+    .filter((x): x is string => !!x);
 }
 
 const deDate = (ymdStr: string) => (/^\d{4}-\d{2}-\d{2}/.test(ymdStr) ? ymdStr.slice(0, 10).split('-').reverse().join('.') : '');

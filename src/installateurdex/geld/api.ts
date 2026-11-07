@@ -8,7 +8,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '../fetchAll';
 import type { AccountingSettings } from './accountingExport';
 import { articleNoOf, matchArticle, saleCents, type Article, type PricingRule } from './articles';
-import { isMissingTable, markFromRow, rowFromMark, type FollowUpMark, type FollowUpMarks, type FollowUpRow } from './nachfassLogik';
+import { isMissingTable, markFromRow, mergeMarks, rowFromMark, type FollowUpMark, type FollowUpMarks, type FollowUpRow } from './nachfassLogik';
 import { localDay } from './util';
 import { defaultVatRate, totals, type InvoiceDeduction, type InvoiceDraft, type InvoiceKind, type InvoiceProfile, type InvoiceLine, type Land, type MaterialLine } from './invoice';
 
@@ -134,8 +134,12 @@ export interface GeldData {
    * Team. null = Tabelle fehlt (42P01/PGRST205) → das Portal zeigt nur an, ohne Merker.
    */
   followUpMarks(): Promise<FollowUpMarks | null>;
-  /** Merker eines Angebots speichern (Upsert, ganzer Stand wie App updateFollowUpMark). */
-  setFollowUpMark(orgId: string, quoteId: string, mark: FollowUpMark): Promise<void>;
+  /**
+   * Merker eines Angebots speichern: Serverzeile frisch lesen, mit mergeMarks zusammenführen, dann Upsert — wie App
+   * data/quoteFollowUp.ts (sonst überschriebe ein älterer Stand z. B. „angenommen“ eines Kollegen). Liefert den
+   * gespeicherten (zusammengeführten) Stand.
+   */
+  setFollowUpMark(orgId: string, quoteId: string, mark: FollowUpMark): Promise<FollowUpMark>;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -198,6 +202,7 @@ export const STATUS_ERROR = (code?: string) =>
 export function isMissingPaidAtParam(e: { code?: string; message?: string } | null | undefined): boolean {
   if (!e) return false;
   if (e.code === 'PGRST202' || e.code === 'PGRST203' || e.code === '42883') return true;
+  if (e.code) return false; // z. B. PGRST002 (Schema-Cache lädt, 503) ist vorübergehend — kein Rückfall (wie App)
   return /could not find the function|function .*does not exist|best candidate function/i.test(e.message ?? '');
 }
 export const REMIND_ERROR = (code?: string) =>
@@ -598,8 +603,12 @@ export function supabaseGeld(sb: SupabaseClient): GeldData {
       return out;
     },
     async setFollowUpMark(orgId, quoteId, mark) {
-      const { error } = await sb.from('quote_follow_up').upsert(rowFromMark(quoteId, orgId, mark), { onConflict: 'invoice_id' });
-      if (!error) return;
+      const cur = await sb.from('quote_follow_up').select('invoice_id, snooze_until, nudged_at, nudges, accepted_at').eq('invoice_id', quoteId).maybeSingle();
+      if (cur.error && isMissingTable(cur.error)) throw new Error('Merker gehen erst, wenn das Nachfassen in der Datenbank eingerichtet ist (NACHTRAG-ANGEBOTE-2026-11-07.sql).');
+      if (cur.error) dbError('Merker konnte nicht gelesen werden', cur.error);
+      const merged = mergeMarks(cur.data ? markFromRow(cur.data as FollowUpRow, (d) => localDay(d)) : undefined, mark);
+      const { error } = await sb.from('quote_follow_up').upsert(rowFromMark(quoteId, orgId, merged), { onConflict: 'invoice_id' });
+      if (!error) return merged;
       if (isMissingTable(error)) throw new Error('Merker gehen erst, wenn das Nachfassen in der Datenbank eingerichtet ist (NACHTRAG-ANGEBOTE-2026-11-07.sql).');
       if (error.code === '22023') throw new Error('Merker gehen nur bei ausgestellten Angeboten.');
       dbError('Merker konnte nicht gespeichert werden', error);

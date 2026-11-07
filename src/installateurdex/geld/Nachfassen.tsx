@@ -94,8 +94,9 @@ function Liste({
     setBusy(id);
     setError(null);
     try {
-      await ext.geld.setFollowUpMark(org.id, id, next);
-      setMarks({ ...marks, [id]: next });
+      // gespeicherter Stand = mit dem Server zusammengeführt (z. B. „angenommen“ eines Kollegen bleibt)
+      const saved = await ext.geld.setFollowUpMark(org.id, id, next);
+      setMarks({ ...marks, [id]: saved });
     } catch (e) {
       setError(errText(e));
     } finally {
