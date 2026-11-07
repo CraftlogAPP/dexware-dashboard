@@ -365,3 +365,52 @@
 .idx-scope .idx-geld-bad {
   color: var(--red);
 }
+
+/* ---------- Kontoauszug abgleichen ---------- */
+.idx-scope .idx-konto-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 6px 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.idx-scope .idx-konto-row.done {
+  opacity: 0.7;
+}
+.idx-scope .idx-konto-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.idx-scope .idx-konto-text {
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.idx-scope .idx-konto-match {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.idx-scope .idx-konto-ok {
+  color: #86efac;
+  margin-top: 4px;
+}
+.idx-scope .idx-konto-others {
+  margin-top: 12px;
+}
+.idx-scope .idx-konto-others summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
+.idx-scope .idx-konto .btn.small {
+  min-height: 44px;
+}
+@media (max-width: 560px) {
+  .idx-scope .idx-konto-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

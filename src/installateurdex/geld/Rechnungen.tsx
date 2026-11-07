@@ -6,13 +6,14 @@
 
 import { useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
-import { Download, FilePlus2, FileText, Settings2 } from 'lucide-react';
+import { Download, FilePlus2, FileText, Landmark, Settings2 } from 'lucide-react';
 import { Modal } from '../../components/form';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { useInst } from '../context';
 import { openCents, type StoredInvoice } from './api';
 import { Beleg } from './Beleg';
 import { Firmendaten } from './Firmendaten';
+import { KontoauszugDialog } from './Kontoauszug';
 import { euro } from './invoice';
 import { invoiceBookCsv, periodRange, type Period } from './invoiceExport';
 import { accountingExport, BOOK_FORMAT_INFO, bookFormats, defaultBookFormat, missingAccountingSetup, type BookFormat } from './accountingExport';
@@ -116,6 +117,7 @@ function Liste() {
   const zeitraum = (ZEITRAUM.some((z) => z.id === params.get('z')) ? params.get('z') : 'latest') as Zeitraum;
   const [query, setQuery] = useState('');
   const [exportOpen, setExportOpen] = useState(false);
+  const [bankOpen, setBankOpen] = useState(false);
 
   // Kacheln aus einer eigenen, vollständigen Abfrage (alle offenen + im Monat bezahlten Rechnungen) — die Liste aus den
   // neuesten 500 Belegen bzw. dem gewählten Zeitraum. Früher kamen auch die Kacheln nur aus den neuesten 500.
@@ -189,6 +191,9 @@ function Liste() {
           </Link>
           <button type="button" className="btn ghost small" onClick={() => setExportOpen(true)} disabled={!invoices.some((x) => x.status !== 'draft') && zeitraum === 'latest'}>
             <Download className="i" aria-hidden /> Export für Steuerberater
+          </button>
+          <button type="button" className="btn ghost small" onClick={() => setBankOpen(true)}>
+            <Landmark className="i" aria-hidden /> Kontoauszug abgleichen
           </button>
           <Link className="btn ghost small" to={`${base}/rechnungen/firmendaten`}>
             <Settings2 className="i" aria-hidden /> Firmendaten
@@ -301,6 +306,17 @@ function Liste() {
       </LoadGuard>
 
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
+      {bankOpen && (
+        <KontoauszugDialog
+          onClose={() => setBankOpen(false)}
+          onChanged={() => {
+            // Kacheln + Liste sofort neu (bezahlt markierte Rechnungen wandern von „offen“ zu „bezahlt“)
+            latest.refresh();
+            tiles.refresh();
+            ranged.refresh();
+          }}
+        />
+      )}
     </>
   );
 }
