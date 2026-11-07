@@ -1,0 +1,269 @@
+/* Cockpit (Inhaber) — schlichte SVG-Diagramme in den Portal-Farben. */
+.idx-scope .ck {
+  --ck-paid: var(--accent);
+  --ck-open: color-mix(in oklab, var(--accent) 38%, transparent);
+  --ck-fc: color-mix(in oklab, var(--blue) 70%, var(--surface));
+  --ck-fc-over: var(--red);
+}
+.idx-scope .ck-kpis {
+  margin-bottom: 16px;
+}
+.idx-scope .ck-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+@media (max-width: 1100px) {
+  .idx-scope .ck-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.idx-scope .ck-card {
+  min-width: 0;
+  padding: 16px 18px;
+}
+.idx-scope .ck-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.idx-scope .ck-title {
+  margin: 0;
+  font-size: 15.5px;
+}
+.idx-scope .ck-sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.idx-scope .ck-sub b {
+  color: var(--text);
+}
+.idx-scope .ck-note {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.idx-scope .ck-foot {
+  margin-top: 14px;
+}
+
+/* Legende */
+.idx-scope .ck-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.idx-scope .ck-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.idx-scope .ck-legend i {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+}
+.idx-scope .ck-legend i.ck-paid {
+  background: var(--ck-paid);
+}
+.idx-scope .ck-legend i.ck-open {
+  background: var(--ck-open);
+  box-shadow: inset 0 0 0 1px var(--ck-paid);
+}
+.idx-scope .ck-legend i.ck-fc {
+  background: var(--ck-fc);
+}
+.idx-scope .ck-legend i.ck-fc-over {
+  background: var(--ck-fc-over);
+}
+.idx-scope .ck-legend i.ck-ist {
+  background: var(--accent);
+}
+.idx-scope .ck-legend i.ck-plan {
+  background: var(--ck-fc);
+}
+.idx-scope .ck-legend i.ck-soll {
+  width: 3px;
+  background: var(--text);
+}
+
+/* Säulen */
+.idx-scope .ck-chart {
+  position: relative;
+  padding-left: 46px;
+}
+.idx-scope .ck-axis {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+}
+.idx-scope .ck-axis span {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.idx-scope .ck-svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.idx-scope line.ck-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.idx-scope line.ck-base {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.idx-scope rect.ck-hit {
+  fill: transparent;
+}
+.idx-scope .ck-bar:hover rect.ck-hit {
+  fill: color-mix(in oklab, var(--text) 5%, transparent);
+}
+.idx-scope rect.ck-paid {
+  fill: var(--ck-paid);
+}
+.idx-scope rect.ck-open {
+  fill: var(--ck-open);
+  stroke: var(--ck-paid);
+  stroke-width: 1;
+}
+.idx-scope rect.ck-fc {
+  fill: var(--ck-fc);
+}
+.idx-scope rect.ck-fc-over {
+  fill: var(--ck-fc-over);
+}
+.idx-scope .ck-xlabel {
+  font-size: 11px;
+  fill: var(--muted);
+}
+.idx-scope .ck-bar.current .ck-xlabel {
+  fill: var(--text);
+  font-weight: 700;
+}
+.idx-scope .ck-top {
+  font-size: 10.5px;
+  font-weight: 650;
+  fill: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 640px) {
+  .idx-scope .ck-top {
+    display: none;
+  }
+  .idx-scope .ck-xlabel {
+    font-size: 9.5px;
+  }
+}
+
+/* Waagrechte Balken (offene Posten) */
+.idx-scope .ck-hbars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.idx-scope .ck-hrow {
+  display: grid;
+  grid-template-columns: 150px minmax(60px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13.5px;
+}
+.idx-scope .ck-hrow:hover,
+.idx-scope .ck-hrow:focus-visible {
+  background: color-mix(in oklab, var(--text) 5%, transparent);
+}
+.idx-scope .ck-hlabel {
+  color: var(--muted);
+}
+.idx-scope .ck-htrack svg {
+  display: block;
+}
+.idx-scope .ck-hval {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.idx-scope rect.ck-age0 {
+  fill: color-mix(in oklab, var(--amber) 70%, var(--surface));
+}
+.idx-scope rect.ck-age1 {
+  fill: var(--amber);
+}
+.idx-scope rect.ck-age2 {
+  fill: color-mix(in oklab, var(--red) 70%, var(--amber));
+}
+.idx-scope rect.ck-age3 {
+  fill: var(--red);
+}
+.idx-scope rect.ck-age-ok {
+  fill: color-mix(in oklab, var(--muted) 45%, transparent);
+}
+@media (max-width: 520px) {
+  .idx-scope .ck-hrow {
+    grid-template-columns: 110px minmax(40px, 1fr) auto;
+  }
+}
+
+/* Auslastung */
+.idx-scope .ck-loads {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.idx-scope .ck-load-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+.idx-scope .ck-load-svg {
+  display: block;
+  overflow: visible;
+}
+.idx-scope rect.ck-track {
+  fill: color-mix(in oklab, var(--text) 6%, transparent);
+}
+.idx-scope rect.ck-ist {
+  fill: var(--accent);
+}
+.idx-scope rect.ck-plan {
+  fill: var(--ck-fc);
+}
+.idx-scope line.ck-soll-line {
+  stroke: var(--text);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+/* nur für Bildschirmleser */
+.idx-scope .ck-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+

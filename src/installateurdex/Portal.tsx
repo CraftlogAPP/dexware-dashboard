@@ -16,6 +16,7 @@ import {
   Euro,
   FileUp,
   Flame,
+  Gauge,
   Globe,
   Inbox,
   CalendarClock,
@@ -144,6 +145,7 @@ function groupsFor(isOwner: boolean): NavGroup[] {
         { to: 'auswertungen/garantie', label: 'Garantie in Gefahr', icon: ShieldAlert },
         ...(isOwner
           ? [
+              { to: 'auswertungen/cockpit', label: 'Cockpit', icon: Gauge },
               { to: 'auswertungen/heizungstausch', label: 'Tausch-Chancen', icon: Flame },
               { to: 'auswertungen/kaeltemittel', label: 'Kältemittel-Jahresbericht', icon: Snowflake },
               { to: 'auswertungen/woche', label: 'Wochenbericht', icon: BarChart3 },

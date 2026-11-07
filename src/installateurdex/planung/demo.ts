@@ -66,7 +66,44 @@ function buildAppointments(): Appt[] {
     // vorige Woche
     appt('p-30', 'u-max', -7, [8, 0], [10, 0], 'Wartung', { site_id: 's-gruber', asset_id: 'a-gru-kl3', status: 'done' }),
     appt('p-31', 'u-lisa', -5, [13, 0], [15, 0], 'Störung', { site_id: 's-steiner', asset_id: 'a-ste-oel', status: 'done' }),
+    ...pastWeeks(),
   ];
+}
+
+/** Erledigte Termine der letzten drei Wochen (Mo–Fr) — damit „Auslastung je Monteur“ im Cockpit ein Bild ergibt. */
+function pastWeeks(): Appt[] {
+  const sites: [string, string | null, string][] = [
+    ['s-huber', 'a-hub-wp', 'Wartung'],
+    ['s-see', 'a-see-gt1', 'Wartung'],
+    ['s-gruber', 'a-gru-kl1', 'Reparatur'],
+    ['s-steiner', 'a-ste-oel', 'Störung'],
+    ['s-novak', 'a-nov-lu', 'Wartung'],
+    ['s-see', 'a-see-so', 'Besichtigung'],
+  ];
+  const out: Appt[] = [];
+  for (let day = -21; day < 0; day++) {
+    const wd = ((day % 7) + 7) % 7; // 0 = Mo
+    if (wd > 4) continue;
+    for (const [ui, who] of ['u-max', 'u-lisa', 'u-owner'].entries()) {
+      const r = rnd(day * 5 + ui);
+      if (who === 'u-owner' && r < 0.55) continue; // der Chef ist seltener draußen
+      if (who === 'u-lisa' && wd === 4) continue; // Lisa: Teilzeit, freitags frei
+      const n = who === 'u-owner' ? 1 : who === 'u-lisa' ? (r < 0.6 ? 1 : 2) : r < 0.25 ? 1 : r < 0.8 ? 2 : 3;
+      for (let k = 0; k < n; k++) {
+        const [site, asset, title] = sites[Math.floor(rnd(day * 11 + ui * 3 + k) * sites.length)];
+        const h = 8 + k * 3;
+        const len = rnd(day + ui + k * 7) < 0.5 ? 2 : 1.5;
+        out.push(
+          appt(`p-w${-day}-${ui}-${k}`, who, day, [h, 0], [h + Math.floor(len), len % 1 ? 30 : 0], title, {
+            site_id: site,
+            asset_id: asset,
+            status: rnd(day * 13 + ui + k) < 0.07 ? 'canceled' : 'done',
+          }),
+        );
+      }
+    }
+  }
+  return out;
 }
 
 /** Gleichmäßiger Pseudo-Zufall je Tag (gleiche Daten bei jedem Neuladen). */
@@ -109,9 +146,12 @@ function buildTimes(): TimeEntry[] {
     for (const [ui, user] of ['u-owner', 'u-max', 'u-lisa'].entries()) {
       const r = rnd(seed * 3 + ui);
       if (r < 0.08) continue; // Urlaub/krank
+      // Lisa: Teilzeit (Sollzeit 20 h, Mo–Do) — freitags frei, nachmittags nur bis 13:30
+      const lisa = user === 'u-lisa';
+      if (lisa && wd === 5) continue;
       const startH = user === 'u-owner' ? 8 : 7;
       const startM = Math.round(r * 4) * 5;
-      const endH = 15 + Math.round(rnd(seed + ui * 7) * 2);
+      const endH = lisa ? 13 : 15 + Math.round(rnd(seed + ui * 7) * 2);
       if (isToday) {
         // heute: Max stempelt gerade (läuft), die anderen haben noch nichts
         if (user === 'u-max' && now.getHours() >= 8) {
@@ -125,7 +165,7 @@ function buildTimes(): TimeEntry[] {
       // an manchen Tagen fehlt die Pause (zeigt den Hinweis nach AZG/ArbZG)
       const skipBreak = rnd(seed * 5 + ui) < 0.12;
       if (!skipBreak) add(user, 'break', at(d, 12, 0), at(d, 12, 30));
-      add(user, 'work', at(d, 12, skipBreak ? 0 : 30), at(d, endH, 0), {
+      add(user, 'work', at(d, 12, skipBreak ? 0 : 30), at(d, endH, lisa ? 30 : 0), {
         note: rnd(seed + ui) < 0.3 ? 'Baustelle Huber' : null,
         // eine Korrektur durch den Inhaber
         ...(user === 'u-lisa' && d.getDate() === 10 ? { edited_by: 'u-owner', edited_at: at(d, 18, 0).toISOString() } : {}),

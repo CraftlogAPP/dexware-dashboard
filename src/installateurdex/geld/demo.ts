@@ -2,6 +2,7 @@
 // wie ../demo.ts. Nummernvergabe, Storno und Mahnstufen ahmen die Server-RPCs aus rechnung.sql nach.
 
 import { JOBS, SITES } from '../demo';
+import { historyInvoices } from '../auswertung/cockpitDemo';
 import { searchArticles, type Article } from './articles';
 import { emptyProfile, ISSUE_ERROR, profileSnapshot, REMIND_ERROR, STATUS_ERROR, type Catalog, type GeldData, type StoredArticle, type StoredInvoice, type StoredProfile } from './api';
 import { addDaysYmd, formatNumber, totals, type InvoiceDraft, type InvoiceLine } from './invoice';
@@ -118,6 +119,7 @@ function buildInvoices(): StoredInvoice[] {
     issued('inv-0012', `RE-${year}-0012`, 's-huber', huber, 38, { status: 'paid', paidAt: tsAgo(30, 9) }),
     credit,
     canceled,
+    ...historyInvoices(profileSnapshot(PROFILE)), // ältere Rechnungen der letzten 12 Monate (Cockpit, auswertung/cockpitDemo.ts)
   ];
 }
 

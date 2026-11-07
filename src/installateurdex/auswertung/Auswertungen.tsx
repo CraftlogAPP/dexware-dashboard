@@ -5,6 +5,7 @@
 import type { ReactElement } from 'react';
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import { useInst } from '../context';
+import { Cockpit } from './Cockpit';
 import { Garantie } from './Garantie';
 import { Kaeltemittel } from './Kaeltemittel';
 import { Radar } from './Radar';
@@ -12,6 +13,7 @@ import { Woche } from './Woche';
 import './auswertung.css';
 
 const TABS = [
+  { path: 'cockpit', label: '🧭 Cockpit', owner: true },
   { path: 'garantie', label: '🛡️ Garantie in Gefahr', owner: false },
   { path: 'heizungstausch', label: '🔥 Tausch-Chancen', owner: true },
   { path: 'kaeltemittel', label: '❄️ Kältemittel-Jahresbericht', owner: true },
@@ -19,6 +21,7 @@ const TABS = [
 ] as const;
 
 const INTRO: Record<(typeof TABS)[number]['path'], string> = {
+  cockpit: 'Umsatz, Wartungs-Vorschau, offene Posten und Auslastung auf einen Blick — nur für den Inhaber.',
   garantie: 'Gefährdete und auslaufende Garantien — Wartungsvertrag anbieten.',
   heizungstausch: 'Alte Öl-/Gasanlagen im Bestand — Tausch ansprechen.',
   kaeltemittel: 'Eingefüllt, zurückgewonnen, Dichtheitskontrollen — alle Kunden.',
@@ -55,6 +58,7 @@ export function Auswertungen() {
       )}
       <Routes>
         <Route index element={<Navigate to={`${root}/garantie`} replace />} />
+        <Route path="cockpit" element={page('cockpit', <Cockpit />, true)} />
         <Route path="garantie" element={page('garantie', <Garantie />, false)} />
         <Route path="heizungstausch" element={page('heizungstausch', <Radar />, true)} />
         <Route path="kaeltemittel" element={page('kaeltemittel', <Kaeltemittel />, true)} />
