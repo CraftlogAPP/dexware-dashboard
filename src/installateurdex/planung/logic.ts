@@ -271,6 +271,8 @@ export const MAX_ENTRY_MS = 24 * 3600_000;
 export const OWN_EDIT_DAYS = 7;
 /** RLS time_delete: eigene Einträge bis 24 Stunden nach dem Anlegen löschbar */
 export const OWN_DELETE_HOURS = 24;
+/** Eigenen, noch laufenden Block verwerfen: bis so viele Tage nach Beginn (NACHTRAG-TEAMRECHTE, wie Ändern). */
+export const OWN_RUNNING_DISCARD_DAYS = 8;
 
 /** Dauer in Minuten (laufende Einträge bis `now`, gedeckelt auf 24 h) — wie App timeclock.ts minutesOf */
 export function minutesOf(e: Pick<TimeEntry, 'started_at' | 'ended_at'>, now = new Date()): number {

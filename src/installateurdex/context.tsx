@@ -11,6 +11,8 @@ import { supabaseData, type InstData } from './data';
 import type { ExtData } from './ext';
 import { realExt } from './ext';
 import type { InstOrg } from './types';
+import { useAsync } from '../components/ui';
+import { ALL_PERMS, fetchTeamPerms, type Perm } from './rechte';
 
 export interface InstContext {
   app: AppConfig;
@@ -20,6 +22,19 @@ export interface InstContext {
   org: InstOrg;
   role: Role;
   isOwner: boolean;
+  /**
+   * Team-Rechte (NACHTRAG-TEAMRECHTE): Inhaber alles, Stellvertreter alle Team-Rechte, sonst Einzelrechte.
+   * Ohne Nachtrag: Inhaber alles, Mitarbeiter nichts (permsAvailable = false). Der Server prüft es ohnehin selbst.
+   */
+  can: (perm: Perm) => boolean;
+  /** Eigene, wirksame Rechte */
+  perms: Perm[];
+  /** Ist Stellvertreter (für Texte) */
+  deputy: boolean;
+  /** Kennt der Server die Team-Rechte schon? */
+  permsAvailable: boolean;
+  /** Rechte neu laden (nach dem Ändern auf der Team-Seite). */
+  reloadPerms: () => void;
   demo: boolean;
   /** Wer angemeldet ist (für Merk-Schalter je Nutzer im Browser, z. B. „Einführung gesehen“). */
   userKey: string;
@@ -56,6 +71,14 @@ export function RealInstProvider({ app, children }: { app: AppConfig; children: 
   const data = useMemo(() => supabaseData(client), [client]);
   const ext = useMemo(() => realExt(client), [client]);
   const { requestsVersion, bumpRequests } = useRequestsVersion();
+  // Eigene Rechte (team_perms). Fehler/kein Nachtrag → alter Stand (Inhaber alles, Mitarbeiter nichts).
+  const permsState = useAsync(() => fetchTeamPerms(client).catch(() => null), [client, userKey, orgCtx?.org.id]);
+  const mine = permsState.data?.find((r) => r.user_id === userKey);
+  const ownerRole = orgCtx?.role === 'owner';
+  const perms = useMemo<Perm[]>(() => (ownerRole ? ALL_PERMS : (mine?.effective ?? [])), [ownerRole, mine]);
+  const deputy = !!mine?.deputy;
+  const permsAvailable = !!permsState.data;
+  const reloadPerms = permsState.reload;
   const value = useMemo<InstContext | null>(
     () =>
       orgCtx
@@ -66,6 +89,11 @@ export function RealInstProvider({ app, children }: { app: AppConfig; children: 
             org: orgCtx.org as InstOrg,
             role: orgCtx.role,
             isOwner: orgCtx.role === 'owner',
+            can: (p: Perm) => perms.includes(p),
+            perms,
+            deputy,
+            permsAvailable,
+            reloadPerms,
             demo: false,
             userKey,
             base: `/app/${app.id}`,
@@ -74,7 +102,7 @@ export function RealInstProvider({ app, children }: { app: AppConfig; children: 
             bumpRequests,
           }
         : null,
-    [app, data, ext, orgCtx, refresh, requestsVersion, bumpRequests, userKey],
+    [app, data, ext, orgCtx, refresh, requestsVersion, bumpRequests, userKey, perms, deputy, permsAvailable, reloadPerms],
   );
   if (!value) return null; // OrgGate rendert davor Lade-/Fehlerzustand
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

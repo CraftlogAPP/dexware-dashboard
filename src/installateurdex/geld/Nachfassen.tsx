@@ -27,7 +27,9 @@ import { deDay, errText, localDay } from './util';
 import { onlineStatus } from './angebotLink';
 
 export function Nachfassen() {
-  const { ext, org, base, isOwner } = useInst();
+  const { ext, org, base, can } = useInst();
+  // „Abgelehnt …“ (Storno) = Recht „Rechnungen & Angebote“ (Inhaber, Stellvertreter, Einzelrecht)
+  const isOwner = can('rechnungen');
   const geld = ext.geld;
   const land: Land = org.land === 'DE' || org.land === 'CH' ? org.land : 'AT';
   const state = useAsync(async () => {

@@ -41,6 +41,8 @@ const TIME_COLS = 'id, org_id, user_id, user_name, kind, started_at, ended_at, s
 // Seit NACHTRAG-ZEITBUCH-2026-11-07.sql: „in Rechnung übernommen“. Ältere Datenbank → einmal ohne, dann nicht mehr fragen.
 const TIME_COLS_BILLED = TIME_COLS + ', billed_at';
 let billedColumn = true;
+// time_entry.corrected_at (NACHTRAG-SYNC-2026-11-08): fehlt die Spalte noch, in dieser Sitzung ohne sie korrigieren
+let correctedColumn = true;
 const isMissing = (e: PgError) =>
   !!e && (['42P01', '42703', 'PGRST205', 'PGRST204'].includes(e.code ?? '') || /does not exist|could not find/i.test(e.message ?? ''));
 
@@ -80,6 +82,9 @@ function timeError(msg: string, e: PgError): never {
   throw new Error(`${msg}: ${plain(e)}`);
 }
 
+/** Der Server hat das Löschen abgelehnt (0 Zeilen) — die Seite ersetzt es durch einen genauen Grund. */
+export const TIME_NOT_DELETED =
+  'Zeit nicht gelöscht: Löschen geht nur bei eigenen, nicht vom Inhaber korrigierten Einträgen bis 24 Stunden nach dem Anlegen.';
 const NO_ROW = 'Keine Berechtigung oder der Eintrag wurde inzwischen gelöscht — bitte neu laden.';
 
 export function supabasePlanung(sb: SupabaseClient): PlanungData {
@@ -223,16 +228,25 @@ export function supabasePlanung(sb: SupabaseClient): PlanungData {
 
     async updateTimeEntry(id, patch) {
       // RLS time_update: eigene bis 7 Tage, Inhaber alle. Fremde Korrektur vermerkt der Trigger (edited_by/edited_at).
-      const { data, error } = await sb.from('time_entry').update(patch).eq('id', id).select('id');
+      // corrected_at mitschicken: Der Server setzt es dann auf seine Zeit — eine Korrektur an der EIGENEN Zeit gewinnt so
+      // gegen einen älteren Stand aus der Warteschlange des Handys (NACHTRAG-SYNC-2026-11-08). Ohne Nachtrag: ohne die Spalte.
+      let { data, error } = correctedColumn
+        ? await sb.from('time_entry').update({ ...patch, corrected_at: new Date().toISOString() }).eq('id', id).select('id')
+        : await sb.from('time_entry').update(patch).eq('id', id).select('id');
+      if (error && correctedColumn && isMissing(error) && /corrected_at/i.test(`${error.message} ${error.details ?? ''} ${error.hint ?? ''}`)) {
+        correctedColumn = false;
+        ({ data, error } = await sb.from('time_entry').update(patch).eq('id', id).select('id'));
+      }
       if (error) timeError('Zeit nicht gespeichert', error);
       if (!data?.length) throw new Error(`Zeit nicht gespeichert: ${NO_ROW}`);
     },
 
     async deleteTimeEntry(id) {
-      // RLS time_delete: nur eigene, bis 24 Stunden nach dem Anlegen.
+      // RLS time_delete: eigene bis 24 Stunden nach dem Anlegen (nicht vom Inhaber korrigiert); seit NACHTRAG-TEAMRECHTE
+      // auch eigene laufende Blöcke (bis 8 Tage) und mit Recht „zeiten“ alle im Betrieb — nie schon abgerechnete.
       const { data, error } = await sb.from('time_entry').delete().eq('id', id).select('id');
       if (error) timeError('Zeit nicht gelöscht', error);
-      if (!data?.length) throw new Error('Zeit nicht gelöscht: Löschen geht nur bei eigenen, nicht vom Inhaber korrigierten Einträgen bis 24 Stunden nach dem Anlegen.');
+      if (!data?.length) throw new Error(TIME_NOT_DELETED);
     },
   };
 }

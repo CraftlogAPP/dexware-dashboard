@@ -212,7 +212,8 @@ export function RequestDetail() {
  * Kontaktdaten der Anfrage anlegen (nur Inhaber, RLS site_insert), danach dort Adresse und Anlagen ergänzen.
  */
 function NewCustomer({ r }: { r: ServiceRequest }) {
-  const { data, org, base, isOwner } = useInst();
+  const { data, org, base, can } = useInst();
+  const isOwner = can('kunden'); // RLS site_insert: Inhaber oder Recht „Kunden & Anlagen“
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -220,7 +221,7 @@ function NewCustomer({ r }: { r: ServiceRequest }) {
     r.source === 'helper'
       ? 'Neuer Kunde über den Installateur-Helfer — noch ohne Objekt in deinem Bestand.'
       : 'Diese Anfrage hängt an keinem Objekt.';
-  if (!isOwner) return <span className="muted">{intro} Als Kunde anlegen kann ihn der Inhaber.</span>;
+  if (!isOwner) return <span className="muted">{intro} Als Kunde anlegen kann ihn der Inhaber (oder wer das Recht „Kunden & Anlagen“ hat).</span>;
 
   async function create() {
     setBusy(true);

@@ -10,6 +10,7 @@ import { AkteLimitHinweis } from '../AkteLimitHinweis';
 import { akteLimitNote } from '../akteLimitNote';
 import { Fehlerverlauf } from '../auswertung/Fehlerverlauf';
 import { AnlagenSchema } from '../anlage/AnlagenSchema';
+import { VertragHinweis } from '../vertrag/Vertraege';
 import {
   PASS_BASE,
   checkLabel,
@@ -145,6 +146,8 @@ export function AssetDetail() {
                 die Garantie an regelmäßige Wartung — was genau gilt, regelt der Hersteller.
               </div>
             )}
+
+            {site && <VertragHinweis siteId={site.id} assetId={asset.id} />}
 
             {/* Schaubild wie in der App: Quelle → Gerät → Verbraucher, fließende Leitungen, Status-Licht, Kennzahlen */}
             <div className="idx-schema-wrap">
@@ -401,7 +404,8 @@ function TimelineItem({ j, asset }: { j: Job; asset: Asset }) {
   const summary = checklistSummary(j.checklist);
   const defectsInList = Object.entries(j.checklist ?? {}).filter(([, v]) => v === 'defect');
   const materials = (j.materials ?? []).filter((m) => m?.name?.trim());
-  const { isOwner, base } = useInst(); // Rechnung aus Einsatz (geld/Beleg.tsx) — wie App „🧾 Rechnung“ beim Einsatz, Portal-Rechnungen nur Inhaber
+  const { can, base } = useInst(); // Rechnung aus Einsatz (geld/Beleg.tsx) — wie App „🧾 Rechnung“ beim Einsatz, Portal-Rechnungen mit Recht „Rechnungen“
+  const isOwner = can('rechnungen');
 
   return (
     <li className={`idx-tl-item ${j.type === 'repair' ? 'repair' : ''} ${j.canceled ? 'canceled' : ''}`}>

@@ -15,7 +15,7 @@ type Filter = 'all' | WatchKind;
 const TONE: Record<WatchKind, string> = { risk: 'red', soon: 'amber', ending: 'accent', noContract: 'muted' };
 
 export function Garantie() {
-  const { data, ext, org, base, isOwner } = useInst();
+  const { data, ext, org, base, can } = useInst();
   const state = useAsync(async () => {
     const [sites, assets, lastService] = await Promise.all([data.sites(), data.assets(), data.lastService()]);
     return { sites, assets, lastService };
@@ -127,14 +127,14 @@ export function Garantie() {
                               </Link>
                             ) : (
                               // Angebote schreibt nur der Inhaber (Rechnungen & Angebote sind für Monteure gesperrt)
-                              isOwner && (
+                              can('rechnungen') && (
                                 <Link className="btn ghost small" to={`${base}/rechnungen/neu?art=angebot&objekt=${encodeURIComponent(e.asset.site_id)}`}>
                                   <FileText className="i" aria-hidden /> Angebot
                                 </Link>
                               )
                             )}
-                            {/* Anlagen ändern darf nur der Inhaber (RLS item_update) */}
-                            {isOwner && !e.asset.contract && (
+                            {/* Anlagen ändern: Inhaber oder Recht „Kunden & Anlagen“ (RLS item_update) */}
+                            {can('kunden') && !e.asset.contract && (
                               <button type="button" className="btn ghost small aw-push" onClick={() => setContract(e)}>
                                 <Handshake className="i" aria-hidden /> Vertrag ✓
                               </button>

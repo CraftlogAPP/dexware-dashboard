@@ -6,6 +6,7 @@ import { supabasePlanung, type PlanungData } from './planung/data';
 import { supabaseAuswertung, type AuswertungData } from './auswertung/data';
 import { supabaseGeld, type GeldData } from './geld/api';
 import { supabasePruefpunkte, type PruefpunkteData } from './pruefpunkte/data';
+import { supabaseVertraege, type VertraegeData } from './vertrag/vertraegeData';
 // @ext-import
 
 export interface ExtData {
@@ -13,6 +14,7 @@ export interface ExtData {
   auswertung: AuswertungData;
   geld: GeldData;
   pruefpunkte: PruefpunkteData;
+  vertraege: VertraegeData;
   // @ext-type
 }
 
@@ -24,6 +26,7 @@ export function realExt(sb: SupabaseClient): ExtData {
     auswertung: supabaseAuswertung(sb),
     geld: supabaseGeld(sb),
     pruefpunkte: supabasePruefpunkte(sb),
+    vertraege: supabaseVertraege(sb),
     // @ext-real
   };
 }

@@ -11,6 +11,7 @@ import { AkteLimitHinweis } from '../AkteLimitHinweis';
 import { akteLimitNote } from '../akteLimitNote';
 import { fmtEur, kindInfo, makerModel, reminderState, type Site } from '../types';
 import { AnlagenSchema } from '../anlage/AnlagenSchema';
+import { VertraegeKarte } from '../vertrag/Vertraege';
 
 /**
  * Kundenportal „Mein Zuhause“ (zuhause.sql) je Objekt freigeben — wie die App (SiteFormScreen): nur mit E-Mail des
@@ -18,7 +19,8 @@ import { AnlagenSchema } from '../anlage/AnlagenSchema';
  * zurück; hier wird die E-Mail nicht geändert.
  */
 function PortalSwitch({ site, onChanged }: { site: Site; onChanged: () => void }) {
-  const { data, isOwner } = useInst();
+  const { data, can } = useInst();
+  const isOwner = can('kunden'); // RLS site_update: Inhaber oder Recht „Kunden & Anlagen“
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const on = site.portal_enabled === true;
@@ -290,6 +292,8 @@ export function SiteDetail() {
                       Kundendaten und die Zustimmung zur Erinnerungsmail werden in der App beim Objekt gepflegt.
                     </p>
                   </div>
+
+                  <VertraegeKarte siteId={site.id} assetNames={new Map(assets.map((a) => [a.id, a.name]))} />
 
                   <div className="card">
                     <h3 className="idx-card-title">Offene Empfehlungen ({open.length})</h3>
