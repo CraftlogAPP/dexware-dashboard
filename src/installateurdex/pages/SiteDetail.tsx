@@ -18,7 +18,8 @@ import { AnlagenSchema } from '../anlage/AnlagenSchema';
  * zurück; hier wird die E-Mail nicht geändert.
  */
 function PortalSwitch({ site, onChanged }: { site: Site; onChanged: () => void }) {
-  const { data, isOwner } = useInst();
+  const { data, can } = useInst();
+  const isOwner = can('kunden'); // RLS site_update: Inhaber oder Recht „Kunden & Anlagen“
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const on = site.portal_enabled === true;

@@ -401,7 +401,8 @@ function TimelineItem({ j, asset }: { j: Job; asset: Asset }) {
   const summary = checklistSummary(j.checklist);
   const defectsInList = Object.entries(j.checklist ?? {}).filter(([, v]) => v === 'defect');
   const materials = (j.materials ?? []).filter((m) => m?.name?.trim());
-  const { isOwner, base } = useInst(); // Rechnung aus Einsatz (geld/Beleg.tsx) — wie App „🧾 Rechnung“ beim Einsatz, Portal-Rechnungen nur Inhaber
+  const { can, base } = useInst(); // Rechnung aus Einsatz (geld/Beleg.tsx) — wie App „🧾 Rechnung“ beim Einsatz, Portal-Rechnungen mit Recht „Rechnungen“
+  const isOwner = can('rechnungen');
 
   return (
     <li className={`idx-tl-item ${j.type === 'repair' ? 'repair' : ''} ${j.canceled ? 'canceled' : ''}`}>

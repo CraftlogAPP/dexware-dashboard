@@ -41,7 +41,8 @@ interface Loaded {
 }
 
 export function Import() {
-  const { data, isOwner } = useInst();
+  const { data, can } = useInst();
+  const isOwner = can('kunden'); // RLS site_insert/item_insert: Inhaber oder Recht „Kunden & Anlagen“
   const existing = useAsync(async () => {
     const [sites, assets] = await Promise.all([data.sites(), data.assets()]);
     return { sites, assets };
@@ -55,7 +56,7 @@ export function Import() {
         Kostenlos. Danach stehen sie sofort in der App und im Portal.
       </p>
       {!isOwner ? (
-        <div className="info-box">Importieren kann nur der Inhaber des Betriebs.</div>
+        <div className="info-box">Importieren kann der Inhaber des Betriebs (oder wer das Recht „Kunden & Anlagen“ hat).</div>
       ) : (
         <LoadGuard state={existing}>
           {(ex) => <ImportFlow sites={ex.sites} assets={ex.assets} onImported={existing.refresh} />}

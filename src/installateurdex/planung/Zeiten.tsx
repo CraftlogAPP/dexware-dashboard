@@ -11,6 +11,7 @@ import { Modal } from '../../components/form';
 import { downloadCsv, toCsv } from '../csv';
 import { useInst } from '../context';
 import { PrintButton } from '../parts';
+import { TIME_NOT_DELETED } from './data';
 import type { Site } from '../types';
 import {
   KIND_ICON,
@@ -18,6 +19,7 @@ import {
   MAX_ENTRY_MS,
   MONTHS,
   OWN_DELETE_HOURS,
+  OWN_RUNNING_DISCARD_DAYS,
   WD,
   atLocal,
   dayKey,
@@ -76,7 +78,9 @@ interface Edit {
 const whereOf = (e: TimeEntry) => (e.site_id ? `site:${e.site_id}` : parseNote(e.note).place ? `place:${parseNote(e.note).place}` : '');
 
 export function Zeiten() {
-  const { data, ext, org, isOwner, role } = useInst();
+  const { data, ext, org, can, role } = useInst();
+  // „Zeiten aller“: Inhaber, Stellvertreter oder Recht „zeiten“ (NACHTRAG-TEAMRECHTE) — sonst nur die eigenen
+  const allTimes = can('zeiten');
   const [month, setMonth] = useState(() => {
     const n = new Date();
     return new Date(n.getFullYear(), n.getMonth(), 1);
@@ -115,7 +119,7 @@ export function Zeiten() {
       </div>
       <p className="muted" style={{ marginTop: 6 }}>
         Das Zeitbuch aus der App: je Block Kunde oder Ort, Tätigkeit und Pause. Arbeitszeit = Dauer ohne Pausen, die Fahrt zum Kunden zählt mit.{' '}
-        {isOwner
+        {allTimes
           ? 'Du siehst alle im Betrieb und kannst Einträge korrigieren — jede Korrektur wird vermerkt.'
           : 'Du siehst deine eigenen Zeiten. Stempeln und korrigieren (bis 7 Tage zurück) geht in der App; ältere Einträge korrigiert der Inhaber.'}
       </p>
@@ -124,7 +128,7 @@ export function Zeiten() {
         {({ me, team, sites }) => {
           const all = entries.data ?? [];
           // Monteur: nur eigene (RLS liefert ohnehin nur diese — hier zusätzlich, auch für die Beispieldaten)
-          const visible = isOwner ? all : all.filter((e) => e.user_id === me);
+          const visible = allTimes ? all : all.filter((e) => e.user_id === me);
           const memberOf = (id: string) => team.find((m) => m.userId === id);
           // Wer es war, kommt aus der Mitgliederliste (user_id → Konto). Der Freitext user_name stammt vom Handy und ist
           // frei wählbar — nur Rückfall für ehemalige Mitglieder, sonst könnte jemand Zeiten unter fremdem Namen führen.
@@ -133,7 +137,7 @@ export function Zeiten() {
           // Personen im Monat: Team-Reihenfolge, dann ehemalige mit Einträgen
           const people: { id: string; name: string; color?: string; m?: PlanMember }[] = [];
           for (const m of team)
-            if (isOwner || m.userId === me) people.push({ id: m.userId, name: m.name, color: m.color, m });
+            if (allTimes || m.userId === me) people.push({ id: m.userId, name: m.name, color: m.color, m });
           for (const e of visible)
             if (!people.some((p) => p.id === e.user_id)) people.push({ id: e.user_id, name: `${nameOf(e)} (ehemalig)` });
           const shown = person === 'all' ? visible : visible.filter((e) => e.user_id === person);
@@ -166,7 +170,7 @@ export function Zeiten() {
           const targetList = targets.data ?? null;
           const hasTargets = !!targetList?.some((t) => targetOf(t));
           // Sollzeit setzen: nur Inhaber und nur, wenn die Tabelle time_target schon da ist (SQL vom 07.11.)
-          const canSetTargets = isOwner && targetList !== null;
+          const canSetTargets = allTimes && targetList !== null;
           // „In Rechnung übernommen“ kennt der Server erst mit der SQL vom 07.11. — vorher keine Spalte
           const billedKnown = all.some((e) => e.billed_at !== undefined);
           const perPerson = people
@@ -187,7 +191,7 @@ export function Zeiten() {
                 count: list.length,
               };
             })
-            .filter((p) => p.count > 0 || isOwner);
+            .filter((p) => p.count > 0 || allTimes);
 
           const label = `${String(month.getMonth() + 1).padStart(2, '0')}-${month.getFullYear()}`;
           function exportCsv() {
@@ -200,11 +204,36 @@ export function Zeiten() {
               .map((p) => ({ name: p.name, entries: visible.filter((e) => e.user_id === p.id) }))
               .filter((p) => p.entries.length > 0);
 
-          const canEdit = () => isOwner;
+          const canEdit = () => allTimes;
+          // Wie RLS time_delete (NACHTRAG-TEAMRECHTE): nie abgerechnete; mit „Zeiten aller“ jede; eigene bis 24 h nach dem
+          // Anlegen oder solange der Block noch läuft (bis 8 Tage) — nicht, wenn der Inhaber sie korrigiert hat.
           const canDelete = (e: TimeEntry) =>
-            !!me && e.user_id === me && Date.now() - Date.parse(e.created_at) < OWN_DELETE_HOURS * 3600_000 &&
-            // vom Inhaber korrigiert → nicht mehr selbst löschbar (RLS time_delete, zeit.sql)
-            (!e.edited_by || e.edited_by === e.user_id);
+            !e.billed_at &&
+            (allTimes ||
+              (!!me && e.user_id === me &&
+                (Date.now() - Date.parse(e.created_at) < OWN_DELETE_HOURS * 3600_000 || (!e.ended_at && Date.now() - Date.parse(e.started_at) < OWN_RUNNING_DISCARD_DAYS * 86_400_000)) &&
+                (!e.edited_by || e.edited_by === e.user_id)));
+          // Server lehnt ab → genauer Grund statt der allgemeinen Meldung
+          const deleteRefused = (e: TimeEntry) =>
+            e.billed_at
+              ? 'Diese Zeit ist schon in eine Rechnung übernommen — sie bleibt als Nachweis stehen und lässt sich nur noch korrigieren.'
+              : e.user_id !== me
+                ? 'Zeiten anderer verwerfen geht mit dem nächsten Server-Update (Team-Rechte). Bis dahin bitte den Eintrag korrigieren.'
+                : e.edited_by && e.edited_by !== e.user_id
+                  ? 'Diesen Eintrag hat der Inhaber korrigiert — er bleibt als Nachweis stehen.'
+                  : !e.ended_at
+                    ? 'Ein laufender Block lässt sich nach 24 Stunden erst mit dem nächsten Server-Update verwerfen. Bis dahin bitte ein Ende eintragen und korrigieren.'
+                    : 'Löschen geht nur bis 24 Stunden nach dem Anlegen. Bitte den Eintrag stattdessen korrigieren.';
+          const discard = async (e: TimeEntry) => {
+            try {
+              await ext.planung.deleteTimeEntry(e.id);
+            } catch (err) {
+              if (err instanceof Error && err.message === TIME_NOT_DELETED) throw new Error(`Zeit nicht gelöscht: ${deleteRefused(e)}`);
+              throw err;
+            }
+          };
+          // Mitarbeiter ohne „Zeiten aller“: nur ihr eigener laufender Block bekommt hier einen Knopf (verwerfen)
+          const actionCol = allTimes || shown.some((e) => !e.ended_at && e.user_id === me && canDelete(e));
           const openEdit = (e: TimeEntry) => {
             const n = parseNote(e.note);
             setEdit({
@@ -241,7 +270,7 @@ export function Zeiten() {
                   {entries.loading && <span className="spinner pt-spin" aria-label="Lädt" />}
                   <span style={{ flex: 1 }} />
                   <PrintButton
-                    label={person === 'all' && isOwner ? 'Arbeitszeitbuch (alle) drucken / PDF' : 'Arbeitszeitbuch drucken / PDF'}
+                    label={person === 'all' && allTimes ? 'Arbeitszeitbuch (alle) drucken / PDF' : 'Arbeitszeitbuch drucken / PDF'}
                     build={async () => {
                       const ppl = bookPeople();
                       if (!ppl.length) throw new Error('In diesem Monat gibt es noch keine Zeiten.');
@@ -252,7 +281,7 @@ export function Zeiten() {
                     <Download className="i" aria-hidden /> CSV (Excel)
                   </button>
                 </div>
-                {isOwner && people.length > 1 && (
+                {allTimes && people.length > 1 && (
                   <div className="idx-tabs pt-filter" role="tablist" aria-label="Person">
                     <button type="button" role="tab" aria-selected={person === 'all'} className={person === 'all' ? 'on' : ''} onClick={() => setPerson('all')}>
                       Alle
@@ -301,7 +330,7 @@ export function Zeiten() {
                 </div>
               </div>
 
-              {isOwner && person === 'all' && perPerson.length > 0 && (
+              {allTimes && person === 'all' && perPerson.length > 0 && (
                 <>
                   <h3 className="pt-h3">Je Person</h3>
                   <div className="table-wrap">
@@ -450,7 +479,7 @@ export function Zeiten() {
                         <th className="pt-num">Zeit</th>
                         <th>Kunde / Ort</th>
                         <th>Tätigkeit</th>
-                        {isOwner && <th aria-label="Aktion" />}
+                        {actionCol && <th aria-label="Aktion" />}
                       </tr>
                     </thead>
                     <tbody>
@@ -461,12 +490,12 @@ export function Zeiten() {
                         return (
                           <DayRows
                             key={`${g.day}|${g.userId}`}
-                            title={`${WD[d.getDay()]} ${deDate(d)}${hol.get(g.day) ? ` · ★ ${hol.get(g.day)}` : ''}${person === 'all' && isOwner ? ` · ${p?.name ?? nameOf(g.entries[0])}` : ''}`}
+                            title={`${WD[d.getDay()]} ${deDate(d)}${hol.get(g.day) ? ` · ★ ${hol.get(g.day)}` : ''}${person === 'all' && allTimes ? ` · ${p?.name ?? nameOf(g.entries[0])}` : ''}`}
                             color={person === 'all' ? p?.color : undefined}
                             total={hm(g.t.paid)}
                             sub={`Pausen ${hm(g.t.break)}`}
                             hints={hints}
-                            cols={isOwner ? 7 : 6}
+                            cols={actionCol ? 7 : 6}
                           >
                             {g.entries.map((e) => {
                               const w = whereLabel(e, siteName);
@@ -489,9 +518,9 @@ export function Zeiten() {
                                       </span>
                                     )}
                                   </td>
-                                  {isOwner && (
+                                  {actionCol && (
                                     <td className="pt-num">
-                                      {canEdit() && (
+                                      {canEdit() ? (
                                         <button
                                           type="button"
                                           className="btn ghost small"
@@ -500,7 +529,18 @@ export function Zeiten() {
                                         >
                                           <Pencil className="i" aria-hidden /> <span className="hide-sm">Korrigieren</span>
                                         </button>
-                                      )}
+                                      ) : !e.ended_at && e.user_id === me && canDelete(e) ? (
+                                        <button
+                                          type="button"
+                                          className="btn ghost small pt-danger-text"
+                                          onClick={() => {
+                                            if (!window.confirm(`Laufenden Block seit ${hhmm(e.started_at)} verwerfen? Er wird gelöscht und zählt nicht als Arbeitszeit.`)) return;
+                                            discard(e).then(entries.reload, (err) => alert(err instanceof Error ? err.message : String(err)));
+                                          }}
+                                        >
+                                          Zeit verwerfen
+                                        </button>
+                                      ) : null}
                                     </td>
                                   )}
                                 </tr>
@@ -532,7 +572,7 @@ export function Zeiten() {
                     entries.reload();
                   }}
                   onDelete={async () => {
-                    await ext.planung.deleteTimeEntry(edit.entry.id);
+                    await discard(edit.entry);
                     setEdit(null);
                     entries.reload();
                   }}
@@ -771,9 +811,9 @@ function EditDialog({
           {canDelete &&
             (confirmDel ? (
               <span className="row" style={{ gap: 8 }}>
-                <span className="small">Wirklich löschen?</span>
+                <span className="small">{running ? 'Laufenden Block wirklich verwerfen? Er zählt dann nicht als Arbeitszeit.' : 'Wirklich löschen?'}</span>
                 <button type="button" className="btn small pt-danger" onClick={() => void remove()} disabled={busy}>
-                  Ja, löschen
+                  {running ? 'Ja, verwerfen' : 'Ja, löschen'}
                 </button>
                 <button type="button" className="btn ghost small" onClick={() => setConfirmDel(false)} disabled={busy}>
                   Nein
@@ -781,7 +821,7 @@ function EditDialog({
               </span>
             ) : (
               <button type="button" className="btn ghost small pt-danger-text" onClick={() => setConfirmDel(true)} disabled={busy}>
-                Löschen
+                {running ? 'Zeit verwerfen' : 'Löschen'}
               </button>
             ))}
           <span style={{ flex: 1 }} />

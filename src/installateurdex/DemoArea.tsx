@@ -11,9 +11,11 @@ import { createDemoStore } from './demo';
 import { demoExt } from './ext-demo';
 import { PortalRoutes } from './Portal';
 import type { InstOrg } from './types';
+import { ALL_PERMS, type Perm } from './rechte';
 
 export function DemoArea({ app }: { app: AppConfig }) {
-  const [role, setRole] = useState<Role>('owner');
+  // „Stellvertreter“ = Mitarbeiter mit allen Team-Rechten (NACHTRAG-TEAMRECHTE)
+  const [role, setRole] = useState<Role | 'deputy'>('owner');
   const [plan, setPlan] = useState<'free' | 'pro'>('pro');
   const style = {
     '--accent': app.theme.accent,
@@ -54,6 +56,9 @@ export function DemoArea({ app }: { app: AppConfig }) {
           <button type="button" className={`btn small ${role === 'worker' ? '' : 'ghost'}`} onClick={() => setRole('worker')}>
             Mitarbeiter
           </button>
+          <button type="button" className={`btn small ${role === 'deputy' ? '' : 'ghost'}`} onClick={() => setRole('deputy')}>
+            Stellvertreter
+          </button>
         </span>
         <span className="row" style={{ gap: 6 }}>
           Tarif:
@@ -72,7 +77,9 @@ export function DemoArea({ app }: { app: AppConfig }) {
   );
 }
 
-function DemoInstProvider({ app, role, plan, children }: { app: AppConfig; role: Role; plan: 'free' | 'pro'; children: ReactNode }) {
+function DemoInstProvider({ app, role: view, plan, children }: { app: AppConfig; role: Role | 'deputy'; plan: 'free' | 'pro'; children: ReactNode }) {
+  const role: Role = view === 'deputy' ? 'worker' : view;
+  const perms = useMemo<Perm[]>(() => (view === 'worker' ? [] : ALL_PERMS), [view]);
   const [org, setOrg] = useState<InstOrg | null>(null);
   const [store] = useState(() => createDemoStore((o) => setOrg(o)));
   const [ext] = useState(() => demoExt());
@@ -87,6 +94,11 @@ function DemoInstProvider({ app, role, plan, children }: { app: AppConfig; role:
       org: current,
       role,
       isOwner: role === 'owner',
+      can: (p: Perm) => perms.includes(p),
+      perms,
+      deputy: view === 'deputy',
+      permsAvailable: true,
+      reloadPerms: () => {},
       demo: true,
       userKey: 'demo',
       base: `/app/${app.id}`,
@@ -94,7 +106,7 @@ function DemoInstProvider({ app, role, plan, children }: { app: AppConfig; role:
       requestsVersion,
       bumpRequests,
     }),
-    [app, store, ext, current, role, requestsVersion, bumpRequests],
+    [app, store, ext, current, role, view, perms, requestsVersion, bumpRequests],
   );
   return <InstContextProvider value={value}>{children}</InstContextProvider>;
 }

@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { useAsync, useLiveRefresh } from '../components/ui';
 import { useInst } from './context';
+import type { Perm } from './rechte';
 import { Einfuehrung } from './Einfuehrung';
 import { merkVerfuegbar, readMerk, writeMerk } from './merk';
 import { Start } from './pages/Start';
@@ -117,29 +118,25 @@ const KUNDEN: NavItem = { to: 'kunden', label: 'Kunden & Anlagen', short: 'Kunde
 const ZEITEN: NavItem = { to: 'zeiten', label: 'Zeiten', icon: Clock };
 const EINST_ITEMS = ['einstellungen', 'pruefpunkte', 'team', 'profil', 'import', 'abo'];
 
-/** Menü je Rolle. Monteure: kein Büro, von den Berichten nur „Garantie in Gefahr“ (wie die App). */
-function groupsFor(isOwner: boolean): NavGroup[] {
+/**
+ * Menü je Rolle. Monteure: kein Büro, von den Berichten nur „Garantie in Gefahr“ (wie die App). Mit Team-Rechten
+ * (Stellvertreter/Einzelrechte, NACHTRAG-TEAMRECHTE) kommen „Rechnungen & Angebote“, „Zeiten“ (alle) und „Import“ dazu.
+ */
+function groupsFor(isOwner: boolean, can: (p: Perm) => boolean): NavGroup[] {
+  const buero: NavItem[] = [
+    ...(can('rechnungen') ? [{ to: 'rechnungen', label: 'Rechnungen & Angebote', icon: Receipt }] : []),
+    ...(isOwner ? [{ to: 'material', label: 'Material & Preise', icon: Package }] : []),
+    ...(can('zeiten') ? [ZEITEN] : []),
+  ];
   return [
     { id: 'start', title: null, items: [START] },
     {
       id: 'tag',
       title: 'Tagesgeschäft',
       // Monteure sehen ihre eigenen Zeiten weiterhin — ohne die Gruppe „Büro“ hier.
-      items: [ANFRAGEN, PLANTAFEL, WARTUNG, KUNDEN, ...(isOwner ? [] : [ZEITEN])],
+      items: [ANFRAGEN, PLANTAFEL, WARTUNG, KUNDEN, ...(can('zeiten') ? [] : [ZEITEN])],
     },
-    ...(isOwner
-      ? [
-          {
-            id: 'buero',
-            title: 'Büro',
-            items: [
-              { to: 'rechnungen', label: 'Rechnungen & Angebote', icon: Receipt },
-              { to: 'material', label: 'Material & Preise', icon: Package },
-              ZEITEN,
-            ],
-          },
-        ]
-      : []),
+    ...(buero.length ? [{ id: 'buero', title: 'Büro', items: buero }] : []),
     {
       id: 'berichte',
       title: 'Berichte',
@@ -164,12 +161,8 @@ function groupsFor(isOwner: boolean): NavGroup[] {
         ...(isOwner ? [{ to: 'einstellungen#preise', label: 'Preis je Wartung', icon: Euro }] : []),
         { to: 'pruefpunkte', label: 'Prüfpunkte', icon: ListChecks },
         { to: 'team', label: 'Team', icon: Users },
-        ...(isOwner
-          ? [
-              { to: 'profil', label: 'Neue Kunden über den Helfer', icon: Globe },
-              { to: 'import', label: 'Import', icon: FileUp },
-            ]
-          : []),
+        ...(isOwner ? [{ to: 'profil', label: 'Neue Kunden über den Helfer', icon: Globe }] : []),
+        ...(can('kunden') ? [{ to: 'import', label: 'Import', icon: FileUp }] : []),
         { to: 'abo', label: 'Abo', icon: CreditCard },
       ],
     },
@@ -180,7 +173,7 @@ function groupsFor(isOwner: boolean): NavGroup[] {
 const MOBILE: NavItem[] = [START, ANFRAGEN, PLANTAFEL, WARTUNG, KUNDEN];
 
 function Shell() {
-  const { base, org, role, data, requestsVersion, isOwner, userKey } = useInst();
+  const { base, org, role, data, requestsVersion, isOwner, userKey, can, deputy } = useInst();
   const location = useLocation();
   // Neue Anfragen in der Navigation — still alle 60 s und beim Zurückwechseln in den Tab.
   const count = useAsync(() => data.newRequestCount(), [data, requestsVersion]);
@@ -273,7 +266,7 @@ function Shell() {
     );
   };
 
-  const groups = groupsFor(isOwner);
+  const groups = groupsFor(isOwner, can);
   const mobileActive = MOBILE.some(isActive);
 
   return (
@@ -356,7 +349,7 @@ function Shell() {
         <div className="nav-footer">
           <b>{org.name}</b>
           <br />
-          Rolle: {role === 'owner' ? 'Inhaber' : 'Mitarbeiter'}
+          Rolle: {role === 'owner' ? 'Inhaber' : deputy ? 'Stellvertreter' : 'Mitarbeiter'}
         </div>
       </nav>
       <main className="app-main">

@@ -25,13 +25,14 @@ import { AGE_BUCKETS, ageOf, deDay, errText, isAgeId, isOverdue, kindLabel, loca
 import './geld.css';
 
 export function Rechnungen() {
-  const { isOwner, base } = useInst();
-  if (!isOwner) {
+  const { can, base } = useInst();
+  // Inhaber, Stellvertreter oder Recht „Rechnungen & Angebote“ (NACHTRAG-TEAMRECHTE; der Server prüft es selbst)
+  if (!can('rechnungen')) {
     return (
       <>
         <h1>Rechnungen &amp; Angebote</h1>
         <div className="info-box">
-          Rechnungen, Angebote und Zahlungen verwaltet der Inhaber des Betriebs — wie in der App. Rechnungsentwürfe aus
+          Rechnungen, Angebote und Zahlungen verwaltet der Inhaber des Betriebs (oder wer von ihm das Recht dazu hat) — wie in der App. Rechnungsentwürfe aus
           einem Einsatz legst du in der App beim Objekt an; der Inhaber sieht sie hier und stellt sie aus.
         </div>
       </>

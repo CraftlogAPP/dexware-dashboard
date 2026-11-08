@@ -155,7 +155,9 @@ function useMedia(query: string): boolean {
 const siteLabel = (s: Site | undefined) => (s ? `${s.operator_name ? `${s.operator_name} · ` : ''}${s.name}` : '');
 
 export function Plantafel() {
-  const { data, ext, org, isOwner, role, base, bumpRequests } = useInst();
+  const { data, ext, org, can, role, base, bumpRequests } = useInst();
+  // „für alle planen“: Inhaber, Stellvertreter oder Recht „Termine für alle“ (NACHTRAG-TEAMRECHTE; RLS appt_*)
+  const isOwner = can('plantafel');
   const [params, setParams] = useSearchParams();
   const wide = useMedia('(min-width: 900px)');
   const [week, setWeek] = useState(() => weekStart(new Date()));
@@ -429,7 +431,7 @@ export function Plantafel() {
     }
     const t0: MoveTarget = active?.target ?? { day: dayOf(a.starts_at), assigned_to: a.assigned_to };
     if ((dir === 'lane-' || dir === 'lane+') && !isOwner) {
-      const text = 'Anderen Monteuren gibt nur der Inhaber Termine.';
+      const text = 'Anderen Monteuren gibt nur der Inhaber (oder wer das Recht hat) Termine.';
       // während des Verschiebens steht der Hinweis in der Leiste; der nächste Tag-Schritt räumt ihn wieder weg
       if (active) setMove({ ...active, reason: text });
       else setNotice({ kind: 'info', text });
@@ -478,7 +480,7 @@ export function Plantafel() {
       const next = clampStart(start + sign * (e.shiftKey ? 60 : MIN_DUR));
       return setMove({ ...base, reason: null, startMin: next, durMin: Math.min(dur, 24 * 60 - next) });
     }
-    if (!isOwner) return setMove({ ...base, reason: 'Anderen Monteuren gibt nur der Inhaber Termine.' });
+    if (!isOwner) return setMove({ ...base, reason: 'Anderen Monteuren gibt nur der Inhaber (oder wer das Recht hat) Termine.' });
     const t = stepTarget(t0, k === 'ArrowLeft' ? 'lane-' : 'lane+', ctx.keyDays, ctx.keyLanes(a)) ?? t0;
     setMove({ ...base, target: t, lane: ctx.laneIdOf(t.assigned_to), reason: null });
   }
@@ -574,7 +576,7 @@ export function Plantafel() {
       <p className="muted" style={{ marginTop: 6 }}>
         Termine je Monteur — dieselbe Plantafel wie in der App.{' '}
         {isOwner
-          ? 'Als Inhaber planst du für alle.'
+          ? 'Du planst für alle.'
           : 'Du siehst alle Termine im Betrieb und planst deine eigenen; für andere plant der Inhaber.'}
       </p>
 
@@ -792,7 +794,7 @@ export function Plantafel() {
               return {
                 t: { day: spot.day, assigned_to: spot.lane },
                 lane: spot.lane,
-                reason: canAssignTo(orig, spot.lane, actor) ? null : 'Anderen Monteuren gibt nur der Inhaber Termine.',
+                reason: canAssignTo(orig, spot.lane, actor) ? null : 'Anderen Monteuren gibt nur der Inhaber (oder wer das Recht hat) Termine.',
               };
             },
             keyDays: timeline ? [day] : (wide ? cols : days).map(dayKey),
@@ -1340,7 +1342,7 @@ function ApptDialog({
     if (e <= s) return setError('Das Ende muss nach dem Beginn liegen.');
     if (e.getTime() - s.getTime() > APPT_MAX_HOURS * 3600_000) return setError(`Ein Termin darf höchstens ${APPT_MAX_HOURS} Stunden dauern.`);
     if (draft.note.length > APPT_NOTE_MAX) return setError(`Die Notiz darf höchstens ${APPT_NOTE_MAX} Zeichen lang sein.`);
-    if (!isOwner && draft.assigned_to !== me) return setError('Für andere planen darf nur der Inhaber.');
+    if (!isOwner && draft.assigned_to !== me) return setError('Für andere planen darf nur der Inhaber (oder wer das Recht hat).');
     if (isOwner && !draft.assigned_to && !draft.orig) return setError('Bitte auswählen, wer den Termin übernimmt.');
     const who = team.find((m) => m.userId === draft.assigned_to);
     const keepName = draft.orig && draft.orig.assigned_to === draft.assigned_to ? draft.orig.assigned_name : null;

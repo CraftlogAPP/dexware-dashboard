@@ -80,6 +80,9 @@ function timeError(msg: string, e: PgError): never {
   throw new Error(`${msg}: ${plain(e)}`);
 }
 
+/** Der Server hat das Löschen abgelehnt (0 Zeilen) — die Seite ersetzt es durch einen genauen Grund. */
+export const TIME_NOT_DELETED =
+  'Zeit nicht gelöscht: Löschen geht nur bei eigenen, nicht vom Inhaber korrigierten Einträgen bis 24 Stunden nach dem Anlegen.';
 const NO_ROW = 'Keine Berechtigung oder der Eintrag wurde inzwischen gelöscht — bitte neu laden.';
 
 export function supabasePlanung(sb: SupabaseClient): PlanungData {
@@ -229,10 +232,11 @@ export function supabasePlanung(sb: SupabaseClient): PlanungData {
     },
 
     async deleteTimeEntry(id) {
-      // RLS time_delete: nur eigene, bis 24 Stunden nach dem Anlegen.
+      // RLS time_delete: eigene bis 24 Stunden nach dem Anlegen (nicht vom Inhaber korrigiert); seit NACHTRAG-TEAMRECHTE
+      // auch eigene laufende Blöcke (bis 8 Tage) und mit Recht „zeiten“ alle im Betrieb — nie schon abgerechnete.
       const { data, error } = await sb.from('time_entry').delete().eq('id', id).select('id');
       if (error) timeError('Zeit nicht gelöscht', error);
-      if (!data?.length) throw new Error('Zeit nicht gelöscht: Löschen geht nur bei eigenen, nicht vom Inhaber korrigierten Einträgen bis 24 Stunden nach dem Anlegen.');
+      if (!data?.length) throw new Error(TIME_NOT_DELETED);
     },
   };
 }
