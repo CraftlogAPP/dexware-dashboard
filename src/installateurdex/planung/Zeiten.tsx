@@ -117,7 +117,7 @@ export function Zeiten() {
         Das Zeitbuch aus der App: je Block Kunde oder Ort, Tätigkeit und Pause. Arbeitszeit = Dauer ohne Pausen, die Fahrt zum Kunden zählt mit.{' '}
         {isOwner
           ? 'Du siehst alle im Betrieb und kannst Einträge korrigieren — jede Korrektur wird vermerkt.'
-          : 'Du siehst deine eigenen Zeiten. Stempeln und korrigieren (bis 6 Tage zurück) geht in der App; ältere Einträge korrigiert der Inhaber.'}
+          : 'Du siehst deine eigenen Zeiten. Stempeln und korrigieren (bis 7 Tage zurück) geht in der App; ältere Einträge korrigiert der Inhaber.'}
       </p>
 
       <LoadGuard state={fixed}>
