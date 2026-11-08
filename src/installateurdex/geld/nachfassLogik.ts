@@ -45,8 +45,45 @@ export interface FollowUpMark {
   nudges?: number;
   /** „Angenommen“ getippt (Rechnung evtl. noch nicht angelegt) */
   acceptedAt?: string;
+  /** Kundenlink (Angebot online annehmen): kommt nur vom Server, wird nie hochgeladen */
+  online?: OnlineQuote;
+}
+
+/** Stand des Kundenlinks je Angebot (Tabelle quote_link, NACHTRAG-ANGEBOT-ONLINE-2026-11-08.sql) */
+export interface OnlineQuote {
+  /** zuerst geöffnet (ISO) */
+  viewedAt?: string;
+  views?: number;
+  decision?: 'accepted' | 'declined';
+  /** entschieden (ISO) und als Kalendertag (JJJJ-MM-TT, Ortszeit) */
+  decidedAt?: string;
+  decidedDay?: string;
+  /** Name, mit dem der Kunde unterschrieben hat */
+  name?: string;
+  /** Grund der Ablehnung (freiwillig) */
+  reason?: string;
+  /** nur Privatkunden AT/DE: vorzeitiger Beginn verlangt? (null = nicht gefragt) */
+  earlyStart?: boolean | null;
 }
 export type FollowUpMarks = Record<string, FollowUpMark>;
+
+/**
+ * Kundenlinks über die Merker legen: online angenommen zählt wie „angenommen“ getippt (Tag der Annahme, falls noch kein
+ * früherer), online abgelehnt macht das Angebot „abgelehnt“ (quoteState). links = null (offline/ohne SQL) → die
+ * zuletzt bekannten Online-Stände bleiben stehen.
+ */
+export function withOnline(marks: FollowUpMarks, links: Record<string, OnlineQuote> | null, previous?: FollowUpMarks): FollowUpMarks {
+  const out: FollowUpMarks = {};
+  for (const [id, m] of Object.entries(marks)) out[id] = { ...m };
+  const src: Record<string, OnlineQuote> = links ?? {};
+  if (!links) for (const [id, m] of Object.entries(previous ?? {})) if (m.online) src[id] = m.online;
+  for (const [id, o] of Object.entries(src)) {
+    const m: FollowUpMark = { ...(out[id] ?? {}), online: o };
+    if (o.decision === 'accepted' && o.decidedDay && (!m.acceptedAt || o.decidedDay < m.acceptedAt)) m.acceptedAt = o.decidedDay;
+    out[id] = m;
+  }
+  return out;
+}
 
 export type QuoteState = 'draft' | 'open' | 'accepted' | 'rejected' | 'canceled';
 
@@ -133,6 +170,7 @@ export function quoteState(q: QuoteLike, accepted: Set<string>, marks: FollowUpM
   if (q.status === 'draft') return 'draft';
   if (q.status === 'canceled') return isRejectedReason(q.canceledReason) ? 'rejected' : 'canceled';
   if ((q.number && accepted.has(q.number)) || marks[q.id]?.acceptedAt) return 'accepted';
+  if (marks[q.id]?.online?.decision === 'declined') return 'rejected';
   return 'open';
 }
 

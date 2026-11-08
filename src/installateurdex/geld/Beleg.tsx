@@ -38,6 +38,7 @@ import {
   type VatMode,
 } from './invoice';
 import { InvoiceBadge } from './parts';
+import { AngebotOnline } from './AngebotOnline';
 import { buildInvoiceHtml, docTitle, downloadEbInterface, downloadEInvoice, type InvoiceDoc } from './print';
 import { centsText, deDay, deTs, errText, localDay, qtyText, splitAddress, toCents, toQty } from './util';
 
@@ -808,6 +809,20 @@ function Editor({ initial }: { initial: Loaded }) {
             {status === 'paid' && stored?.paidAt && <div className="small" style={{ color: '#86efac' }}>bezahlt am {deTs(stored.paidAt)}</div>}
             {status === 'canceled' && stored?.canceledReason && <div className="idx-storno">Storniert: {stored.canceledReason}</div>}
           </div>
+
+          {quote && status === 'issued' && stored?.id && (
+            <AngebotOnline
+              geld={geld}
+              invoiceId={stored.id}
+              number={stored.number}
+              customer={draft.recipient.name}
+              customerEmail={draft.recipient.email}
+              privateCustomer={!!draft.recipient.private}
+              validUntil={stored.dueAt}
+              firm={(stored.profile as StoredProfile | undefined)?.legalName || profile.legalName}
+              toInvoiceHref={`${base}/rechnungen/neu?ausAngebot=${stored.id}`}
+            />
+          )}
 
           {editable && (
             <div className={`card idx-geld-check ${issues.length ? 'warn' : 'ok'}`}>

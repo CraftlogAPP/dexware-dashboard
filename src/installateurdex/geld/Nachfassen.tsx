@@ -24,6 +24,7 @@ import {
   type FollowUpMarks,
 } from './nachfassLogik';
 import { deDay, errText, localDay } from './util';
+import { onlineStatus } from './angebotLink';
 
 export function Nachfassen() {
   const { ext, org, base, isOwner } = useInst();
@@ -96,7 +97,7 @@ function Liste({
     try {
       // gespeicherter Stand = mit dem Server zusammengeführt (z. B. „angenommen“ eines Kollegen bleibt)
       const saved = await ext.geld.setFollowUpMark(org.id, id, next);
-      setMarks({ ...marks, [id]: saved });
+      setMarks({ ...marks, [id]: { ...saved, online: marks[id]?.online } }); // Online-Stand (Kundenlink) bleibt
     } catch (e) {
       setError(errText(e));
     } finally {
@@ -174,6 +175,12 @@ function Liste({
           {x.lastNudge ? `${x.validUntil ? ' · ' : ''}${x.nudges === 1 ? 'einmal' : `${x.nudges}×`} nachgefasst, zuletzt ${deDay(x.lastNudge)}` : ''}
           {waiting ? `${x.validUntil || x.lastNudge ? ' · ' : ''}nachfassen ab ${deDay(x.nextDue)}` : ''}
         </p>
+        {m[q.id]?.online?.viewedAt && (
+          <p className="nf-info nf-online">
+            {onlineStatus(m[q.id]?.online, true).text}
+            {x.lastNudge ? '' : ' — guter Moment zum Anrufen'}
+          </p>
+        )}
         {!waiting && (
           <>
             <div className="row nf-actions">

@@ -6,7 +6,7 @@ import { historyInvoices } from '../auswertung/cockpitDemo';
 import { searchArticles, type Article } from './articles';
 import { emptyProfile, ISSUE_ERROR, profileSnapshot, REMIND_ERROR, STATUS_ERROR, type Catalog, type GeldData, type StoredArticle, type StoredInvoice, type StoredProfile } from './api';
 import { addDaysYmd, formatNumber, totals, type InvoiceDraft, type InvoiceLine } from './invoice';
-import { mergeMarks, type FollowUpMarks } from './nachfassLogik';
+import { mergeMarks, type FollowUpMarks, type OnlineQuote } from './nachfassLogik';
 
 const wait = <T,>(v: T, ms = 120): Promise<T> => new Promise((r) => setTimeout(() => r(structuredClone(v)), ms));
 const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -175,6 +175,12 @@ export function demoGeld(): GeldData {
   const seq: Record<string, number> = { invoice: 14, quote: 5, credit: 1 };
   let followUp: FollowUpMarks = {};
   const find = (id: string) => invoices.find((x) => x.id === id);
+  const demoLinks = (): Record<string, OnlineQuote> => {
+    const open = invoices.filter((x) => x.kind === 'quote' && x.status === 'issued').slice(0, 2);
+    const out: Record<string, OnlineQuote> = {};
+    if (open[0]) out[open[0].id] = { viewedAt: new Date(Date.now() - 3 * 3600_000).toISOString(), views: 2 };
+    return out;
+  };
 
   return {
     inspection: (id) => {
@@ -352,6 +358,14 @@ export function demoGeld(): GeldData {
     },
     // Beispieldaten: so, als wäre quote_follow_up schon eingespielt (Merker bis zum Neuladen)
     followUpMarks: () => wait(followUp),
+    // Beispiel-Kundenlinks: ein Angebot geöffnet, eines online angenommen (Stand bis zum Neuladen)
+    quoteLinks: () => wait(demoLinks()),
+    async quoteLinkCreate(invoiceId) {
+      const v = find(invoiceId);
+      if (!v || v.kind !== 'quote' || v.status !== 'issued') throw new Error('Den Link gibt es nur für ausgestellte Angebote deines Betriebs.');
+      return wait('https://installateurdex.dexware.app/angebot/?t=demo', 200);
+    },
+    quoteSignature: () => wait(null),
     async setFollowUpMark(_orgId, quoteId, mark) {
       const v = find(quoteId);
       if (!v || v.kind !== 'quote' || v.status === 'draft') throw new Error('Merker gehen nur bei ausgestellten Angeboten.');

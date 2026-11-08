@@ -8,7 +8,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '../fetchAll';
 import type { AccountingSettings } from './accountingExport';
 import { articleNoOf, matchArticle, saleCents, type Article, type PricingRule } from './articles';
-import { isMissingTable, markFromRow, mergeMarks, rowFromMark, type FollowUpMark, type FollowUpMarks, type FollowUpRow } from './nachfassLogik';
+import { isMissingTable, markFromRow, mergeMarks, rowFromMark, type FollowUpMark, type FollowUpMarks, type FollowUpRow, type OnlineQuote } from './nachfassLogik';
+import { quoteLinkUrl } from './angebotLink';
 import { localDay } from './util';
 import { defaultVatRate, totals, type InvoiceDeduction, type InvoiceDraft, type InvoiceKind, type InvoiceProfile, type InvoiceLine, type Land, type MaterialLine } from './invoice';
 
@@ -140,6 +141,29 @@ export interface GeldData {
    * gespeicherten (zusammengeführten) Stand.
    */
   setFollowUpMark(orgId: string, quoteId: string, mark: FollowUpMark): Promise<FollowUpMark>;
+
+  /**
+   * Angebot online annehmen (quote_link, NACHTRAG-ANGEBOT-ONLINE-2026-11-08.sql): Stand aller Kundenlinks.
+   * null = SQL noch nicht eingespielt → das Portal zeigt nichts davon.
+   */
+  quoteLinks(): Promise<Record<string, OnlineQuote> | null>;
+  /** Kundenlink anlegen bzw. den bestehenden holen (renew = neuer Schlüssel, alter ungültig). Liefert die Adresse. */
+  quoteLinkCreate(invoiceId: string, renew?: boolean): Promise<string>;
+  /** Unterschrift (PNG-Daten-URL) eines online angenommenen Angebots */
+  quoteSignature(invoiceId: string): Promise<string | null>;
+}
+
+/** quote_link oder die Funktionen fehlen (SQL noch nicht eingespielt) — nicht bei PGRST002/Netz/401 */
+export function isMissingQuoteLink(e: { code?: string; message?: string } | null | undefined): boolean {
+  if (!e) return false;
+  if (['42P01', 'PGRST205', 'PGRST202', '42883'].includes(String(e.code ?? ''))) return true;
+  if (e.code) return false;
+  return /could not find the (table|function)|quote_link.* does not exist/i.test(e.message ?? '');
+}
+
+type QuoteLinkRow = { invoice_id: string; viewed_at: string | null; views: number | null; decided_at: string | null; decision: 'accepted' | 'declined' | null; signer_name: string | null; decline_reason: string | null; early_start: boolean | null };
+function onlineFromRow(r: QuoteLinkRow, day: (d: Date) => string): OnlineQuote {
+  return { viewedAt: r.viewed_at ?? undefined, views: r.views ?? 0, decision: r.decision ?? undefined, decidedAt: r.decided_at ?? undefined, decidedDay: r.decided_at ? day(new Date(r.decided_at)) : undefined, name: r.signer_name ?? undefined, reason: r.decline_reason ?? undefined, earlyStart: r.early_start };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -614,6 +638,31 @@ export function supabaseGeld(sb: SupabaseClient): GeldData {
       if (isMissingTable(error)) throw new Error('Merker gehen erst, wenn das Nachfassen in der Datenbank eingerichtet ist (NACHTRAG-ANGEBOTE-2026-11-07.sql).');
       if (error.code === '22023') throw new Error('Merker gehen nur bei ausgestellten Angeboten.');
       dbError('Merker konnte nicht gespeichert werden', error);
+    },
+    async quoteLinks() {
+      const { data, error } = await fetchAllRows<QuoteLinkRow>((a, b) =>
+        sb.from('quote_link').select('invoice_id, viewed_at, views, decided_at, decision, signer_name, decline_reason, early_start').order('invoice_id').range(a, b),
+      );
+      if (error) return null; // fehlt (SQL) oder vorübergehend — dann eben ohne Online-Stand
+      const out: Record<string, OnlineQuote> = {};
+      for (const r of data) out[r.invoice_id] = onlineFromRow(r, (d) => localDay(d));
+      return out;
+    },
+    async quoteLinkCreate(invoiceId, renew = false) {
+      const { data, error } = await sb.rpc('quote_link_create', { p_invoice: invoiceId, p_renew: renew });
+      if (error) {
+        if (isMissingQuoteLink(error)) throw new Error('„Online annehmen“ ist in der Datenbank noch nicht eingerichtet (NACHTRAG-ANGEBOT-ONLINE-2026-11-08.sql).');
+        if (error.code === '22023' || error.code === '42501') throw new Error('Den Link gibt es nur für ausgestellte Angebote deines Betriebs.');
+        dbError('Link konnte nicht erstellt werden', error);
+      }
+      const url = quoteLinkUrl(data as string);
+      if (!url) throw new Error('Link konnte nicht erstellt werden.');
+      return url;
+    },
+    async quoteSignature(invoiceId) {
+      const { data } = await sb.from('quote_link').select('signature').eq('invoice_id', invoiceId).maybeSingle();
+      const sig = (data as { signature?: string | null } | null)?.signature;
+      return typeof sig === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(sig) ? sig : null;
     },
   };
 }

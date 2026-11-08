@@ -3,7 +3,7 @@
 
 import type { GeldData, StoredInvoice } from './api';
 import { addDaysYmd } from './invoice';
-import { DEFAULT_FOLLOW_UP_DAYS, FOLLOW_UP_DAY_CHOICES, type FollowUpMarks } from './nachfassLogik';
+import { DEFAULT_FOLLOW_UP_DAYS, FOLLOW_UP_DAY_CHOICES, withOnline, type FollowUpMarks } from './nachfassLogik';
 import { localDay } from './util';
 
 /** So weit zurück werden Angebote/Rechnungen geladen (Gewinnquote 90 Tage, offene Angebote sind selten älter) */
@@ -22,11 +22,14 @@ export interface NachfassDaten {
  */
 export async function loadNachfassDaten(geld: GeldData, softMarks = false): Promise<NachfassDaten> {
   const today = localDay();
-  const [ranged, latest, marks] = await Promise.all([
+  const [ranged, latest, rawMarks, links] = await Promise.all([
     geld.invoices({ from: addDaysYmd(today, -LOOKBACK_DAYS), to: addDaysYmd(today, 1) }),
     geld.invoices(),
     softMarks ? geld.followUpMarks().catch(() => null) : geld.followUpMarks(),
+    geld.quoteLinks().catch(() => null), // Angebot online annehmen — ohne SQL einfach ohne
   ]);
+  // online angenommen/abgelehnt zählt im Nachfassen wie in der App (nachfassLogik withOnline)
+  const marks = rawMarks ? withOnline(rawMarks, links) : null;
   const byId = new Map<string, StoredInvoice>();
   for (const x of [...ranged, ...latest]) byId.set(x.id, x);
   return { all: [...byId.values()], marks };

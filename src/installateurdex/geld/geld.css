@@ -469,6 +469,21 @@
 .idx-scope .nf-info.warn {
   color: #fcd34d;
 }
+/* Angebot online angesehen (Kundenlink) — jetzt anrufen */
+.idx-scope .nf-info.nf-online {
+  color: #7dd3fc;
+  font-weight: 700;
+}
+/* Karte „Online annehmen lassen“ im Beleg */
+.idx-scope .ql-card { border-width: 1.5px; }
+.idx-scope .ql-card.accepted { border-color: #22c55e; }
+.idx-scope .ql-card.declined { border-color: #f87171; }
+.idx-scope .ql-status { font-weight: 800; margin: 4px 0; }
+.idx-scope .ql-card.accepted .ql-status { color: #4ade80; }
+.idx-scope .ql-card.declined .ql-status { color: #fca5a5; }
+.idx-scope .ql-sig { background: #fff; border-radius: 10px; padding: 6px; max-width: 320px; margin-top: 8px; }
+.idx-scope .ql-sig img { width: 100%; height: auto; display: block; }
+.idx-scope .ql-url { font-family: ui-monospace, Consolas, monospace; font-size: 12px; word-break: break-all; color: var(--muted); }
 .idx-scope .nf-actions {
   margin-top: 10px;
   gap: 6px;
