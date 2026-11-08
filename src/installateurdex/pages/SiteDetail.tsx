@@ -11,6 +11,7 @@ import { AkteLimitHinweis } from '../AkteLimitHinweis';
 import { akteLimitNote } from '../akteLimitNote';
 import { fmtEur, kindInfo, makerModel, reminderState, type Site } from '../types';
 import { AnlagenSchema } from '../anlage/AnlagenSchema';
+import { VertraegeKarte } from '../vertrag/Vertraege';
 
 /**
  * Kundenportal „Mein Zuhause“ (zuhause.sql) je Objekt freigeben — wie die App (SiteFormScreen): nur mit E-Mail des
@@ -291,6 +292,8 @@ export function SiteDetail() {
                       Kundendaten und die Zustimmung zur Erinnerungsmail werden in der App beim Objekt gepflegt.
                     </p>
                   </div>
+
+                  <VertraegeKarte siteId={site.id} assetNames={new Map(assets.map((a) => [a.id, a.name]))} />
 
                   <div className="card">
                     <h3 className="idx-card-title">Offene Empfehlungen ({open.length})</h3>

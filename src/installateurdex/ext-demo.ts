@@ -4,6 +4,7 @@ import { demoPlanung } from './planung/demo';
 import { demoAuswertung } from './auswertung/demo';
 import { demoGeld } from './geld/demo';
 import { demoPruefpunkte } from './pruefpunkte/demo';
+import { demoVertraege } from './vertrag/vertraegeData';
 // @ext-demo-import
 
 export function demoExt(): ExtData {
@@ -12,6 +13,7 @@ export function demoExt(): ExtData {
     auswertung: demoAuswertung(),
     geld: demoGeld(),
     pruefpunkte: demoPruefpunkte(),
+    vertraege: demoVertraege(),
     // @ext-demo
   };
 }
