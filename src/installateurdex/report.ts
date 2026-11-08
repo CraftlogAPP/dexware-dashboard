@@ -31,6 +31,7 @@ import {
   type LeakInfo,
   type Site,
 } from './types';
+import { isSafeImgSrc } from '../lib/imgSrc';
 
 const DEFAULT_COLOR = '#B5651D'; // Kupfer wie im App-PDF
 const DISCLAIMER =
@@ -52,7 +53,7 @@ function esc(s: string | null | undefined): string {
 /** Nur Bild-Daten-URIs und https-Links als Bildquelle zulassen. */
 function imgSrc(u: string | null | undefined): string {
   if (!u) return '';
-  return /^(data:image\/|https:\/\/)/.test(u) ? esc(u) : '';
+  return isSafeImgSrc(u) ? esc(u) : '';
 }
 
 function css(accent: string): string {

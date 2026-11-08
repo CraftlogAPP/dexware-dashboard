@@ -23,6 +23,7 @@ import {
   type Zahlweise,
 } from './vertragLogik';
 import type { Land } from '../geld/invoice';
+import { isSafeImgSrc } from '../../lib/imgSrc';
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
@@ -35,7 +36,7 @@ const DEFAULT_BRAND_COLOR = '#B5651D'; // Kupfer wie im App-PDF
 const resolveBrandColor = (c?: string | null) => (c && /^#[0-9A-Fa-f]{6}$/.test(c) ? c : DEFAULT_BRAND_COLOR);
 /** Druck läuft im selben Ursprung wie das Portal: als Bildquelle nur data:image/… und https://, Wert maskiert. */
 function imgSrc(u: string | null | undefined): string {
-  return u && /^(data:image\/|https:\/\/)/.test(u) ? esc(u) : '';
+  return isSafeImgSrc(u) ? esc(u) : '';
 }
 
 

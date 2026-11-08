@@ -27,6 +27,7 @@ import {
   type Site,
   type Slot,
 } from './types';
+import { isSafeImgSrc } from '../lib/imgSrc';
 
 export interface OrgSettingsInput {
   public_phone: string | null;
@@ -176,8 +177,8 @@ export function supabaseData(sb: SupabaseClient): InstData {
     return rows.map((r) => {
       const p = pathOf(r.photo_url);
       if (p) return { ...r, photo_url: signed.get(p)?.url ?? null };
-      // Nur Bild-Daten oder https durchlassen — alles andere nicht als Bildquelle verwenden.
-      const ok = typeof r.photo_url === 'string' && /^(data:image\/|https:\/\/)/.test(r.photo_url);
+      // Nur eingebettete Rasterbilder oder der Supabase-Speicher (lib/imgSrc.ts) — alles andere nicht als Bildquelle.
+      const ok = isSafeImgSrc(r.photo_url);
       return ok ? r : { ...r, photo_url: null };
     });
   }
@@ -285,7 +286,7 @@ export function supabaseData(sb: SupabaseClient): InstData {
       if (error || !data) return null; // Anzeige-Komfort — nie die Seite blockieren
       const signed = await signPhotos(sb, { photo_url: (data as { photo_url: string | null }).photo_url });
       const u = signed.photo_url;
-      return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u) ? u : null;
+      return isSafeImgSrc(u) ? u : null;
     },
 
     async lastLeakCheck() {

@@ -16,6 +16,7 @@ import {
   type InspectionWithPhotos,
   type Site,
 } from './types';
+import { isSafeImgSrc } from '../lib/imgSrc';
 
 function esc(s: string): string {
   return s
@@ -28,7 +29,7 @@ function esc(s: string): string {
 /** Bildquelle (Unterschrift kommt roh aus der DB): nur data:image/… oder https://, maskiert — sonst nichts. */
 function imgSrc(u: string | null | undefined): string {
   if (!u) return '';
-  return /^(data:image\/|https:\/\/)/.test(u) ? esc(u) : '';
+  return isSafeImgSrc(u) ? esc(u) : '';
 }
 
 function itemName(id: string | null, items: LiftingItem[]): string {

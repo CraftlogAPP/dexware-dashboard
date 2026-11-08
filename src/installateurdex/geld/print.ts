@@ -5,6 +5,7 @@
 import { activeDeductions, deductionGross, epcPayload, euro, legalNotes, lineNet, toCiiXml, totals, type InvoiceDraft, type InvoiceProfile } from './invoice';
 import { toEbInterfaceXml } from './ebInterface';
 import { qrSvg } from './qr';
+import { isSafeImgSrc } from '../../lib/imgSrc';
 
 const DEFAULT_BRAND_COLOR = '#B5651D'; // wie App lib/branding.ts
 
@@ -48,7 +49,7 @@ export interface DocBranding {
 
 function imgSrc(u: string | null | undefined): string {
   if (!u) return '';
-  return /^(data:image\/|https:\/\/)/.test(u) ? esc(u) : '';
+  return isSafeImgSrc(u) ? esc(u) : '';
 }
 
 export function docTitle(d: InvoiceDraft): string {

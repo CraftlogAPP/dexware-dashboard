@@ -3,6 +3,7 @@
 
 import { isProOrg, type InstOrg } from '../types';
 import type { FgasYear } from './logic';
+import { isSafeImgSrc } from '../../lib/imgSrc';
 
 const DEFAULT_COLOR = '#B5651D'; // DEFAULT_BRAND_COLOR in mobile/src/lib/branding.ts
 
@@ -15,7 +16,7 @@ const day = (iso: string) => new Date(iso).toLocaleDateString('de-DE');
 /** Nur Bild-Daten-URIs und https-Links als Logo zulassen (wie report.ts). */
 function imgSrc(u: string | null | undefined): string {
   if (!u) return '';
-  return /^(data:image\/|https:\/\/)/.test(u) ? esc(u) : '';
+  return isSafeImgSrc(u) ? esc(u) : '';
 }
 
 export function buildFgasYearHtml(org: InstOrg, r: FgasYear): string {
