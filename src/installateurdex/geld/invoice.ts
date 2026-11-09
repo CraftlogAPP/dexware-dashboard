@@ -115,11 +115,12 @@ export function parseQty(s: string | number | undefined): number {
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
-/** Minuten → abzurechnende Stunden im Takt (aufgerundet), z. B. 70 min @15 → 1,25 h */
+/** Minuten → abzurechnende Stunden im Takt (aufgerundet), z. B. 70 min @15 → 1,25 h.
+ *  Auf 2 Stellen gerundet wie in der App: bei 5-Minuten-Takt wäre 85 min = 1,41666… h → Menge × Preis ≠ Zeilensumme. */
 export function billableHours(minutes: number, step = 15): number {
   if (!minutes || minutes <= 0) return 0;
   const s = step > 0 ? step : 15;
-  return (Math.ceil(minutes / s) * s) / 60;
+  return Math.round(((Math.ceil(minutes / s) * s) / 60) * 100) / 100;
 }
 
 export function defaultVatRate(land: Land): number {
