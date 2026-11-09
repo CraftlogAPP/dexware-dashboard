@@ -1348,6 +1348,86 @@ select option {
   font-size: 12.5px;
   font-weight: 600;
 }
+a.due-row:hover {
+  text-decoration: none;
+}
+
+/* ---------- Startseite: Cockpit (Fälligkeiten aller angemeldeten Apps) ---------- */
+.cockpit {
+  margin: 4px 0 30px;
+  padding: 18px 18px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.07), rgba(245, 158, 11, 0.02)), var(--surface);
+}
+.cockpit-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 4px 12px;
+}
+.cockpit-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+.cockpit-head h2 span {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 15px;
+}
+.cockpit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.cockpit-card {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 4px 8px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.cockpit-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 10px 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+.cockpit-more .i {
+  width: 14px;
+  height: 14px;
+}
+.cockpit-ok {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  border-color: rgba(34, 197, 94, 0.32);
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.08), rgba(34, 197, 94, 0.02)), var(--surface);
+}
+.cockpit-ok > .i {
+  width: 26px;
+  height: 26px;
+  color: #4ade80;
+  flex: none;
+}
+.cockpit-ok div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cockpit-ok span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.group-title.more {
+  margin-top: 36px;
+}
 
 @media (max-width: 760px) {
   .site-header .auth-status {

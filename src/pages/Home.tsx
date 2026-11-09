@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, ArrowUpRight, Check, SlidersHorizontal } from 'lucide-react';
 import { APPS, STATUS_ORDER, appIcon, type AppConfig } from '../apps/registry';
 import { DueBell } from '../duechecks/DueBell';
+import { DueCockpit } from '../duechecks/DueCockpit';
 import { useDueChecks } from '../duechecks/useDueChecks';
 import { useHiddenApps } from '../lib/appPrefs';
 import { LegalLinks } from '../components/LegalLinks';
@@ -16,6 +17,20 @@ export function Home() {
   const due = useDueChecks();
   const { hidden, toggle, reset } = useHiddenApps();
   const visible = apps.filter((a) => !hidden.has(a.id));
+  // Angemeldet in mindestens einer App: „Deine Apps“ = die angemeldeten (+ externe wie BaumDex bleiben unten),
+  // der Rest unter „Weitere Dexware-Apps“. Vorher hießen alle 17 „Deine Apps“, auch für Ein-App-Kunden.
+  const signedInIds = due.sessionsChecked ? new Set(Object.keys(due.sessions).filter((id) => due.sessions[id])) : new Set<string>();
+  const mine = signedInIds.size > 0 ? visible.filter((a) => signedInIds.has(a.id)) : visible;
+  const others = signedInIds.size > 0 ? visible.filter((a) => !signedInIds.has(a.id)) : [];
+  const tile = (app: AppConfig, i: number) => (
+    <AppTile
+      key={app.id}
+      app={app}
+      index={i}
+      dueCount={due.results[app.id]?.count ?? 0}
+      signedIn={due.sessionsChecked && app.id in due.sessions ? due.sessions[app.id] : null}
+    />
+  );
 
   return (
     <>
@@ -62,23 +77,19 @@ export function Home() {
           </p>
         </section>
 
-        <h2 className="group-title">Deine Apps</h2>
+        <DueCockpit {...due} />
+
+        <h2 className="group-title">{signedInIds.size > 0 ? 'Deine Apps' : 'Apps'}</h2>
         {visible.length > 0 ? (
-          <div className="tile-grid">
-            {visible.map((app, i) => (
-              <AppTile
-                key={app.id}
-                app={app}
-                index={i}
-                dueCount={due.results[app.id]?.count ?? 0}
-                signedIn={
-                  due.sessionsChecked && app.id in due.sessions
-                    ? due.sessions[app.id]
-                    : null
-                }
-              />
-            ))}
-          </div>
+          <>
+            <div className="tile-grid">{mine.map(tile)}</div>
+            {others.length > 0 && (
+              <>
+                <h2 className="group-title more">Weitere Dexware-Apps</h2>
+                <div className="tile-grid">{others.map((app, i) => tile(app, mine.length + i))}</div>
+              </>
+            )}
+          </>
         ) : (
           <div className="tiles-empty">
             <p>Alle Apps sind ausgeblendet.</p>
