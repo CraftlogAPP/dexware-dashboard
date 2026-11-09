@@ -14,7 +14,7 @@ function esc(s: string): string {
 const PROOF_NOTE = `<div class="proof"><b>Prüffester Strecken-Nachweis.</b> Die Fahrt wird per GPS aufgezeichnet (ungenaue Punkte über ±35 m
   und GPS-Sprünge werden ausgelassen). Gefahrene Länge, Abdeckung der Strecken-Vorlage und den Server-Eingang berechnet der Server
   selbst — unabhängig von Handy-Uhr und App. Abdeckung: Die Vorlage wird alle 10 m geprüft; ein Abschnitt gilt als befahren, wenn die
-  aufgezeichnete Fahrt höchstens 25 m entfernt verlief. Pausen in der Aufzeichnung (App verlassen) werden vermerkt und nicht als
+  aufgezeichnete Fahrt höchstens 25 m entfernt verlief. Pausen in der Aufzeichnung (unterbrochen, z. B. App beendet) werden vermerkt und nicht als
   gefahren gewertet. Jede Fahrt erhält beim Eingang einen Prüfcode (SHA-256 über alle Nachweisfelder); eine spätere Änderung ist
   technisch gesperrt.</div>`;
 

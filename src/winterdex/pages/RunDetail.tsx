@@ -100,7 +100,7 @@ export function RunDetail() {
               <div className="card" style={{ marginBottom: 16 }}>
                 {run.gaps.length > 0 && (
                   <div className="gps-warn" style={{ color: '#B91C1C', fontWeight: 700 }}>
-                    Pausen in der Aufzeichnung: {run.gaps.map(([a, b]) => fmtTimeSpan(a, b)).join(', ')} (App verlassen —
+                    Pausen in der Aufzeichnung: {run.gaps.map(([a, b]) => fmtTimeSpan(a, b)).join(', ')} (Aufzeichnung unterbrochen —
                     nicht als gefahren gewertet)
                   </div>
                 )}
