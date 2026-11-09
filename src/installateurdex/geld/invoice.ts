@@ -409,6 +409,8 @@ export function validate(d: InvoiceDraft, p: InvoiceProfile): string[] {
   });
   if (d.kind === 'quote') return issues;
   if (!d.serviceDate) issues.push('Leistungsdatum fehlt.');
+  // Leistungszeitraum: „bis“ nach dem Leistungsdatum (wie App)
+  else if (d.serviceDateTo && d.serviceDateTo <= d.serviceDate) issues.push('Leistungszeitraum: „Leistung bis“ muss nach dem Leistungsdatum liegen (oder leer lassen).');
   if (!small && !d.recipient.name.trim()) issues.push('Name des Kunden fehlt.');
   if (!small && !(d.recipient.street?.trim() && d.recipient.city?.trim())) issues.push('Anschrift des Kunden fehlt.');
   if (at) {
