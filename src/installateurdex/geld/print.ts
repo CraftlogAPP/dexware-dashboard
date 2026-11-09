@@ -15,6 +15,14 @@ const esc = (s: unknown) =>
 const day = (iso?: string) => (iso ? esc(String(iso).slice(0, 10).split('-').reverse().join('.')) : '');
 const qty = (n: number) => esc(Number(n).toLocaleString('de-DE', { maximumFractionDigits: 3 }));
 const rate = (n: number) => esc(String(Number(n))); // wie App: Rohzahl (z. B. 8.1), aber garantiert eine Zahl
+
+/** Frei eingetragene Abschläge: Netto + USt ausweisen (§ 14 Abs. 5 UStG / § 11 Abs. 1 Z 4 UStG AT) — wie App und Buchungsexport (Hauptsatz). */
+function prepaidSplit(t: ReturnType<typeof totals>, vatMode: InvoiceDraft['vatMode']): string {
+  if (vatMode !== 'normal' || !t.byRate.length || t.prepaidCents <= 0) return '';
+  const main = [...t.byRate].sort((a, b) => b.baseCents - a.baseCents)[0];
+  const vat = Math.round((t.prepaidCents * main.rate) / (100 + main.rate));
+  return `<br/><span style="font-size:0.85em;color:#666">brutto, darin netto ${euro(t.prepaidCents - vat)} + USt ${rate(main.rate)} % ${euro(vat)}</span>`;
+}
 const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /** wie App pdf/report.ts pdfFileName (ohne Endung — der Browser nimmt den Titel als Dateinamen) */
@@ -154,7 +162,7 @@ ${d.intro?.trim() ? `<p class="intro">${esc(d.intro.trim()).replace(/\n/g, '<br/
   <tr><td>Summe netto</td><td class="num">${sgn(t.netCents)}</td></tr>
   ${vatRows}
   <tr class="total"><td>${quote ? 'Angebotssumme' : credit ? 'Gutschrift gesamt' : ded.length ? 'Gesamtleistung brutto' : 'Gesamtbetrag'}</td><td class="num">${sgn(t.grossCents)}</td></tr>
-  ${ded.length ? `${dedRows}${restRows}` : t.prepaidCents > 0 && !quote ? `<tr><td>abzüglich Abschläge</td><td class="num">− ${euro(t.prepaidCents)}</td></tr><tr class="total"><td>Zu zahlen</td><td class="num">${euro(t.dueCents)}</td></tr>` : ''}
+  ${ded.length ? `${dedRows}${restRows}` : t.prepaidCents > 0 && !quote ? `<tr><td>abzüglich Abschläge${prepaidSplit(t, d.vatMode)}</td><td class="num">− ${euro(t.prepaidCents)}</td></tr><tr class="total"><td>Zu zahlen</td><td class="num">${euro(t.dueCents)}</td></tr>` : ''}
 </table>
 ${p.land === 'DE' && r.private && t.laborGrossCents > 0 && !quote ? `<div class="labor">Darin enthaltene Arbeits- und Fahrtkosten (§ 35a EStG): ${euro(t.laborGrossCents)} inkl. USt</div>` : ''}
 ${notes.length ? `<div class="notes">${notes.map(esc).join('<br/>')}</div>` : ''}
