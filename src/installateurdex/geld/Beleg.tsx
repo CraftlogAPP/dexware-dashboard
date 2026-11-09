@@ -334,6 +334,14 @@ function Editor({ initial }: { initial: Loaded }) {
   const changeStatus = (s: 'paid' | 'issued' | 'canceled', reason?: string) =>
     run(s, async () => {
       if (!stored) return;
+      // Abschlagsrechnung, die eine ausgestellte Schlussrechnung abzieht: erst die Schlussrechnung stornieren (wie App)
+      if (s === 'canceled' && stored.kind === 'invoice' && stored.number) {
+        const finals = (await geld.invoices()).filter(
+          (x) => x.id !== stored.id && x.kind === 'invoice' && (x.status === 'issued' || x.status === 'paid') &&
+            activeDeductions(x.data).some((dd) => dd.id === stored.id || dd.number === stored.number),
+        );
+        if (finals.length) throw new Error(`Diese Abschlagsrechnung ist in ${finals.map((x) => x.number).join(', ')} abgezogen. Storniere zuerst die Schlussrechnung, dann diese Rechnung.`);
+      }
       const res = await geld.setStatus(stored.id, s, reason, s === 'paid' ? paidDay : undefined);
       adopt(await geld.invoice(stored.id));
       setCancelText(null);
