@@ -69,7 +69,7 @@ export function buildReportHtml(
         : '';
       return `<tr class="${op.canceled ? 'canceled' : ''}">
         <td>${time}${proof}</td>
-        <td>${action}</td>
+        <td>${action}${op.notes?.trim() ? `<div style="font-size:10px">Notiz: ${esc(op.notes.trim())}</div>` : ''}</td>
         <td>${grit}</td>
         <td>${esc(weatherLabel(op.weather))}</td>
         <td class="small">${gpsProofCell(op)}</td>
