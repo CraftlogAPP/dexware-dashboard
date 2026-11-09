@@ -206,8 +206,11 @@ export function totals(d: InvoiceDraft): InvoiceTotals {
   const netCents = byRate.reduce((s, g) => s + g.baseCents, 0);
   const vatCents = byRate.reduce((s, g) => s + g.vatCents, 0);
   const grossCents = netCents + vatCents;
-  const laborNet = d.lines.filter((l) => l.kind === 'labor' || l.kind === 'travel').reduce((s, l) => s + lineNet(l), 0);
-  const laborGrossCents = noVat ? laborNet : round(laborNet * (1 + (d.lines.find((l) => l.kind === 'labor')?.vatRate ?? 0) / 100));
+  // § 35a: brutto je Zeile mit IHREM Steuersatz (wie App) — ohne Arbeitszeit-Zeile kam sonst 0 % USt heraus
+  const laborLines = d.lines.filter((l) => l.kind === 'labor' || l.kind === 'travel');
+  const laborGrossCents = noVat
+    ? laborLines.reduce((s, l) => s + lineNet(l), 0)
+    : round(laborLines.reduce((s, l) => s + lineNet(l) * (1 + (Number(l.vatRate) || 0) / 100), 0));
   // Schlussrechnung: Abschläge je Steuersatz (Beträge exakt wie auf den Abschlagsrechnungen, nicht neu gerechnet)
   const ded = new Map<number, { netCents: number; vatCents: number }>();
   for (const x of activeDeductions(d)) {
