@@ -11,12 +11,14 @@ import { useInst } from '../context';
 import type { StoredProfile } from './api';
 import { cleanAccounting, resolveAccounting, revenueKeys, revenueLabel, type AccountingSettings } from './accountingExport';
 import { errText } from './util';
+import { parseEuro } from '../vertrag/vertragLogik';
 
 // wie App InvoiceProfileScreen
 const centsToText = (c?: number) => (c ? (c / 100).toFixed(2).replace('.', ',') : '');
+// Tausenderpunkt: „1.500“ = 1.500 € — wie App
 const textToCents = (s: string) => {
-  const n = Number(s.replace(/[^0-9,.]/g, '').replace(',', '.'));
-  return Number.isFinite(n) && n > 0 && n < 100_000 ? Math.round(n * 100) : undefined;
+  const c = parseEuro(s);
+  return c != null && c > 0 && c < 10_000_000 ? c : undefined;
 };
 const IBAN_RE = /^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/;
 

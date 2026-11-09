@@ -2,6 +2,7 @@
 
 import type { StoredInvoice } from './api';
 import { calendarDaysBetween } from './invoice';
+import { parseEuro } from '../vertrag/vertragLogik';
 
 /** Kalendertag „JJJJ-MM-TT“ in LOKALER Zeit (wie App lib/dates.ts localDay — nie toISOString). */
 export function localDay(d: Date = new Date()): string {
@@ -14,10 +15,8 @@ export const deTs = (iso?: string) => (iso ? deDay(localDay(new Date(iso))) : ''
 
 // wie App InvoiceScreen
 export const centsText = (c: number) => (c ? (c / 100).toFixed(2).replace('.', ',') : '');
-export const toCents = (s: string) => {
-  const n = Number(s.replace(/[^0-9,.-]/g, '').replace(',', '.'));
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : 0;
-};
+// Deutscher Tausenderpunkt: „1.500“ = 1.500 € (vorher 1,50 €), „1.500,50“ ging auf 0 — wie App (parseEuro)
+export const toCents = (s: string) => parseEuro(s) ?? 0;
 export const toQty = (s: string) => {
   const n = Number(s.replace(',', '.').replace(/[^0-9.]/g, ''));
   return Number.isFinite(n) && n > 0 ? n : 0;
