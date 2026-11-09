@@ -178,8 +178,11 @@ export function fmtPct(n: number | null | undefined): string {
   return n == null ? '—' : `${n.toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
 }
 /** „16:43–17:19 Uhr“ (fmtTime hängt selbst „Uhr“ an). */
+/** Ende an einem anderen Kalendertag (Berliner Zeit) bekommt das Datum dazu: „23:40–00:20 Uhr“ wäre sonst mehrdeutig (wie App). */
 export function fmtTimeSpan(a: string, b: string): string {
-  return `${fmtTime(a).replace(/ Uhr$/, '')}–${fmtTime(b)}`;
+  const day = (iso: string) => new Date(iso).toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit' });
+  const end = day(a) === day(b) ? fmtTime(b) : `${day(b)}, ${fmtTime(b)}`;
+  return `${fmtTime(a).replace(/ Uhr$/, '')}–${end}`;
 }
 /** Lokales Datum (yyyy-mm-dd) — „heute gefahren" nach Ortszeit, nicht UTC. */
 export function localDay(iso: string | Date): string {
