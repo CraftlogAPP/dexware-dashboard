@@ -108,11 +108,25 @@ export interface InvoiceDraft {
 
 const round = (n: number) => Math.round(n + Number.EPSILON * Math.sign(n));
 
+/**
+ * Erste Zahl aus einem Mengen-Text, deutsche Schreibweise: „2,5“ → 2,5 · „1.500“ → 1500 · „1.234,5“ → 1234,5 ·
+ * „1.5“ → 1,5 · „ca. 3 Stk“ → 3 · „2x3“ → 2 (vorher 0,3 bzw. 23). Unlesbares/0 → null.
+ */
+export function readQty(s: string | number | undefined | null): number | null {
+  if (typeof s === 'number') return Number.isFinite(s) && s > 0 ? s : null;
+  const m = /\d[\d.,]*/.exec(String(s ?? ''));
+  if (!m) return null;
+  let t = m[0].replace(/[.,]+$/, '');
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  else if (/^[1-9]\d{0,2}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+  if (!/^\d+(\.\d+)?$/.test(t)) return null;
+  const n = Number(t);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 /** „2,5“ / „3“ / „1.5“ → Zahl; Unlesbares → 1 */
 export function parseQty(s: string | number | undefined): number {
-  if (typeof s === 'number') return Number.isFinite(s) && s > 0 ? s : 1;
-  const n = parseFloat(String(s ?? '').replace(',', '.').replace(/[^0-9.]/g, ''));
-  return Number.isFinite(n) && n > 0 ? n : 1;
+  return readQty(s) ?? 1;
 }
 
 /** Minuten → abzurechnende Stunden im Takt (aufgerundet), z. B. 70 min @15 → 1,25 h.

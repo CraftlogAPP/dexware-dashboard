@@ -57,12 +57,19 @@ export const euroText = (c: number) => `${(c / 100).toLocaleString('de-DE', { mi
 
 /** „120“, „120,50“, „1.200,50“ → Cent; ungültig/leer → null. */
 export function parseEuro(s: string): number | null {
-  const t = s.trim().replace(/\s|€/g, '');
+  const t = s.trim().replace(/[\s€'’]|EUR/gi, '');
   if (!t) return null;
-  // „1.200,50“ / „120,5“ → Komma = Dezimal; „1.200“ → Tausenderpunkt; „120.50“ → Dezimalpunkt
-  const norm = /,\d{1,2}$/.test(t) ? t.replace(/\./g, '').replace(',', '.') : /^\d{1,3}(\.\d{3})+$/.test(t) ? t.replace(/\./g, '') : t.replace(/,/g, '');
+  // Deutsche Schreibweise: Ein Komma ist IMMER das Dezimalzeichen (Punkte davor = Tausender) — auch bei
+  // „0,125“ (vorher 125,00 €) oder „12,345“ (vorher 12.345,00 €). Ohne Komma: „1.200“ = Tausenderpunkt,
+  // „120.50“ / „0.125“ = Dezimalpunkt. Gerundet wird kaufmännisch auf Cent.
+  const norm = t.includes(',')
+    ? t.replace(/\./g, '').replace(',', '.')
+    : /^[1-9]\d{0,2}(\.\d{3})+$/.test(t)
+      ? t.replace(/\./g, '')
+      : t;
+  if (!/^\d+(\.\d+)?$/.test(norm)) return null;
   const n = Number(norm);
-  return Number.isFinite(n) && n >= 0 && n < 1_000_000 ? Math.round(n * 100) : null;
+  return Number.isFinite(n) && n >= 0 && n < 1_000_000 ? Math.round(n * 100 + 1e-9) : null;
 }
 
 /** Wartungen pro Jahr bei einem Intervall in Monaten (24 → 0,5). */

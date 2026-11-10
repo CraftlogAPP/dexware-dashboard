@@ -1,7 +1,7 @@
 // Kleine gemeinsame Helfer der Geld-Seiten (Eingabe-Umwandlung wie App InvoiceScreen/ArticlesScreen, Status-Abzeichen).
 
 import type { StoredInvoice } from './api';
-import { calendarDaysBetween } from './invoice';
+import { calendarDaysBetween, readQty } from './invoice';
 import { parseEuro } from '../vertrag/vertragLogik';
 
 /** Kalendertag „JJJJ-MM-TT“ in LOKALER Zeit (wie App lib/dates.ts localDay — nie toISOString). */
@@ -17,10 +17,7 @@ export const deTs = (iso?: string) => (iso ? deDay(localDay(new Date(iso))) : ''
 export const centsText = (c: number) => (c ? (c / 100).toFixed(2).replace('.', ',') : '');
 // Deutscher Tausenderpunkt: „1.500“ = 1.500 € (vorher 1,50 €), „1.500,50“ ging auf 0 — wie App (parseEuro)
 export const toCents = (s: string) => parseEuro(s) ?? 0;
-export const toQty = (s: string) => {
-  const n = Number(s.replace(',', '.').replace(/[^0-9.]/g, ''));
-  return Number.isFinite(n) && n > 0 ? n : 0;
-};
+export const toQty = (s: string) => readQty(s) ?? 0; // gleicher Leser wie parseQty („1.500“ = 1500, „1.234,5“ = 1234,5)
 export const qtyText = (n: number) => (n ? String(n).replace('.', ',') : '');
 
 /** „Musterstraße 1, 7000 Eisenstadt“ → Straße / PLZ / Ort (wie App InvoiceScreen splitAddress) */

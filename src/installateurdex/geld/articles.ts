@@ -215,7 +215,7 @@ export function parseMoney(s: string): number | null {
   const lastComma = t.lastIndexOf(','), lastDot = t.lastIndexOf('.');
   if (lastComma > lastDot) t = t.replace(/\./g, '').replace(',', '.');
   else if (lastDot > lastComma && lastComma >= 0) t = t.replace(/,/g, '');
-  else if (lastComma < 0 && /^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+  else if (lastComma < 0 && /^[1-9]\d{0,2}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, ''); // „0.125“ bleibt 0,125
   if (!/^-?\d+(\.\d+)?$/.test(t)) return null;
   const v = Math.round(parseFloat(t) * 100);
   return Number.isFinite(v) && v >= 0 ? v : null;
