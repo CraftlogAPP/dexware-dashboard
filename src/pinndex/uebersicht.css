@@ -192,6 +192,9 @@
 }
 
 /* ---------- Karte ---------- */
+.pinn-scope .pinn-overview > * {
+  min-width: 0;
+}
 .pinn-scope .pinn-map-col {
   position: sticky;
   top: 76px;
