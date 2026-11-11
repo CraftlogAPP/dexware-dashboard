@@ -57,7 +57,9 @@ function AboContent({ info }: { info: AboInfo }) {
             ? 'Das Suite-Bundle schaltet die Pro-Funktionen in allen Dex-Apps frei — auch in dieser.'
             : proActive
               ? `Dein Pro-Abo für ${app.name} ist aktiv.`
-              : `Du nutzt ${app.name} im Free-Tarif. Pro oder das Suite-Bundle schließt du in der ${app.name}-App am Handy ab (Google Play).`}
+              : app.notInSuite
+                ? `Du nutzt ${app.name} im Free-Tarif. Pro schließt du in der ${app.name}-App am Handy ab (Google Play). ${app.name} ist nicht Teil des Dexware-Suite-Abos.`
+                : `Du nutzt ${app.name} im Free-Tarif. Pro oder das Suite-Bundle schließt du in der ${app.name}-App am Handy ab (Google Play).`}
         </p>
       </div>
 

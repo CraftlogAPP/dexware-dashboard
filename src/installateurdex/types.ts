@@ -16,7 +16,7 @@ import type { Org } from '../lib/orgApi';
 // ---------------------------------------------------------------------------
 export interface InstOrg extends Org {
   plan?: 'free' | 'pro' | null;
-  /** Pro gilt bis hier (Ablauf aus RevenueCat + Puffer); null = unbefristet (Suite, Sonderlizenz). tarif-abgleich.sql */
+  /** Pro gilt bis hier (Ablauf aus RevenueCat + Puffer); null = unbefristet (Sonderlizenz, Admin). tarif-abgleich.sql */
   plan_until?: string | null;
   /** Plätze für Monteure laut Abo (ohne Inhaber) — setzt nur der Server (sync_seat_limit). */
   seat_limit?: number | null;

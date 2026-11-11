@@ -8,7 +8,7 @@ import { isProOrg } from '../types';
 
 /**
  * Maßgeblich ist der Tarif des BETRIEBS (org.plan/plan_until) — den gleicht der Server mit dem Abo des
- * Inhabers ab (Pro, Team 3/5/10, Suite, Sonderlizenz). Monteure haben kein eigenes Abo.
+ * Inhabers ab (Pro, Team 3/5/10, Sonderlizenz — seit 11.11.2026 kein Suite-Abo). Monteure haben kein eigenes Abo.
  * Der Inhaber sieht darunter zusätzlich sein Store-Abo aus RevenueCat (Ablauf, Kündigung).
  */
 export function Abo() {
