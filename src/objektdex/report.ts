@@ -89,7 +89,7 @@ export function buildReportHtml(x: ReportInput): string {
 </style></head><body>
 <div class="head"><div><h1>Leistungsnachweis</h1><div class="muted">${esc(x.orgName)}</div></div>
 <div style="text-align:right"><b>${esc(p.name)}</b><div class="muted">${esc(p.address)}</div>${p.customer_name ? `<div class="muted">für ${esc(p.customer_name)}</div>` : ''}<div><b>Zeitraum:</b> ${esc(x.periodLabel)}</div></div></div>
-<div class="kpis"><div class="kpi"><span class="small">Einsätze</span><b>${valid.length}</b></div><div class="kpi"><span class="small">storniert</span><b>${x.ops.length - valid.length}</b></div><div class="kpi"><span class="small">Mängel im Zeitraum</span><b>${x.defects.length}</b></div></div>
+<div class="kpis"><div class="kpi"><span class="small">Einsätze</span><b>${valid.length}</b></div><div class="kpi"><span class="small">storniert</span><b>${x.ops.length - valid.length}</b></div><div class="kpi"><span class="small">Mängel (offen + im Zeitraum)</span><b>${x.defects.length}</b></div></div>
 <h2>Soll/Ist je Leistung</h2>
 ${siRows ? `<table><thead><tr><th>Leistung</th><th>Turnus</th><th style="text-align:right">erledigt</th></tr></thead><tbody>${siRows}</tbody></table>` : '<p class="muted">Keine Leistungen im Zeitraum.</p>'}
 <h2>Einsätze</h2>

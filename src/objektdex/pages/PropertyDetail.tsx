@@ -125,7 +125,7 @@ export function PropertyDetail() {
               <div className="card empty">Noch keine Leistungen. Ohne Leistungen ist das Objekt nie „fällig“.</div>
             ) : (
               <div className="table-wrap">
-                <table>
+                <table className="od-ops">
                   <thead>
                     <tr>
                       <th>Leistung</th>
@@ -232,7 +232,7 @@ export function PropertyDetail() {
               <div className="card empty">In den letzten 60 Tagen keine Einsätze.</div>
             ) : (
               <div className="table-wrap">
-                <table>
+                <table className="od-ops">
                   <tbody>
                     {ops.map((o) => (
                       <tr key={o.id} className={o.canceled ? 'od-canceled' : undefined}>

@@ -127,7 +127,7 @@ function RecentOps({ ops, names }: { ops: OdOperation[]; names: Map<string, stri
   if (!ops.length) return <div className="card empty">Diese Woche noch keine Einsätze.</div>;
   return (
     <div className="table-wrap">
-      <table>
+      <table className="od-ops">
         <thead>
           <tr>
             <th>Zeit</th>

@@ -300,3 +300,35 @@ table.od-sollist td {
   color: var(--accent-text);
   margin: 4px 0;
 }
+
+/* Einsatz-Tabellen am Handy als Karten (statt seitlich scrollen) */
+@media (max-width: 640px) {
+  table.od-ops thead {
+    display: none;
+  }
+  table.od-ops,
+  table.od-ops tbody,
+  table.od-ops tr,
+  table.od-ops td {
+    display: block;
+    width: 100%;
+  }
+  table.od-ops tr {
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.od-ops tr:last-child {
+    border-bottom: 0;
+  }
+  table.od-ops td {
+    border: 0 !important;
+    padding: 2px 12px !important;
+    white-space: normal;
+  }
+  table.od-ops td:first-child {
+    font-weight: 800;
+  }
+  table.od-ops td:empty {
+    display: none;
+  }
+}

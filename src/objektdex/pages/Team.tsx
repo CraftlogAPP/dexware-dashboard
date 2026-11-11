@@ -53,7 +53,7 @@ export function Team() {
               </div>
             )}
             <div className="table-wrap">
-              <table>
+              <table className="od-ops">
                 <thead>
                   <tr>
                     <th>E-Mail</th>

@@ -96,7 +96,7 @@ export function Links() {
                 <div className="card empty">Noch keine Links.</div>
               ) : (
                 <div className="table-wrap">
-                  <table>
+                  <table className="od-ops">
                     <thead>
                       <tr>
                         <th>Objekt</th>

@@ -72,7 +72,14 @@ const PROPS: [P, S[]][] = [
 ];
 
 const PEOPLE = ['Lena Krämer', 'Tom Berger'];
-const NOTES = ['Treppenhaus nass gewischt, Fenster Podest 2. OG gereinigt.', 'Alles in Ordnung.', 'Zufahrt gekehrt, Gully frei gemacht.', 'Tonnen wieder reingestellt, Deckel geschlossen.', '', ''];
+// Notiz passend zur ersten Leistung (nur jeder zweite Einsatz hat eine)
+const NOTES: Record<string, string> = {
+  stairs: 'Treppenhaus nass gewischt, Fenster Podest 2. OG gereinigt.',
+  bins: 'Tonnen wieder reingestellt, Deckel geschlossen.',
+  sweep: 'Zufahrt gekehrt, Gully frei gemacht.',
+  playground: 'Sichtkontrolle ohne Befund.',
+  mow: 'Rasen gemäht, Schnittgut abgefahren.',
+};
 const at = (day: Day, hh: number, mm: number) => new Date(`${day}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`).toISOString();
 const hash = (n: number) => (n * 2654435761 % 4294967296).toString(16).padStart(8, '0').repeat(8);
 
@@ -167,7 +174,7 @@ export function createDemoStore(): DemoStore {
         service_ids: done.map((s) => s.id),
         services: done.map((s) => ({ id: s.id, name: s.name, cadence: s.cadence })),
         photo_count: photos,
-        notes: NOTES[n % NOTES.length] || null,
+        notes: n % 2 ? NOTES[done[0].template_key ?? ''] ?? 'Alles in Ordnung.' : null,
         performer_name: PEOPLE[(n + pi) % 2],
         received_at: at(day, Math.floor((minute + 26) / 60), (minute + 26) % 60),
         distance_m: 9 + (n % 7),
