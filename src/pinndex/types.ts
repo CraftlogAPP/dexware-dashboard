@@ -25,6 +25,8 @@ export interface PinnOrg {
   seat_limit: number;
   seat_override: number | null;
   allow_open_pool: boolean;
+  /** Ergänzung 11.11.: Standort beim Starten/Beenden mitschicken (nur Chef schaltet) */
+  share_location?: boolean;
   created_at: string;
 }
 
@@ -35,7 +37,7 @@ export interface PinnMember {
   display_name: string | null;
   color: string | null;
   active: boolean;
-  /** Zusatz laut SCHEMA-ABWEICHUNGEN.md: Chef/Disponent-Mitteilung bei „fertig“ abschaltbar */
+  /** Zusatz laut SCHEMA-ABWEICHUNGEN.md: Chef/Büro-Mitteilung bei „fertig“ abschaltbar */
   notify_done?: boolean;
   created_at: string;
 }
@@ -46,6 +48,9 @@ export interface Customer {
   name: string;
   phone: string | null;
   address: string | null;
+  /** Ergänzung 11.11.: Koordinaten der Adresse (einmalig gesucht, beim Kunden gemerkt) */
+  lat?: number | null;
+  lng?: number | null;
   note: string | null;
   deleted_at: string | null;
   updated_at: string;
@@ -72,6 +77,9 @@ export interface Job {
   work_seconds: number;
   /** Zusatz laut SCHEMA-ABWEICHUNGEN.md: Beginn der laufenden Strecke (nur bei status running), sonst null */
   running_since: string | null;
+  /** Ergänzung 11.11.: Koordinaten der Adresse (Pin auf der Live-Karte) */
+  lat?: number | null;
+  lng?: number | null;
   done_note: string | null;
   outcome: JobOutcome | null;
   photos: string[] | null;
@@ -94,7 +102,7 @@ export interface JobEvent {
   seq?: number;
 }
 
-/** Was Chef/Disponent beim Anlegen/Bearbeiten setzen darf (Stammdaten — nie status/work_seconds). */
+/** Was Chef/Büro beim Anlegen/Bearbeiten setzen darf (Stammdaten — nie status/work_seconds). */
 export interface JobInput {
   title: string;
   customer_id: string | null;
@@ -107,12 +115,16 @@ export interface JobInput {
   urgent: boolean;
   assignee_id: string | null;
   helper_ids: string[];
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface CustomerInput {
   name: string;
   phone: string | null;
   address: string | null;
+  lat?: number | null;
+  lng?: number | null;
   note: string | null;
 }
 
@@ -152,7 +164,7 @@ export const EVENT_LABEL: Record<EventKind, string> = {
 
 export const ROLE_LABEL: Record<PinnRole, string> = {
   owner: 'Chef',
-  dispatcher: 'Disponent',
+  dispatcher: 'Büro',
   worker: 'Monteur',
 };
 

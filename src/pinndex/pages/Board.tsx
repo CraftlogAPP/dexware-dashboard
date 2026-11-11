@@ -4,7 +4,6 @@
 // Aktualisierung: Realtime (context.tsx) + Rückfall alle 20 s + beim Zurückkehren in den Tab (useLiveRefresh).
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Inbox, Plus, Siren, Timer, Undo2, Users } from 'lucide-react';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { usePointerDrag, type DropSpot } from '../../installateurdex/planung/ziehen';
@@ -83,21 +82,6 @@ export function Board() {
   };
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
   const [statusFilter, setStatusFilter] = useState<JobStatus | 'urgent' | null>(null);
-
-  // Direktlinks: …?karte=<id> öffnet eine Karte (z. B. aus einer Mitteilung), …?neu=1 das Anlegen-Blatt
-  const [params, setParams] = useSearchParams();
-  useEffect(() => {
-    const k = params.get('karte');
-    const n = params.get('neu');
-    if (!k && !n) return;
-    if (k) sheet.openJob(k);
-    else if (canManage) sheet.newJob({ day: dayKey(new Date()) });
-    const rest = new URLSearchParams(params);
-    rest.delete('karte');
-    rest.delete('neu');
-    setParams(rest, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const from = view === 'day' ? anchor : weekStart(anchor);
   const to = addDays(from, view === 'day' ? 1 : 7);

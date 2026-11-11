@@ -1,0 +1,481 @@
+/* PinnDex — Übersicht „Wer ist wo“, Live-Karte, Adress-Pin, Team-Ergänzungen (11.11.). Nur Tokens aus index.css. */
+
+.pinn-scope .pinn-today-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 14px 0 18px;
+  font-size: 14.5px;
+  color: var(--muted);
+}
+.pinn-scope .pinn-today-strip b {
+  font-size: 20px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-right: 2px;
+}
+.pinn-scope .pinn-today-strip .st-done b {
+  color: var(--st-done);
+}
+.pinn-scope .pinn-today-strip .st-running b {
+  color: var(--st-running);
+}
+.pinn-scope .pinn-today-strip .st-new b {
+  color: var(--st-new);
+}
+.pinn-scope .pinn-today-strip .urgent,
+.pinn-scope .pinn-today-strip .urgent b {
+  color: var(--urgent);
+}
+.pinn-scope .pinn-today-strip .i {
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+}
+.pinn-scope .pinn-overview {
+  display: grid;
+  grid-template-columns: minmax(330px, 1fr) minmax(0, 1.45fr);
+  gap: 18px;
+  align-items: start;
+}
+.pinn-scope .pinn-who-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pinn-scope .pinn-who {
+  --pc: var(--muted);
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--card-solid);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+  animation: pinn-card-in 0.35s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.pinn-scope .pinn-who:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+.pinn-scope .pinn-who.focused {
+  border-color: var(--pc);
+  box-shadow: 0 0 0 1px var(--pc), var(--shadow-pop);
+}
+.pinn-scope .pinn-who.k-working {
+  background: linear-gradient(100deg, color-mix(in oklab, var(--st-running) 9%, var(--card-solid)), var(--card-solid) 60%);
+}
+.pinn-scope .pinn-who-none {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+}
+.pinn-scope .pinn-who-main {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+.pinn-scope .pinn-who-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.pinn-scope .pinn-who-top b {
+  font-size: 16px;
+}
+.pinn-scope .pinn-who-count {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.pinn-scope .pinn-who-state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.pinn-scope .pinn-who-state .i {
+  width: 15px;
+  height: 15px;
+}
+.pinn-scope .pinn-who-state b {
+  color: var(--text);
+  font-weight: 650;
+}
+.pinn-scope .pinn-who-state.k-working {
+  color: var(--st-running);
+}
+.pinn-scope .pinn-who-state.k-working .i {
+  animation: pinn-breathe 1.6s ease-in-out infinite;
+}
+.pinn-scope .pinn-who-state.k-paused {
+  color: var(--st-paused);
+}
+.pinn-scope .pinn-who-state.k-onway {
+  color: var(--st-seen);
+}
+.pinn-scope .pinn-who-clock {
+  margin-left: auto;
+  font-weight: 750;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.pinn-scope .pinn-who-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pinn-scope .pinn-who-job {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pinn-scope .pinn-who-job:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pinn-scope .pinn-who-job span {
+  color: var(--muted);
+  font-weight: 600;
+  margin-right: 4px;
+}
+.pinn-scope .pinn-who-job.now span {
+  color: var(--st-running);
+}
+.pinn-scope .pinn-who-job.urgent {
+  color: var(--urgent);
+}
+.pinn-scope .pinn-who-bar {
+  height: 5px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.pinn-scope .pinn-who-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--pc);
+  transition: width 0.6s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.pinn-scope .pinn-tolink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* ---------- Karte ---------- */
+.pinn-scope .pinn-map-col {
+  position: sticky;
+  top: 76px;
+}
+.pinn-scope .pinn-map-box {
+  position: relative;
+}
+.pinn-scope .pinn-map {
+  height: calc(100vh - 230px);
+  min-height: 420px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--lane-bg);
+  z-index: 0;
+}
+.pinn-scope .pinn-map-wait {
+  display: grid;
+  place-items: center;
+}
+.pinn-scope .pinn-map-all {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 500;
+}
+/* Kacheln im Dunkel-Modus abdunkeln (Pins bleiben farbig) */
+.pinn-scope[data-theme='dark'] .pinn-map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.6);
+}
+.pinn-scope .pinn-map .leaflet-control-attribution {
+  background: color-mix(in oklab, var(--surface) 85%, transparent);
+  color: var(--muted);
+  font-size: 11px;
+}
+.pinn-scope .pinn-map .leaflet-control-attribution a {
+  color: var(--accent-text);
+}
+.pinn-scope .pinn-map .leaflet-bar a {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+.pinn-scope .pinn-map .leaflet-bar a:hover {
+  background: var(--surface2);
+}
+.pinn-scope .pinn-map .leaflet-tooltip.pinn-tip {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop);
+  font: 13px/1.4 Inter, system-ui, sans-serif;
+  padding: 7px 10px;
+}
+.pinn-scope .pinn-map .leaflet-tooltip-top.pinn-tip::before {
+  border-top-color: var(--border-strong);
+}
+.pinn-scope .pinn-pin-wrap {
+  background: none;
+  border: none;
+}
+.pinn-scope .pinn-pin {
+  --c: var(--st-new);
+  position: relative;
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+.pinn-scope .pinn-pin i {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 2.5px solid var(--surface);
+  box-shadow: 0 0 0 1.5px var(--c), var(--shadow);
+  transition: transform 0.2s;
+}
+.pinn-scope .pinn-pin:hover i {
+  transform: scale(1.25);
+}
+.pinn-scope .pinn-pin.st-seen {
+  --c: var(--st-seen);
+}
+.pinn-scope .pinn-pin.st-running {
+  --c: var(--st-running);
+}
+.pinn-scope .pinn-pin.st-paused {
+  --c: var(--st-paused);
+}
+.pinn-scope .pinn-pin.st-done {
+  --c: var(--st-done);
+  opacity: 0.75;
+}
+.pinn-scope .pinn-pin.urgent:not(.st-done) i {
+  box-shadow: 0 0 0 2px var(--urgent), var(--shadow);
+}
+.pinn-scope .pinn-pin.st-running::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: var(--c);
+  opacity: 0.5;
+  animation: pinn-pin-pulse 1.8s ease-out infinite;
+}
+@keyframes pinn-pin-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.6;
+  }
+  80%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+.pinn-scope .pinn-pin b {
+  position: absolute;
+  left: 25px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--st-running);
+  color: var(--on-running);
+  font: 700 12px/1.4 Inter, system-ui, sans-serif;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+.pinn-scope .pinn-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.pinn-scope .pinn-map-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--c, var(--st-new));
+  vertical-align: -1px;
+}
+.pinn-scope .pinn-map-legend .st-seen {
+  --c: var(--st-seen);
+}
+.pinn-scope .pinn-map-legend .st-running {
+  --c: var(--st-running);
+}
+.pinn-scope .pinn-map-legend .st-paused {
+  --c: var(--st-paused);
+}
+.pinn-scope .pinn-map-legend .st-done {
+  --c: var(--st-done);
+}
+.pinn-scope .pinn-nopin {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.pinn-scope .pinn-nopin .i {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 1px;
+}
+
+/* ---------- Adresse + „Pin suchen“, dezente Pin-Hinweise ---------- */
+.pinn-scope .pinn-addr {
+  margin-bottom: 14px;
+}
+.pinn-scope .pinn-addr > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.pinn-scope .pinn-addr-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+.pinn-scope .pinn-addr-row .btn {
+  height: 44px;
+  flex: none;
+}
+.pinn-scope .pinn-pinhint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.pinn-scope .pinn-pinhint.ok {
+  color: var(--st-running);
+}
+.pinn-scope .pinn-saved .pinn-pinhint {
+  display: inline;
+}
+.pinn-scope .pinn-linkbtn {
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pinn-scope .pinn-nopin .pinn-linkbtn {
+  margin-left: 0;
+}
+
+/* ---------- Team: Standort-Schalter, neue Mitglieder ---------- */
+.pinn-scope .pinn-loccard {
+  max-width: 760px;
+  margin-bottom: 16px;
+}
+.pinn-scope .pinn-loccard p {
+  margin: 4px 0 0;
+}
+.pinn-scope .pinn-switch.plain {
+  margin: 0;
+  border: none;
+  padding-left: 0;
+  height: 40px;
+}
+.pinn-scope .pinn-switch.plain.on {
+  background: transparent;
+  color: var(--text);
+}
+.pinn-scope .pinn-switch.plain.on .pinn-switch-knob {
+  background: var(--st-running);
+}
+.pinn-scope .pinn-member.new {
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.pinn-scope .pinn-newtag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.pinn-scope .pinn-newtag .i {
+  width: 13px;
+  height: 13px;
+}
+
+@media (max-width: 960px) {
+  .pinn-scope .pinn-overview {
+    grid-template-columns: 1fr;
+  }
+  .pinn-scope .pinn-map-col {
+    position: static;
+    order: -1;
+  }
+  .pinn-scope .pinn-map {
+    height: 340px;
+    min-height: 0;
+  }
+}
+@media (max-width: 760px) {
+  .pinn-scope .pinn-map {
+    height: 300px;
+    border-radius: 14px;
+  }
+  .pinn-scope .pinn-who-list {
+    padding-bottom: 80px;
+  }
+}

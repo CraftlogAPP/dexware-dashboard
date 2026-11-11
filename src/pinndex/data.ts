@@ -1,12 +1,13 @@
 // PinnDex — Datenquelle. Eine Schnittstelle, zwei Umsetzungen: echt (Supabase, hier) und Beispieldaten (demo.ts).
 // Tabellen/Spalten genau nach KONZEPT.md Abschnitt 6. Regeln:
 // - Zustandswechsel NUR über RPC job_set_status, Zeit-Korrektur NUR über RPC job_fix_time — nie status/work_seconds direkt.
-// - Stammdaten (Titel, Kunde, Termin, Zuweisung) schreibt nur Chef/Disponent; die Datenbank (RLS) prüft das selbst.
+// - Stammdaten (Titel, Kunde, Termin, Zuweisung) schreibt nur Chef/Büro; die Datenbank (RLS) prüft das selbst.
 // - Listen seitenweise laden (PostgREST liefert höchstens 1.000 Zeilen je Abfrage, siehe lib/fetchAll.ts).
 
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '../lib/fetchAll';
 import { fail } from '../lib/orgApi';
+import { geocodeAddress, type GeoPoint } from './geocode';
 import { newId } from './logic';
 import type {
   Customer,
@@ -40,9 +41,9 @@ export const PHOTO_BUCKET = 'pinn';
 
 // Spalten immer ausdrücklich nennen: member.push_token ist für Clients nicht lesbar (select('*') scheitert)
 const JOB_COLS =
-  'id, org_id, title, customer_id, customer_name, customer_phone, address, note, scheduled_at, duration_min, urgent, assignee_id, helper_ids, status, seen_at, started_at, finished_at, work_seconds, running_since, done_note, outcome, photos, result_photos, created_by, created_at, updated_at, deleted_at';
+  'id, org_id, title, customer_id, customer_name, customer_phone, address, note, scheduled_at, duration_min, urgent, assignee_id, helper_ids, status, seen_at, started_at, finished_at, work_seconds, running_since, lat, lng, done_note, outcome, photos, result_photos, created_by, created_at, updated_at, deleted_at';
 const MEMBER_COLS = 'org_id, user_id, role, display_name, color, active, notify_done, created_at';
-const CUSTOMER_COLS = 'id, org_id, name, phone, address, note, deleted_at, updated_at';
+const CUSTOMER_COLS = 'id, org_id, name, phone, address, note, lat, lng, deleted_at, updated_at';
 const EVENT_COLS = 'id, org_id, job_id, actor_id, kind, at, data, seq';
 
 export interface PinnContextData {
@@ -82,6 +83,12 @@ export interface PinnData {
   setRole(userId: string, role: Exclude<PinnRole, 'owner'>): Promise<void>;
   removeMember(userId: string): Promise<void>;
   renameOrg(name: string): Promise<void>;
+  /** Chef: Standort beim Starten/Beenden mitschicken (org.share_location) */
+  setShareLocation(on: boolean): Promise<void>;
+  /** Pin einer Karte setzen/ändern (job.lat/lng) — nach der Adress-Suche */
+  setJobPos(id: string, pos: GeoPoint | null): Promise<void>;
+  /** Adresse → Koordinaten (austauschbarer Anbieter, siehe geocode.ts). null = nicht gefunden. */
+  geocode(address: string, retry?: boolean): Promise<GeoPoint | null>;
   /** Storage-Pfade → anzeigbare Adressen (signiert, 1 h). */
   photoUrls(paths: string[]): Promise<string[]>;
   /**
@@ -290,6 +297,18 @@ export function supabaseData(sb: SupabaseClient, orgId: string): PinnData {
       const { error } = await sb.from('org').update({ name }).eq('id', orgId);
       if (error) fail('Betrieb konnte nicht gespeichert werden', error);
     },
+
+    async setShareLocation(on) {
+      const { error } = await sb.from('org').update({ share_location: on }).eq('id', orgId);
+      if (error) fail('Einstellung konnte nicht gespeichert werden', error);
+    },
+
+    async setJobPos(id, pos) {
+      const { error } = await sb.from('job').update({ lat: pos?.lat ?? null, lng: pos?.lng ?? null }).eq('id', id).eq('org_id', orgId);
+      if (error) fail('Pin konnte nicht gespeichert werden', error);
+    },
+
+    geocode: (address, retry) => geocodeAddress(address, { retry }),
 
     async photoUrls(paths) {
       const clean = paths.filter((p) => typeof p === 'string' && p.startsWith(`${orgId}/`));

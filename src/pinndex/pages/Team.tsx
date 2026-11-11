@@ -1,8 +1,8 @@
 // PinnDex — Team: Betrieb, Team-Code (PD-XXXX-XXXX, 30 Tage, erneuerbar), Plätze, Mitglieder mit Rollen.
-// Nur der Chef ändert Rollen, entfernt Mitglieder und sieht den Team-Code (Disponent: kein Team/Abo — KONZEPT.md Abschnitt 2).
+// Nur der Chef ändert Rollen, entfernt Mitglieder und sieht den Team-Code (Büro: kein Team/Abo — KONZEPT.md Abschnitt 2).
 
 import { useState } from 'react';
-import { Check, Copy, Pencil, RefreshCw, UserMinus } from 'lucide-react';
+import { Check, Copy, MapPin, Pencil, RefreshCw, Sparkles, UserMinus } from 'lucide-react';
 import { FormDialog, s, type FormValues } from '../../components/form';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { usePinn } from '../context';
@@ -65,13 +65,15 @@ export function Team() {
   }
 
   const active = members.filter((m) => m.active);
+  // „neu beigetreten“: in den letzten 7 Tagen per Team-Code dazugekommen (Chef ausgenommen) — steht oben
+  const isNew = (m: PinnMember) => m.role !== 'owner' && Date.now() - Date.parse(m.created_at) < 7 * 86400000;
   const gone = members.filter((m) => !m.active);
 
   return (
     <>
       <h1>Team</h1>
       <p className="muted" style={{ marginTop: -6 }}>
-        Chef verwaltet Betrieb und Team, Disponenten planen Aufträge, Monteure arbeiten sie in der App ab.
+        Chef verwaltet Betrieb und Team, das Büro plant Aufträge, Monteure arbeiten sie in der App ab.
       </p>
 
       <div className="card pinn-orgcard">
@@ -93,12 +95,13 @@ export function Team() {
           {(c) => c && (
             <div className="card pinn-codecard">
               <div>
-                <div className="pinn-fact-label">Team-Code für neue Monteure</div>
+                <div className="pinn-fact-label">Team-Code zum Beitreten</div>
                 {c.code ? (
                   <>
                     <div className="pinn-code mono">{c.code.code}</div>
                     <div className="muted small">
-                      In der PinnDex-App unter „Team-Code eingeben“. Beliebig oft einlösbar
+                      In der PinnDex-App unter „Team-Code eingeben“ — wer beitritt, wählt selbst <b>Monteur</b> oder <b>Büro</b>; du kannst die Rolle unten
+                      jederzeit ändern. Beliebig oft einlösbar
                       {c.code.expires_at ? `, gültig bis ${ddmmyyyy(new Date(c.code.expires_at))}` : ''}.
                     </div>
                   </>
@@ -108,8 +111,9 @@ export function Team() {
                 {c.seats && (
                   <div className={`pinn-seats${c.seats.members >= c.seats.limit ? ' full' : ''}`}>
                     <span className="pinn-seatbar" style={{ '--fill': `${Math.min(100, (c.seats.members / Math.max(1, c.seats.limit)) * 100)}%` } as React.CSSProperties} />
-                    {c.seats.members} von {c.seats.limit} Plätzen belegt
-                    {c.seats.members >= c.seats.limit ? ' — Team voll, mehr Plätze über das Abo in der App' : ''}
+                    {c.seats.members} von {c.seats.limit} Monteur-Plätzen belegt
+                    {c.seats.members >= c.seats.limit ? ' — voll, mehr Plätze über das Abo in der App' : ''}
+                    <span className="muted"> · Büro zählt nicht mit</span>
                   </div>
                 )}
               </div>
@@ -128,27 +132,58 @@ export function Team() {
         </LoadGuard>
       )}
 
+      {isOwner && (
+        <div className="card pinn-loccard">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!org.share_location}
+            className={`pinn-switch plain${org.share_location ? ' on' : ''}`}
+            disabled={busy === 'loc'}
+            onClick={() =>
+              void act('loc', async () => {
+                await data.setShareLocation(!org.share_location);
+                refreshOrg();
+              })
+            }
+          >
+            <span className="pinn-switch-knob" aria-hidden />
+            <MapPin className="i" aria-hidden /> Standort beim Starten/Beenden mitschicken
+          </button>
+          <p className="muted small">
+            Die App schickt nur in diesem Moment <b>einmal</b> den Standort mit — so steht der Pin auf der Übersicht dort, wo die Arbeit begonnen hat
+            („angekommen 08:03“). Keine Dauer-Ortung, kein Bewegungsprofil. Sag deinem Team Bescheid, wenn du es einschaltest.
+          </p>
+        </div>
+      )}
+
       {error && <div className="error-box">{error}</div>}
 
       <div className="section-head">
         <h2>Mitglieder ({active.length})</h2>
       </div>
       <div className="pinn-members">
-        {active.map((m) => {
+        {[...active.filter(isNew), ...active.filter((m) => !isNew(m))].map((m) => {
           const i = members.indexOf(m);
           return (
-            <div key={m.user_id} className="card pinn-member">
+            <div key={m.user_id} className={`card pinn-member${isNew(m) ? ' new' : ''}`}>
               <Avatar name={memberName(m)} color={memberColor(m, i)} size={42} />
               <div className="pinn-member-main">
                 <b>{memberName(m)}</b>
                 {m.user_id === me.user_id && <span className="muted small"> (du)</span>}
-                <div className="muted small">seit {ddmmyyyy(new Date(m.created_at))}</div>
+                {isNew(m) ? (
+                  <div className="pinn-newtag">
+                    <Sparkles className="i" aria-hidden /> neu beigetreten als {ROLE_LABEL[m.role]} · {ddmmyyyy(new Date(m.created_at))}
+                  </div>
+                ) : (
+                  <div className="muted small">seit {ddmmyyyy(new Date(m.created_at))}</div>
+                )}
               </div>
               {isOwner && m.role !== 'owner' ? (
                 <div className="pinn-member-actions">
                   <select aria-label={`Rolle von ${memberName(m)}`} value={m.role} disabled={!!busy} onChange={(e) => void setRole(m, e.target.value as Exclude<PinnRole, 'owner'>)}>
                     <option value="worker">Monteur</option>
-                    <option value="dispatcher">Disponent</option>
+                    <option value="dispatcher">Büro</option>
                   </select>
                   <button type="button" className="btn ghost small pinn-danger" onClick={() => remove(m)} disabled={!!busy} aria-label={`${memberName(m)} entfernen`}>
                     <UserMinus className="i" aria-hidden />

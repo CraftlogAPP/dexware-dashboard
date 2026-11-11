@@ -3,7 +3,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Ban, CalendarClock, Check, Clock, History, MapPin, Navigation, Pause, Pencil, Phone, Play, Save, Siren, StickyNote, Timer, UserRound } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { LoadGuard, useAsync } from '../components/ui';
+import type { GeoPoint } from './geocode';
 import { usePinn } from './context';
 import {
   addDays,
@@ -49,7 +51,9 @@ export function useJobSheet(): SheetApi {
 }
 
 export function JobSheetHost({ children }: { children: ReactNode }) {
+  const { canManage } = usePinn();
   const [state, setState] = useState<SheetState>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const api = useMemo<SheetApi>(
     () => ({
       openJob: (id) => setState({ kind: 'detail', id }),
@@ -58,6 +62,27 @@ export function JobSheetHost({ children }: { children: ReactNode }) {
     [],
   );
   const close = useCallback(() => setState(null), []);
+
+  // Direktlinks auf jeder Seite: …?karte=<id> öffnet eine Karte (z. B. aus einer Mitteilung), …?neu=1 das Anlegen-Blatt
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const k = params.get('karte');
+    const n = params.get('neu');
+    if (!k && !n) return;
+    if (k) api.openJob(k);
+    else if (canManage) api.newJob({ day: dayKey(new Date()) });
+    const rest = new URLSearchParams(params);
+    rest.delete('karte');
+    rest.delete('neu');
+    setParams(rest, { replace: true });
+  }, [params, setParams, api, canManage]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => setNotice(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [notice]);
+
   return (
     <SheetCtx.Provider value={api}>
       {children}
@@ -67,8 +92,17 @@ export function JobSheetHost({ children }: { children: ReactNode }) {
           job={state.job}
           preset={state.preset}
           onClose={close}
-          onSaved={(job) => (state.job ? setState({ kind: 'detail', id: job.id }) : close())}
+          onSaved={(job, pinMissing) => {
+            if (pinMissing) setNotice(`„${job.title}“ gespeichert — Adresse nicht gefunden, Pin fehlt.`);
+            if (state.job) setState({ kind: 'detail', id: job.id });
+            else close();
+          }}
         />
+      )}
+      {notice && (
+        <div className="pinn-toast" role="status">
+          <MapPin className="i" aria-hidden /> <span>{notice}</span>
+        </div>
       )}
     </SheetCtx.Provider>
   );
@@ -149,6 +183,8 @@ function DetailBody({
   const [error, setError] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
   const mine = isMine(job, me.user_id);
+  // Standort, den die App einmalig beim Starten mitgeschickt hat (job_event.data = { lat, lng, acc })
+  const arrived = events.find((e) => e.kind === 'start' && typeof e.data?.lat === 'number' && typeof e.data?.lng === 'number');
 
   async function run(fn: () => Promise<void>) {
     if (busyRef.current) return; // Doppelklick
@@ -269,6 +305,21 @@ function DetailBody({
             <a className="pinn-route" href={mapsUrl(job.address)} target="_blank" rel="noreferrer">
               <Navigation className="i" aria-hidden /> Route
             </a>
+            {arrived && <div className="pinn-pinhint ok">angekommen {hhmm(arrived.at)} (Standort beim Start)</div>}
+            {job.lat == null && (
+              <div className="pinn-pinhint">
+                Adresse nicht gefunden – Pin fehlt
+                {canManage && (
+                  <button type="button" className="pinn-linkbtn" disabled={busy} onClick={() => void run(async () => {
+                    const p = await data.geocode(job.address!, true);
+                    if (!p) throw new Error('Adresse weiterhin nicht gefunden — bitte genauer schreiben (Straße Hausnummer, PLZ Ort) unter „Bearbeiten“.');
+                    await data.setJobPos(job.id, p);
+                  })}>
+                    erneut suchen
+                  </button>
+                )}
+              </div>
+            )}
           </Fact>
         )}
         {job.note && (
@@ -559,6 +610,8 @@ interface FormState {
   assignee: string;
   helpers: string[];
   saveCustomer: boolean;
+  /** Ergebnis von „Pin suchen“ (null = noch nicht gesucht) */
+  pin: GeoPoint | null;
 }
 
 function initialForm(job: Job | null, preset?: JobPreset): FormState {
@@ -578,6 +631,7 @@ function initialForm(job: Job | null, preset?: JobPreset): FormState {
       assignee: job.assignee_id ?? '',
       helpers: job.helper_ids ?? [],
       saveCustomer: true,
+      pin: null,
     };
   }
   return {
@@ -594,6 +648,7 @@ function initialForm(job: Job | null, preset?: JobPreset): FormState {
     assignee: preset?.assignee_id ?? '',
     helpers: [],
     saveCustomer: true,
+    pin: null,
   };
 }
 
@@ -609,7 +664,17 @@ const DURATIONS = [
   ['480', '8 h'],
 ] as const;
 
-function JobForm({ job, preset, onClose, onSaved }: { job: Job | null; preset?: JobPreset; onClose: () => void; onSaved: (job: Job) => void }) {
+function JobForm({
+  job,
+  preset,
+  onClose,
+  onSaved,
+}: {
+  job: Job | null;
+  preset?: JobPreset;
+  onClose: () => void;
+  onSaved: (job: Job, pinMissing: boolean) => void;
+}) {
   const { data, members, bump } = usePinn();
   const customers = useAsync(() => data.customers(), [data]);
   const [start] = useState(() => initialForm(job, preset));
@@ -618,6 +683,17 @@ function JobForm({ job, preset, onClose, onSaved }: { job: Job | null; preset?: 
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [savedCount, setSavedCount] = useState(0);
+  const [lastPinMissing, setLastPinMissing] = useState(false);
+  // „Pin suchen“ auf Knopfdruck (nie bei jedem Tastendruck — Nominatim-Regeln)
+  const [pinState, setPinState] = useState<'idle' | 'busy' | 'found' | 'missing'>(() => (job?.address && job.lat == null ? 'missing' : 'idle'));
+  async function findPin() {
+    const addr = f.address.trim();
+    if (!addr || pinState === 'busy') return;
+    setPinState('busy');
+    const p = await data.geocode(addr, true);
+    setF((x) => (x.address.trim() === addr ? { ...x, pin: p } : x));
+    setPinState(p ? 'found' : 'missing');
+  }
   const titleRef = useRef<HTMLInputElement>(null);
   const dirty = JSON.stringify(f) !== JSON.stringify(start);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -648,10 +724,26 @@ function JobForm({ job, preset, onClose, onSaved }: { job: Job | null; preset?: 
     try {
       let customerId = f.customerId ?? exact?.id ?? null;
       const name = f.customerName.trim();
+      const addr = f.address.trim();
+      // Pin: einmalig beim Speichern — erst Bekanntes (Knopf „Pin suchen“, Karte, Kunde), sonst Adress-Suche (geocode.ts)
+      const cust = list.find((c) => c.id === customerId);
+      const same = (a: string | null | undefined) => (a ?? '').trim().toLowerCase() === addr.toLowerCase();
+      let pos: GeoPoint | null = null;
+      if (addr) {
+        pos =
+          f.pin ??
+          (job && same(job.address) && job.lat != null && job.lng != null ? { lat: job.lat, lng: job.lng } : null) ??
+          (cust && same(cust.address) && cust.lat != null && cust.lng != null ? { lat: cust.lat, lng: cust.lng } : null) ??
+          (await data.geocode(addr));
+      }
+      const pinMissing = !!addr && !pos;
       if (name && !customerId && f.saveCustomer) {
-        const c = await data.saveCustomer({ name, phone: f.phone.trim() || null, address: f.address.trim() || null, note: null });
+        const c = await data.saveCustomer({ name, phone: f.phone.trim() || null, address: addr || null, note: null, lat: pos?.lat ?? null, lng: pos?.lng ?? null });
         customerId = c.id;
         customers.refresh();
+      } else if (cust && pos && same(cust.address) && cust.lat == null) {
+        // Ergebnis beim Kunden merken — nächstes Mal ohne Suche
+        await data.saveCustomer({ name: cust.name, phone: cust.phone, address: cust.address, note: cust.note, lat: pos.lat, lng: pos.lng }, cust.id).catch(() => undefined);
       }
       const input: JobInput = {
         title: f.title.trim().slice(0, 200),
@@ -665,6 +757,8 @@ function JobForm({ job, preset, onClose, onSaved }: { job: Job | null; preset?: 
         urgent: f.urgent,
         assignee_id: f.assignee || null,
         helper_ids: f.helpers.filter((h) => h !== f.assignee),
+        lat: pos?.lat ?? null,
+        lng: pos?.lng ?? null,
       };
       const saved = await data.saveJob(input, job?.id);
       bump();
@@ -672,9 +766,10 @@ function JobForm({ job, preset, onClose, onSaved }: { job: Job | null; preset?: 
         // nächster Auftrag: Tag und Monteur bleiben, der Rest wird leer
         setF((x) => ({ ...initialForm(null, { day: x.day, assignee_id: x.assignee || null }), time: '' }));
         setSavedCount((n) => n + 1);
+        setLastPinMissing(pinMissing);
         window.setTimeout(() => titleRef.current?.focus(), 0);
       } else {
-        onSaved(saved);
+        onSaved(saved, pinMissing);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -720,6 +815,7 @@ function JobForm({ job, preset, onClose, onSaved }: { job: Job | null; preset?: 
         {savedCount > 0 && !job && (
           <div className="pinn-saved" role="status">
             <Check className="i" aria-hidden /> {savedCount === 1 ? 'Auftrag gespeichert' : `${savedCount} Aufträge gespeichert`} — weiter mit dem nächsten.
+            {lastPinMissing && <span className="pinn-pinhint"> (Adresse nicht gefunden – Pin fehlt)</span>}
           </div>
         )}
         <label className="field">
@@ -731,7 +827,17 @@ function JobForm({ job, preset, onClose, onSaved }: { job: Job | null; preset?: 
           customers={list}
           value={f.customerName}
           onChange={(v) => setF((x) => ({ ...x, customerName: v, customerId: null }))}
-          onPick={(c) => setF((x) => ({ ...x, customerName: c.name, customerId: c.id, phone: x.phone || c.phone || '', address: x.address || c.address || '' }))}
+          onPick={(c) =>
+            setF((x) => ({
+              ...x,
+              customerName: c.name,
+              customerId: c.id,
+              phone: x.phone || c.phone || '',
+              address: x.address || c.address || '',
+              // Pin vom Kunden übernehmen (keine neue Suche nötig)
+              pin: x.address ? x.pin : c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : null,
+            }))
+          }
         />
         {isNewCustomer && (
           <label className="checkbox-field pinn-newcust">
@@ -744,10 +850,29 @@ function JobForm({ job, preset, onClose, onSaved }: { job: Job | null; preset?: 
             Telefon
             <input type="tel" value={f.phone} maxLength={40} onChange={(e) => set('phone', e.target.value)} />
           </label>
-          <label className="field">
-            Adresse
-            <input value={f.address} maxLength={200} onChange={(e) => set('address', e.target.value)} placeholder="Straße, Ort" />
-          </label>
+          <div className="field pinn-addr">
+            <label htmlFor="pinn-addr-input">Adresse</label>
+            <div className="pinn-addr-row">
+              <input
+                id="pinn-addr-input"
+                value={f.address}
+                maxLength={200}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setF((x) => ({ ...x, address: v, pin: null }));
+                  setPinState('idle');
+                }}
+                placeholder="Straße, Ort"
+              />
+              <button type="button" className="btn ghost small" onClick={() => void findPin()} disabled={!f.address.trim() || pinState === 'busy'} title="Adresse auf der Karte suchen (sonst beim Speichern)">
+                <MapPin className="i" aria-hidden />
+                <span className="sr-only">Pin suchen</span>
+              </button>
+            </div>
+            {pinState === 'busy' && <span className="pinn-pinhint">sucht …</span>}
+            {pinState === 'found' && <span className="pinn-pinhint ok">Pin gefunden</span>}
+            {pinState === 'missing' && <span className="pinn-pinhint">Adresse nicht gefunden – Pin fehlt</span>}
+          </div>
         </div>
 
         <div className="field pinn-termin">

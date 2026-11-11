@@ -1,5 +1,5 @@
 // PinnDex — gemeinsamer Kontext der Seiten: Datenquelle (echt oder Beispieldaten), Betrieb, eigene Rolle, Team.
-// Rechte wie die Datenbank-Regeln (KONZEPT.md Abschnitt 2/6): Chef alles, Disponent Karten + Kunden (kein Team/Abo),
+// Rechte wie die Datenbank-Regeln (KONZEPT.md Abschnitt 2/6): Chef alles, Büro (dispatcher) Karten + Kunden (kein Team/Abo),
 // Monteur nur eigene Karten und nur Zustand (keine Stammdaten). Der Server prüft das ohnehin selbst (RLS + RPCs).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -14,7 +14,7 @@ export interface PinnCtx {
   org: PinnOrg;
   me: PinnMember;
   role: PinnRole;
-  /** Chef oder Disponent: Karten anlegen, zuweisen, Kunden pflegen, Zeiten korrigieren */
+  /** Chef oder Büro: Karten anlegen, zuweisen, Kunden pflegen, Zeiten korrigieren */
   canManage: boolean;
   /** Nur Chef: Team, Rollen, Team-Code, Betrieb */
   isOwner: boolean;

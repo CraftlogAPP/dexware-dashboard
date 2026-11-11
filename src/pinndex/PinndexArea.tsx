@@ -4,7 +4,7 @@
 
 import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, Route, Routes } from 'react-router-dom';
-import { BookUser, CircleCheck, Clock, SquareKanban, Users } from 'lucide-react';
+import { BookUser, CircleCheck, Clock, MapPinned, SquareKanban, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
@@ -14,12 +14,14 @@ import { ThemeSwitch } from './parts';
 import { loadPinnContext, supabaseData } from './data';
 import { JobSheetHost } from './JobSheet';
 import { Board } from './pages/Board';
+import { Overview } from './pages/Overview';
 import { Done } from './pages/Done';
 import { Times } from './pages/Times';
 import { Team } from './pages/Team';
 import { Customers } from './pages/Customers';
 import { ROLE_LABEL } from './types';
 import './pinndex.css';
+import './uebersicht.css';
 
 const DemoArea = import.meta.env.DEV ? lazy(() => import('./DemoArea').then((m) => ({ default: m.DemoArea }))) : null;
 
@@ -124,7 +126,8 @@ export function PinnRoutes() {
     <JobSheetHost>
       <Routes>
         <Route element={<Shell />}>
-          <Route index element={<Board />} />
+          <Route index element={<Overview />} />
+          <Route path="pinnwand" element={<Board />} />
           <Route path="erledigt" element={<Done />} />
           <Route path="zeiten" element={<Times />} />
           <Route path="kunden" element={<Customers />} />
@@ -141,6 +144,9 @@ function Shell() {
     <div className="app-shell">
       <nav className="app-nav">
         <NavLink to={base} end>
+          <MapPinned className="i" aria-hidden /> Übersicht
+        </NavLink>
+        <NavLink to={`${base}/pinnwand`}>
           <SquareKanban className="i" aria-hidden /> Pinnwand
         </NavLink>
         <NavLink to={`${base}/erledigt`}>

@@ -42,6 +42,7 @@ function seed(): Store {
     seat_limit: 5,
     seat_override: null,
     allow_open_pool: false,
+    share_location: true,
     created_at: created,
   };
   const m = (user_id: string, role: PinnRole, display_name: string, color: string | null, active = true): PinnMember => ({
@@ -55,31 +56,33 @@ function seed(): Store {
   });
   const members = [
     m('u-chef', 'owner', 'Sabine Kurz', '#f472b6'),
-    m('u-dispo', 'dispatcher', 'Petra Lang', '#c084fc'),
+    { ...m('u-dispo', 'dispatcher', 'Petra Lang', '#c084fc'), created_at: ago(60 * 26) }, // gestern beigetreten (zeigt „neu“)
     m('u-tom', 'worker', 'Tom Berger', '#60a5fa'),
     m('u-lena', 'worker', 'Lena Hofer', '#34d399'),
     m('u-murat', 'worker', 'Murat Demir', '#fbbf24'),
     m('u-jonas', 'worker', 'Jonas Wagner', '#fb923c'),
   ];
-  const c = (name: string, phone: string, address: string, note: string | null = null): Customer => ({
+  const c = (name: string, phone: string, address: string, pos: [number, number], note: string | null = null): Customer => ({
     id: newId(),
     org_id: ORG_ID,
     name,
     phone,
     address,
     note,
+    lat: pos[0],
+    lng: pos[1],
     deleted_at: null,
     updated_at: created,
   });
   const customers = [
-    c('Familie Maier', '+49 171 2345678', 'Hauptstraße 5, 84028 Landshut', 'Hund im Garten — klingeln und warten'),
-    c('Bäckerei Huber', '+49 871 44310', 'Altstadt 112, 84028 Landshut'),
-    c('Hausverwaltung Sonnhof', '+49 871 99020', 'Seligenthaler Str. 30, 84034 Landshut', 'Schlüssel beim Hausmeister, Wohnung 3 OG'),
-    c('Dr. Schneider', '+49 160 9988776', 'Am Hofgarten 7, 84036 Landshut'),
-    c('Kita Sonnenschein', '+49 871 22113', 'Ludmillastraße 4, 84034 Landshut', 'Nur zwischen 9 und 14 Uhr'),
-    c('Weber Immobilien', '+49 871 55667', 'Ländtorplatz 2, 84028 Landshut'),
-    c('Herr Yilmaz', '+49 152 3344556', 'Veldener Str. 88, 84036 Landshut'),
-    c('Gasthof zur Post', '+49 871 12345', 'Dorfplatz 1, 84032 Altdorf'),
+    c('Familie Maier', '+49 171 2345678', 'Hauptstraße 5, 84028 Landshut', [48.5441, 12.1462], 'Hund im Garten — klingeln und warten'),
+    c('Bäckerei Huber', '+49 871 44310', 'Altstadt 112, 84028 Landshut', [48.5369, 12.1526]),
+    c('Hausverwaltung Sonnhof', '+49 871 99020', 'Seligenthaler Str. 30, 84034 Landshut', [48.5412, 12.1398], 'Schlüssel beim Hausmeister, Wohnung 3 OG'),
+    c('Dr. Schneider', '+49 160 9988776', 'Am Hofgarten 7, 84036 Landshut', [48.5331, 12.1586]),
+    c('Kita Sonnenschein', '+49 871 22113', 'Ludmillastraße 4, 84034 Landshut', [48.5447, 12.1561], 'Nur zwischen 9 und 14 Uhr'),
+    c('Weber Immobilien', '+49 871 55667', 'Ländtorplatz 2, 84028 Landshut', [48.5386, 12.1491]),
+    c('Herr Yilmaz', '+49 152 3344556', 'Veldener Str. 88, 84036 Landshut', [48.5291, 12.1302]),
+    c('Gasthof zur Post', '+49 871 12345', 'Dorfplatz 1, 84032 Altdorf', [48.5611, 12.1112]),
   ];
   const cust = (i: number) => customers[i];
 
@@ -124,7 +127,7 @@ function seed(): Store {
     if (j.assignee_id) ev(j, 'assigned', j.created_at, j.created_by, { to: j.assignee_id });
     return j;
   };
-  const forCustomer = (i: number) => ({ customer_id: cust(i).id, customer_name: cust(i).name, customer_phone: cust(i).phone, address: cust(i).address });
+  const forCustomer = (i: number) => ({ customer_id: cust(i).id, customer_name: cust(i).name, customer_phone: cust(i).phone, address: cust(i).address, lat: cust(i).lat ?? null, lng: cust(i).lng ?? null });
 
   // ---------- heute ----------
   const a = job({ id: 'demo-therme', title: 'Therme tauschen', ...forCustomer(0), scheduled_at: at(0, 7, 30), duration_min: 240, assignee_id: 'u-tom', helper_ids: ['u-jonas'], status: 'running', note: 'Neue Therme steht im Keller. Alte Therme mitnehmen.', photos: [photo('Alte Therme', 200), photo('Typenschild', 30)] });
@@ -132,7 +135,7 @@ function seed(): Store {
   a.started_at = ago(47);
   a.running_since = a.started_at;
   ev(a, 'seen', a.seen_at, 'u-tom');
-  ev(a, 'start', a.started_at, 'u-tom');
+  ev(a, 'start', a.started_at, 'u-tom', { lat: 48.54402, lng: 12.14641, acc: 11 });
 
   const b = job({ id: 'demo-wasserhahn', title: 'Wasserhahn tropft — Küche', ...forCustomer(1), scheduled_at: at(0, 9, 0), duration_min: 60, assignee_id: 'u-lena', status: 'done', urgent: false });
   b.seen_at = ago(200);
@@ -143,7 +146,7 @@ function seed(): Store {
   b.outcome = 'ok';
   b.result_photos = [photo('Neue Kartusche', 160)];
   ev(b, 'seen', b.seen_at, 'u-lena');
-  ev(b, 'start', b.started_at, 'u-lena');
+  ev(b, 'start', b.started_at, 'u-lena', { lat: 48.53682, lng: 12.15248, acc: 9 });
   ev(b, 'done', b.finished_at, 'u-lena', { note: b.done_note });
 
   const cJob = job({ title: 'Heizung macht Geräusche', ...forCustomer(2), scheduled_at: at(0, 11, 0), duration_min: 90, assignee_id: 'u-lena', status: 'paused', note: 'Mieterin Frau Koch, 3. OG' });
@@ -151,7 +154,7 @@ function seed(): Store {
   cJob.started_at = ago(65);
   cJob.work_seconds = 35 * 60;
   ev(cJob, 'seen', cJob.seen_at, 'u-lena');
-  ev(cJob, 'start', cJob.started_at, 'u-lena');
+  ev(cJob, 'start', cJob.started_at, 'u-lena', { lat: 48.54131, lng: 12.13995, acc: 15 });
   ev(cJob, 'pause', ago(30), 'u-lena', { reason: 'Ersatzteil holen' });
 
   const d = job({ title: 'Rohrbruch Keller', ...forCustomer(5), scheduled_at: at(0, 10, 0), duration_min: 120, assignee_id: 'u-murat', status: 'seen', urgent: true, note: 'Wasser abgestellt. Sofort hin!' });
@@ -161,7 +164,7 @@ function seed(): Store {
   job({ title: 'Wartung Gasheizung', ...forCustomer(3), scheduled_at: at(0, 13, 30), duration_min: 90, assignee_id: 'u-murat', status: 'new' });
   job({ title: 'Spülkasten defekt', ...forCustomer(4), scheduled_at: at(0, 14, 0), duration_min: 45, assignee_id: 'u-tom', status: 'new' });
   job({ title: 'Heizkörper entlüften (8 Stück)', ...forCustomer(2), scheduled_at: at(0, 15, 30), duration_min: 60, assignee_id: 'u-jonas', status: 'seen', seen_at: ago(20) });
-  job({ title: 'Angebot vor Ort: Bad', ...forCustomer(6), scheduled_at: at(0, 16, 0), duration_min: 30, status: 'new' });
+  job({ title: 'Angebot vor Ort: Bad', ...forCustomer(6), lat: null, lng: null, scheduled_at: at(0, 16, 0), duration_min: 30, status: 'new' });
   job({ title: 'Warmwasser fällt aus', ...forCustomer(7), scheduled_at: at(0, 12, 0), duration_min: 60, status: 'new', urgent: true });
   job({ title: 'Silikonfugen Dusche erneuern', customer_name: 'Frau Lindner', customer_phone: '+49 151 1212121', address: 'Bahnhofplatz 3, 84032 Landshut', status: 'new' });
 
@@ -275,7 +278,9 @@ export function createDemoStore(): DemoStore {
     j.status = to;
     j.running_since = to === 'running' ? now : null;
     j.updated_at = now;
-    ev(j, kind, actor, extra?.note ? { note: extra.note } : null);
+    // wie die App: Standort einmalig bei Start/Weiter/Fertig, nur wenn der Chef es eingeschaltet hat
+    const loc = s.org.share_location && j.lat != null && j.lng != null && (kind === 'start' || kind === 'resume' || kind === 'done') ? { lat: j.lat + (Math.random() - 0.5) * 0.0006, lng: j.lng! + (Math.random() - 0.5) * 0.0006, acc: 10 } : {};
+    ev(j, kind, actor, { ...loc, ...(extra?.note ? { note: extra.note } : {}) });
   }
 
   // Beispiel-Monteure arbeiten: alle 9 s rückt eine Karte von heute weiter
@@ -452,7 +457,7 @@ export function createDemoStore(): DemoStore {
       }
       return delay({ code: s.org.team_code!, expires_at: s.org.team_code_expires });
     },
-    seats: () => delay({ limit: s.org.seat_override ?? s.org.seat_limit, members: s.members.filter((m) => m.active && m.role !== 'owner').length }),
+    seats: () => delay({ limit: s.org.seat_override ?? s.org.seat_limit, members: s.members.filter((m) => m.active && m.role === 'worker').length }),
     async setRole(userId, role) {
       if (viewer.role !== 'owner') throw new Error('Rolle konnte nicht geändert werden: nur der Chef.');
       const m = s.members.find((x) => x.user_id === userId);
@@ -469,6 +474,27 @@ export function createDemoStore(): DemoStore {
       if (viewer.role !== 'owner') throw new Error('Betrieb konnte nicht gespeichert werden: nur der Chef.');
       s.org.name = name;
       await delay(null);
+    },
+    async setShareLocation(on) {
+      if (viewer.role !== 'owner') throw new Error('Einstellung konnte nicht gespeichert werden: nur der Chef.');
+      s.org.share_location = on;
+      await delay(null);
+    },
+    async setJobPos(id, pos) {
+      if (!canManage()) throw new Error('Pin konnte nicht gespeichert werden: dafür fehlt dir die Berechtigung.');
+      const j = job(id);
+      j.lat = pos?.lat ?? null;
+      j.lng = pos?.lng ?? null;
+      emit();
+      await delay(null);
+    },
+    // Beispiel-Adress-Suche ohne Netz: Adressen mit „Landshut“/„Altdorf“ landen rund um Landshut, alles andere „nicht gefunden“
+    async geocode(address) {
+      await delay(null, 400);
+      if (!/landshut|altdorf|ergolding|kumhausen/i.test(address)) return null;
+      let h = 0;
+      for (const ch of address) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      return { lat: 48.537 + ((h % 1000) / 1000 - 0.5) * 0.03, lng: 12.152 + (((h >> 10) % 1000) / 1000 - 0.5) * 0.04 };
     },
     photoUrls: (paths) => delay(paths.filter((p) => p.startsWith('data:image/'))),
     subscribe(onChange, onLive) {

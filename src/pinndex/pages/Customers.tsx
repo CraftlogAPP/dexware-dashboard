@@ -1,5 +1,5 @@
 // PinnDex — Kunden: Liste mit Suche, anlegen, bearbeiten, löschen (weich: deleted_at). Entsteht sonst nebenbei beim Anlegen
-// von Aufträgen. Nur Chef/Disponent (Stammdaten). CSV-Import kommt später (KONZEPT.md Abschnitt 5).
+// von Aufträgen. Nur Chef/Büro (Stammdaten). CSV-Import kommt später (KONZEPT.md Abschnitt 5).
 
 import { useState } from 'react';
 import { MapPin, Pencil, Phone, Plus, Search, Trash2 } from 'lucide-react';
@@ -29,14 +29,20 @@ export function Customers() {
     return (
       <>
         <h1>Kunden</h1>
-        <div className="info-box">Die Kundenliste pflegen Chef und Disponent.</div>
+        <div className="info-box">Die Kundenliste pflegen Chef und Büro.</div>
       </>
     );
   }
 
   async function onSave(v: FormValues) {
-    const input = { name: s(v.name).slice(0, 120), phone: orNull(v.phone), address: orNull(v.address), note: orNull(v.note) };
-    await data.saveCustomer(input, edit && edit !== 'new' ? edit.id : undefined);
+    const address = orNull(v.address);
+    const prev = edit && edit !== 'new' ? edit : null;
+    // Pin einmalig beim Speichern suchen — nur wenn die Adresse neu/geändert ist (geocode.ts, austauschbar)
+    let pos = prev && prev.address === address && prev.lat != null && prev.lng != null ? { lat: prev.lat, lng: prev.lng } : null;
+    if (address && !pos) pos = await data.geocode(address);
+    const input = { name: s(v.name).slice(0, 120), phone: orNull(v.phone), address, note: orNull(v.note), lat: pos?.lat ?? null, lng: pos?.lng ?? null };
+    await data.saveCustomer(input, prev?.id);
+    setError(address && !pos ? `„${input.name}“ gespeichert — Adresse nicht gefunden, Pin fehlt.` : null);
     state.refresh();
   }
 
@@ -70,7 +76,7 @@ export function Customers() {
           </span>
         </label>
       </div>
-      {error && <div className="error-box">{error}</div>}
+      {error && <div className={error.includes('Pin fehlt') ? 'info-box' : 'error-box'}>{error}</div>}
       <LoadGuard state={state}>
         {(list) => {
           const rows = list.filter((c) => !needle || [c.name, c.address, c.phone, c.note].some((v) => (v ?? '').toLowerCase().includes(needle)));
@@ -95,6 +101,7 @@ export function Customers() {
                           <MapPin className="i" aria-hidden /> {c.address}
                         </a>
                       )}
+                      {c.address && c.lat == null && <span className="pinn-pinhint">Pin fehlt (Adresse nicht gefunden)</span>}
                       {c.note && <span className="muted small">{c.note}</span>}
                     </div>
                     <div className="pinn-custbtns">
