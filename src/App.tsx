@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Home } from './pages/Home';
 import { APPS, type AppConfig } from './apps/registry';
 
@@ -71,6 +71,12 @@ const loading = (
   </div>
 );
 
+/** /app/laufzettel/<rest>?<query> → /app/pinndex/<rest>?<query> (Unterseite und Direktlinks bleiben erhalten) */
+function LaufzettelRedirect() {
+  const loc = useLocation();
+  return <Navigate to={loc.pathname.replace(/^\/app\/laufzettel/, '/app/pinndex') + loc.search} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -88,6 +94,8 @@ export default function App() {
               />
             );
           })}
+          {/* Laufzettel (intern pinndex): sprechende Adresse /app/laufzettel/… leitet weiter */}
+          <Route path="/app/laufzettel/*" element={<LaufzettelRedirect />} />
           {Vorschau && <Route path="/vorschau" element={<Vorschau />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

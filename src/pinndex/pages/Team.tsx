@@ -100,7 +100,7 @@ export function Team() {
                   <>
                     <div className="pinn-code mono">{c.code.code}</div>
                     <div className="muted small">
-                      In der PinnDex-App unter „Team-Code eingeben“ — wer beitritt, wählt selbst <b>Monteur</b> oder <b>Büro</b>; du kannst die Rolle unten
+                      In der Laufzettel-App unter „Team-Code eingeben“ — wer beitritt, wählt selbst <b>Monteur</b> oder <b>Büro</b>; du kannst die Rolle unten
                       jederzeit ändern. Beliebig oft einlösbar
                       {c.code.expires_at ? `, gültig bis ${ddmmyyyy(new Date(c.code.expires_at))}` : ''}.
                     </div>

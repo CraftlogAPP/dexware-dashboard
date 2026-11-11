@@ -37,7 +37,7 @@ function seed(): Store {
     id: ORG_ID,
     name: 'Muster Haustechnik GmbH',
     owner_id: 'u-chef',
-    team_code: 'PD-7K4M-Q2XZ',
+    team_code: 'LZ-7K4M-Q2XZ',
     team_code_expires: addDays(new Date(), 23).toISOString(),
     seat_limit: 5,
     seat_override: null,
@@ -452,7 +452,7 @@ export function createDemoStore(): DemoStore {
       if (viewer.role !== 'owner') throw new Error('Team-Code konnte nicht geladen werden: nur der Chef.');
       if (renew) {
         const part = () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, 'X');
-        s.org.team_code = `PD-${part()}-${part()}`;
+        s.org.team_code = `LZ-${part()}-${part()}`;
         s.org.team_code_expires = addDays(new Date(), 30).toISOString();
       }
       return delay({ code: s.org.team_code!, expires_at: s.org.team_code_expires });

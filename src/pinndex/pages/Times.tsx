@@ -75,7 +75,7 @@ export function Times() {
         ];
       }),
     );
-    const name = `PinnDex-Zeiten-${kind === 'week' ? 'Woche' : 'Monat'}-${dayKey(from)}.csv`;
+    const name = `Laufzettel-Zeiten-${kind === 'week' ? 'Woche' : 'Monat'}-${dayKey(from)}.csv`;
     downloadCsv(name, toCsv(header, lines));
   }
 

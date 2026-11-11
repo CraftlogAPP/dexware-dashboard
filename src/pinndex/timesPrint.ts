@@ -48,7 +48,7 @@ export function buildTimesHtml(o: {
         <tbody>${lines}</tbody>
         <tfoot><tr class="tot"><td colspan="5">Summe</td><td class="n">${esc(fmtWork(r.seconds))}</td><td class="n">${esc(decimalHours(r.seconds))}</td></tr></tfoot></table>
         <div class="sig"><div><div class="line"></div><div class="lab">Datum, Unterschrift Mitarbeiter/in</div></div><div><div class="line"></div><div class="lab">Datum, Unterschrift Arbeitgeber/in</div></div></div>
-        <footer>Arbeitszeit = Summe der Strecken zwischen „Start“ und „Pause“/„Fertig“ in der PinnDex-App, gezählt beim zugewiesenen Monteur. Tag = Tag der Fertigmeldung (laufende Aufträge: Tag des Starts).${r.fixed ? ' <span class="star">*</span> = vom Chef nachträglich korrigiert (Vermerk im Verlauf der Karte).' : ''} Keine Arbeitszeitaufzeichnung im Sinne von § 16 Abs. 2 ArbZG bzw. § 26 AZG (Pausen, Fahrten außerhalb von Aufträgen fehlen). Erstellt am ${esc(dayShort(now))}${now.getFullYear()} ${esc(hhmm(now.toISOString()))} mit PinnDex.</footer>
+        <footer>Arbeitszeit = Summe der Strecken zwischen „Start“ und „Pause“/„Fertig“ in der Laufzettel-App, gezählt beim zugewiesenen Monteur. Tag = Tag der Fertigmeldung (laufende Aufträge: Tag des Starts).${r.fixed ? ' <span class="star">*</span> = vom Chef nachträglich korrigiert (Vermerk im Verlauf der Karte).' : ''} Keine Arbeitszeitaufzeichnung im Sinne von § 16 Abs. 2 ArbZG bzw. § 26 AZG (Pausen, Fahrten außerhalb von Aufträgen fehlen). Erstellt am ${esc(dayShort(now))}${now.getFullYear()} ${esc(hhmm(now.toISOString()))} mit Laufzettel.</footer>
       </section>`;
     })
     .join('');

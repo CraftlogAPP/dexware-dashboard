@@ -37,7 +37,7 @@ const Ctx = createContext<PinnCtx | null>(null);
 
 export function usePinn(): PinnCtx {
   const v = useContext(Ctx);
-  if (!v) throw new Error('usePinn außerhalb des PinnDex-Bereichs');
+  if (!v) throw new Error('usePinn außerhalb des Laufzettel-Bereichs');
   return v;
 }
 

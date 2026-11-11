@@ -436,7 +436,7 @@ function EmptyTeam({ canManage }: { canManage: boolean }) {
         <b>Noch keine Monteure im Team</b>
         <p className="muted">
           {canManage
-            ? 'Monteure treten in der PinnDex-App per Team-Code bei (unter „Team“). Aufträge kannst du trotzdem schon anlegen — sie landen in „Nicht zugewiesen“.'
+            ? 'Monteure treten in der Laufzettel-App per Team-Code bei (unter „Team“). Aufträge kannst du trotzdem schon anlegen — sie landen in „Nicht zugewiesen“.'
             : 'Sobald dir Aufträge zugewiesen sind, erscheinen sie hier.'}
         </p>
       </div>

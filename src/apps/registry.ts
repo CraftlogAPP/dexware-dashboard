@@ -66,7 +66,7 @@ const INSTALLATEURDEX_SUPABASE: SupabaseConfig = {
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxdWR3c3h2amhkd2ZsZWJva2x6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4ODgyMjQsImV4cCI6MjEwOTQ2NDIyNH0.p5SvVCHjeNGDITr4bZqUgeN9FUXo_YHZo0UVeSYKl0k',
 };
 
-// PinnDex (Arbeitsname, Live-Pinnwand für Aufträge): Supabase-Projekt existiert noch nicht. Sobald Alex es angelegt
+// Laufzettel (intern PinnDex, Live-Pinnwand für Aufträge): Supabase-Projekt existiert noch nicht. Sobald Alex es angelegt
 // und PinnDex/supabase/schema.sql eingespielt hat: Adresse + öffentlichen Anon-Key hier eintragen (wie PinnDex/mobile/.env).
 // Leer = der Bereich zeigt im Dev-Server Beispieldaten, im Produktions-Build „noch nicht freigeschaltet“.
 const PINNDEX_SUPABASE: SupabaseConfig = {
@@ -330,14 +330,16 @@ export const APPS: AppConfig[] = [
   },
   {
     id: 'pinndex',
-    name: 'PinnDex',
-    tagline: 'Die digitale Pinnwand für Aufträge — Monteure live im Blick',
+    // Sichtbarer Name seit 11.11.2026 „Laufzettel“ (eigene Marke, kein Teil der Suite) — Kennung/Route bleiben „pinndex“ (wie Bucket pinn)
+    name: 'Laufzettel',
+    tagline: 'Der digitale Laufzettel für dein Team — Aufträge verteilen, Status live sehen',
     status: 'dashboard',
-    // Name noch nicht bestätigt → nicht auf der Startseite (nur /app/pinndex)
+    // Eigenständige Marke, noch nicht gestartet → nicht auf der Startseite (nur /app/pinndex bzw. /app/laufzettel)
     unlisted: true,
-    emoji: '📌',
-    theme: { accent: '#FACC15', onAccent: '#1A1400', bg: '#0C0E13' },
-    landingUrl: 'https://pinndex.dexware.app',
+    emoji: '📋',
+    // Farben wie die App (Bernstein auf Graphit, PinnDex/mobile)
+    theme: { accent: '#F5B544', onAccent: '#1A1305', bg: '#121315' },
+    landingUrl: 'https://laufzettel.dexware.app',
     supabase: PINNDEX_SUPABASE.url && PINNDEX_SUPABASE.anonKey ? PINNDEX_SUPABASE : undefined,
   },
   // TurnDex bleibt bewusst draußen: auf Eis gelegt (kein freies Supabase-Projekt

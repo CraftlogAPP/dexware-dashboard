@@ -20,8 +20,8 @@ import { gpsProofHtml, proofStampHtml } from '../lib/gpsProof';
 
 export function Vorschau() {
   const [params] = useSearchParams();
-  // PinnDex hat einen eigenen Beispieldaten-Bereich (Pinnwand live, alle Seiten bedienbar)
-  if (params.get('app') === 'pinndex') {
+  // Laufzettel (intern pinndex) hat einen eigenen Beispieldaten-Bereich (Pinnwand live, alle Seiten bedienbar)
+  if (params.get('app') === 'pinndex' || params.get('app') === 'laufzettel') {
     const rolle = params.get('rolle');
     return <Navigate to={`/app/pinndex?demo${rolle ? `&rolle=${encodeURIComponent(rolle)}` : ''}`} replace />;
   }
