@@ -256,7 +256,9 @@ export function cadenceText(s: Pick<TurnusSpec, 'cadence' | 'weekdays' | 'monthD
 
 /** „4 von 4“ bzw. „3 (nach Bedarf)“ */
 export function sollIstText(x: SollIst): string {
-  return x.soll == null ? `${x.ist}× (nach Bedarf)` : `${x.ist} von ${x.soll}`;
+  if (x.soll == null) return `${x.ist}× (nach Bedarf)`;
+  if (x.soll === 0) return x.ist > 0 ? `${x.ist}× (noch nicht fällig)` : 'noch nicht fällig';
+  return `${x.ist} von ${x.soll}`;
 }
 
 /** „JJJJ-MM-TT“ → „TT.MM.JJJJ“ */
