@@ -39,6 +39,11 @@ export interface AppConfig {
   /** Emoji als Kachel-Icon */
   emoji: string;
   /**
+   * Nicht auf der Startseite zeigen (Name/Launch noch nicht bestätigt) — der Bereich ist nur über die Direktadresse
+   * /app/<id> erreichbar. Beim Launch einfach entfernen.
+   */
+  unlisted?: boolean;
+  /**
    * Team-Plätze, wenn die App andere Stufen hat als der Standard (Team bis 50 / Team XL bis 100, Ersatzwert 20).
    * Ohne Angabe bleibt die Team-Seite wie bisher — nur Apps mit eigenem Modell setzen das (InstallateurDex: Team 3/5/10).
    */
@@ -59,6 +64,14 @@ const INSTALLATEURDEX_SUPABASE: SupabaseConfig = {
   url: 'https://hqudwsxvjhdwfleboklz.supabase.co',
   anonKey:
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxdWR3c3h2amhkd2ZsZWJva2x6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4ODgyMjQsImV4cCI6MjEwOTQ2NDIyNH0.p5SvVCHjeNGDITr4bZqUgeN9FUXo_YHZo0UVeSYKl0k',
+};
+
+// PinnDex (Arbeitsname, Live-Pinnwand für Aufträge): Supabase-Projekt existiert noch nicht. Sobald Alex es angelegt
+// und PinnDex/supabase/schema.sql eingespielt hat: Adresse + öffentlichen Anon-Key hier eintragen (wie PinnDex/mobile/.env).
+// Leer = der Bereich zeigt im Dev-Server Beispieldaten, im Produktions-Build „noch nicht freigeschaltet“.
+const PINNDEX_SUPABASE: SupabaseConfig = {
+  url: '',
+  anonKey: '',
 };
 
 export const APPS: AppConfig[] = [
@@ -314,6 +327,18 @@ export const APPS: AppConfig[] = [
       seatsWord: 'Plätzen für weitere Monteure',
       fallbackLimit: 0,
     },
+  },
+  {
+    id: 'pinndex',
+    name: 'PinnDex',
+    tagline: 'Die digitale Pinnwand für Aufträge — Monteure live im Blick',
+    status: 'dashboard',
+    // Name noch nicht bestätigt → nicht auf der Startseite (nur /app/pinndex)
+    unlisted: true,
+    emoji: '📌',
+    theme: { accent: '#FACC15', onAccent: '#1A1400', bg: '#0C0E13' },
+    landingUrl: 'https://pinndex.dexware.app',
+    supabase: PINNDEX_SUPABASE.url && PINNDEX_SUPABASE.anonKey ? PINNDEX_SUPABASE : undefined,
   },
   // TurnDex bleibt bewusst draußen: auf Eis gelegt (kein freies Supabase-Projekt
   // verfügbar), darf in keiner öffentlichen Fläche auftauchen.

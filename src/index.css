@@ -1496,3 +1496,80 @@ a.due-row:hover {
 .route-legend a {
   margin-left: auto;
 }
+
+/* ---------- PinnDex: Zustandsfarben + Hell/Dunkel (Tokens) ----------
+   Zustände der Pinnwand als Tokens (dunkel = Standard). Hell: [data-theme='light'] am Bereich (PinnDex setzt es per
+   Umschalter in der Navigation). Nur Tokens + die wenigen fest eingestellten Weiß-Transparenzen werden überschrieben. */
+.pinn-scope {
+  --st-new: #60a5fa;
+  --st-seen: #a78bfa;
+  --st-running: #22c55e;
+  --st-paused: #fb923c;
+  --st-done: #94a3b8;
+  --st-canceled: #f87171;
+  --urgent: #ef4444;
+  --on-urgent: #ffffff;
+  --on-running: #04150a;
+  --hover: rgba(255, 255, 255, 0.04);
+  --lane-bg: rgba(255, 255, 255, 0.022);
+  --card-solid: color-mix(in oklab, var(--bg) 88%, #fff);
+}
+[data-theme='light'] {
+  color-scheme: light;
+  --st-new: #2563eb;
+  --st-seen: #7c3aed;
+  --st-running: #16a34a;
+  --st-paused: #ea580c;
+  --st-done: #64748b;
+  --st-canceled: #dc2626;
+  --urgent: #dc2626;
+  --hover: rgba(15, 23, 42, 0.05);
+  --lane-bg: rgba(15, 23, 42, 0.035);
+}
+[data-theme='light'] .app-scope {
+  --bg: #f3f4f7 !important; /* AppArea setzt --bg inline (dunkle App-Farbe) — hell überschreibt das bewusst */
+  --surface: #ffffff;
+  --surface2: #f8f9fb;
+  --card: linear-gradient(180deg, #ffffff, #fdfdfe);
+  --card-solid: #ffffff;
+  --border: rgba(15, 23, 42, 0.1);
+  --border-strong: rgba(15, 23, 42, 0.22);
+  --text: #0f172a;
+  --muted: #5b6474;
+  --accent-text: color-mix(in oklab, var(--accent) 45%, #1a1400);
+  --accent-soft: color-mix(in oklab, var(--accent) 22%, transparent);
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 10px 28px -16px rgba(15, 23, 42, 0.25);
+  --shadow-pop: 0 1px 2px rgba(15, 23, 42, 0.08), 0 24px 48px -16px rgba(15, 23, 42, 0.3);
+  color: var(--text);
+}
+[data-theme='light'] .app-nav a:hover,
+[data-theme='light'] .btn.ghost:hover {
+  background: var(--hover);
+}
+[data-theme='light'] tbody tr:hover {
+  background: var(--hover);
+}
+[data-theme='light'] .badge {
+  background: rgba(15, 23, 42, 0.04);
+}
+[data-theme='light'] .badge.green {
+  color: #15803d;
+}
+[data-theme='light'] .badge.external {
+  color: #1d4ed8;
+}
+[data-theme='light'] .badge.amber {
+  color: #b45309;
+}
+[data-theme='light'] .badge.red {
+  color: #b91c1c;
+}
+[data-theme='light'] .info-box {
+  color: #1e3a8a;
+}
+[data-theme='light'] .error-box {
+  color: #b91c1c;
+}
+[data-theme='light'] .modal-backdrop {
+  background: rgba(15, 23, 42, 0.35);
+}

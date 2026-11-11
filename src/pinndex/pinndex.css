@@ -1,0 +1,1425 @@
+/* PinnDex — Aufbau der Pinnwand-Seiten. Farben NUR über Tokens aus index.css (--accent, --text, --muted, --border,
+   --surface, --card-solid, --st-*, --urgent, --hover …) — dadurch funktionieren Hell und Dunkel ohne Doppelregeln.
+   Alle Selektoren unter .pinn-scope (Bereich wird lazy geladen, andere Dashboards bleiben unberührt). */
+
+.pinn-scope .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.pinn-scope .spacer {
+  flex: 1;
+}
+.pinn-scope .nowrap {
+  white-space: nowrap;
+}
+.pinn-scope th.num,
+.pinn-scope td.num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Beispieldaten-Hinweis ---------- */
+.pinn-scope .pinn-demo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 9px 16px;
+  font-size: 13.5px;
+  color: var(--text);
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+  border-bottom: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
+}
+
+/* ---------- Kopf, Werkzeugleiste ---------- */
+.pinn-scope .pinn-main {
+  padding-top: 22px;
+}
+.pinn-scope .pinn-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pinn-scope .pinn-head h1 {
+  margin-bottom: 4px;
+}
+.pinn-scope .pinn-sub {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+}
+.pinn-scope .pinn-add {
+  height: 48px;
+  padding: 0 22px;
+  font-size: 16px;
+  border-radius: 14px;
+}
+.pinn-scope .pinn-add .i {
+  width: 20px;
+  height: 20px;
+}
+
+.pinn-scope .pinn-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  color: var(--st-paused);
+}
+.pinn-scope .pinn-live.on {
+  color: var(--st-running);
+}
+.pinn-scope .pinn-live-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.pinn-scope .pinn-live.on .pinn-live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: currentColor;
+  animation: dot-pulse 2.4s ease-out infinite;
+}
+
+.pinn-scope .pinn-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 16px 0 12px;
+}
+.pinn-scope .pinn-seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--lane-bg);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.pinn-scope .pinn-seg button {
+  height: 34px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.pinn-scope .pinn-seg button:hover {
+  color: var(--text);
+}
+.pinn-scope .pinn-seg button.on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.pinn-scope .pinn-datenav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pinn-scope .pinn-datelabel {
+  margin-left: 6px;
+  font-size: 17px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+
+/* Zähler je Zustand = Filter */
+.pinn-scope .pinn-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.pinn-scope .pinn-count {
+  --c: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--c) 35%, transparent);
+  background: color-mix(in oklab, var(--c) 9%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+}
+.pinn-scope .pinn-count b {
+  color: var(--c);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.pinn-scope .pinn-count:hover {
+  background: color-mix(in oklab, var(--c) 16%, transparent);
+}
+.pinn-scope .pinn-count.on {
+  background: color-mix(in oklab, var(--c) 26%, transparent);
+  border-color: var(--c);
+}
+.pinn-scope .pinn-count .i {
+  width: 15px;
+  height: 15px;
+  color: var(--c);
+}
+.pinn-scope .pinn-count.st-new {
+  --c: var(--st-new);
+}
+.pinn-scope .pinn-count.st-seen {
+  --c: var(--st-seen);
+}
+.pinn-scope .pinn-count.st-running {
+  --c: var(--st-running);
+}
+.pinn-scope .pinn-count.st-paused {
+  --c: var(--st-paused);
+}
+.pinn-scope .pinn-count.st-done {
+  --c: var(--st-done);
+}
+.pinn-scope .pinn-count.urgent {
+  --c: var(--urgent);
+}
+
+/* ---------- Pinnwand: Spalten ---------- */
+.pinn-scope .pinn-board {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding: 2px 2px 14px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+.pinn-scope .pinn-lane {
+  flex: 1 0 260px;
+  max-width: 420px;
+  min-width: 260px;
+  scroll-snap-align: start;
+  border-radius: 18px;
+  background: var(--lane-bg);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 3px 0 var(--pc);
+  transition: border-color 0.2s, background 0.2s;
+}
+.pinn-scope .pinn-lane.none {
+  box-shadow: inset 0 3px 0 var(--border-strong);
+  border-style: dashed;
+}
+.pinn-scope .pinn-lane.over {
+  border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+.pinn-scope .pinn-lane-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 14px 10px;
+}
+.pinn-scope .pinn-lane-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+.pinn-scope .pinn-lane-title b {
+  font-size: 15.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pinn-scope .pinn-lane-run {
+  color: var(--st-running);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pinn-scope .pinn-lane-run .i {
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+}
+.pinn-scope .pinn-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--pc) 24%, transparent);
+  color: var(--pc);
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--pc) 60%, transparent);
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+.pinn-scope .pinn-avatar.none {
+  width: 34px;
+  height: 34px;
+  --pc: var(--muted);
+}
+
+.pinn-scope .pinn-drop {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 90px;
+  padding: 4px 10px 12px;
+  border-radius: 14px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.pinn-scope .pinn-drop.on {
+  background: color-mix(in oklab, var(--accent) 9%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.pinn-scope .pinn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+}
+.pinn-scope .pinn-day-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.pinn-scope .pinn-today {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+.pinn-scope .pinn-week {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 0 8px;
+}
+.pinn-scope .pinn-week .pinn-drop {
+  min-height: 0;
+  gap: 7px;
+  padding: 8px 10px;
+}
+.pinn-scope .pinn-day.today {
+  background: color-mix(in oklab, var(--accent) 5%, transparent);
+}
+.pinn-scope .pinn-day-empty {
+  color: var(--muted);
+  opacity: 0.5;
+  font-size: 13px;
+  padding-left: 2px;
+}
+.pinn-scope .pinn-lane-empty {
+  display: grid;
+  place-items: center;
+  min-height: 74px;
+  border: 1.5px dashed var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 13.5px;
+  text-align: center;
+  padding: 10px;
+}
+
+/* ---------- Karte ---------- */
+.pinn-scope .pinn-card {
+  --c: var(--st-new);
+  position: relative;
+  padding: 12px 14px 12px 17px;
+  border-radius: 14px;
+  background: var(--card-solid);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition: transform 0.18s ease, box-shadow 0.25s, border-color 0.35s, background 0.35s, opacity 0.35s;
+  animation: pinn-card-in 0.35s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.pinn-scope .pinn-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--c);
+  transition: background 0.35s;
+}
+.pinn-scope .pinn-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-pop);
+}
+.pinn-scope .pinn-card.draggable {
+  cursor: grab;
+}
+.pinn-scope .pinn-card.lifted {
+  opacity: 0.35;
+  transform: scale(0.98);
+}
+.pinn-scope .pinn-card.st-seen {
+  --c: var(--st-seen);
+}
+.pinn-scope .pinn-card.st-running {
+  --c: var(--st-running);
+  border-color: color-mix(in oklab, var(--st-running) 45%, transparent);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--st-running) 9%, var(--card-solid)), var(--card-solid));
+}
+.pinn-scope .pinn-card.st-paused {
+  --c: var(--st-paused);
+  border-color: color-mix(in oklab, var(--st-paused) 35%, transparent);
+}
+.pinn-scope .pinn-card.st-done {
+  --c: var(--st-done);
+  opacity: 0.72;
+}
+.pinn-scope .pinn-card.st-canceled {
+  --c: var(--st-canceled);
+  opacity: 0.55;
+}
+.pinn-scope .pinn-card.st-canceled h4 {
+  text-decoration: line-through;
+}
+.pinn-scope .pinn-card.urgent:not(.st-done):not(.st-canceled) {
+  border-color: color-mix(in oklab, var(--urgent) 65%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--urgent) 35%, transparent), 0 8px 26px -14px color-mix(in oklab, var(--urgent) 80%, transparent);
+}
+.pinn-scope .pinn-card.urgent:not(.st-done):not(.st-canceled)::before {
+  background: var(--urgent);
+  width: 6px;
+}
+.pinn-scope .pinn-card-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pinn-scope .pinn-card-time {
+  font-weight: 700;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.pinn-scope .pinn-card-time.late {
+  color: var(--urgent);
+}
+.pinn-scope .pinn-card h4 {
+  margin: 8px 0 3px;
+  font-size: 16px;
+  font-weight: 680;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.pinn-scope .pinn-card-meta {
+  font-size: 13.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.pinn-scope .pinn-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.pinn-scope .pinn-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 17px;
+  font-weight: 750;
+  color: var(--st-running);
+  font-variant-numeric: tabular-nums;
+}
+.pinn-scope .pinn-flag {
+  color: var(--st-paused);
+  font-weight: 600;
+}
+.pinn-scope .pinn-card.compact {
+  padding: 9px 11px 9px 14px;
+}
+.pinn-scope .pinn-card.compact h4 {
+  font-size: 14.5px;
+  margin-top: 6px;
+}
+.pinn-scope .pinn-card.compact .pinn-card-meta {
+  font-size: 12.5px;
+}
+.pinn-scope .pinn-card.compact .pinn-timer {
+  font-size: 15px;
+}
+
+@keyframes pinn-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+/* ---------- Zustands-Etikett ---------- */
+.pinn-scope .pinn-status {
+  --c: var(--st-new);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 25px;
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--c) 17%, transparent);
+  color: var(--c);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  animation: pinn-status-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+.pinn-scope .pinn-status .i {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.4;
+}
+.pinn-scope .pinn-status.big {
+  height: 34px;
+  padding: 0 14px 0 11px;
+  font-size: 15px;
+}
+.pinn-scope .pinn-status.big .i {
+  width: 18px;
+  height: 18px;
+}
+.pinn-scope .pinn-status.st-seen {
+  --c: var(--st-seen);
+}
+.pinn-scope .pinn-status.st-running {
+  --c: var(--st-running);
+}
+.pinn-scope .pinn-status.st-running .i {
+  animation: pinn-breathe 1.6s ease-in-out infinite;
+}
+.pinn-scope .pinn-status.st-paused {
+  --c: var(--st-paused);
+}
+.pinn-scope .pinn-status.st-done {
+  --c: var(--st-done);
+}
+.pinn-scope .pinn-status.st-canceled {
+  --c: var(--st-canceled);
+}
+@keyframes pinn-status-pop {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+@keyframes pinn-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+.pinn-scope .pinn-urgent-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 25px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--urgent);
+  color: var(--on-urgent);
+  font-size: 12.5px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+.pinn-scope .pinn-urgent-tag .i {
+  width: 14px;
+  height: 14px;
+}
+.pinn-scope .pinn-urgent-tag:not(.small) {
+  height: 34px;
+  padding: 0 13px;
+  font-size: 14px;
+}
+
+/* ---------- Ziehen ---------- */
+.pinn-scope .pinn-board.dragging {
+  cursor: grabbing;
+}
+.pinn-scope .pinn-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 90;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 260px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--card-solid);
+  border: 2px solid var(--accent);
+  box-shadow: var(--shadow-pop);
+  font-size: 14px;
+  transform: translate(-999px, -999px) rotate(-1.5deg);
+}
+.pinn-scope .pinn-ghost span {
+  color: var(--accent-text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.pinn-scope .pinn-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 12px 10px 18px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-pop);
+  font-size: 14px;
+  transform: translateX(-50%);
+  animation: pinn-toast-in 0.25s ease both;
+}
+.pinn-scope .pinn-toast.error {
+  border-color: color-mix(in oklab, var(--urgent) 60%, transparent);
+  color: var(--urgent);
+}
+@keyframes pinn-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+}
+.pinn-scope .pinn-emptyteam {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  max-width: 640px;
+}
+.pinn-scope .pinn-emptyteam > .i {
+  width: 28px;
+  height: 28px;
+  color: var(--accent-text);
+}
+
+/* ---------- Seitliches Blatt ---------- */
+.pinn-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+  background: color-mix(in oklab, var(--bg) 45%, rgba(0, 0, 0, 0.45));
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: fade-in 0.18s ease both;
+}
+.pinn-scope .pinn-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(500px, 100vw);
+  height: 100%;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-pop);
+  animation: pinn-sheet-in 0.28s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+.pinn-scope .pinn-sheet.wide {
+  width: min(600px, 100vw);
+}
+.pinn-scope .pinn-sheet:focus {
+  outline: none;
+}
+@keyframes pinn-sheet-in {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+}
+.pinn-scope .pinn-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.pinn-scope .pinn-sheet-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 720;
+  overflow-wrap: anywhere;
+}
+.pinn-scope .pinn-sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 22px 40px;
+  overscroll-behavior: contain;
+}
+
+/* ---------- Detail ---------- */
+.pinn-scope .pinn-detail-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.pinn-scope .btn.pinn-danger {
+  color: var(--urgent);
+}
+.pinn-scope .pinn-bigbtns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+.pinn-scope .pinn-bigbtns .btn {
+  height: 58px;
+  font-size: 17px;
+  border-radius: 16px;
+}
+.pinn-scope .btn.pinn-go {
+  background: var(--st-running);
+  color: var(--on-running);
+}
+.pinn-scope .btn.pinn-done {
+  background: var(--text);
+  color: var(--bg);
+}
+.pinn-scope .pinn-facts {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--lane-bg);
+  border: 1px solid var(--border);
+}
+.pinn-scope .pinn-fact {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.pinn-scope .pinn-fact-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.pinn-scope .pinn-fact-label {
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.pinn-scope .pinn-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.pinn-scope .pinn-route {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pinn-scope .pinn-route .i {
+  width: 15px;
+  height: 15px;
+}
+.pinn-scope .pinn-pre {
+  white-space: pre-wrap;
+}
+.pinn-scope .pinn-block {
+  margin-top: 20px;
+}
+.pinn-scope .pinn-block h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.pinn-scope .pinn-block h3 .i {
+  width: 16px;
+  height: 16px;
+}
+.pinn-scope .pinn-work {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+}
+.pinn-scope .pinn-work-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pinn-scope .pinn-work h3 {
+  margin-bottom: 4px;
+}
+.pinn-scope .pinn-work-value {
+  font-size: 34px;
+  font-weight: 760;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.pinn-scope .pinn-work-value.ticking {
+  color: var(--st-running);
+}
+.pinn-scope .pinn-fixnote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--st-paused);
+}
+.pinn-scope .pinn-fixnote .i {
+  width: 14px;
+  height: 14px;
+}
+.pinn-scope .pinn-fix {
+  margin-top: 14px;
+}
+.pinn-scope .pinn-fix-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.pinn-scope .pinn-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+.pinn-scope .pinn-photo {
+  display: block;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.pinn-scope .pinn-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.25s;
+}
+.pinn-scope .pinn-photo:hover img {
+  transform: scale(1.04);
+}
+.pinn-scope .pinn-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 4px;
+  position: relative;
+}
+.pinn-scope .pinn-timeline::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--border);
+}
+.pinn-scope .pinn-timeline li {
+  --c: var(--muted);
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px 118px 1fr;
+  gap: 6px;
+  padding: 6px 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.pinn-scope .pinn-tl-dot {
+  width: 12px;
+  height: 12px;
+  margin: 4px 0 0 0;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 0 3px var(--surface);
+  position: relative;
+}
+.pinn-scope .pinn-tl-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.pinn-scope .pinn-tl-note {
+  display: block;
+  color: var(--muted);
+  font-style: italic;
+}
+.pinn-scope .pinn-timeline .ev-seen {
+  --c: var(--st-seen);
+}
+.pinn-scope .pinn-timeline .ev-start,
+.pinn-scope .pinn-timeline .ev-resume {
+  --c: var(--st-running);
+}
+.pinn-scope .pinn-timeline .ev-pause {
+  --c: var(--st-paused);
+}
+.pinn-scope .pinn-timeline .ev-done {
+  --c: var(--st-done);
+}
+.pinn-scope .pinn-timeline .ev-canceled {
+  --c: var(--st-canceled);
+}
+.pinn-scope .pinn-timeline .ev-created,
+.pinn-scope .pinn-timeline .ev-assigned {
+  --c: var(--st-new);
+}
+.pinn-scope .pinn-timeline .ev-time_fix {
+  --c: var(--accent);
+}
+.pinn-scope .pinn-finish {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in oklab, var(--st-running) 40%, transparent);
+  margin: 0 0 18px;
+}
+
+/* ---------- Formular ---------- */
+.pinn-scope .pinn-form .field > span,
+.pinn-scope .pinn-cust > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.pinn-scope .pinn-form input,
+.pinn-scope .pinn-form select,
+.pinn-scope .pinn-form textarea {
+  font-size: 16px;
+}
+.pinn-scope .pinn-form input[data-autofocus] {
+  font-size: 18px;
+  font-weight: 600;
+  padding: 12px 14px;
+}
+.pinn-scope .pinn-saved {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--st-running) 14%, transparent);
+  color: var(--st-running);
+  font-weight: 600;
+  animation: pinn-toast-in 0.3s ease both;
+}
+.pinn-scope .pinn-newcust {
+  display: block;
+  margin: -6px 0 14px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.pinn-scope .pinn-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 0 12px;
+}
+.pinn-scope .pinn-grid3 {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 0 10px;
+  margin-top: 10px;
+}
+.pinn-scope .pinn-termin {
+  margin-bottom: 4px;
+}
+.pinn-scope .pinn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.pinn-scope .pinn-chip {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.pinn-scope .pinn-chip:hover {
+  border-color: var(--border-strong);
+}
+.pinn-scope .pinn-chip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.pinn-scope .pinn-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  margin: 2px 0 16px;
+  padding: 0 16px 0 8px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.pinn-scope .pinn-switch-knob {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background 0.2s;
+}
+.pinn-scope .pinn-switch-knob::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.22s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.pinn-scope .pinn-switch.on {
+  border-color: var(--urgent);
+  background: color-mix(in oklab, var(--urgent) 12%, transparent);
+  color: var(--urgent);
+}
+.pinn-scope .pinn-switch.on .pinn-switch-knob {
+  background: var(--urgent);
+}
+.pinn-scope .pinn-switch.on .pinn-switch-knob::after {
+  transform: translateX(18px);
+}
+.pinn-scope .pinn-form-actions {
+  position: sticky;
+  bottom: -40px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px -22px 0;
+  padding: 14px 22px;
+  background: color-mix(in oklab, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border);
+}
+.pinn-scope .pinn-form-actions .btn {
+  height: 46px;
+  font-size: 15.5px;
+}
+.pinn-scope .pinn-keys {
+  margin: 10px 0 0;
+}
+.pinn-scope .pinn-cust {
+  position: relative;
+  margin-bottom: 14px;
+}
+.pinn-scope .pinn-suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 5;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-pop);
+}
+.pinn-scope .pinn-suggest li {
+  padding: 9px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14.5px;
+}
+.pinn-scope .pinn-suggest li.on,
+.pinn-scope .pinn-suggest li:hover {
+  background: var(--accent-soft);
+}
+
+/* ---------- Listen (Erledigt, Zeiten) ---------- */
+.pinn-scope .pinn-filter .field {
+  margin-bottom: 0;
+  min-width: 150px;
+}
+.pinn-scope .pinn-search {
+  flex: 1 1 220px;
+}
+.pinn-scope .pinn-search-box {
+  position: relative;
+  display: block;
+}
+.pinn-scope .pinn-search-box .i {
+  position: absolute;
+  left: 12px;
+  top: calc(50% + 3px);
+  transform: translateY(-50%);
+  color: var(--muted);
+}
+.pinn-scope .pinn-search-box input {
+  padding-left: 38px;
+}
+.pinn-scope .pinn-filter .checkbox-field {
+  align-self: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+.pinn-scope .pinn-sum {
+  margin: 6px 0 10px;
+}
+.pinn-scope .pinn-sum b {
+  color: var(--text);
+}
+.pinn-scope .pinn-row {
+  cursor: pointer;
+}
+.pinn-scope .pinn-photocount {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+  vertical-align: 1px;
+}
+.pinn-scope .pinn-photocount .i {
+  width: 14px;
+  height: 14px;
+}
+.pinn-scope .pinn-clip {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pinn-scope .pinn-export {
+  gap: 8px;
+}
+.pinn-scope .pinn-kpis {
+  margin-bottom: 18px;
+}
+.pinn-scope .pinn-chev {
+  transition: transform 0.2s;
+  color: var(--muted);
+}
+.pinn-scope .pinn-chev.open {
+  transform: rotate(180deg);
+}
+.pinn-scope .pinn-subrow td {
+  background: var(--lane-bg);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.pinn-scope .pinn-star {
+  color: var(--st-paused);
+  font-weight: 700;
+}
+.pinn-scope .pinn-foot {
+  margin-top: 12px;
+}
+
+/* ---------- Team, Kunden ---------- */
+.pinn-scope .pinn-orgcard,
+.pinn-scope .pinn-codecard {
+  margin-bottom: 16px;
+}
+.pinn-scope .pinn-codecard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, var(--card-solid)), var(--card-solid));
+  border-color: color-mix(in oklab, var(--accent) 35%, transparent);
+}
+.pinn-scope .pinn-code {
+  margin: 4px 0;
+  font-size: 34px;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  color: var(--accent-text);
+}
+.pinn-scope .pinn-codebtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pinn-scope .pinn-seats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.pinn-scope .pinn-seatbar {
+  position: relative;
+  width: 120px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.pinn-scope .pinn-seatbar::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--fill);
+  border-radius: 999px;
+  background: var(--st-running);
+}
+.pinn-scope .pinn-seats.full .pinn-seatbar::after {
+  background: var(--st-paused);
+}
+.pinn-scope .pinn-members,
+.pinn-scope .pinn-custlist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.pinn-scope .pinn-member {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+}
+.pinn-scope .pinn-member-main {
+  flex: 1;
+  min-width: 0;
+}
+.pinn-scope .pinn-member-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pinn-scope .pinn-member-actions select {
+  margin: 0;
+  width: auto;
+  padding: 7px 10px;
+  font-size: 14px;
+}
+.pinn-scope .pinn-custcard {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.pinn-scope .pinn-custmain {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pinn-scope .pinn-custmain b {
+  font-size: 15.5px;
+}
+.pinn-scope .pinn-custmain a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.pinn-scope .pinn-custmain a .i {
+  width: 14px;
+  height: 14px;
+}
+.pinn-scope .pinn-custbtns {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ---------- Hell/Dunkel-Umschalter (Navigation unten) ---------- */
+.pinn-scope .pinn-theme {
+  display: flex;
+  width: fit-content;
+  gap: 2px;
+  margin-top: 12px;
+  padding: 3px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.pinn-scope .pinn-theme button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 28px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.pinn-scope .pinn-theme button .i {
+  width: 16px;
+  height: 16px;
+}
+.pinn-scope .pinn-theme button.on {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.pinn-scope .pinn-theme.labels {  margin-top: 0;}.pinn-scope .pinn-theme.labels button {  width: auto;  height: 36px;  gap: 7px;  display: inline-flex;  align-items: center;  padding: 0 14px;  font: inherit;  font-size: 14px;  font-weight: 600;}.pinn-scope .pinn-themecard {  display: flex;  align-items: center;  justify-content: space-between;  gap: 12px;  flex-wrap: wrap;  max-width: 640px;  margin-bottom: 16px;}
+/* ---------- Handy (390 px): Spalten wischbar, Blatt ganzer Bildschirm ---------- */
+@media (max-width: 760px) {
+  .pinn-scope .pinn-head h1 {
+    font-size: 23px;
+  }
+  .pinn-scope .pinn-add {
+    position: fixed;
+    right: 16px;
+    bottom: 18px;
+    z-index: 40;
+    height: 56px;
+    border-radius: 18px;
+    box-shadow: var(--shadow-pop), 0 10px 26px -8px color-mix(in oklab, var(--accent) 70%, transparent);
+  }
+  .pinn-scope .pinn-datenav {
+    display: contents;
+  }
+  .pinn-scope .pinn-toolbar {
+    gap: 8px;
+  }
+  .pinn-scope .pinn-datelabel {
+    width: 100%;
+    margin: 4px 0 0;
+  }
+  .pinn-scope .pinn-counts {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-right: -16px;
+    padding-right: 16px;
+    scrollbar-width: none;
+  }
+  .pinn-scope .pinn-count {
+    flex: none;
+  }
+  .pinn-scope .pinn-board {
+    margin: 0 -16px;
+    padding: 2px 16px 90px;
+    scroll-snap-type: x mandatory;
+    scroll-padding: 0 16px;
+    gap: 12px;
+  }
+  .pinn-scope .pinn-lane {
+    flex: 0 0 86vw;
+    min-width: 0;
+    max-width: none;
+  }
+  .pinn-scope .pinn-sheet,
+  .pinn-scope .pinn-sheet.wide {
+    width: 100vw;
+    border-left: none;
+  }
+  .pinn-scope .pinn-sheet-head {
+    padding: 14px 16px 12px;
+  }
+  .pinn-scope .pinn-sheet-body {
+    padding: 14px 16px 32px;
+  }
+  .pinn-scope .pinn-form-actions {
+    margin: 18px -16px 0;
+    padding: 12px 16px;
+    bottom: -32px;
+  }
+  .pinn-scope .pinn-grid2,
+  .pinn-scope .pinn-grid3 {
+    grid-template-columns: 1fr;
+  }
+  .pinn-scope .pinn-timeline li {
+    grid-template-columns: 22px 1fr;
+  }
+  .pinn-scope .pinn-tl-time {
+    grid-column: 2;
+  }
+  .pinn-scope .pinn-tl-text {
+    grid-column: 2;
+  }
+  .pinn-scope .pinn-members,
+  .pinn-scope .pinn-custlist {
+    grid-template-columns: 1fr;
+  }
+  .pinn-scope .pinn-code {
+    font-size: 28px;
+  }
+  .pinn-scope .pinn-clip {
+    max-width: 200px;
+  }
+  .pinn-scope .pinn-filter .field {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+}

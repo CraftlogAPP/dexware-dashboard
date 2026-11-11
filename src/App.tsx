@@ -55,6 +55,9 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
   installateurdex: lazy(() =>
     import('./installateurdex/InstallateurdexArea').then((m) => ({ default: m.InstallateurdexArea })),
   ),
+  pinndex: lazy(() =>
+    import('./pinndex/PinndexArea').then((m) => ({ default: m.PinndexArea })),
+  ),
 };
 
 // Design-Vorschau mit Beispieldaten — nur im Dev-Server, fehlt im Produktions-Build.

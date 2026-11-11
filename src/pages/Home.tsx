@@ -9,9 +9,11 @@ import { useHiddenApps } from '../lib/appPrefs';
 import { LegalLinks } from '../components/LegalLinks';
 
 export function Home() {
-  const apps = [...APPS].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
+  // unlisted (z. B. PinnDex vor dem Launch): nur per Direktadresse, nicht auf der Startseite
+  const listed = APPS.filter((a) => !a.unlisted);
+  const apps = [...listed].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
   // Externe Dashboards (BaumDex) zählen mit — für den Nutzer ist es genauso ein Dashboard
-  const liveCount = APPS.filter(
+  const liveCount = listed.filter(
     (a) => a.status === 'dashboard' || a.status === 'external',
   ).length;
   const due = useDueChecks();
