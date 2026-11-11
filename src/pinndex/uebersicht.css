@@ -124,8 +124,19 @@
 .pinn-scope .pinn-who-state.k-paused {
   color: var(--st-paused);
 }
-.pinn-scope .pinn-who-state.k-onway {
-  color: var(--st-seen);
+/* „gleich dran“: nächster Termin in ≤ 30 Min. — neutral, ohne Ortsbehauptung */
+.pinn-scope .pinn-soon {
+  margin-left: auto;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 750;
+  animation: pinn-breathe 2.4s ease-in-out infinite;
+}
+.pinn-scope .pinn-who-job.soon span {
+  color: var(--accent-text);
 }
 .pinn-scope .pinn-who-clock {
   margin-left: auto;

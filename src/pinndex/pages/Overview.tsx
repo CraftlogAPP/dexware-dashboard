@@ -1,11 +1,11 @@
-// PinnDex — Übersicht „Wer ist wo“ (Start-Bereich): links je Monteur eine Zeile (frei / unterwegs / arbeitet / Pause,
+// Laufzettel (intern PinnDex) — Übersicht „Wer ist wo“ (Start-Bereich): links je Monteur eine Zeile (frei / arbeitet / Pause,
 // aktuelle + nächste Karte, „2 von 5 erledigt“), rechts die Live-Karte mit einem Pin je heutigem Auftrag.
 // Klick auf einen Pin öffnet das Karten-Detail, Klick auf einen Monteur zoomt auf seine Pins (nochmal = alle).
 // Live wie die Pinnwand: Realtime-Version + Rückfall alle 20 s + beim Zurückkehren in den Tab.
 
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Inbox, MapPinOff, Pause, Play, Plus, Siren, SquareKanban, Truck } from 'lucide-react';
+import { Inbox, MapPinOff, Pause, Play, Plus, Siren, SquareKanban } from 'lucide-react';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { usePinn } from '../context';
 import { useJobSheet } from '../JobSheet';
@@ -16,7 +16,8 @@ import type { Job, JobEvent, PinnMember } from '../types';
 
 const LiveMap = lazy(() => import('../LiveMap'));
 
-type Kind = 'working' | 'paused' | 'onway' | 'free';
+// Bewusst kein „unterwegs“: ohne Ortung wissen wir das nicht (Vorgabe 11.11.)
+type Kind = 'working' | 'paused' | 'free';
 
 interface Row {
   id: string; // user_id oder 'none'
@@ -31,7 +32,7 @@ interface Row {
   total: number;
 }
 
-const KIND_LABEL: Record<Kind, string> = { working: 'arbeitet', paused: 'Pause', onway: 'unterwegs', free: 'frei' };
+const KIND_LABEL: Record<Kind, string> = { working: 'arbeitet', paused: 'Pause', free: 'frei' };
 
 export function Overview() {
   const { data, members, me, role, org, version, live, changedAt, canManage, base } = usePinn();
@@ -85,13 +86,14 @@ export function Overview() {
       const open = mine.filter((j) => j.status === 'new' || j.status === 'seen');
       const done = mine.filter((j) => j.status === 'done').length;
       const next = open[0] ?? null;
-      const kind: Kind = running ? 'working' : paused ? 'paused' : next && (done > 0 || next.status === 'seen') ? 'onway' : 'free';
+      const kind: Kind = running ? 'working' : paused ? 'paused' : 'free';
       out.push({ id: m.user_id, member: m, name: memberName(m), color: memberColor(m, i), jobs: mine, kind, current: running ?? paused, next, done, total: mine.length });
     });
     return out;
   }, [members, jobs, role, me.user_id]);
 
-  const now = useNow(jobs.some((j) => j.status === 'running'));
+  // Sekundentakt nur bei laufender Uhr, sonst alle 30 s (für „gleich dran“)
+  const now = useNow(true, jobs.some((j) => j.status === 'running') ? 1000 : 30000);
   const [focusId, setFocusId] = useState<string | null>(null);
 
   const colorOf = useMemo(() => new Map(rows.map((r) => [r.id, r.color])), [rows]);
@@ -264,6 +266,8 @@ function WorkerRow({
   const sinceIso = c ? (c.running_since ?? since[c.id] ?? c.started_at) : null;
   const where = c ? c.customer_name || c.title : '';
   const pct = r.total ? Math.round((r.done / r.total) * 100) : 0;
+  // „gleich dran“: nächster Termin in höchstens 30 Minuten (oder schon fällig), solange nichts läuft
+  const soon = r.kind === 'free' && !!r.next?.scheduled_at && Date.parse(r.next.scheduled_at) - now <= 30 * 60000;
   const open = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     onOpen(id);
@@ -300,12 +304,9 @@ function WorkerRow({
               <Pause className="i" aria-hidden /> Pause bei <b>{where}</b>
             </>
           )}
-          {r.kind === 'onway' && (
-            <>
-              <Truck className="i" aria-hidden /> unterwegs{r.next ? ' zum nächsten Auftrag' : ''}
-            </>
-          )}
+          {/* Keine Ortung → nichts behaupten („unterwegs“): nur frei + was als Nächstes kommt */}
           {r.kind === 'free' && <>frei{r.total === 0 ? ' — heute nichts geplant' : r.next ? '' : ' — alles erledigt'}</>}
+          {soon && <span className="pinn-soon">gleich dran</span>}
         </div>
         <div className="pinn-who-jobs">
           {c && (
@@ -314,8 +315,8 @@ function WorkerRow({
             </button>
           )}
           {r.next && (
-            <button type="button" className={`pinn-who-job${r.next.urgent ? ' urgent' : ''}`} onClick={(e) => open(e, r.next!.id)}>
-              <span>Nächste{r.next.scheduled_at ? ` ${hhmm(r.next.scheduled_at)}` : ''}</span> {r.next.title}
+            <button type="button" className={`pinn-who-job${r.next.urgent ? ' urgent' : ''}${soon ? ' soon' : ''}`} onClick={(e) => open(e, r.next!.id)}>
+              <span>als Nächstes{r.next.scheduled_at ? ` ${hhmm(r.next.scheduled_at)}` : ''} ·</span> {r.next.title}
             </button>
           )}
         </div>
