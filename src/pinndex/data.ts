@@ -284,6 +284,9 @@ export function supabaseData(sb: SupabaseClient, orgId: string): PinnData {
 
     async setRole(userId, role) {
       const { error } = await sb.rpc(RPC.memberUpdate, { p_user: userId, p_role: role });
+      // Sitz-Grenzen (SCHEMA-ABWEICHUNGEN): Monteure je Tarif, Büro eigene Grenze (pinn_office_seats)
+      if (error && /team full/i.test(error.message)) throw new Error('Rolle konnte nicht geändert werden: alle Monteur-Plätze sind belegt — mehr Plätze gibt es über das Abo in der App.');
+      if (error && /office full/i.test(error.message)) throw new Error('Rolle konnte nicht geändert werden: die Büro-Plätze sind belegt.');
       if (error) fail('Rolle konnte nicht geändert werden', error);
     },
 
