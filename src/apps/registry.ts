@@ -39,6 +39,11 @@ export interface AppConfig {
   /** Emoji als Kachel-Icon */
   emoji: string;
   /**
+   * Nicht auf der Startseite zeigen (noch nicht gestartet) — der Bereich ist nur über die Direktadresse
+   * /app/<id> erreichbar. Beim Launch einfach entfernen.
+   */
+  unlisted?: boolean;
+  /**
    * Team-Plätze, wenn die App andere Stufen hat als der Standard (Team bis 50 / Team XL bis 100, Ersatzwert 20).
    * Ohne Angabe bleibt die Team-Seite wie bisher — nur Apps mit eigenem Modell setzen das (InstallateurDex: Team 3/5/10).
    */
@@ -59,6 +64,14 @@ const INSTALLATEURDEX_SUPABASE: SupabaseConfig = {
   url: 'https://hqudwsxvjhdwfleboklz.supabase.co',
   anonKey:
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxdWR3c3h2amhkd2ZsZWJva2x6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4ODgyMjQsImV4cCI6MjEwOTQ2NDIyNH0.p5SvVCHjeNGDITr4bZqUgeN9FUXo_YHZo0UVeSYKl0k',
+};
+
+// ObjektDex (Leistungsnachweis Hausbetreuung/Grünpflege/Reinigung, Suite-App): Supabase-Projekt existiert noch nicht.
+// Sobald Alex es angelegt und ObjektDex/supabase/schema.sql eingespielt hat: Adresse + öffentlichen Anon-Key hier eintragen
+// (wie ObjektDex/mobile/.env) und unlisted entfernen. Leer = Dev-Server zeigt Beispieldaten, Produktions-Build „noch nicht verbunden“.
+const OBJEKTDEX_SUPABASE: SupabaseConfig = {
+  url: '',
+  anonKey: '',
 };
 
 export const APPS: AppConfig[] = [
@@ -314,6 +327,19 @@ export const APPS: AppConfig[] = [
       seatsWord: 'Plätzen für weitere Monteure',
       fallbackLimit: 0,
     },
+  },
+  {
+    id: 'objektdex',
+    name: 'ObjektDex',
+    tagline: 'Hausbetreuung, Grünpflege & Reinigung — jeder Einsatz mit Soll/Ist belegt',
+    status: 'dashboard',
+    // noch nicht gestartet → nicht auf der Startseite (nur /app/objektdex)
+    unlisted: true,
+    emoji: '🏠',
+    // Farben wie die App (frisches Grün/Petrol auf dunklem Grund, ObjektDex/mobile/src/theme.ts)
+    theme: { accent: '#34D8A6', onAccent: '#04261D', bg: '#0A1615' },
+    landingUrl: 'https://objektdex.dexware.app',
+    supabase: OBJEKTDEX_SUPABASE.url && OBJEKTDEX_SUPABASE.anonKey ? OBJEKTDEX_SUPABASE : undefined,
   },
   // TurnDex bleibt bewusst draußen: auf Eis gelegt (kein freies Supabase-Projekt
   // verfügbar), darf in keiner öffentlichen Fläche auftauchen.

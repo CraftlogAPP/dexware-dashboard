@@ -1,0 +1,302 @@
+/* ObjektDex-Bereich — ergänzt index.css. Farben: Grün #34D8A6/#0B8A68, Petrol #0E7490, Status grün/orange/rot. */
+
+.od-demo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  font-size: 13.5px;
+  color: #c9f5e6;
+  background: color-mix(in oklab, #0e7490 35%, transparent);
+  border-bottom: 1px solid rgba(52, 216, 166, 0.25);
+}
+
+div.field {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Filterzeile: Felder nebeneinander, am Handy untereinander */
+.od-filter {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0 14px;
+  margin-bottom: 16px;
+}
+.od-filter .field {
+  margin-bottom: 10px;
+}
+
+/* Heute */
+.od-kpi-of {
+  font-size: 15px;
+  font-weight: 600;
+}
+.od-progress {
+  height: 7px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  margin-top: 8px;
+}
+.od-progress span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #0b8a68, #34d8a6);
+  transition: width 0.6s ease;
+}
+.od-group h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.od-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  background: var(--muted);
+}
+.od-dot-overdue {
+  background: var(--red);
+}
+.od-dot-open {
+  background: #fb923c;
+}
+.od-dot-done {
+  background: #34d399;
+}
+.od-today-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.od-today-card {
+  display: block;
+  color: var(--text);
+  border-left: 4px solid var(--border-strong);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.od-today-card:hover {
+  text-decoration: none;
+  transform: translateY(-2px);
+}
+.od-today-card.od-overdue {
+  border-left-color: var(--red);
+}
+.od-today-card.od-open {
+  border-left-color: #fb923c;
+}
+.od-today-card.od-done {
+  border-left-color: #34d399;
+}
+.od-today-name {
+  font-weight: 800;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+/* Tabellen */
+.od-click {
+  cursor: pointer;
+}
+.od-click:hover td {
+  background: rgba(255, 255, 255, 0.025);
+}
+tr.od-canceled td {
+  opacity: 0.6;
+}
+tr.od-ended td {
+  opacity: 0.55;
+}
+.od-actions {
+  white-space: nowrap;
+}
+.od-dayhead {
+  margin: 18px 0 8px;
+  font-size: 14px;
+  color: var(--accent-text);
+}
+.od-danger {
+  color: #fca5a5 !important;
+}
+
+/* Objekt-Detail */
+.od-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  .od-two {
+    grid-template-columns: 1fr;
+  }
+}
+.od-line + .od-line {
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.od-facts {
+  display: grid;
+  gap: 10px;
+}
+.od-fact {
+  display: grid;
+  gap: 2px;
+}
+
+/* Auswahl-Chips (Turnus, Wochentage, Zeitraum) */
+.od-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+.od-chips input {
+  margin-top: 0;
+}
+.od-chip {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+}
+.od-chip:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.od-chip.on {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+.od-chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.od-chip.od-day {
+  width: 46px;
+  padding: 8px 0;
+  text-align: center;
+}
+.od-preview {
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.od-preview b {
+  color: var(--accent-text);
+}
+
+/* Mängel */
+.od-seg {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 14px;
+}
+.od-seg button {
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 18px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.od-seg button.on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.od-defects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.od-defect {
+  border-left: 4px solid #fb923c;
+}
+.od-defect-done {
+  border-left-color: #34d399;
+}
+.od-defect-text {
+  font-weight: 700;
+  font-size: 15.5px;
+  margin: 4px 0;
+}
+.od-resolved {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #86efac;
+}
+
+/* Soll/Ist */
+.od-sollist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+}
+@media (max-width: 420px) {
+  .od-sollist-grid,
+  .od-defects,
+  .od-today-grid {
+    grid-template-columns: 1fr;
+  }
+}
+table.od-sollist td {
+  padding: 8px 4px;
+}
+
+/* Fotos, Links, Team-Code */
+.od-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+.od-photos img {
+  width: 100%;
+  border-radius: 10px;
+  display: block;
+}
+.od-linkbox {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-strong);
+  background: rgba(255, 255, 255, 0.03);
+  word-break: break-all;
+  font-size: 13px;
+}
+.od-code {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.od-code-value {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--accent-text);
+  margin: 4px 0;
+}
