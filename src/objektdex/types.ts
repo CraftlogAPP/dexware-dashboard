@@ -28,6 +28,8 @@ export interface OdService {
   start_on: Day;
   end_on: Day | null;
   active: boolean;
+  /** Nur Server: Nachfolgerin nach Turnus-Wechsel/Wiederaufnahme — dann nur noch Historie (SCHEMA.md) */
+  replaced_by?: string | null;
   sort: number;
   notes: string | null;
   created_at: string;

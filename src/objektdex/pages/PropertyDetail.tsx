@@ -171,6 +171,8 @@ export function PropertyDetail() {
                                       Beenden
                                     </button>
                                   </>
+                                ) : sv.replaced_by ? (
+                                  <span className="muted small">ersetzt</span>
                                 ) : (
                                   <button className="btn ghost small" disabled={busy} onClick={() => void toggle(() => data.setServiceActive(sv.id, true), `„${sv.name}“ wieder aufnehmen?`)}>
                                     Wieder aufnehmen
