@@ -343,6 +343,10 @@ export function normalizeDraft(raw: unknown): InvoiceDraft {
         unit: txt(l.unit),
         unitPriceCents: Math.round(num(l.unitPriceCents)),
         vatRate: num(l.vatRate),
+        // AngebotDex-Editor der App (Rabatt je Position / Rabatt-Zeile) — wie App data/invoices.ts normalizeDraft
+        ...(l.listPriceCents != null && Number.isFinite(num(l.listPriceCents, NaN)) ? { listPriceCents: Math.round(num(l.listPriceCents)) } : {}),
+        ...(l.discountPct != null && Number.isFinite(num(l.discountPct, NaN)) ? { discountPct: num(l.discountPct) } : {}),
+        ...(l.totalDiscount === true ? { totalDiscount: true as const } : {}),
       };
     }),
     vatMode: oneOf(d.vatMode, ['normal', 'kleinunternehmer', 'reverseCharge'] as const, 'normal'),
@@ -376,7 +380,24 @@ export function normalizeDraft(raw: unknown): InvoiceDraft {
     cancelReason: opt(d.cancelReason),
     // Rechnung aus einem Angebot: dessen Nummer (wie App data/invoices.ts normalizeDraft)
     fromQuote: typeof d.fromQuote === 'string' && d.fromQuote.trim() ? d.fromQuote.trim().slice(0, 60) : undefined,
+    // AngebotDex (App, seit 10.11.2026): Betreff, Gültig bis, Rabatt aufs Ganze, Versions-Hinweis — beim Speichern im
+    // Portal behalten (Prüfung 12.11.: gingen sonst still verloren)
+    ...(typeof d.subject === 'string' && d.subject.trim() ? { subject: d.subject.slice(0, 200) } : {}),
+    ...(isoDay(d.validUntil) ? { validUntil: isoDay(d.validUntil) } : {}),
+    ...(totalDiscountOf(d.totalDiscount) ? { totalDiscount: totalDiscountOf(d.totalDiscount) } : {}),
+    ...(typeof d.replacesQuote === 'string' && d.replacesQuote.trim() ? { replacesQuote: d.replacesQuote.trim().slice(0, 60) } : {}),
   };
+}
+
+/** Rabatt aufs Ganze: Prozent (0–100) ODER Betrag in Cent (> 0), sonst nichts (wie App data/invoices.ts) */
+function totalDiscountOf(v: unknown): { pct?: number; amountCents?: number } | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const o = v as Record<string, unknown>;
+  const pct = num(o.pct, NaN);
+  const amount = num(o.amountCents, NaN);
+  if (Number.isFinite(pct) && pct > 0 && pct <= 100) return { pct };
+  if (Number.isFinite(amount) && amount > 0) return { amountCents: Math.round(amount) };
+  return undefined;
 }
 
 function fromRow(r: Row): StoredInvoice {

@@ -58,6 +58,15 @@ export interface InvoiceLine {
   unit: string; // „h“, „Stk“, „m“, „pauschal“ …
   unitPriceCents: number; // netto
   vatRate: number; // %
+  /**
+   * AngebotDex-Editor der App (seit 10.11.2026, App lib/invoice.ts): Rabatt je Position — `unitPriceCents` ist dann
+   * schon der Preis NACH Rabatt; `listPriceCents`/`discountPct` nur zum Anzeigen. Das Portal rechnet wie bisher
+   * mit unitPriceCents und behält die Felder beim Speichern (sonst gingen sie still verloren).
+   */
+  listPriceCents?: number;
+  discountPct?: number;
+  /** Zeile ist der „Rabatt aufs Ganze“ (negativer Einzelpreis, je Steuersatz eine Zeile) */
+  totalDiscount?: true;
 }
 
 /** Netto + USt einer Abschlagsrechnung bei einem Steuersatz (Cent) */
@@ -104,9 +113,17 @@ export interface InvoiceDraft {
   /** Stornorechnung: Nummer der stornierten Rechnung + Grund */
   cancels?: string;
   cancelReason?: string;
+  /** AngebotDex (App, 10.11.2026): Betreff unter der Überschrift */
+  subject?: string;
+  /** AngebotDex: Angebot gültig bis JJJJ-MM-TT (seit NACHTRAG-ANGEBOT-GUELTIG auch Ablauf am Server = due_at) */
+  validUntil?: string;
+  /** AngebotDex: Einstellung „Rabatt aufs Ganze“ — die Beträge stehen als Zeilen mit `totalDiscount` in `lines` */
+  totalDiscount?: { pct?: number; amountCents?: number };
+  /** AngebotDex: neue Version eines Angebots — Nummer des ersetzten Angebots (nur Hinweis) */
+  replacesQuote?: string;
 }
 
-const round = (n: number) => Math.round(n + Number.EPSILON * Math.sign(n));
+const round =(n: number) => Math.round(n + Number.EPSILON * Math.sign(n));
 
 /**
  * Erste Zahl aus einem Mengen-Text, deutsche Schreibweise: „2,5“ → 2,5 · „1.500“ → 1500 · „1.234,5“ → 1234,5 ·
@@ -171,6 +188,26 @@ export function linesFromInspection(
 
 export const lineNet = (l: InvoiceLine) => round(l.qty * l.unitPriceCents);
 
+/**
+ * Faktor je Steuersatz, um den der „Rabatt aufs Ganze“ (App-Zeilen mit totalDiscount) die übrigen Positionen kürzt —
+ * für § 35a (Arbeits-/Fahrtkosten). Wortgleich mit App lib/invoice.ts. Ohne Rabatt-Zeilen immer 1.
+ */
+function totalDiscountFactors(lines: InvoiceLine[], noVat: boolean): (rate: number) => number {
+  if (!lines.some((l) => l.totalDiscount === true)) return () => 1;
+  const base = new Map<number, number>();
+  const disc = new Map<number, number>();
+  for (const l of lines) {
+    const r = noVat ? 0 : Number(l.vatRate) || 0;
+    const m = l.totalDiscount === true ? disc : base;
+    m.set(r, (m.get(r) ?? 0) + lineNet(l));
+  }
+  return (rate: number) => {
+    const r = noVat ? 0 : rate;
+    const b = base.get(r) ?? 0;
+    return b > 0 ? Math.min(1, Math.max(0, (b + (disc.get(r) ?? 0)) / b)) : 1;
+  };
+}
+
 export interface InvoiceTotals {
   netCents: number;
   vatCents: number;
@@ -222,9 +259,12 @@ export function totals(d: InvoiceDraft): InvoiceTotals {
   const grossCents = netCents + vatCents;
   // § 35a: brutto je Zeile mit IHREM Steuersatz (wie App) — ohne Arbeitszeit-Zeile kam sonst 0 % USt heraus
   const laborLines = d.lines.filter((l) => l.kind === 'labor' || l.kind === 'travel');
+  // „Rabatt aufs Ganze“ aus der App (Zeilen mit totalDiscount) kürzt Arbeits-/Fahrtkosten anteilig je Steuersatz —
+  // gleiche Rechnung wie App lib/invoice.ts totalDiscountFactors; ohne solche Zeilen Faktor 1 (alle alten Belege)
+  const labFactor = totalDiscountFactors(d.lines, noVat);
   const laborGrossCents = noVat
-    ? laborLines.reduce((s, l) => s + lineNet(l), 0)
-    : round(laborLines.reduce((s, l) => s + lineNet(l) * (1 + (Number(l.vatRate) || 0) / 100), 0));
+    ? round(laborLines.reduce((s, l) => s + lineNet(l) * labFactor(0), 0))
+    : round(laborLines.reduce((s, l) => s + lineNet(l) * labFactor(Number(l.vatRate) || 0) * (1 + (Number(l.vatRate) || 0) / 100), 0));
   // Schlussrechnung: Abschläge je Steuersatz (Beträge exakt wie auf den Abschlagsrechnungen, nicht neu gerechnet)
   const ded = new Map<number, { netCents: number; vatCents: number }>();
   for (const x of activeDeductions(d)) {
@@ -523,14 +563,17 @@ export function toCiiXml(
   const lines = d.lines
     .map((l, i) => {
       const rate = d.vatMode === 'normal' ? l.vatRate : 0;
+      // EN 16931 BR-27: Einzelpreis nie negativ — ein Abzug (z. B. „Rabatt aufs Ganze“ aus der App) steht als negative
+      // Menge mit positivem Preis da; der Zeilenbetrag bleibt derselbe (wie App lib/invoice.ts toCiiXml).
+      const neg = l.unitPriceCents < 0;
       return `
     <ram:IncludedSupplyChainTradeLineItem>
       <ram:AssociatedDocumentLineDocument><ram:LineID>${i + 1}</ram:LineID></ram:AssociatedDocumentLineDocument>
       <ram:SpecifiedTradeProduct><ram:Name>${xml(l.text)}</ram:Name></ram:SpecifiedTradeProduct>
       <ram:SpecifiedLineTradeAgreement>
-        <ram:NetPriceProductTradePrice><ram:ChargeAmount>${amt(l.unitPriceCents)}</ram:ChargeAmount></ram:NetPriceProductTradePrice>
+        <ram:NetPriceProductTradePrice><ram:ChargeAmount>${amt(neg ? -l.unitPriceCents : l.unitPriceCents)}</ram:ChargeAmount></ram:NetPriceProductTradePrice>
       </ram:SpecifiedLineTradeAgreement>
-      <ram:SpecifiedLineTradeDelivery><ram:BilledQuantity unitCode="${unitCode(l.unit)}">${qtyStr(l.qty)}</ram:BilledQuantity></ram:SpecifiedLineTradeDelivery>
+      <ram:SpecifiedLineTradeDelivery><ram:BilledQuantity unitCode="${unitCode(l.unit)}">${qtyStr(neg ? -l.qty : l.qty)}</ram:BilledQuantity></ram:SpecifiedLineTradeDelivery>
       <ram:SpecifiedLineTradeSettlement>
         <ram:ApplicableTradeTax><ram:TypeCode>VAT</ram:TypeCode><ram:CategoryCode>${vatCategoryFor(d.vatMode, rate).code}</ram:CategoryCode><ram:RateApplicablePercent>${rate}</ram:RateApplicablePercent></ram:ApplicableTradeTax>
         <ram:SpecifiedTradeSettlementLineMonetarySummation><ram:LineTotalAmount>${amt(lineNet(l))}</ram:LineTotalAmount></ram:SpecifiedTradeSettlementLineMonetarySummation>

@@ -139,6 +139,7 @@ export function buildInvoiceHtml(doc: InvoiceDoc, branding: DocBranding): string
   .pay { margin-top: 16px; padding: 10px 12px; background: #F6F4F1; border-radius: 8px; font-size: 9.5pt; line-height: 1.5; overflow: hidden; break-inside: avoid; }
   .qr { float: right; width: 92px; text-align: center; font-size: 7pt; color: #646B74; margin-left: 12px; } .qr svg { width: 92px; height: 92px; display: block; background: #fff; padding: 4px; }
   .labor { font-size: 8.5pt; color: #646B74; margin-top: 6px; }
+  .subject { margin: 0 0 12px; font-weight: 700; }
   footer { margin-top: 28px; font-size: 7.5pt; color: #8A9098; border-top: 1px solid #eee; padding-top: 6px; line-height: 1.5; }
   .stamp { position: fixed; top: 38%; left: 18%; transform: rotate(-18deg); font-size: 54pt; font-weight: 900; letter-spacing: 6px; border: 6px solid; border-radius: 14px; padding: 4px 22px; opacity: .18; }
   .stamp.paid { color: #16A34A; } .stamp.canceled { color: #DC2626; } .stamp.draft { color: #646B74; }
@@ -151,11 +152,12 @@ ${stamp}
 <h1>${title}${doc.number ? ` ${esc(doc.number)}` : ''}</h1>
 <div class="meta">
   <div>Datum<b>${day(doc.issuedAt) || day(localDay())}</b></div>
-  ${quote ? `<div>Gültig bis<b>${day(doc.dueAt) || '30 Tage'}</b></div>` : `<div>Leistung<b>${period}</b></div>`}
+  ${quote ? `<div>Gültig bis<b>${day(d.validUntil || doc.dueAt) || '30 Tage'}</b></div>` : `<div>Leistung<b>${period}</b></div>`}
   ${credit && d.cancels ? `<div>Zu Rechnung<b>${esc(d.cancels)}</b></div>` : ''}
   ${!quote && !credit && doc.dueAt ? `<div>Fällig am<b>${day(doc.dueAt)}</b></div>` : ''}
   ${p.uid ? `<div>Unsere UID<b>${esc(p.uid)}</b></div>` : p.taxNumber ? `<div>Steuernummer<b>${esc(p.taxNumber)}</b></div>` : ''}
 </div>
+${d.subject?.trim() ? `<p class="subject">Betreff: ${esc(d.subject.trim())}</p>` : ''}
 ${d.intro?.trim() ? `<p class="intro">${esc(d.intro.trim()).replace(/\n/g, '<br/>')}</p>` : ''}
 <table class="lines"><thead><tr><th></th><th>Leistung / Material</th><th class="num">Menge</th><th class="num">Einzelpreis</th>${d.vatMode === 'normal' ? '<th class="num">USt</th>' : ''}<th class="num">Betrag</th></tr></thead><tbody>${rows}</tbody></table>
 <table class="sum">
