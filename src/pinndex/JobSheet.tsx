@@ -9,6 +9,7 @@ import type { GeoPoint } from './geocode';
 import { usePinn } from './context';
 import {
   addDays,
+  canGetJobs,
   dayKey,
   dayShort,
   fmtClock,
@@ -698,7 +699,8 @@ function JobForm({
   const dirty = JSON.stringify(f) !== JSON.stringify(start);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((x) => ({ ...x, [k]: v }));
 
-  const active = members.filter((m) => m.active);
+  // Auswahl: nur wer Aufträge bekommen darf (Monteure, dann Chef) — das Büro nicht (12.11.)
+  const active = members.filter(canGetJobs);
   const ordered = [...active.filter((m) => m.role === 'worker'), ...active.filter((m) => m.role !== 'worker')];
   const today = dayKey(new Date());
   const tomorrow = dayKey(addDays(new Date(), 1));

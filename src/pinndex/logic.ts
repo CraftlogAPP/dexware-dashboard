@@ -141,6 +141,19 @@ export const initials = (name: string) =>
 /** Gehört die Karte (für den Monteur) zu „meinen“? Hauptmonteur oder Helfer. */
 export const isMine = (j: Job, uid: string) => j.assignee_id === uid || (j.helper_ids ?? []).includes(uid);
 
+/**
+ * Wer darf Aufträge bekommen (Zugewiesener/Helfer)? Nur aktive Monteure und der Chef — nie das Büro (Entscheidung
+ * 12.11.2026; Server: pinn_assignable/job_before_write, Fehler „assignee is office“/„helper is office“).
+ */
+export const canGetJobs = (m: Pick<PinnMember, 'active' | 'role'> | null | undefined) => !!m && m.active && (m.role === 'owner' || m.role === 'worker');
+
+/** Verständliche Meldungen zu den Büro-Regeln (Server-Codes aus schema.sql), sonst null. */
+export function officeRuleMessage(msg: string | undefined): string | null {
+  if (/assignee is office|helper is office/i.test(msg ?? '')) return 'Büro-Mitglieder bekommen keine Aufträge. Aufträge gehen an Monteure oder an den Chef.';
+  if (/member has open jobs/i.test(msg ?? '')) return 'Diese Person hat noch offene Aufträge. Gib sie erst jemand anderem (oder sag sie ab) – dann kann sie ins Büro wechseln.';
+  return null;
+}
+
 /** Lokales Datum + Uhrzeit (Eingabefelder) → ISO mit Zeitzone. Leerer Tag = kein Termin. */
 export function scheduledIso(day: string, time: string): string | null {
   if (!day) return null;

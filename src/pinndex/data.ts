@@ -8,7 +8,7 @@ import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '../lib/fetchAll';
 import { fail } from '../lib/orgApi';
 import { geocodeAddress, type GeoPoint } from './geocode';
-import { newId } from './logic';
+import { newId, officeRuleMessage } from './logic';
 import type {
   Customer,
   CustomerInput,
@@ -114,6 +114,12 @@ export async function loadPinnContext(sb: SupabaseClient): Promise<PinnContextDa
   return { org: org as PinnOrg, me };
 }
 
+/** Büro-Regeln (12.11.): Server-Code → verständliche Meldung statt technischem Fehler */
+function officeRule(error: { message: string } | null) {
+  const m = error ? officeRuleMessage(error.message) : null;
+  if (m) throw new Error(m);
+}
+
 export function supabaseData(sb: SupabaseClient, orgId: string): PinnData {
   const jobs = () => sb.from('job').select(JOB_COLS).eq('org_id', orgId).is('deleted_at', null);
 
@@ -215,18 +221,21 @@ export function supabaseData(sb: SupabaseClient, orgId: string): PinnData {
     async saveJob(input, id) {
       if (id) {
         const { data, error } = await sb.from('job').update(input).eq('id', id).eq('org_id', orgId).select(JOB_COLS).single();
+        officeRule(error);
         if (error) fail('Auftrag konnte nicht gespeichert werden', error);
         return data as Job;
       }
       // created_by/status/… setzt der Server (Spaltenrechte erlauben nur Stammdaten + id/org_id)
       const row = { ...input, id: newId(), org_id: orgId };
       const { data, error } = await sb.from('job').insert(row).select(JOB_COLS).single();
+      officeRule(error);
       if (error) fail('Auftrag konnte nicht angelegt werden', error);
       return data as Job;
     },
 
     async moveJob(id, patch) {
       const { error } = await sb.from('job').update(patch).eq('id', id).eq('org_id', orgId);
+      officeRule(error);
       if (error) fail('Auftrag konnte nicht verschoben werden', error);
     },
 
@@ -287,6 +296,7 @@ export function supabaseData(sb: SupabaseClient, orgId: string): PinnData {
       // Sitz-Grenzen (SCHEMA-ABWEICHUNGEN): Monteure je Tarif, Büro eigene Grenze (pinn_office_seats)
       if (error && /team full/i.test(error.message)) throw new Error('Rolle konnte nicht geändert werden: alle Monteur-Plätze sind belegt — mehr Plätze gibt es über das Abo in der App.');
       if (error && /office full/i.test(error.message)) throw new Error('Rolle konnte nicht geändert werden: die Büro-Plätze sind belegt.');
+      officeRule(error);
       if (error) fail('Rolle konnte nicht geändert werden', error);
     },
 

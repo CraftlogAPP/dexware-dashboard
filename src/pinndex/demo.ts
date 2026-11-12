@@ -3,7 +3,7 @@
 // alle paar Sekunden eine Karte weiter (gesehen → läuft → fertig). Nach dem Neuladen ist alles wie vorher.
 
 import type { PinnData, StatusExtra } from './data';
-import { addDays, newId, startOfDay } from './logic';
+import { addDays, canGetJobs, isMine, isOpen, newId, officeRuleMessage, startOfDay } from './logic';
 import type { Customer, Job, JobEvent, JobStatus, PinnMember, PinnOrg, PinnRole } from './types';
 
 const ORG_ID = 'demo-org';
@@ -259,6 +259,11 @@ export function createDemoStore(): DemoStore {
     s.events.push({ id: newId(), org_id: ORG_ID, job_id: j.id, actor_id: actor, kind, at: new Date().toISOString(), data });
   const lastRun = (j: Job) => [...s.events].reverse().find((e) => e.job_id === j.id && (e.kind === 'start' || e.kind === 'resume'))?.at;
   const canManage = () => viewer.role !== 'worker';
+  // wie job_before_write am Server: Zugewiesener/Helfer nur Monteur oder Chef, nie Büro (nur neu gesetzte prüfen)
+  const assertAssignable = (assignee: string | null | undefined, helpers: string[] | undefined, before: Job | null) => {
+    const ids = [...(assignee && assignee !== before?.assignee_id ? [assignee] : []), ...(helpers ?? []).filter((h) => !(before?.helper_ids ?? []).includes(h))];
+    for (const uid of ids) if (!canGetJobs(s.members.find((x) => x.user_id === uid))) throw new Error(officeRuleMessage('assignee is office')!);
+  };
 
   function transition(j: Job, to: JobStatus, actor: string, extra?: StatusExtra) {
     if (!NEXT[j.status].includes(to)) throw new Error(`Zustand konnte nicht geändert werden: von „${j.status}“ nach „${to}“ ist nicht erlaubt.`);
@@ -363,6 +368,7 @@ export function createDemoStore(): DemoStore {
     },
     async saveJob(input, id) {
       if (!canManage()) throw new Error('Auftrag konnte nicht gespeichert werden: dafür fehlt dir die Berechtigung.');
+      assertAssignable(input.assignee_id, input.helper_ids, id ? job(id) : null);
       if (id) {
         const j = job(id);
         const assignedBefore = j.assignee_id;
@@ -401,6 +407,7 @@ export function createDemoStore(): DemoStore {
     async moveJob(id, patch) {
       if (!canManage()) throw new Error('Auftrag konnte nicht verschoben werden: dafür fehlt dir die Berechtigung.');
       const j = job(id);
+      if ('assignee_id' in patch) assertAssignable(patch.assignee_id, [], j);
       if ('assignee_id' in patch && patch.assignee_id !== j.assignee_id) {
         j.assignee_id = patch.assignee_id ?? null;
         ev(j, 'assigned', viewer.uid, { to: j.assignee_id });
@@ -461,6 +468,9 @@ export function createDemoStore(): DemoStore {
     async setRole(userId, role) {
       if (viewer.role !== 'owner') throw new Error('Rolle konnte nicht geändert werden: nur der Chef.');
       const m = s.members.find((x) => x.user_id === userId);
+      // wie member_update: Monteur → Büro nur ohne offene Aufträge
+      if (m && role === 'dispatcher' && m.role !== 'dispatcher' && s.jobs.some((j) => !j.deleted_at && isOpen(j.status) && isMine(j, userId)))
+        throw new Error(officeRuleMessage('member has open jobs')!);
       if (m && m.role !== 'owner') m.role = role;
       await delay(null);
     },
