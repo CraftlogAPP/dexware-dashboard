@@ -123,7 +123,7 @@ export interface InvoiceDraft {
   replacesQuote?: string;
 }
 
-const round =(n: number) => Math.round(n + Number.EPSILON * Math.sign(n));
+const round = (n: number) => Math.round(n + Number.EPSILON * Math.sign(n));
 
 /**
  * Erste Zahl aus einem Mengen-Text, deutsche Schreibweise: „2,5“ → 2,5 · „1.500“ → 1500 · „1.234,5“ → 1234,5 ·
