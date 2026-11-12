@@ -491,6 +491,7 @@ function ServiceDialog({
       </div>
       <p className="muted small" style={{ marginTop: 8 }}>
         Soll/Ist zählt ab „Gilt ab“. Endet die Leistung, bleibt sie in alten Nachweisen erhalten.
+        {service ? ' Ein geänderter Turnus gilt ab heute: Läuft die Leistung schon, wird sie ab heute neu geführt, frühere Nachweise behalten den bisherigen Turnus.' : ''}
       </p>
     </Modal>
   );
