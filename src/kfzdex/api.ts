@@ -31,15 +31,41 @@ export async function fetchKfzOrgContext(
   };
 }
 
-/** Permanenter Beitrittscode des Betriebs (steht direkt auf der org-Zeile). */
-export async function fetchInviteCode(sb: SupabaseClient): Promise<string | null> {
-  const { data, error } = await sb
-    .from('org')
-    .select('invite_code')
-    .limit(1)
-    .maybeSingle();
-  if (error) fail('Einladungscode konnte nicht geladen werden', error);
-  return (data?.invite_code as string | undefined) ?? null;
+/** Server-Funktion fehlt (Nachtrag noch nicht eingespielt). */
+function isMissingFunction(e: { code?: string; message?: string } | null | undefined): boolean {
+  if (!e) return false;
+  if (e.code === 'PGRST202' || e.code === '42883') return true;
+  return /could not find the function|function .* does not exist/i.test(String(e.message ?? ''));
+}
+
+export interface KfzTeamCode {
+  /** Einladungscode — null, wenn der Nutzer ihn nicht sehen darf (Mitglied). */
+  code: string | null;
+  /** Darf den Code sehen und erneuern (Inhaber; mit Nachtrag auch Verwalter). */
+  canManage: boolean;
+}
+
+/**
+ * Einladungscode des Betriebs.
+ * Mit NACHTRAG-VERWALTER-2026-11-13 (KfzDex): Der Code liegt in org_code und kommt nur über team_code() an Inhaber und
+ * Verwalter; Mitglieder bekommen „only owners …“ → kein Code. Ohne Nachtrag (Funktion fehlt): wie bisher direkt aus
+ * der org-Zeile, erneuern darf dann nur der Inhaber.
+ */
+export async function fetchKfzTeamCode(sb: SupabaseClient, isOwner: boolean): Promise<KfzTeamCode> {
+  const { data, error } = await sb.rpc('team_code');
+  if (!error) return { code: (data as string | null) ?? null, canManage: true };
+  if (/only owners/i.test(String(error.message ?? ''))) return { code: null, canManage: false };
+  if (!isMissingFunction(error)) fail('Einladungscode konnte nicht geladen werden', error);
+  const row = await sb.from('org').select('invite_code').limit(1).maybeSingle();
+  if (row.error) fail('Einladungscode konnte nicht geladen werden', row.error);
+  return { code: (row.data?.invite_code as string | null | undefined) ?? null, canManage: isOwner };
+}
+
+/** Neuen Einladungscode erzeugen (Inhaber; mit Nachtrag auch Verwalter) — der alte wird sofort ungültig. */
+export async function renewKfzTeamCode(sb: SupabaseClient): Promise<string> {
+  const { data, error } = await sb.rpc('renew_invite_code');
+  if (error) fail('Neuer Einladungscode konnte nicht erzeugt werden', error);
+  return data as string;
 }
 
 export async function fetchOrgMembers(sb: SupabaseClient): Promise<OrgMember[]> {

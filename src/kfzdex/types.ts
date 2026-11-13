@@ -66,6 +66,8 @@ export interface OrgMember {
   org_id: string;
   user_id: string;
   role: 'owner' | 'member';
+  /** Verwalter (KfzDex-Nachtrag 13.11.2026) — fehlt ohne Nachtrag. */
+  is_admin?: boolean;
   created_at: string;
 }
 
