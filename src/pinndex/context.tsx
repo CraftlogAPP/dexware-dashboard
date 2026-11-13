@@ -16,8 +16,10 @@ export interface PinnCtx {
   role: PinnRole;
   /** Chef oder Büro: Karten anlegen, zuweisen, Kunden pflegen, Zeiten korrigieren */
   canManage: boolean;
-  /** Nur Chef: Team, Rollen, Team-Code, Betrieb */
+  /** Nur Chef: Team, Rollen, Betrieb */
   isOwner: boolean;
+  /** Chef oder Verwalter (member.is_admin, 13.11.): Team-Code sehen, kopieren, erneuern. Ernennen nur in der App. */
+  canTeamCode: boolean;
   demo: boolean;
   /** Absoluter Pfad des Bereichs, z. B. /app/pinndex */
   base: string;
@@ -98,6 +100,7 @@ export function PinnProvider({
             role,
             canManage: role === 'owner' || role === 'dispatcher',
             isOwner: role === 'owner',
+            canTeamCode: role === 'owner' || (!!me.is_admin && me.active),
             demo,
             base: `/app/${app.id}`,
             members: members.data,

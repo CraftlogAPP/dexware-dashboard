@@ -39,6 +39,8 @@ export interface PinnMember {
   active: boolean;
   /** Zusatz laut SCHEMA-ABWEICHUNGEN.md: Chef/Büro-Mitteilung bei „fertig“ abschaltbar */
   notify_done?: boolean;
+  /** Nachtrag 13.11. (Laufzettel NACHTRAG-VERWALTER): Verwalter — sieht/teilt/erneuert den Team-Code. Fehlt ohne Nachtrag. */
+  is_admin?: boolean;
   created_at: string;
 }
 

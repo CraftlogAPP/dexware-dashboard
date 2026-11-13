@@ -1,5 +1,6 @@
 // PinnDex — Team: Betrieb, Team-Code (PD-XXXX-XXXX, 30 Tage, erneuerbar), Plätze, Mitglieder mit Rollen.
-// Nur der Chef ändert Rollen, entfernt Mitglieder und sieht den Team-Code (Büro: kein Team/Abo — KONZEPT.md Abschnitt 2).
+// Nur der Chef ändert Rollen, entfernt Mitglieder und ändert den Betrieb (Büro: kein Team/Abo — KONZEPT.md Abschnitt 2).
+// Seit 13.11.: Verwalter (member.is_admin, ernannt vom Chef in der App) sehen den Team-Code auch, kopieren und erneuern ihn.
 
 import { useState } from 'react';
 import { Check, Copy, MapPin, Pencil, RefreshCw, Sparkles, UserMinus } from 'lucide-react';
@@ -11,8 +12,12 @@ import { Avatar, ThemeSwitch } from '../parts';
 import { ROLE_LABEL, type PinnMember, type PinnRole } from '../types';
 
 export function Team() {
-  const { data, org, members, isOwner, me, reloadMembers, refreshOrg } = usePinn();
-  const code = useAsync(async () => (isOwner ? { code: await data.teamCode(false), seats: await data.seats() } : null), [data, isOwner]);
+  const { data, org, members, isOwner, canTeamCode, me, reloadMembers, refreshOrg } = usePinn();
+  // Plätze (sync_seat_limit = Tarif-Abgleich) nur beim Chef — der Verwalter sieht nur den Code
+  const code = useAsync(
+    async () => (canTeamCode ? { code: await data.teamCode(false), seats: isOwner ? await data.seats() : null } : null),
+    [data, canTeamCode, isOwner],
+  );
   const [busy, setBusy] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [editOrg, setEditOrg] = useState(false);
@@ -86,11 +91,18 @@ export function Team() {
           )}
         </div>
         <p className="muted small" style={{ margin: '4px 0 0' }}>
-          Du bist hier <b>{ROLE_LABEL[me.role]}</b>.
+          Du bist hier <b>{ROLE_LABEL[me.role]}</b>
+          {!isOwner && me.is_admin ? (
+            <>
+              {' '}und <b>Verwalter</b> — du teilst und erneuerst den Team-Code. Rollen und Betrieb ändert der Chef.
+            </>
+          ) : (
+            '.'
+          )}
         </p>
       </div>
 
-      {isOwner && (
+      {canTeamCode && (
         <LoadGuard state={code}>
           {(c) => c && (
             <div className="card pinn-codecard">
@@ -100,8 +112,8 @@ export function Team() {
                   <>
                     <div className="pinn-code mono">{c.code.code}</div>
                     <div className="muted small">
-                      In der Laufzettel-App unter „Team-Code eingeben“ — wer beitritt, wählt selbst <b>Monteur</b> oder <b>Büro</b>; du kannst die Rolle unten
-                      jederzeit ändern. Beliebig oft einlösbar
+                      In der Laufzettel-App unter „Team-Code eingeben“ — wer beitritt, wählt selbst <b>Monteur</b> oder <b>Büro</b>;
+                      {isOwner ? ' du kannst die Rolle unten jederzeit ändern.' : ' die Rolle ändert der Chef.'} Beliebig oft einlösbar
                       {c.code.expires_at ? `, gültig bis ${ddmmyyyy(new Date(c.code.expires_at))}` : ''}.
                     </div>
                   </>
@@ -171,6 +183,7 @@ export function Team() {
               <div className="pinn-member-main">
                 <b>{memberName(m)}</b>
                 {m.user_id === me.user_id && <span className="muted small"> (du)</span>}
+                {m.is_admin && m.role !== 'owner' && <span className="muted small"> · Verwalter</span>}
                 {isNew(m) ? (
                   <div className="pinn-newtag">
                     <Sparkles className="i" aria-hidden /> neu beigetreten als {ROLE_LABEL[m.role]} · {ddmmyyyy(new Date(m.created_at))}

@@ -43,6 +43,18 @@ export const PHOTO_BUCKET = 'pinn';
 const JOB_COLS =
   'id, org_id, title, customer_id, customer_name, customer_phone, address, note, scheduled_at, duration_min, urgent, assignee_id, helper_ids, status, seen_at, started_at, finished_at, work_seconds, running_since, lat, lng, done_note, outcome, photos, result_photos, created_by, created_at, updated_at, deleted_at';
 const MEMBER_COLS = 'org_id, user_id, role, display_name, color, active, notify_done, created_at';
+// is_admin (Verwalter) gibt es erst mit Laufzettel-NACHTRAG-VERWALTER-2026-11-13 — ohne ihn liefe jede Abfrage mit der
+// Spalte auf einen Fehler. Deshalb erst mit, bei „Spalte fehlt“ einmal ohne (und danach gleich ohne).
+let adminColMissing = false;
+const isMissingCol = (e: { code?: string; message?: string } | null) => !!e && (e.code === '42703' || /is_admin/.test(e.message ?? ''));
+async function selectMembers<T>(run: (cols: string) => PromiseLike<{ data: T | null; error: { code?: string; message: string } | null }>) {
+  if (!adminColMissing) {
+    const r = await run(`${MEMBER_COLS}, is_admin`);
+    if (!isMissingCol(r.error)) return r;
+    adminColMissing = true;
+  }
+  return run(MEMBER_COLS);
+}
 const CUSTOMER_COLS = 'id, org_id, name, phone, address, note, lat, lng, deleted_at, updated_at';
 const EVENT_COLS = 'id, org_id, job_id, actor_id, kind, at, data, seq';
 
@@ -105,7 +117,7 @@ export async function loadPinnContext(sb: SupabaseClient): Promise<PinnContextDa
   const { data: auth } = await sb.auth.getUser();
   const uid = auth.user?.id;
   if (!uid) return null;
-  const { data: ms, error: mErr } = await sb.from('member').select(MEMBER_COLS).eq('user_id', uid).eq('active', true).limit(1);
+  const { data: ms, error: mErr } = await selectMembers((cols) => sb.from('member').select(cols).eq('user_id', uid).eq('active', true).limit(1));
   if (mErr) fail('Mitgliedschaft konnte nicht geladen werden', mErr);
   const me = ms?.[0] as PinnMember | undefined;
   if (!me) return null;
@@ -131,9 +143,9 @@ export function supabaseData(sb: SupabaseClient, orgId: string): PinnData {
 
   return {
     async members() {
-      const { data, error } = await sb.from('member').select(MEMBER_COLS).eq('org_id', orgId).order('created_at').order('user_id');
+      const { data, error } = await selectMembers((cols) => sb.from('member').select(cols).eq('org_id', orgId).order('created_at').order('user_id'));
       if (error) fail('Team konnte nicht geladen werden', error);
-      return (data ?? []) as PinnMember[];
+      return (data ?? []) as unknown as PinnMember[];
     },
 
     customers() {
