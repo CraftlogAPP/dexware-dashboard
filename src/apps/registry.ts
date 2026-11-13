@@ -66,12 +66,11 @@ const INSTALLATEURDEX_SUPABASE: SupabaseConfig = {
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxdWR3c3h2amhkd2ZsZWJva2x6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4ODgyMjQsImV4cCI6MjEwOTQ2NDIyNH0.p5SvVCHjeNGDITr4bZqUgeN9FUXo_YHZo0UVeSYKl0k',
 };
 
-// Laufzettel (intern PinnDex, Live-Pinnwand für Aufträge): Supabase-Projekt existiert noch nicht. Sobald Alex es angelegt
-// und PinnDex/supabase/schema.sql eingespielt hat: Adresse + öffentlichen Anon-Key hier eintragen (wie PinnDex/mobile/.env).
-// Leer = der Bereich zeigt im Dev-Server Beispieldaten, im Produktions-Build „noch nicht freigeschaltet“.
+// Laufzettel (intern PinnDex, Live-Pinnwand für Aufträge): Supabase-Projekt otdixdconynnzngwkotx (Frankfurt, seit 12.11.2026),
+// Schema PinnDex/supabase/schema.sql ist eingespielt. Werte wie PinnDex/mobile/.env (Anon-Key ist öffentlich, RLS schützt).
 const PINNDEX_SUPABASE: SupabaseConfig = {
-  url: '',
-  anonKey: '',
+  url: 'https://otdixdconynnzngwkotx.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90ZGl4ZGNvbnlubnpuZ3drb3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1MDc0OTAsImV4cCI6MjExMDA4MzQ5MH0.vS-30hvxBGTloq-o0Q5HqXpouicgN6ZiUbrmwfzIr4I',
 };
 
 export const APPS: AppConfig[] = [
