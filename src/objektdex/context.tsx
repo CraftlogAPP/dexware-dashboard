@@ -1,10 +1,12 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import type { OdData } from './data';
+import type { OdRole } from './types';
 
 export interface OdContextValue {
   data: OdData;
   orgName: string;
-  role: 'owner' | 'worker';
+  /** owner = Inhaber · admin = Verwalter (Team-Code, Mitarbeiter entfernen) · worker = Mitarbeiter */
+  role: OdRole;
   /** Beispieldaten (Dev-Vorschau) — nichts wird gespeichert */
   demo: boolean;
   /** Basis-Pfad des Bereichs, z. B. /app/objektdex */

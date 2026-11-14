@@ -11,6 +11,7 @@ import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
 import { AboPage } from '../components/AboPage';
 import { OdProvider, useOd } from './context';
 import { supabaseData } from './data';
+import { parseRole } from './types';
 import { Overview } from './pages/Overview';
 import { Properties } from './pages/Properties';
 import { PropertyDetail } from './pages/PropertyDetail';
@@ -66,7 +67,7 @@ function LiveBridge({ children }: { children: React.ReactNode }) {
     () => ({
       data: supabaseData(client, org!.org.id),
       orgName: org!.org.name,
-      role: (org!.role === 'owner' ? 'owner' : 'worker') as 'owner' | 'worker',
+      role: parseRole(org!.role),
       demo: false,
       base: `/app/${app.id}`,
     }),
@@ -119,7 +120,7 @@ function Shell() {
         <div className="nav-footer">
           <b>{orgName}</b>
           <br />
-          Rolle: {role === 'owner' ? 'Inhaber' : 'Mitarbeiter'}
+          Rolle: {role === 'owner' ? 'Inhaber' : role === 'admin' ? 'Verwalter' : 'Mitarbeiter'}
         </div>
       </nav>
       <main className="app-main">

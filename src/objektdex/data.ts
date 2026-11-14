@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '../lib/fetchAll';
 import { fail } from '../lib/orgApi';
 import { addDays, dayToUTC, type Day } from './turnus';
+import { parseRole } from './types';
 import type {
   OdDefect,
   OdMember,
@@ -42,6 +43,8 @@ export interface OdData {
   listMembers(): Promise<OdMember[]>;
   teamCode(renew: boolean): Promise<{ code: string; expires_at: string; use_count: number } | null>;
   removeMember(membershipId: string): Promise<void>;
+  /** Verwalter ernennen ('admin') / zurückstufen ('worker') — nur der Inhaber (Server prüft selbst) */
+  setMemberRole(userId: string, role: 'admin' | 'worker'): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------- Berliner Tagesgrenzen
@@ -203,7 +206,7 @@ export function supabaseData(sb: SupabaseClient, orgId: string): OdData {
     async listMembers() {
       const { data, error } = await sb.rpc('list_members');
       if (error) fail('Team konnte nicht geladen werden', error);
-      return (data ?? []) as OdMember[];
+      return ((data ?? []) as OdMember[]).map((m) => ({ ...m, role: parseRole(m.role) }));
     },
     async teamCode(renew) {
       const { data, error } = await sb.rpc('team_code', { p_renew: renew });
@@ -213,7 +216,17 @@ export function supabaseData(sb: SupabaseClient, orgId: string): OdData {
     },
     async removeMember(membershipId) {
       const { error } = await sb.rpc('remove_member', { p_membership: membershipId });
-      if (error) fail('Mitglied nicht entfernt', error);
+      if (error) {
+        if (/Verwalter kann nur der Inhaber/i.test(error.message)) throw new Error('Verwalter kann nur der Inhaber entfernen.');
+        fail('Mitglied nicht entfernt', error);
+      }
+    },
+    async setMemberRole(userId, role) {
+      const { error } = await sb.rpc('set_member_role', { p_user: userId, p_role: role });
+      if (error) {
+        if (/nur der Inhaber/i.test(error.message)) throw new Error('Verwalter ernennen darf nur der Inhaber des Betriebs.');
+        fail('Rolle nicht geändert', error);
+      }
     },
   };
 }

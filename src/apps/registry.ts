@@ -71,12 +71,13 @@ const INSTALLATEURDEX_SUPABASE: SupabaseConfig = {
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxdWR3c3h2amhkd2ZsZWJva2x6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4ODgyMjQsImV4cCI6MjEwOTQ2NDIyNH0.p5SvVCHjeNGDITr4bZqUgeN9FUXo_YHZo0UVeSYKl0k',
 };
 
-// ObjektDex (Leistungsnachweis Hausbetreuung/Grünpflege/Reinigung, Suite-App): Supabase-Projekt existiert noch nicht.
-// Sobald Alex es angelegt und ObjektDex/supabase/schema.sql eingespielt hat: Adresse + öffentlichen Anon-Key hier eintragen
-// (wie ObjektDex/mobile/.env) und unlisted entfernen. Leer = Dev-Server zeigt Beispieldaten, Produktions-Build „noch nicht verbunden“.
+// ObjektDex (Leistungsnachweis Hausbetreuung/Grünpflege/Reinigung, Suite-App): Supabase-Projekt yugakdpkrbcenyqkzkad (Frankfurt),
+// Schema ObjektDex/supabase/schema.sql + Nachträge eingespielt. Werte wie ObjektDex/mobile/.env (Anon-Key ist öffentlich, RLS
+// schützt; ohne Anmeldung sind seit NACHTRAG-SICHERHEIT-2026-11-13 keine Tabellen lesbar). Verbunden 14.11.2026.
 const OBJEKTDEX_SUPABASE: SupabaseConfig = {
-  url: '',
-  anonKey: '',
+  url: 'https://yugakdpkrbcenyqkzkad.supabase.co',
+  anonKey:
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1Z2FrZHBrcmJjZW55cWt6a2FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0OTYyMzcsImV4cCI6MjExMDA3MjIzN30.qIYvan-DkXiIfFR4wYaldlJ1svgKPzV86XJjZqMlQ9M',
 };
 
 // Laufzettel (intern PinnDex, Live-Pinnwand für Aufträge): Supabase-Projekt otdixdconynnzngwkotx (Frankfurt, seit 12.11.2026),
@@ -347,13 +348,15 @@ export const APPS: AppConfig[] = [
     name: 'ObjektDex',
     tagline: 'Hausbetreuung, Grünpflege & Reinigung — jeder Einsatz mit Soll/Ist belegt',
     status: 'dashboard',
-    // noch nicht gestartet → nicht auf der Startseite (nur /app/objektdex)
+    // noch nicht gestartet (geschlossener Test) → nicht auf der Startseite; die App verlinkt direkt /app/objektdex
     unlisted: true,
     emoji: '🏠',
     // Farben wie die App (frisches Grün/Petrol auf dunklem Grund, ObjektDex/mobile/src/theme.ts)
     theme: { accent: '#34D8A6', onAccent: '#04261D', bg: '#0A1615' },
     landingUrl: 'https://objektdex.dexware.app',
-    supabase: OBJEKTDEX_SUPABASE.url && OBJEKTDEX_SUPABASE.anonKey ? OBJEKTDEX_SUPABASE : undefined,
+    // Öffentlicher RevenueCat-SDK-Key wie ObjektDex/mobile/.env (nur Abo-Anzeige)
+    revenueCat: 'goog_WBvzEsiVeXLgRjHhOWiuYcoysur',
+    supabase: OBJEKTDEX_SUPABASE,
   },
   {
     id: 'pinndex',

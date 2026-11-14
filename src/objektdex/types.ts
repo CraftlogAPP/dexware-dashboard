@@ -103,10 +103,18 @@ export interface OdSollIstRow {
   last_done: string | null;
 }
 
+/** owner = Inhaber · admin = Verwalter (Mitarbeiter + Team-Verwaltung, seit 13.11.2026) · worker = Mitarbeiter */
+export type OdRole = 'owner' | 'admin' | 'worker';
+
+/** Unbekannte Rollen (künftige Server-Stände) immer wie Mitarbeiter behandeln — nie mehr Rechte zeigen als sicher. */
+export const parseRole = (v: unknown): OdRole => (v === 'owner' || v === 'admin' ? v : 'worker');
+
 export interface OdMember {
   membership_id: string;
+  /** Nutzer-Kennung (für set_member_role) */
+  user_id: string;
   email: string;
-  role: 'owner' | 'worker';
+  role: OdRole;
   joined_at: string;
 }
 

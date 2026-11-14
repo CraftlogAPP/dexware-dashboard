@@ -216,9 +216,9 @@ export function createDemoStore(): DemoStore {
     { id: did(5, 3), property_id: did(1, 1), label: 'alter Link (Beirat)', created_at: at(addDays(today, -60), 8, 0), revoked_at: at(addDays(today, -21), 8, 0), last_viewed_at: at(addDays(today, -30), 7, 51), view_count: 3 },
   ];
   const members: OdMember[] = [
-    { membership_id: did(6, 1), email: 'chef@objektservice-brandl.example', role: 'owner', joined_at: at(start, 9, 0) },
-    { membership_id: did(6, 2), email: 'lena.kraemer@objektservice-brandl.example', role: 'worker', joined_at: at(addDays(start, 2), 7, 30) },
-    { membership_id: did(6, 3), email: 'tom.berger@objektservice-brandl.example', role: 'worker', joined_at: at(addDays(start, 5), 7, 45) },
+    { membership_id: did(6, 1), user_id: did(7, 1), email: 'chef@objektservice-brandl.example', role: 'owner', joined_at: at(start, 9, 0) },
+    { membership_id: did(6, 2), user_id: did(7, 2), email: 'lena.kraemer@objektservice-brandl.example', role: 'worker', joined_at: at(addDays(start, 2), 7, 30) },
+    { membership_id: did(6, 3), user_id: did(7, 3), email: 'tom.berger@objektservice-brandl.example', role: 'admin', joined_at: at(addDays(start, 5), 7, 45) },
   ];
   let code = { code: 'OD-K7MR-4QPZ', expires_at: at(addDays(today, 21), 12, 0), use_count: 2 };
 
@@ -337,6 +337,11 @@ export function createDemoStore(): DemoStore {
     async removeMember(id) {
       const i = members.findIndex((m) => m.membership_id === id && m.role !== 'owner');
       if (i >= 0) members.splice(i, 1);
+      await wait(null);
+    },
+    async setMemberRole(userId, role) {
+      const m = members.find((x) => x.user_id === userId && x.role !== 'owner');
+      if (m) m.role = role;
       await wait(null);
     },
   };

@@ -7,11 +7,12 @@ import { appIcon, type AppConfig } from '../apps/registry';
 import { OdProvider } from './context';
 import { createDemoStore } from './demo';
 import { OdRoutes } from './ObjektdexArea';
+import type { OdRole } from './types';
 
 export function DemoArea({ app }: { app: AppConfig }) {
   const params = new URLSearchParams(window.location.search);
   const [clean] = useState(() => params.has('sauber'));
-  const [role, setRole] = useState<'owner' | 'worker'>(() => (params.get('rolle') === 'worker' ? 'worker' : 'owner'));
+  const [role, setRole] = useState<OdRole>(() => { const r = params.get('rolle'); return r === 'worker' || r === 'admin' ? r : 'owner'; });
   const [store] = useState(() => createDemoStore());
   const value = useMemo(() => ({ data: store.data, orgName: store.orgName, role, demo: true, base: `/app/${app.id}` }), [store, role, app.id]);
   const style = { '--accent': app.theme.accent, '--on-accent': app.theme.onAccent, '--bg': app.theme.bg } as React.CSSProperties;
@@ -43,9 +44,9 @@ export function DemoArea({ app }: { app: AppConfig }) {
           </span>
           <span className="row" style={{ gap: 6 }}>
             Ansicht:
-            {(['owner', 'worker'] as const).map((r) => (
+            {(['owner', 'admin', 'worker'] as const).map((r) => (
               <button key={r} type="button" className={`btn small ${role === r ? '' : 'ghost'}`} onClick={() => setRole(r)}>
-                {r === 'owner' ? 'Inhaber' : 'Mitarbeiter'}
+                {r === 'owner' ? 'Inhaber' : r === 'admin' ? 'Verwalter' : 'Mitarbeiter'}
               </button>
             ))}
           </span>
