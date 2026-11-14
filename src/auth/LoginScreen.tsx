@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { LayoutGrid } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { appIcon } from '../apps/registry';
@@ -21,6 +21,20 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // Google im Browser braucht im Supabase-Projekt das Client-Secret (die Apps melden nativ ohne an).
+  // Fehlt es, landet man sonst auf der rohen Supabase-Fehlerseite „missing OAuth secret“ (Laufzettel/
+  // InstallateurDex, 14.11.2026). Vorab prüfen: 302 → Knopf zeigen, 400 → nur E-Mail. Netzfehler → zeigen.
+  const [googleOk, setGoogleOk] = useState<boolean | null>(null);
+  useEffect(() => {
+    const base = app.supabase?.url;
+    if (!base) { setGoogleOk(false); return; }
+    let alive = true;
+    const probe = `${base}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(`${window.location.origin}/app/${app.id}`)}`;
+    fetch(probe, { redirect: 'manual' })
+      .then((r) => { if (alive) setGoogleOk(r.type === 'opaqueredirect' || (r.status >= 300 && r.status < 400)); })
+      .catch(() => { if (alive) setGoogleOk(true); });
+    return () => { alive = false; };
+  }, [app.id, app.supabase?.url]);
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -91,14 +105,15 @@ export function LoginScreen() {
         </div>
         <h2>{app.name} Dashboard</h2>
         <p className="auth-sub">
-          Melde dich mit deinem bestehenden {app.name}-Konto an — per Google oder mit
-          denselben Zugangsdaten wie in der App.
+          {googleOk === false
+            ? <>Melde dich mit deinem bestehenden {app.name}-Konto an — mit denselben Zugangsdaten wie in der App. Hast du dich in der App mit Google angemeldet? Dann über „Passwort vergessen“ einmal ein Passwort festlegen.</>
+            : <>Melde dich mit deinem bestehenden {app.name}-Konto an — per Google oder mit denselben Zugangsdaten wie in der App.</>}
         </p>
 
         {error && <div className="error-box">{error}</div>}
         {info && <div className="info-box">{info}</div>}
 
-        {mode === 'login' && (
+        {mode === 'login' && googleOk === true && (
           <>
             <button
               type="button"
