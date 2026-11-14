@@ -79,6 +79,13 @@ const OBJEKTDEX_SUPABASE: SupabaseConfig = {
   anonKey: '',
 };
 
+// Laufzettel (intern PinnDex, Live-Pinnwand für Aufträge): Supabase-Projekt otdixdconynnzngwkotx (Frankfurt, seit 12.11.2026),
+// Schema PinnDex/supabase/schema.sql ist eingespielt. Werte wie PinnDex/mobile/.env (Anon-Key ist öffentlich, RLS schützt).
+const PINNDEX_SUPABASE: SupabaseConfig = {
+  url: 'https://otdixdconynnzngwkotx.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90ZGl4ZGNvbnlubnpuZ3drb3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1MDc0OTAsImV4cCI6MjExMDA4MzQ5MH0.vS-30hvxBGTloq-o0Q5HqXpouicgN6ZiUbrmwfzIr4I',
+};
+
 export const APPS: AppConfig[] = [
   {
     id: 'craftdex',
@@ -347,6 +354,20 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#34D8A6', onAccent: '#04261D', bg: '#0A1615' },
     landingUrl: 'https://objektdex.dexware.app',
     supabase: OBJEKTDEX_SUPABASE.url && OBJEKTDEX_SUPABASE.anonKey ? OBJEKTDEX_SUPABASE : undefined,
+  },
+  {
+    id: 'pinndex',
+    // Sichtbarer Name seit 11.11.2026 „Laufzettel“ (eigene Marke, kein Teil der Suite) — Kennung/Route bleiben „pinndex“ (wie Bucket pinn)
+    name: 'Laufzettel',
+    tagline: 'Der digitale Laufzettel für dein Team — Aufträge verteilen, Status live sehen',
+    status: 'dashboard',
+    // Eigenständige Marke, noch nicht gestartet → nicht auf der Startseite (nur /app/pinndex bzw. /app/laufzettel)
+    unlisted: true,
+    emoji: '📋',
+    // Farben wie die App (Bernstein auf Graphit, PinnDex/mobile)
+    theme: { accent: '#F5B544', onAccent: '#1A1305', bg: '#121315' },
+    landingUrl: 'https://laufzettel.dexware.app',
+    supabase: PINNDEX_SUPABASE.url && PINNDEX_SUPABASE.anonKey ? PINNDEX_SUPABASE : undefined,
   },
   // TurnDex bleibt bewusst draußen: auf Eis gelegt (kein freies Supabase-Projekt
   // verfügbar), darf in keiner öffentlichen Fläche auftauchen.

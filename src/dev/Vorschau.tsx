@@ -22,6 +22,11 @@ export function Vorschau() {
   const [params] = useSearchParams();
   // ObjektDex hat einen eigenen Beispieldaten-Bereich (alle Seiten bedienbar)
   if (params.get('app') === 'objektdex') return <Navigate to={`/app/objektdex?demo${params.has('sauber') ? '&sauber' : ''}`} replace />;
+  // Laufzettel (intern pinndex) hat einen eigenen Beispieldaten-Bereich (Pinnwand live, alle Seiten bedienbar)
+  if (params.get('app') === 'pinndex' || params.get('app') === 'laufzettel') {
+    const rolle = params.get('rolle');
+    return <Navigate to={`/app/pinndex?demo${rolle ? `&rolle=${encodeURIComponent(rolle)}` : ''}`} replace />;
+  }
   return <VorschauInhalt params={params} />;
 }
 
