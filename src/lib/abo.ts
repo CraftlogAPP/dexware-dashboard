@@ -150,10 +150,12 @@ export async function loadAboInfo(app: AppConfig, session: Session): Promise<Abo
   const email = session.user.email ?? '';
   const dexId = email ? await dexwareId(email) : null;
 
+  // Apps außerhalb des Suite-Abos (registry: notInSuite) fragen den Suite-Server gar nicht erst.
+  const suiteCounts = !app.notInSuite;
   const [byUid, byDexId, suiteStatus] = await Promise.all([
     fetchSubscriber(app.revenueCat, session.user.id),
     dexId ? fetchSubscriber(app.revenueCat, dexId) : Promise.resolve(null),
-    dexId ? fetchSuiteStatus(dexId) : Promise.resolve({ active: false as const }),
+    dexId && suiteCounts ? fetchSuiteStatus(dexId) : Promise.resolve({ active: false as const }),
   ]);
 
   if (!byUid && !byDexId) {
@@ -169,10 +171,9 @@ export async function loadAboInfo(app: AppConfig, session: Session): Promise<Abo
           .reduce<EntitlementInfo | null>((a, b) => better(a, b), null)
       : null;
   const pro = better(proOf(byUid), proOf(byDexId));
-  const suite = better(
-    byUid ? toInfo(byUid, ENTITLEMENT_SUITE) : null,
-    byDexId ? toInfo(byDexId, ENTITLEMENT_SUITE) : null,
-  );
+  const suite = suiteCounts
+    ? better(byUid ? toInfo(byUid, ENTITLEMENT_SUITE) : null, byDexId ? toInfo(byDexId, ENTITLEMENT_SUITE) : null)
+    : null;
 
   return {
     pro,

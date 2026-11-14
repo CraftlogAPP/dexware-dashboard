@@ -39,6 +39,11 @@ export interface AppConfig {
   /** Emoji als Kachel-Icon */
   emoji: string;
   /**
+   * App gehört NICHT zum Dexware-Suite-Abo (Alex, 11.11.2026: Suite = nur die Prüf-Apps). Die Abo-Seite fragt dann
+   * weder das Entitlement „suite“ noch den Suite-Server und erwähnt die Suite nicht — gilt nur das eigene Pro/Team.
+   */
+  notInSuite?: boolean;
+  /**
    * Team-Plätze, wenn die App andere Stufen hat als der Standard (Team bis 50 / Team XL bis 100, Ersatzwert 20).
    * Ohne Angabe bleibt die Team-Seite wie bisher — nur Apps mit eigenem Modell setzen das (InstallateurDex: Team 3/5/10).
    */
@@ -303,6 +308,8 @@ export const APPS: AppConfig[] = [
     tagline: 'Wartungen, Anlagenpass & Kundenanfragen für Installateure (Heizung, Wärmepumpe, Klima, Sanitär)',
     status: 'dashboard',
     emoji: '🔧',
+    // eigener Tarif, nicht im Suite-Abo (11.11.2026) — wie tarif-abgleich.sql/NACHTRAG-SUITE-TRENNUNG
+    notInSuite: true,
     theme: { accent: '#D9822B', onAccent: '#14181D', bg: '#0F1216' },
     landingUrl: 'https://installateurdex.dexware.app',
     revenueCat: 'goog_DOFgenvUDvWqRvosCnrBsaEkUcG',
