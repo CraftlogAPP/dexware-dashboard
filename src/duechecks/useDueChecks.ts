@@ -21,7 +21,7 @@ export interface DueChecksState {
 }
 
 /** Apps mit eigenem Login (Supabase-Backend) — deren Anmeldung wird geprüft. */
-const BACKEND_APPS = APPS.filter((a) => a.status === 'dashboard' && a.supabase);
+const BACKEND_APPS = APPS.filter((a) => a.status === 'dashboard' && a.supabase && !a.unlisted);
 
 /**
  * Prüft appübergreifend die Fälligkeiten aller Apps mit Supabase-Backend +

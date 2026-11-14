@@ -2,7 +2,7 @@
 // mit Beispieldaten, damit sich das Design ohne Test-Login prüfen lässt.
 // Wird im Produktions-Build nicht eingebunden (siehe App.tsx).
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import {
   ClipboardCheck,
   CreditCard,
@@ -20,6 +20,12 @@ import { gpsProofHtml, proofStampHtml } from '../lib/gpsProof';
 
 export function Vorschau() {
   const [params] = useSearchParams();
+  // ObjektDex hat einen eigenen Beispieldaten-Bereich (alle Seiten bedienbar)
+  if (params.get('app') === 'objektdex') return <Navigate to={`/app/objektdex?demo${params.has('sauber') ? '&sauber' : ''}`} replace />;
+  return <VorschauInhalt params={params} />;
+}
+
+function VorschauInhalt({ params }: { params: URLSearchParams }) {
   const app = APPS.find((a) => a.id === params.get('app')) ?? APPS.find((a) => a.id === 'spieldex')!;
   const [dialog, setDialog] = useState(params.get('dialog') === '1');
   const style = {
