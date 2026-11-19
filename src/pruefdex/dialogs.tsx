@@ -60,7 +60,7 @@ export function DeviceDialog({
         protection_class:
           (orNull(v.protection_class) as ProtectionClass | null) ?? null,
         location_note: orNull(v.location_note),
-        interval_months: num(v.interval_months) ?? 12,
+        interval_months: num(v.interval_months) ?? 6,
         next_due_date: orNull(v.next_due_date),
       },
       device === 'new' ? undefined : device,
@@ -101,7 +101,7 @@ export function DeviceDialog({
           label: 'Prüfintervall (Monate)',
           kind: 'number',
           required: true,
-          hint: 'DGUV V3: üblich 6–24 Monate je nach Beanspruchung',
+          hint: 'Richtwert DGUV Vorschrift 3: 6 Monate, Baustelle 3. 12 bzw. 24 Monate (Büro) nur als Höchstwert bei Fehlerquote unter 2 % — die Frist legt der Arbeitgeber fest.',
         },
         {
           key: 'next_due_date',
@@ -112,7 +112,7 @@ export function DeviceDialog({
       ]}
       initial={
         device === 'new'
-          ? { interval_months: '12' }
+          ? { interval_months: '6' }
           : {
               name: device.name,
               device_type: device.device_type ?? '',
