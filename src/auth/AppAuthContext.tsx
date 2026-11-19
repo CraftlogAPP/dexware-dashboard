@@ -55,7 +55,9 @@ export function AppAuthProvider({
   const signOut = useCallback(async () => {
     // Liegt in der Handy-Ansicht noch etwas nur auf diesem Gerät (wartend/angefangen): vorher nachfragen.
     if (!(await confirmLogout())) return;
-    await client.auth.signOut();
+    // Nur dieses Gerät/diesen Browser abmelden. Ohne scope meldet Supabase ÜBERALL ab — dann flöge auch die
+    // Handy-App des Nutzers raus (spätestens bei der nächsten Token-Erneuerung).
+    await client.auth.signOut({ scope: 'local' });
   }, [client]);
 
   const value = useMemo<AppAuthValue>(

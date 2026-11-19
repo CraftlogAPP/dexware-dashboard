@@ -4,7 +4,8 @@ import { WebBuy } from '../components/WebBuy';
 import { WEB_OFFERS } from '../apps/webOffers';
 import { APPS } from '../apps/registry';
 
-const TEST = 'https://pay.rev.cat/jbswzhlxbgsrgube';
+// Kein echter Kauf-Link im öffentlichen Repo (auch kein Test-Link): Platzhalter, die Kacheln sind nur zum Ansehen.
+const TEST = 'https://pay.rev.cat/beispiel';
 
 export default function KaufVorschau() {
   const bald = new URLSearchParams(location.search).get('bald');
