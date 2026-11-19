@@ -46,7 +46,14 @@ export function useOrg(): OrgState {
  * Lade-/Fehler-/„kein Betrieb"-Gate um die App-Routen.
  * children rendern erst, wenn der Org-Kontext steht.
  */
-export function OrgGate({ children }: { children: ReactNode }) {
+export function OrgGate({
+  children,
+  noOrg,
+}: {
+  children: ReactNode;
+  /** Eigene Seite, wenn das Konto noch zu keinem Betrieb gehört (z. B. WinterDex: Betrieb anlegen / Team beitreten) */
+  noOrg?: ReactNode;
+}) {
   const { app } = useAppAuth();
   const { data, loading, error, reload } = useOrg();
 
@@ -67,6 +74,7 @@ export function OrgGate({ children }: { children: ReactNode }) {
       </div>
     );
   }
+  if (!data && noOrg) return <>{noOrg}</>;
   if (!data) {
     return (
       <div className="page">

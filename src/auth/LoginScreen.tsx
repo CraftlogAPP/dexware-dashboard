@@ -5,7 +5,7 @@ import { appIcon } from '../apps/registry';
 import { useAppAuth } from './AppAuthContext';
 import { LegalLinks } from '../components/LegalLinks';
 
-type Mode = 'login' | 'reset-request' | 'reset-code';
+type Mode = 'login' | 'signup' | 'reset-request' | 'reset-code';
 
 /**
  * Login mit dem bestehenden App-Konto (E-Mail + Passwort).
@@ -21,6 +21,8 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // E-Mail noch nicht bestätigt → Knopf „Bestätigungs-Mail erneut senden“
+  const [unconfirmed, setUnconfirmed] = useState(false);
   // Google im Browser braucht im Supabase-Projekt das Client-Secret (die Apps melden nativ ohne an).
   // Fehlt es, landet man sonst auf der rohen Supabase-Fehlerseite „missing OAuth secret“ (Laufzettel/
   // InstallateurDex, 14.11.2026). Vorab prüfen: 302 → Knopf zeigen, 400 → nur E-Mail. Netzfehler → zeigen.
@@ -52,8 +54,46 @@ export function LoginScreen() {
   function onLogin(e: FormEvent) {
     e.preventDefault();
     void run(async () => {
-      const { error: err } = await client.auth.signInWithPassword({ email, password });
-      if (err) throw new Error(loginErrorText(err.message));
+      setUnconfirmed(false);
+      const { error: err } = await client.auth.signInWithPassword({ email: email.trim(), password });
+      if (err) {
+        if (/email not confirmed/i.test(err.message)) setUnconfirmed(true);
+        throw new Error(loginErrorText(err.message));
+      }
+    });
+  }
+
+  // Bestätigungslink führt zurück in diesen App-Bereich (dieselbe freigegebene Adresse wie die Google-Anmeldung).
+  const confirmUrl = `${window.location.origin}/app/${app.id}`;
+
+  /** Neues Konto anlegen (nur Apps mit webSignup) — wie die Registrierung in der App: E-Mail + Passwort, Bestätigung per Link. */
+  function onSignup(e: FormEvent) {
+    e.preventDefault();
+    void run(async () => {
+      if (password.length < 6) throw new Error('Bitte ein Passwort mit mindestens 6 Zeichen wählen.');
+      rememberReturnPath(app.id);
+      const { data, error: err } = await client.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: confirmUrl } });
+      if (err) throw new Error(signupErrorText(err.message));
+      // Schon registrierte Adresse: der Server antwortet aus Datenschutzgründen ohne Fehler, aber ohne Identität.
+      if (data.user && (data.user.identities?.length ?? 0) === 0) {
+        setMode('login');
+        throw new Error('Für diese E-Mail gibt es schon ein Konto. Bitte anmelden — oder über „Passwort vergessen?“ ein neues Passwort festlegen.');
+      }
+      if (!data.session) {
+        setMode('login');
+        setPassword('');
+        setInfo(`Fast fertig: Wir haben dir eine Bestätigungs-E-Mail an ${email.trim()} geschickt. Tippe auf den Link darin — danach bist du angemeldet. Öffnet sich der Link in einem anderen Browser, melde dich dort einfach mit E-Mail und Passwort an.`);
+      }
+      // Mit Sitzung (Bestätigung ausgeschaltet) leitet der Provider automatisch weiter.
+    });
+  }
+
+  function onResend() {
+    void run(async () => {
+      const { error: err } = await client.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: confirmUrl } });
+      if (err) throw new Error(signupErrorText(err.message));
+      setUnconfirmed(false);
+      setInfo(`Bestätigungs-E-Mail erneut an ${email.trim()} gesendet. Bitte auch im Spam-Ordner nachsehen.`);
     });
   }
 
@@ -106,17 +146,24 @@ export function LoginScreen() {
         <div className="auth-logo">
           <img src={appIcon(app.id)} alt={`${app.name}-Icon`} />
         </div>
-        <h2>{app.name} Dashboard</h2>
+        <h2>{mode === 'signup' ? `${app.name}-Konto anlegen` : `${app.name} Dashboard`}</h2>
         <p className="auth-sub">
-          {googleOk === false
+          {mode === 'signup'
+            ? <>Kostenlos registrieren — danach legst du deinen Betrieb an oder trittst mit einem Einladungscode dem Team deines Betriebs bei. Dasselbe Konto gilt auch in der {app.name}-App.</>
+            : googleOk === false
             ? <>Melde dich mit deinem bestehenden {app.name}-Konto an — mit denselben Zugangsdaten wie in der App. Hast du dich in der App mit Google angemeldet? Dann über „Passwort vergessen“ einmal ein Passwort festlegen.</>
             : <>Melde dich mit deinem bestehenden {app.name}-Konto an — per Google oder mit denselben Zugangsdaten wie in der App.</>}
         </p>
 
         {error && <div className="error-box">{error}</div>}
         {info && <div className="info-box">{info}</div>}
+        {unconfirmed && mode === 'login' && (
+          <button type="button" className="btn ghost small" style={{ marginBottom: 12 }} disabled={busy} onClick={onResend}>
+            Bestätigungs-Mail erneut senden
+          </button>
+        )}
 
-        {mode === 'login' && googleOk === true && (
+        {(mode === 'login' || mode === 'signup') && googleOk === true && (
           <>
             <button
               type="button"
@@ -126,7 +173,7 @@ export function LoginScreen() {
               onClick={onGoogle}
             >
               <GoogleIcon />
-              Mit Google anmelden
+              {mode === 'signup' ? 'Mit Google registrieren' : 'Mit Google anmelden'}
             </button>
             <div className="auth-divider">
               <span>oder mit E-Mail</span>
@@ -167,9 +214,41 @@ export function LoginScreen() {
               >
                 Passwort vergessen?
               </button>
-              <a href={app.landingUrl} target="_blank" rel="noreferrer">
-                Noch kein Konto? → App laden
-              </a>
+              {app.webSignup ? (
+                <button type="button" className="btn ghost small" onClick={() => { setError(null); setInfo(null); setMode('signup'); }}>
+                  Noch kein Konto? Jetzt registrieren
+                </button>
+              ) : (
+                <a href={app.landingUrl} target="_blank" rel="noreferrer">
+                  Noch kein Konto? → App laden
+                </a>
+              )}
+            </div>
+          </form>
+        )}
+
+        {mode === 'signup' && (
+          <form onSubmit={onSignup}>
+            <label className="field">
+              E-Mail
+              <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </label>
+            <label className="field">
+              Passwort (mindestens 6 Zeichen)
+              <input type="password" required minLength={6} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </label>
+            <button className="btn" style={{ width: '100%' }} disabled={busy}>
+              {busy ? 'Konto wird angelegt …' : 'Konto anlegen'}
+            </button>
+            <p className="muted small" style={{ marginTop: 10 }}>
+              Mit der Registrierung akzeptierst du die{' '}
+              <a href={`${app.landingUrl}/agb.html`} target="_blank" rel="noreferrer">AGB</a> und die{' '}
+              <a href={`${app.landingUrl}/datenschutz.html`} target="_blank" rel="noreferrer">Datenschutzerklärung</a>.
+            </p>
+            <div className="auth-links">
+              <button type="button" className="btn ghost small" onClick={() => { setError(null); setMode('login'); }}>
+                ← Ich habe schon ein Konto
+              </button>
             </div>
           </form>
         )}
@@ -294,6 +373,28 @@ function loginErrorText(raw: string): string {
   }
   if (/email not confirmed/i.test(raw)) {
     return 'E-Mail-Adresse noch nicht bestätigt — bitte zuerst den Bestätigungslink aus der Registrierungs-Mail öffnen.';
+  }
+  return raw;
+}
+
+function signupErrorText(raw: string): string {
+  if (/already (been )?registered|user already exists/i.test(raw)) {
+    return 'Für diese E-Mail gibt es schon ein Konto. Bitte anmelden — oder über „Passwort vergessen?“ ein neues Passwort festlegen.';
+  }
+  if (/password should (be at least|contain)|weak password|password is too weak/i.test(raw)) {
+    return 'Das Passwort ist zu schwach — bitte mindestens 6 Zeichen wählen.';
+  }
+  if (/rate limit|too many|only request this after/i.test(raw)) {
+    return 'Zu viele Versuche in kurzer Zeit. Bitte ein paar Minuten warten und erneut versuchen.';
+  }
+  if (/invalid.*email|unable to validate email/i.test(raw)) {
+    return 'Diese E-Mail-Adresse sieht nicht gültig aus. Bitte prüfen.';
+  }
+  if (/signups? (are )?(not allowed|disabled)/i.test(raw)) {
+    return 'Die Registrierung ist gerade nicht möglich. Bitte später erneut versuchen oder support@dexware.app schreiben.';
+  }
+  if (/failed to fetch|load failed|networkerror/i.test(raw)) {
+    return 'Keine Verbindung zum Server. Bitte Internet prüfen und erneut versuchen.';
   }
   return raw;
 }

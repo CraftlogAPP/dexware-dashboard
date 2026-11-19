@@ -10,6 +10,7 @@ import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { fmtDateTime } from '../../lib/format';
 import { lastOpByProperty } from '../labels';
 import { PropertyDialog } from '../dialogs';
+import { Modal } from '../../components/form';
 import type { DutyTimes, Property } from '../types';
 
 interface Data {
@@ -17,9 +18,13 @@ interface Data {
   lastByProp: Map<string, OpMeta>;
 }
 
+/** Gratis-Paket: so viele Objekte wie in der App (mobile/src/lib/entitlement.ts → FREE_LIMITS.properties). */
+const FREE_PROPERTIES = 2;
+
 export function Properties() {
   const { client } = useAppAuth();
   const [editing, setEditing] = useState<Property | 'new' | null>(null);
+  const [gate, setGate] = useState(false);
 
   const state = useAsync<Data>(async () => {
     const [properties, meta] = await Promise.all([
@@ -34,7 +39,20 @@ export function Properties() {
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Objekte</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => setEditing('new')}>
+        <button
+          className="btn"
+          onClick={() => {
+            void (async () => {
+              const count = state.data?.properties.length ?? 0;
+              if (count >= FREE_PROPERTIES) {
+                // Pro des Betriebs laut Server (Abo, Team, Kommunal-Lizenz, Suite). Im Zweifel erlaubt — nie zu Unrecht sperren.
+                const { data, error } = await client.rpc('org_pro_active');
+                if (!error && data === false) return setGate(true);
+              }
+              setEditing('new');
+            })();
+          }}
+        >
           ＋ Objekt anlegen
         </button>
       </div>
@@ -92,6 +110,21 @@ export function Properties() {
           )
         }
       </LoadGuard>
+
+      {gate && (
+        <Modal title="Mehr Objekte mit Pro" onClose={() => setGate(false)} dirty={false}>
+          <p>
+            Im Gratis-Paket sind {FREE_PROPERTIES} Objekte möglich. Unbegrenzt viele Objekte gibt es mit Pro — das Abo schließt du in
+            der WinterDex-App (Android) unter „Abo“ ab. Ohne Android-Gerät? Schreib uns an{' '}
+            <a href="mailto:support@dexware.app?subject=WinterDex%20Pro%20ohne%20Android">support@dexware.app</a>.
+          </p>
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+            <button type="button" className="btn" onClick={() => setGate(false)}>
+              Verstanden
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {editing && (
         <PropertyDialog

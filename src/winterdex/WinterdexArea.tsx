@@ -17,6 +17,7 @@ import { Routes as RoutesPage } from './pages/Routes';
 import { RouteDetail } from './pages/RouteDetail';
 import { RunDetail } from './pages/RunDetail';
 import { Aussendienst, EinsatzRedirect } from './aussendienst/Aussendienst';
+import { Onboarding } from './Onboarding';
 import { supabaseBackend } from './einsatz/backend';
 import { EinsatzCtx } from './einsatz/context';
 
@@ -40,7 +41,7 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
   return (
     <AppArea app={app} headerAction={<ModeSwitch />}>
       <OrgProvider>
-        <OrgGate>
+        <OrgGate noOrg={<Onboarding />}>
           <Routes>
             <Route path="aussendienst/*" element={<EinsatzScope><Aussendienst /></EinsatzScope>} />
             <Route path="einsatz" element={<EinsatzRedirect to={`/app/${app.id}/aussendienst`} />} />
