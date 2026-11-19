@@ -5,6 +5,7 @@ import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
+import { WebOnboarding } from '../components/WebOnboarding';
 import { AboPage } from '../components/AboPage';
 import { Overview } from './pages/Overview';
 import { Customers } from './pages/Customers';
@@ -51,7 +52,7 @@ export function PruefdexArea({ app }: { app: AppConfig }) {
   return (
     <AppArea app={app} headerAction={<VorOrtSwitch />}>
       <OrgProvider>
-        <OrgGate>
+        <OrgGate noOrg={<WebOnboarding />}>
           <Routes>
             <Route
               path={`${VOR_ORT_PATH}/*`}

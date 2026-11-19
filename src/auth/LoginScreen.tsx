@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { appIcon } from '../apps/registry';
 import { useAppAuth } from './AppAuthContext';
 import { LegalLinks } from '../components/LegalLinks';
+import { WEB_ONBOARDING } from '../lib/webOnboarding';
 
 type Mode = 'login' | 'signup' | 'reset-request' | 'reset-code';
 
@@ -71,7 +72,9 @@ export function LoginScreen() {
     e.preventDefault();
     void run(async () => {
       if (password.length < 6) throw new Error('Bitte ein Passwort mit mindestens 6 Zeichen wählen.');
-      rememberReturnPath(app.id);
+      // Der Bestätigungslink kehrt zur Startseite des Bereichs zurück — die Unterseite (z. B. …/vor-ort) so lange merken,
+      // wie der Link gilt (24 Stunden), nicht nur die 10 Minuten einer Google-Anmeldung.
+      rememberReturnPath(app.id, SIGNUP_RETURN_MS);
       const { data, error: err } = await client.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: confirmUrl } });
       if (err) throw new Error(signupErrorText(err.message));
       // Schon registrierte Adresse: der Server antwortet aus Datenschutzgründen ohne Fehler, aber ohne Identität.
@@ -90,6 +93,7 @@ export function LoginScreen() {
 
   function onResend() {
     void run(async () => {
+      rememberReturnPath(app.id, SIGNUP_RETURN_MS);
       const { error: err } = await client.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: confirmUrl } });
       if (err) throw new Error(signupErrorText(err.message));
       setUnconfirmed(false);
@@ -149,7 +153,7 @@ export function LoginScreen() {
         <h2>{mode === 'signup' ? `${app.name}-Konto anlegen` : `${app.name} Dashboard`}</h2>
         <p className="auth-sub">
           {mode === 'signup'
-            ? <>Kostenlos registrieren — danach legst du deinen Betrieb an oder trittst mit einem Einladungscode dem Team deines Betriebs bei. Dasselbe Konto gilt auch in der {app.name}-App.</>
+            ? <>Kostenlos registrieren — danach legst du deinen Betrieb an{WEB_ONBOARDING[app.id] && !WEB_ONBOARDING[app.id].join ? '' : ' oder trittst mit einem Einladungscode dem Team deines Betriebs bei'}. Dasselbe Konto gilt auch in der {app.name}-App.</>
             : googleOk === false
             ? <>Melde dich mit deinem bestehenden {app.name}-Konto an — mit denselben Zugangsdaten wie in der App. Hast du dich in der App mit Google angemeldet? Dann über „Passwort vergessen“ einmal ein Passwort festlegen.</>
             : <>Melde dich mit deinem bestehenden {app.name}-Konto an — per Google oder mit denselben Zugangsdaten wie in der App.</>}
@@ -407,13 +411,15 @@ function googleErrorText(raw: string): string {
 }
 
 const RETURN_KEY = 'dexware-dash-return';
+const RETURN_MS = 10 * 60 * 1000;
+const SIGNUP_RETURN_MS = 24 * 60 * 60 * 1000;
 
-/** Vor der Google-Anmeldung: Unterseite merken, auf der die Anmeldung begonnen wurde. */
-function rememberReturnPath(appId: string): void {
+/** Vor der Google-Anmeldung bzw. Registrierung: Unterseite merken, auf der die Anmeldung begonnen wurde. */
+function rememberReturnPath(appId: string, ttl = RETURN_MS): void {
   try {
     const path = window.location.pathname;
     if (path.startsWith(`/app/${appId}/`) && path.length > `/app/${appId}/`.length) {
-      localStorage.setItem(RETURN_KEY, JSON.stringify({ appId, path, at: Date.now() }));
+      localStorage.setItem(RETURN_KEY, JSON.stringify({ appId, path, at: Date.now(), ttl }));
     } else {
       localStorage.removeItem(RETURN_KEY);
     }
@@ -422,17 +428,33 @@ function rememberReturnPath(appId: string): void {
   }
 }
 
-/** Nach der Anmeldung: gemerkte Unterseite einmalig abholen (höchstens 10 Minuten alt, nur für diese App). */
+/**
+ * Nach der Anmeldung: gemerkte Unterseite einmalig abholen (Google: höchstens 10 Minuten alt, Registrierung: so lange
+ * der Bestätigungslink gilt, 24 Stunden; nur für diese App).
+ */
 export function takeReturnPath(appId: string): string | null {
   try {
     const raw = localStorage.getItem(RETURN_KEY);
     if (!raw) return null;
     localStorage.removeItem(RETURN_KEY);
-    const v = JSON.parse(raw) as { appId?: string; path?: string; at?: number };
+    const v = JSON.parse(raw) as { appId?: string; path?: string; at?: number; ttl?: number };
     if (v.appId !== appId || typeof v.path !== 'string' || !v.path.startsWith(`/app/${appId}/`)) return null;
-    if (Date.now() - (v.at ?? 0) > 10 * 60 * 1000) return null;
+    if (Date.now() - (v.at ?? 0) > Math.min(v.ttl ?? RETURN_MS, SIGNUP_RETURN_MS)) return null;
     return v.path;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Angemeldet und schon auf einer Unterseite dieser App: der Merker hat sich erledigt (z. B. nach der Registrierung auf
+ * derselben Seite mit Passwort angemeldet) — sonst spränge der nächste Wechsel zur Startseite einmal dorthin zurück.
+ */
+export function forgetReturnPath(appId: string): void {
+  try {
+    const raw = localStorage.getItem(RETURN_KEY);
+    if (raw && (JSON.parse(raw) as { appId?: string }).appId === appId) localStorage.removeItem(RETURN_KEY);
+  } catch {
+    /* nur Komfort */
   }
 }

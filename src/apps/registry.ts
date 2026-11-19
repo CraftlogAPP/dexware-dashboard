@@ -189,6 +189,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#3B82F6', onAccent: '#ffffff', bg: '#090e1a' },
     landingUrl: 'https://schutzdex.dexware.app',
     revenueCat: 'goog_bFUROrBgFYMKMKDFIJYmvCSMcrT',
+    webSignup: true,
     supabase: {
       url: 'https://fdeuotsktshxtkobkpay.supabase.co',
       anonKey:
@@ -204,6 +205,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#2F6BF2', onAccent: '#ffffff', bg: '#090e1c' },
     landingUrl: 'https://pruefdex.dexware.app',
     revenueCat: 'goog_pPXjHAIrXRKvpiGVTwCVDdRyOco',
+    webSignup: true,
     supabase: {
       url: 'https://rwiqqppaiqnepsraeeaa.supabase.co',
       anonKey:
@@ -249,6 +251,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#F97316', onAccent: '#1f0b00', bg: '#0b0f15' },
     landingUrl: 'https://kfzdex.dexware.app',
     revenueCat: 'goog_EGwxQkGUiswhKHzJfwpurysKnFI',
+    webSignup: true,
     supabase: {
       url: 'https://xjfkxrtvrpxwbqqozmar.supabase.co',
       anonKey:
@@ -264,6 +267,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#EA5A47', onAccent: '#ffffff', bg: '#0b1517' },
     landingUrl: 'https://spieldex.dexware.app',
     revenueCat: 'goog_pUmlTTpXcHtjVuLUNPSArxyVarJ',
+    webSignup: true,
     supabase: {
       url: 'https://ycstxklzqfapgtgoomxw.supabase.co',
       anonKey:
@@ -279,6 +283,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#F59E0B', onAccent: '#211400', bg: '#13110c' },
     landingUrl: 'https://regaldex.dexware.app',
     revenueCat: 'goog_aYtkRUUHPzDFfjbhkvXrpfyWHpn',
+    webSignup: true,
     supabase: {
       url: 'https://vzxqbdadtzjolppzfqxx.supabase.co',
       anonKey:
@@ -294,6 +299,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#DC2626', onAccent: '#ffffff', bg: '#140c0b' },
     landingUrl: 'https://feuerdex.dexware.app',
     revenueCat: 'goog_UZqByYBRPUCNkRbRMVXyAVdQfuX',
+    webSignup: true,
     supabase: {
       url: 'https://evwdeonvgocfeflpecga.supabase.co',
       anonKey:
@@ -309,6 +315,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#14B8A6', onAccent: '#042f2b', bg: '#0a1413' },
     landingUrl: 'https://geruestdex.dexware.app',
     revenueCat: 'goog_JtcTMMIsmhGoHABsFvpqfmnGvUW',
+    webSignup: true,
     supabase: {
       url: 'https://tncufucamwaiqgjnyuwd.supabase.co',
       anonKey:
@@ -324,6 +331,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#7C3AED', onAccent: '#ffffff', bg: '#100d17' },
     landingUrl: 'https://toredex.dexware.app',
     revenueCat: 'goog_vCXreEPQCtnZnxADPLpSozSpnRY',
+    webSignup: true,
     supabase: {
       url: 'https://lecgketoggxvecmolnqx.supabase.co',
       anonKey:
@@ -339,6 +347,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#DB2777', onAccent: '#ffffff', bg: '#150d13' },
     landingUrl: 'https://gurtdex.dexware.app',
     revenueCat: 'goog_AgviVPXkwpqsIocTiFHGfTvnIdM',
+    webSignup: true,
     supabase: {
       url: 'https://sqwvkpigdxqfflvaotek.supabase.co',
       anonKey:
@@ -354,6 +363,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#84CC16', onAccent: '#0E120B', bg: '#0E120B' },
     landingUrl: 'https://hebedex.dexware.app',
     revenueCat: 'goog_RARplVhVPiwOtVtDVUmuqwmqBGk',
+    webSignup: true,
     supabase: {
       url: 'https://pwaxrteojzryzfiagbfc.supabase.co',
       anonKey:
@@ -369,6 +379,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#2563EB', onAccent: '#ffffff', bg: '#0a0e16' },
     landingUrl: 'https://leiterdex.dexware.app',
     revenueCat: 'goog_vTdzyRKXPUnpDufpvAdJPpBFdhS',
+    webSignup: true,
     supabase: {
       url: 'https://nluocglurpymdhhzfxjd.supabase.co',
       anonKey:

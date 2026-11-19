@@ -5,6 +5,7 @@ import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
+import { WebOnboarding } from '../components/WebOnboarding';
 import { fetchOwnerOrgContext } from '../lib/orgApi';
 import { AboPage } from '../components/AboPage';
 import { Overview } from './pages/Overview';
@@ -48,7 +49,7 @@ export function SchutzdexArea({ app }: { app: AppConfig }) {
   return (
     <AppArea app={app} headerAction={<VorOrtSwitch hint="Handy-Ansicht: Unterweisung durchführen und unterschreiben lassen" />}>
       <OrgProvider fetch={fetchOwnerOrgContext}>
-        <OrgGate>
+        <OrgGate noOrg={<WebOnboarding fetchOrg={fetchOwnerOrgContext} />}>
           <Routes>
             <Route
               path={`${VOR_ORT_PATH}/*`}

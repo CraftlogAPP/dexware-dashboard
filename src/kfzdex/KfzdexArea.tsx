@@ -5,6 +5,7 @@ import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
+import { WebOnboarding } from '../components/WebOnboarding';
 import { fetchKfzOrgContext } from './api';
 import { AboPage } from '../components/AboPage';
 import { Overview } from './pages/Overview';
@@ -51,7 +52,7 @@ export function KfzdexArea({ app }: { app: AppConfig }) {
   return (
     <AppArea app={app} headerAction={<VorOrtSwitch />}>
       <OrgProvider fetch={fetchKfzOrgContext}>
-        <OrgGate>
+        <OrgGate noOrg={<WebOnboarding fetchOrg={fetchKfzOrgContext} />}>
           <Routes>
             <Route
               path={`${VOR_ORT_PATH}/*`}
