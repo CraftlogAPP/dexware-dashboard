@@ -1423,3 +1423,52 @@
     flex: 1 1 140px;
   }
 }
+
+/* ---------- Optik-Prüfung 19.11.2026 ---------- */
+/* Team: Mitglieder-Karten ragten am Handy rechts aus dem Bild, Name und „neu beigetreten“ wurden zerquetscht —
+   breitere Spalten, und bei wenig Platz rutschen Rolle/Entfernen in eine eigene Zeile */
+.pinn-scope .pinn-members {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+}
+.pinn-scope .pinn-member {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.pinn-scope .pinn-member-main {
+  flex: 1 1 150px;
+}
+.pinn-scope .pinn-member-actions {
+  margin-left: auto;
+}
+.pinn-scope .pinn-member .pinn-newtag {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 10px;
+}
+/* Team: Schalter „Standort … mitschicken“ — die Beschriftung bricht um, statt über den Text darunter zu laufen */
+.pinn-scope .pinn-loccard .pinn-switch.plain {
+  height: auto;
+  min-height: 40px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  text-align: left;
+}
+.pinn-scope .pinn-switch.plain .pinn-switch-knob,
+.pinn-scope .pinn-switch.plain .i {
+  flex: none;
+}
+@media (max-width: 760px) {
+  /* Erledigt/Zeiten: Suchfeld über die ganze Breite (der Beispieltext war abgeschnitten) */
+  .pinn-scope .pinn-filter .pinn-search {
+    flex-basis: 100%;
+  }
+}
+@media (pointer: coarse) {
+  .pinn-scope .pinn-seg button,
+  .pinn-scope .pinn-count,
+  .pinn-scope .pinn-theme.labels button,
+  .pinn-scope .pinn-loccard .pinn-switch.plain {
+    min-height: 44px;
+  }
+}

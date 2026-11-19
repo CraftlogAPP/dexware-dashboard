@@ -157,12 +157,12 @@ export function EinsatzDemoArea({ app }: { app: AppConfig }) {
       <header className="site-header">
         <span className="app-chip">{app.name} · Beispieldaten</span>
         <div className="spacer" />
-        <label className="small muted" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          Server
+        <label className="small muted" style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <select
+            aria-label="Server (Beispieldaten)"
             value={netz}
             onChange={(e) => setNetz(e.target.value as Netz)}
-            style={{ width: 'auto', margin: 0, padding: '4px 8px' }}
+            style={{ width: 'auto', maxWidth: 130, margin: 0, padding: '4px 8px' }}
             data-testid="demo-netz"
           >
             <option value="an">erreichbar</option>

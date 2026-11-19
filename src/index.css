@@ -1672,20 +1672,33 @@ a.due-row:hover {
   height: 100%;
   object-fit: cover;
 }
+/* Tippfläche 44 px (ganze Ecke), sichtbar bleibt der 30-px-Kreis */
 .ez-photo button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  padding: 4px 4px 10px 10px;
+  border: none;
+  background: none;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.ez-photo button::before {
+  content: '';
   position: absolute;
   top: 4px;
   right: 4px;
   width: 30px;
   height: 30px;
-  padding: 0;
-  border: none;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.68);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
+}
+.ez-photo button > * {
+  position: relative;
 }
 .ez-photo.busy {
   display: grid;
@@ -1727,10 +1740,15 @@ a.due-row:hover {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* wächst mit, wenn die Beschriftung umbricht (z. B. „Handy weitergeben — weiter mit <langer Name>“) */
 .btn.ez-big,
 .btn.ez-save {
   width: 100%;
-  height: 52px;
+  height: auto;
+  min-height: 52px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  line-height: 1.25;
   font-size: 16px;
   white-space: normal;
 }
@@ -1907,7 +1925,7 @@ a.due-row:hover {
 }
 .ez-home {
   margin-top: 28px;
-  padding: 12px 16px;
+  padding: 4px 16px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   font-size: 14px;
@@ -1916,12 +1934,15 @@ a.due-row:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 28px;
+  min-height: 44px;
   font-weight: 600;
   cursor: pointer;
 }
 .ez-home p {
-  margin: 10px 0 0;
+  margin: 2px 0 0;
+}
+.ez-home p:last-child {
+  margin-bottom: 8px;
 }
 .ez-done {
   padding-top: 20px;
@@ -2604,7 +2625,7 @@ a.due-row:hover {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-bottom: 10px;
+  margin-bottom: 18px;
 }
 .buy-head b {
   font-size: 17px;
@@ -2918,4 +2939,90 @@ button.sd-member {
 .sd-stand .btn,
 .sd-stand .badge {
   flex: none;
+}
+
+/* ---------- Optik-Prüfung 19.11.2026: nichts ragt heraus, nichts wird hart abgeschnitten ---------- */
+/* Zu langer Feldinhalt oder Beispieltext endet mit „…“ statt mitten im Buchstaben */
+input {
+  text-overflow: ellipsis;
+}
+/* Kopfzeile mit Zusatz-Knopf („Vor Ort“ / „Außendienst“) am Tablet: „Abmelden“ ragte bei 768 px aus dem Bild —
+   das Wort „Dashboard“ und die E-Mail weichen, bis wieder Platz ist */
+@media (max-width: 960px) {
+  .site-header.has-action .app-chip .hide-sm,
+  .site-header.has-action .header-user .email {
+    display: none;
+  }
+}
+/* … und am schmalen Handy (360 px) etwas enger, damit der App-Name nicht gekürzt wird */
+@media (max-width: 400px) {
+  .site-header.has-action {
+    gap: 8px;
+    padding: 0 12px;
+  }
+}
+/* Glocke auf der Startseite: Das Fenster hing am Glocken-Knopf und ragte am Handy links aus dem Bild —
+   dort spannt es sich unter der Kopfzeile über die Bildschirmbreite */
+@media (max-width: 520px) {
+  .due-bell {
+    position: static;
+  }
+  .due-pop {
+    left: 14px;
+    right: 14px;
+    width: auto;
+  }
+}
+
+/* ---------- Tippflächen am Handy/Tablet (Finger statt Maus): Bedienbares mindestens 44 px ---------- */
+@media (pointer: coarse) {
+  .btn,
+  .btn.small,
+  .auth-links > .btn {
+    min-height: 44px;
+  }
+  .btn.small {
+    min-width: 44px;
+  }
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']),
+  select,
+  textarea {
+    min-height: 44px;
+  }
+  .ez-back,
+  .pv-unit a,
+  .auth-links a,
+  .app-nav a {
+    min-height: 44px;
+  }
+  .due-bell-btn {
+    width: 44px;
+    height: 44px;
+  }
+  /* Logo und Textlinks: unsichtbar vergrößerte Tippfläche, das Bild bleibt gleich */
+  .brand,
+  .ez p > a,
+  .ad-main > p > a,
+  .section-head > a,
+  .route-legend a {
+    position: relative;
+  }
+  .brand::after,
+  .ez p > a::after,
+  .ad-main > p > a::after,
+  .section-head > a::after,
+  .route-legend a::after {
+    content: '';
+    position: absolute;
+    top: -14px;
+    bottom: -14px;
+    left: 0;
+    right: 0;
+  }
+  .brand::after {
+    top: -8px;
+    bottom: -8px;
+    left: -8px;
+    right: -8px;
+  }
 }
