@@ -32,7 +32,8 @@ console.log(`\n=== HebeDex-Rechner — Browser (src/hebedex/rechner.ts) gegen Ap
 check('Grenzwerte gleich: Glieddicke −10 %, Längung 5 %, Maulaufweitung 10 %',
   WEB.CHAIN_WEAR_LIMIT_PCT === APP.CHAIN_WEAR_LIMIT_PCT && WEB.CHAIN_ELONG_LIMIT_PCT === APP.CHAIN_ELONG_LIMIT_PCT && WEB.HOOK_OPENING_LIMIT_PCT === APP.HOOK_OPENING_LIMIT_PCT &&
     WEB.CHAIN_WEAR_LIMIT_PCT === 10 && WEB.CHAIN_ELONG_LIMIT_PCT === 5 && WEB.HOOK_OPENING_LIMIT_PCT === 10);
-check('Drahtbruch-Tabelle gleich: Litzenseil 4/6/16, Kabelschlagseil 10/15/40', gleich(WEB.WIRE_LIMITS, APP.WIRE_LIMITS) && gleich(WEB.WIRE_LIMITS, { strand: [4, 6, 16], cable: [10, 15, 40] }) && gleich(WEB.ROPE_KIND_LABELS, APP.ROPE_KIND_LABELS));
+check('Drahtbruch-Tabelle gleich (DGUV Regel 109-017, Tabellen 1 und 2): Litzenseil –/6/14, Kabelschlagseil 10/15/40', gleich(WEB.WIRE_LIMITS, APP.WIRE_LIMITS) && gleich(WEB.WIRE_LIMITS, { strand: [null, 6, 14], cable: [10, 15, 40] }) && gleich(WEB.ROPE_KIND_LABELS, APP.ROPE_KIND_LABELS));
+check('Grenzen als Satz wortgleich zur App (wireLimitText), Litzenseil nennt die 3 benachbarten Drahtbrüche', WEB.wireLimitText('strand') === APP.wireLimitText('strand') && WEB.wireLimitText('cable') === APP.wireLimitText('cable') && WEB.wireLimitText('strand').includes('6 Brüchen auf 6d oder 14 Brüchen auf 30d') && WEB.wireLimitText('strand').includes('3 benachbarten Drahtbrüchen in einer Litze') && WEB.wireLimitText('cable').includes('10 / 15 / 40'));
 
 // ---------------------------------------------------------------- Feste Beispiele (Beispieldaten der App + Grenzfälle)
 const kette = (m, nominal = null) => WEB.rechne('chain', { nominal_mm: nominal }, m);
@@ -57,7 +58,12 @@ r = WEB.rechne('hook', {}, { openingMeasured: '28' });
 check('Maulweite ohne Neumaß → „Maulweite neu fehlt“', r.complete === false && r.missing === 'Maulweite neu', r);
 
 r = WEB.rechne('wire', { rope_kind: 'strand' }, { b3: '3', b6: '6' });
-check('Litzenseil: 3 auf 3d (Grenze 4), 6 auf 6d (Grenze 6) → rot', r.red === true && r.text === 'Litzenseil: 3 auf 3d (Grenze 4), 6 auf 6d (Grenze 6)', r);
+check('Litzenseil: 3 auf 3d (kein Grenzwert), 6 auf 6d (Grenze 6) → rot', r.red === true && r.text === 'Litzenseil: 3 auf 3d (kein Grenzwert), 6 auf 6d (Grenze 6)', r);
+r = WEB.rechne('wire', { rope_kind: 'strand' }, { b3: '9', b6: '5', b30: '13' });
+check('Litzenseil knapp darunter: 5 auf 6d, 13 auf 30d → grün; die Zahl auf 3d wird nicht bewertet', r.red === false && r.text === 'Litzenseil: 9 auf 3d (kein Grenzwert), 5 auf 6d (Grenze 6), 13 auf 30d (Grenze 14)', r);
+r = WEB.rechne('wire', { rope_kind: 'strand' }, { b30: '14' });
+check('Litzenseil genau an der Grenze: 14 auf 30d → rot', r.red === true && r.text === 'Litzenseil: 14 auf 30d (Grenze 14)', r);
+check('Balken: Litzenseil 3 von 6 auf 6d = halbe Grenze; Wert auf 3d zählt nicht', WEB.anteilAnGrenze('wire', { rope_kind: 'strand' }, { b3: '50', b6: '3' }).ratio === 0.5 && WEB.anteilAnGrenze('wire', { rope_kind: 'cable' }, { b3: '5' }).ratio === 0.5);
 r = WEB.rechne('wire', { rope_kind: 'strand' }, { ropeKind: 'cable', b3: '9', b6: '14', b30: '39' });
 check('Kabelschlagseil (im Formular gewählt): 9/14/39 → grün', r.red === false && r.text === 'Kabelschlagseil: 9 auf 3d (Grenze 10), 14 auf 6d (Grenze 15), 39 auf 30d (Grenze 40)', r);
 r = WEB.rechne('wire', { rope_kind: 'cable' }, { b30: '40' });
@@ -83,7 +89,7 @@ abweichung.length = 0;
 for (const ropeKind of [undefined, '', 'strand', 'cable', 'x'])
   for (const b3 of ['', '0', '3', '4', '9', '10', 'x'])
     for (const b6 of ['', '5', '6', '14', '15'])
-      for (const b30 of ['', '15', '16', '39', '40', 12]) {
+      for (const b30 of ['', '13', '14', '15', '16', '39', '40', 12]) {
         const m = { ropeKind, b3, b6, b30 };
         n++;
         if (!gleich(WEB.wireRopeBreaks(m), APP.wireRopeBreaks(m))) abweichung.push(m);
@@ -166,7 +172,7 @@ check('Vorbelegung wie in der App: Nenndicke aus den Stammdaten; nach einer Prü
     gleich(spec({ kind: 'wire_rope', rope_kind: 'cable', nominal_mm: '12' }).prefill({}), { nominal: '12', ropeKind: 'cable' }) && gleich(spec({ kind: 'wire_rope' }).prefill({}), { nominal: '', ropeKind: 'strand' }) &&
     gleich(spec({ kind: 'hook' }).prefill({ openingNew: '25', openingMeasured: '28' }), { openingNew: '25', nominal: '' }));
 check('Hinweistexte der Rechner nennen die Grenzen der App',
-  s.hint({}).includes('−10 % Glieddicke, 5 % Längung') && spec({ kind: 'wire_rope' }).hint({ ropeKind: 'cable' }).includes('Ablegereif ab 10 / 15 / 40 Brüchen') && spec({ kind: 'wire_rope' }).hint({}).includes('4 / 6 / 16') && spec({ kind: 'hook' }).hint({}).includes('über 10 %'));
+  s.hint({}).includes('−10 % Glieddicke, 5 % Längung') && spec({ kind: 'wire_rope' }).hint({ ropeKind: 'cable' }).includes('Ablegereif ab 10 / 15 / 40 Brüchen') && spec({ kind: 'wire_rope' }).hint({}).includes('6 / 14') && spec({ kind: 'hook' }).hint({}).includes('über 10 %'));
 check('Teilung neu: Platzhalter zeigt die Normteilung 3 × d', s.rows[1][0].placeholder({ nominal: '10' }) === '30' && s.rows[1][0].placeholder({ nominal: '8,5' }) === '25.5' && s.rows[1][0].placeholder({}) === '3 × d');
 check('Sperr-Rückfragen wortgleich zur App; bei Rot ist die Sperre gleich gesetzt',
   cfg.severities.filter((x) => x.blockQuestion).every((x) => schirm.includes(x.blockQuestion)) && cfg.severities.find((x) => x.id === 'red').autoBlock === true && !cfg.severities.find((x) => x.id === 'amber').autoBlock &&

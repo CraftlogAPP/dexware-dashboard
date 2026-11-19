@@ -1,8 +1,9 @@
 // Ablegereife-Rechner von HebeDex — 1:1 aus der App übernommen (HebeDex/mobile/src/types.ts: chainWear,
 // wireRopeBreaks, hookOpening, measureResult, fmtPct und die Grenzwerte). Gleiche Felder, gleiche Rechenregeln,
 // gleiche Grenzen, gleiche Texte — damit „Vor Ort“ im Browser dasselbe Ergebnis zeigt wie die App.
-// Grundlage: DGUV Information 209-013 — Kette: Glieddicke −10 %, Längung ≥ 5 %; Drahtseil: Drahtbruch-Tabelle
-// (Litzenseil 4/6/16, Kabelschlagseil 10/15/40 auf 3d/6d/30d); Haken: Maulaufweitung > 10 %.
+// Grundlage: DGUV Information 209-013 — Kette: Glieddicke −10 %, Längung ≥ 5 %; Haken: Maulaufweitung > 10 %.
+// Drahtseil: DGUV Regel 109-017, Tabellen 1 und 2 (Litzenseil 6 auf 6d, 14 auf 30d oder 3 benachbarte Drähte einer
+// Litze; Kabelschlagseil 10/15/40 auf 3d/6d/30d).
 // Bewusst ohne Abhängigkeiten: tests/hebedex-rechner.test.mjs prüft genau diese Datei gegen die Datei der App.
 // Die Werte sind Text, wie eingegeben (Komma oder Punkt) — so stehen sie auch in der Spalte inspection.measurements.
 
@@ -73,11 +74,22 @@ export function chainWear(m: {
   return { red, wearPct, elongPct, complete: parts.length > 0, text: parts.join(' · '), missing };
 }
 
-/** Drahtbruch-Grenzen je Bezugslänge 3d / 6d / 30d. */
-export const WIRE_LIMITS: Record<'strand' | 'cable', [number, number, number]> = {
-  strand: [4, 6, 16],
+/**
+ * Drahtbruch-Grenzen je Bezugslänge 3d / 6d / 30d — DGUV Regel 109-017 (Ausgabe Dezember 2020), Tabelle 1
+ * (Litzenseile, gemäß DIN EN 13414-2: 6 auf 6d, 14 auf 30d, außerdem 3 benachbarte Drähte einer Litze) und
+ * Tabelle 2 (Kabelschlagseile: 10 / 15 / 40). null = für diese Länge nennt die Regel keinen Wert.
+ */
+export const WIRE_LIMITS: Record<'strand' | 'cable', [number | null, number, number]> = {
+  strand: [null, 6, 14],
   cable: [10, 15, 40],
 };
+
+/** Die Grenzen als Satz für den Hinweis über den Eingabefeldern. */
+export function wireLimitText(kind: 'strand' | 'cable'): string {
+  return kind === 'cable'
+    ? 'Ablegereif ab 10 / 15 / 40 Brüchen auf 3d / 6d / 30d; abweichende Herstellerangaben beachten.'
+    : 'Ablegereif ab 6 Brüchen auf 6d oder 14 Brüchen auf 30d — außerdem bei 3 benachbarten Drahtbrüchen in einer Litze.';
+}
 
 export const ROPE_KIND_LABELS: Record<'strand' | 'cable', string> = {
   strand: 'Litzenseil',
@@ -98,8 +110,10 @@ export function wireRopeBreaks(m: { ropeKind?: unknown; b3?: unknown; b6?: unkno
   let red = false;
   vals.forEach((v, i) => {
     if (v === undefined) return;
-    parts.push(`${v} auf ${names[i]} (Grenze ${lim[i]})`);
-    if (v >= lim[i]) red = true;
+    const g = lim[i];
+    // Litzenseil auf 3d: kein Wert in der Regel — die Zahl bleibt sichtbar, bewertet wird sie nicht.
+    parts.push(g === null ? `${v} auf ${names[i]} (kein Grenzwert)` : `${v} auf ${names[i]} (Grenze ${g})`);
+    if (g !== null && v >= g) red = true;
   });
   return { red, complete: parts.length > 0, text: parts.length ? `${ROPE_KIND_LABELS[kind]}: ${parts.join(', ')}` : '' };
 }
@@ -173,7 +187,7 @@ export function anteilAnGrenze(art: RechnerArt, teil: RechnerTeil, m: Record<str
   } else if (art === 'wire') {
     const lim = WIRE_LIMITS[(m.ropeKind || teil.rope_kind) === 'cable' ? 'cable' : 'strand'];
     const vals = [m.b3, m.b6, m.b30].map((v) => parseInt(v ?? '', 10));
-    ratio = Math.max(0, ...vals.map((v, i) => (Number.isFinite(v) ? v / lim[i] : 0)));
+    ratio = Math.max(0, ...vals.map((v, i) => (Number.isFinite(v) && lim[i] !== null ? v / (lim[i] as number) : 0)));
     label = 'Anteil an der Grenze';
   }
   return { ratio, label };
