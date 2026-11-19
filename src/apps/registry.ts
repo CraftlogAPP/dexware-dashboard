@@ -48,6 +48,13 @@ export interface AppConfig {
   webSignup?: boolean;
   /** Mitarbeiter einladen (Team-Code) nur mit Pro — wie in der App (WinterDex: Gratis = Solo-Paket). */
   teamNeedsPro?: boolean;
+  /**
+   * Kauf im Browser (ohne Google Play) über RevenueCat-Kauf-Links mit Paddle als Verkäufer: je Tarif die Adresse des
+   * Kauf-Links OHNE Nutzerkennung (https://pay.rev.cat/<token>). Die Abo-Seite hängt die Dexware-ID (sha256 der
+   * E-Mail) an — dieselbe Kennung wie in der App, deshalb erkennen App und Server den Kauf ohne Änderung.
+   * Leer/fehlend = kein Web-Kauf (Knopf erscheint nicht). Einrichtung: dexware-suite/vertrieb/web-checkout/README.md
+   */
+  webCheckout?: { pro?: string; proLabel?: string; suite?: string; suiteLabel?: string };
   /** Emoji als Kachel-Icon */
   emoji: string;
   /**

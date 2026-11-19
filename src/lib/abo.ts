@@ -22,7 +22,7 @@ const SUITE_ANON =
 const ENTITLEMENT_PRO = 'pro';
 const ENTITLEMENT_SUITE = 'suite';
 
-export type AboStore = 'play_store' | 'app_store' | 'promotional' | 'stripe' | string;
+export type AboStore = 'play_store' | 'app_store' | 'promotional' | 'stripe' | 'paddle' | string;
 
 export interface EntitlementInfo {
   active: boolean;
@@ -185,4 +185,11 @@ export async function loadAboInfo(app: AppConfig, session: Session): Promise<Abo
 }
 
 /** Google-Play-Abo-Übersicht — funktioniert am Handy und im Browser (gleiches Google-Konto). */
+/** Adresse des Web-Kaufs für dieses Konto (RevenueCat-Kauf-Link + Dexware-ID) oder null, wenn nicht eingerichtet. */
+export async function webCheckoutUrl(link: string | undefined, email: string | null | undefined): Promise<string | null> {
+  if (!link || !link.startsWith('https://') || !email) return null;
+  const base = link.endsWith('/') ? link.slice(0, -1) : link;
+  return `${base}/${await dexwareId(email)}`;
+}
+
 export const PLAY_SUBSCRIPTIONS_URL = 'https://play.google.com/store/account/subscriptions';

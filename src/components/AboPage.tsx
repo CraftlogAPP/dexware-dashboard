@@ -2,6 +2,7 @@ import { useAppAuth } from '../auth/AppAuthContext';
 import {
   loadAboInfo,
   PLAY_SUBSCRIPTIONS_URL,
+  webCheckoutUrl,
   type AboInfo,
   type EntitlementInfo,
 } from '../lib/abo';
@@ -32,7 +33,17 @@ export function AboPage({ embedded = false }: { embedded?: boolean } = {}) {
 }
 
 function AboContent({ info }: { info: AboInfo }) {
-  const { app } = useAppAuth();
+  const { app, session } = useAppAuth();
+  // Kauf im Browser (nur wenn für die App eingerichtet): Adressen vorab bauen, damit der Knopf ein echter Link ist.
+  const email = session?.user.email;
+  const links = useAsync(
+    async () => ({
+      pro: await webCheckoutUrl(app.webCheckout?.pro, email),
+      suite: app.notInSuite ? null : await webCheckoutUrl(app.webCheckout?.suite, email),
+    }),
+    [app.id, email],
+  );
+  const buy = links.data;
   const suiteActive = !!info.suite?.active || info.suiteBackendActive;
   const proActive = !!info.pro?.active;
 
@@ -62,6 +73,31 @@ function AboContent({ info }: { info: AboInfo }) {
                 : `Du nutzt ${app.name} im Free-Tarif. Pro oder das Suite-Bundle schließt du in der ${app.name}-App am Handy ab (Google Play).`}
         </p>
       </div>
+
+      {!suiteActive && !proActive && buy && (buy.pro || buy.suite) && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Direkt hier kaufen</h3>
+          <p className="muted">
+            Ohne Google Play, zum Beispiel am iPhone: Bezahlt wird sicher über unseren Zahlungspartner Paddle (Karte oder
+            PayPal). Der Tarif gilt für dieses Konto <b>{email}</b> — im Browser und in der App.
+          </p>
+          <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+            {buy.pro && (
+              <a className="btn" href={buy.pro} target="_blank" rel="noreferrer">
+                {app.webCheckout?.proLabel ?? `${app.name} Pro kaufen`} ↗
+              </a>
+            )}
+            {buy.suite && (
+              <a className="btn ghost" href={buy.suite} target="_blank" rel="noreferrer">
+                {app.webCheckout?.suiteLabel ?? 'Dexware Suite kaufen'} ↗
+              </a>
+            )}
+          </div>
+          <p className="muted small" style={{ marginBottom: 0, marginTop: 10 }}>
+            Nach dem Kauf diese Seite neu laden — die Freischaltung dauert meist unter einer Minute.
+          </p>
+        </div>
+      )}
 
       {current && <EntitlementDetails info={current} />}
 
@@ -184,6 +220,8 @@ function storeLabel(store: string | null): string {
       return 'Freischaltung/Promo';
     case 'stripe':
       return 'Web (Stripe)';
+    case 'paddle':
+      return 'Web (Paddle)';
     default:
       return store ?? '—';
   }
