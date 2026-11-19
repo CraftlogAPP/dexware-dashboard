@@ -23,6 +23,8 @@ export async function fetchSchutzPro(app: AppConfig, session: Session): Promise<
   try {
     const abo = await loadAboInfo(app, session);
     const v = !!(abo.pro?.active || abo.suite?.active || abo.suiteBackendActive);
+    // Suite-Server hat nicht geantwortet: ein Suite-Abo aus einer anderen App könnte übersehen sein → nicht sperren (nicht merken)
+    if (!v && abo.suiteBackendUnknown) return true;
     cache.set(session, { v, at: Date.now() });
     return v;
   } catch {

@@ -42,6 +42,11 @@ export function useOrg(): OrgState {
   return v;
 }
 
+/** Wie useOrg, aber null außerhalb eines OrgProvider (Bereiche ohne Betrieb/Team, z. B. CraftDex). */
+export function useOrgOptional(): OrgState | null {
+  return useContext(Ctx);
+}
+
 /**
  * Lade-/Fehler-/„kein Betrieb"-Gate um die App-Routen.
  * children rendern erst, wenn der Org-Kontext steht.

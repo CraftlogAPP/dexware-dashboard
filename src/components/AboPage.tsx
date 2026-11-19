@@ -9,6 +9,7 @@ import {
 import { LoadGuard, useAsync } from './ui';
 import { WebBuy, type WebBuyGroup } from './WebBuy';
 import { WEB_OFFERS } from '../apps/webOffers';
+import { useOrgOptional } from './OrgContext';
 
 /**
  * Abo-Verwaltung (generisch für alle App-Bereiche): aktueller Tarif
@@ -38,6 +39,10 @@ function AboContent({ info }: { info: AboInfo }) {
   const { app, session } = useAppAuth();
   // Kauf im Browser (nur wenn für die App eingerichtet): Adressen vorab bauen, damit der Knopf ein echter Link ist.
   const email = session?.user.email;
+  // Pro gilt für den Betrieb und hängt am Konto des INHABERS (Server: org_pro_active). Ein Kauf mit dem Konto eines
+  // Mitarbeiters/Verwalters würde den Betrieb nicht freischalten → dort keine Kauf-Kacheln, stattdessen ein Hinweis.
+  const role = useOrgOptional()?.data?.role;
+  const notOwner = !!role && role !== 'owner';
   const dexId = useAsync(async () => (email ? dexwareId(email) : null), [email]).data;
   const groups: WebBuyGroup[] = [];
   // Angebot aus der registry (WinterDex) oder aus den vorbereiteten Angeboten (webOffers); ohne Kauf-Link ausgegraut.
@@ -75,7 +80,15 @@ function AboContent({ info }: { info: AboInfo }) {
         </p>
       </div>
 
-      {!suiteActive && !proActive && dexId && email && <WebBuy groups={groups} dexId={dexId} email={email} />}
+      {notOwner && groups.length > 0 && (
+        <div className="info-box">
+          Der Tarif gehört zum Betrieb und läuft über das Konto des <b>Inhabers</b>. Als Teammitglied arbeitest du unter
+          seinem Tarif mit — ein eigenes Abo brauchst du nicht (es würde den Betrieb auch nicht freischalten). Diese Seite
+          zeigt nur, ob an <b>deinem eigenen</b> Konto ein Abo hängt.
+        </div>
+      )}
+
+      {!notOwner && !suiteActive && !proActive && dexId && email && <WebBuy groups={groups} dexId={dexId} email={email} />}
 
       {current && <EntitlementDetails info={current} />}
 

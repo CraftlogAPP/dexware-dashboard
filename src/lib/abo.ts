@@ -48,6 +48,8 @@ export interface AboInfo {
   /** Suite-Bundle laut Suite-Backend (deckt Käufe in anderen Apps ab) */
   suiteBackendActive: boolean;
   suiteBackendExpires: string | null;
+  /** Suite-Server hat nicht geantwortet — „nicht aktiv“ ist dann keine sichere Auskunft */
+  suiteBackendUnknown: boolean;
   /** Store-Verwaltungslink des Abos (Google Play), falls RevenueCat einen kennt */
   managementUrl: string | null;
 }
@@ -128,16 +130,16 @@ function better(a: EntitlementInfo | null, b: EntitlementInfo | null): Entitleme
 
 async function fetchSuiteStatus(
   id: string,
-): Promise<{ active: boolean; expires_at?: string | null }> {
+): Promise<{ active: boolean; expires_at?: string | null; unknown?: boolean }> {
   try {
     const res = await fetch(`${SUITE_URL}/suite-status?app_user_id=${id}`, {
       headers: { Authorization: `Bearer ${SUITE_ANON}`, apikey: SUITE_ANON },
     });
-    if (!res.ok) return { active: false };
+    if (!res.ok) return { active: false, unknown: true };
     return (await res.json()) as { active: boolean; expires_at?: string | null };
   } catch {
     // Offline/CORS → Suite unbekannt, Anzeige degradiert zu „nicht aktiv".
-    return { active: false };
+    return { active: false, unknown: true };
   }
 }
 
@@ -158,7 +160,9 @@ export async function loadAboInfo(app: AppConfig, session: Session): Promise<Abo
     dexId && suiteCounts ? fetchSuiteStatus(dexId) : Promise.resolve({ active: false as const }),
   ]);
 
-  if (!byUid && !byDexId) {
+  // Käufe hängen an der Dexware-ID (App, Web-Kauf, Server). Fehlt genau diese Antwort, wäre „Free“ nur geraten —
+  // lieber Fehler mit „Erneut versuchen“, als einem zahlenden Konto „kostenlose Version“ samt Kauf-Kacheln zu zeigen.
+  if ((!byUid && !byDexId) || (dexId && !byDexId)) {
     throw new Error('Abo-Status konnte nicht geladen werden — bitte später erneut versuchen.');
   }
 
@@ -180,6 +184,7 @@ export async function loadAboInfo(app: AppConfig, session: Session): Promise<Abo
     suite,
     suiteBackendActive: suiteStatus.active,
     suiteBackendExpires: 'expires_at' in suiteStatus ? (suiteStatus.expires_at ?? null) : null,
+    suiteBackendUnknown: 'unknown' in suiteStatus && suiteStatus.unknown === true,
     managementUrl: byDexId?.management_url ?? byUid?.management_url ?? null,
   };
 }
