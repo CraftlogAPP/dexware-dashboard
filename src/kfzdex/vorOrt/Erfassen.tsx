@@ -140,7 +140,8 @@ function UvvForm({ vehicle }: { vehicle: Vehicle }) {
       const row = buildUvvRow({ id: idRef.current, orgId, vehicleId: vehicle.id, date, inspector, pointIds: POINT_IDS, checked, defects });
       const outcome = await submitProof(be, { key: row.id, kind: 'uvv', userId, label: vehicle.plate, row, createdAt: new Date().toISOString(), sent: false });
       saveName(userId, inspector);
-      writeDraft(userId, vehicle.id, null);
+      // Entwurf erst weg, wenn die fertige Fassung sicher ist (Server oder dauerhaft auf dem Gerät) — sonst bleibt er als letzte Sicherung.
+      if (outcome.result === 'synced' || outcome.onDevice || outcome.proofOnServer) writeDraft(userId, vehicle.id, null);
       setDone({ outcome, passed: row.result === 'bestanden', date });
       window.scrollTo({ top: 0 });
     } catch (e) {

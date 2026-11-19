@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -9,6 +10,7 @@ import {
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import type { AppConfig } from '../apps/registry';
 import { getClient } from '../lib/supabaseClients';
+import { confirmLogout } from '../lib/logoutGuard';
 
 interface AppAuthValue {
   app: AppConfig;
@@ -48,17 +50,17 @@ export function AppAuthProvider({
     };
   }, [client]);
 
+  // Stabil halten: Das Sitzungsobjekt wechselt bei jeder Rückkehr in den Tab und bei jeder Token-Erneuerung. Hinge
+  // signOut daran, bauten die Vor-Ort-Bereiche ihren Server-Zugriff jedes Mal neu und lüden mitten im Formular neu.
+  const signOut = useCallback(async () => {
+    // Liegt in der Handy-Ansicht noch etwas nur auf diesem Gerät (wartend/angefangen): vorher nachfragen.
+    if (!(await confirmLogout())) return;
+    await client.auth.signOut();
+  }, [client]);
+
   const value = useMemo<AppAuthValue>(
-    () => ({
-      app,
-      client,
-      session,
-      loading,
-      signOut: async () => {
-        await client.auth.signOut();
-      },
-    }),
-    [app, client, session, loading],
+    () => ({ app, client, session, loading, signOut }),
+    [app, client, session, loading, signOut],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

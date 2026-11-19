@@ -6,6 +6,8 @@ import { useOrg } from '../components/OrgContext';
 import { supabasePruefBackend } from './backend';
 import type { PruefConfig } from './config';
 import { PruefCtx, type PruefCtxValue } from './context';
+import { listDrafts, listPending } from './store';
+import { useLogoutCount } from '../lib/logoutGuard';
 
 /** Unterpfad der Handy-Ansicht in jeder App: /app/<app>/vor-ort */
 export const VOR_ORT_PATH = 'vor-ort';
@@ -37,6 +39,10 @@ export function VorOrtScope({ cfg, children }: { cfg: PruefConfig; children: Rea
       signOut: () => void signOut(),
     };
   }, [cfg, client, app.id, userId, email, org, role, signOut]);
+  useLogoutCount(
+    userId ? async () => (await listPending(app.id, userId)).length + (await listDrafts(app.id, userId)).length : null,
+    [app.id, userId],
+  );
   if (!value) return null;
   return <PruefCtx.Provider value={value}>{children}</PruefCtx.Provider>;
 }

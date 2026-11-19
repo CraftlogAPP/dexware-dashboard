@@ -290,7 +290,8 @@ function Erfassen({ propertyId }: { propertyId: string }) {
         photos,
       });
       setPerformerName(userId, form.performerName.trim());
-      await deleteDraft(userId, propertyId);
+      // Entwurf erst weg, wenn die fertige Fassung sicher ist (Server oder dauerhaft auf dem Gerät) — sonst bleibt er als letzte Sicherung.
+      if (res.result === 'synced' || res.onDevice) await deleteDraft(userId, propertyId);
       setResult({ ...res, hadGps: gpsOk });
       setPhase('done');
       window.scrollTo({ top: 0 });

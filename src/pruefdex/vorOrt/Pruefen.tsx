@@ -351,7 +351,8 @@ function Formular({ deviceId }: { deviceId: string }) {
         createdAt: at,
       });
       setPrefs(APP, userId, { name: form.inspectorName.trim(), qualification: form.qualification.trim() });
-      await deleteDraft(userId, deviceId);
+      // Entwurf erst weg, wenn die fertige Fassung sicher ist (Server oder dauerhaft auf dem Gerät) — sonst bleibt er als letzte Sicherung.
+      if (outcome.result === 'synced' || outcome.onDevice) await deleteDraft(userId, deviceId);
       setDone({
         outcome,
         result: inspection.result,

@@ -21,15 +21,34 @@ function openDb(): Promise<IDBDatabase | null> {
       try {
         const req = indexedDB.open(DB_NAME, 1);
         req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'key' });
-        req.onsuccess = () => resolve(req.result);
+        req.onsuccess = () => {
+          const db = req.result;
+          // Der Browser darf die Verbindung schließen (iOS nach längerem Hintergrund): beim nächsten Zugriff neu öffnen,
+          // sonst blieben Entwürfe und Wartendes bis zum Neuladen der Seite unsichtbar.
+          db.onclose = forgetDb;
+          db.onversionchange = () => {
+            db.close();
+            forgetDb();
+          };
+          resolve(db);
+        };
         req.onerror = () => resolve(null);
         req.onblocked = () => resolve(null);
       } catch {
         resolve(null);
       }
     });
+    // Öffnen gescheitert: nicht für die ganze Lebensdauer der Seite merken — der nächste Zugriff versucht es wieder.
+    const mine = dbPromise;
+    void mine.then((db) => {
+      if (!db && dbPromise === mine) dbPromise = null;
+    });
   }
   return dbPromise;
+}
+
+function forgetDb(): void {
+  dbPromise = null;
 }
 
 function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T | undefined> {
@@ -44,6 +63,8 @@ function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<
           tx.onerror = () => reject(tx.error ?? new Error('IndexedDB-Fehler'));
           tx.onabort = () => reject(tx.error ?? new Error('IndexedDB abgebrochen'));
         } catch (e) {
+          // z. B. InvalidStateError: Verbindung wurde geschlossen → nächster Zugriff öffnet neu
+          forgetDb();
           reject(e as Error);
         }
       }),
@@ -56,7 +77,8 @@ export async function kvPut<T extends KvRec>(rec: T): Promise<boolean> {
   try {
     await run('readwrite', (s) => s.put(rec));
     // Dauerhaft gesichert → die Kopie im Arbeitsspeicher wird nicht mehr gebraucht (Fotos sind groß)
-    memory.delete(rec.key);
+    // … aber nur, wenn inzwischen kein neuerer Stand desselben Schlüssels geschrieben wird (der könnte noch scheitern)
+    if (memory.get(rec.key) === rec) memory.delete(rec.key);
     return true;
   } catch {
     return false;

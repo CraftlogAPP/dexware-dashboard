@@ -588,7 +588,9 @@ function Formular({ unitId }: { unitId: string }) {
         sent: { inspection: false, defects: [] },
       });
       setPrefs(app, userId, { name: form.inspectorName.trim(), qualification: form.qualification.trim() });
-      await deleteDraft(app, userId, unitId);
+      // Entwurf erst weg, wenn die fertige Fassung sicher ist (Server oder dauerhaft auf dem Gerät). Liegt sie nur im
+      // Arbeitsspeicher (Speicher voll, privates Surfen), bleibt der Entwurf als letzte Sicherung stehen.
+      if (outcome.result === 'synced' || outcome.onDevice) await deleteDraft(app, userId, unitId);
       setDone({
         outcome,
         hadGps: gpsOk,

@@ -20,6 +20,9 @@ import { Aussendienst, EinsatzRedirect } from './aussendienst/Aussendienst';
 import { Onboarding } from './Onboarding';
 import { supabaseBackend } from './einsatz/backend';
 import { EinsatzCtx } from './einsatz/context';
+import { listDrafts, listPending } from './einsatz/store';
+import { getActiveRun, listPendingRuns } from './aussendienst/runStore';
+import { useLogoutCount } from '../lib/logoutGuard';
 
 // Außendienst mit Beispieldaten — nur im Dev-Server (/app/winterdex/aussendienst?demo), fehlt im Produktions-Build.
 const EinsatzDemo = import.meta.env.DEV
@@ -105,6 +108,16 @@ function EinsatzScope({ children }: { children: ReactNode }) {
           }
         : null,
     [client, app, userId, orgId, data?.role],
+  );
+  useLogoutCount(
+    userId
+      ? async () =>
+          (await listPending(userId)).length +
+          (await listDrafts(userId)).length +
+          (await listPendingRuns(userId)).length +
+          ((await getActiveRun(userId)) ? 1 : 0)
+      : null,
+    [userId],
   );
   if (!value) return null;
   return <EinsatzCtx.Provider value={value}>{children}</EinsatzCtx.Provider>;

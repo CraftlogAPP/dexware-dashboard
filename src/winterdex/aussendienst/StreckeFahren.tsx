@@ -299,7 +299,8 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
       finishedRef.current = true;
       const res = await submitRun(be, { userId, routeName: sess.routeName, row, photos });
       setPerformerName(userId, form.performerName.trim());
-      await deleteActiveRun(userId);
+      // Aufzeichnung erst weg, wenn die fertige Fahrt sicher ist (Server oder dauerhaft auf dem Gerät) — sonst bleibt sie als letzte Sicherung.
+      if (res.result === 'synced' || res.onDevice) await deleteActiveRun(userId);
       setResult({ ...res, lengthM: rec.data.lengthM });
       setPhase('done');
       window.scrollTo({ top: 0 });
