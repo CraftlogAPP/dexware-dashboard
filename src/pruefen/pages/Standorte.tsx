@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Search, Smartphone } from 'lucide-react';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
+import { sitesPathOf, unitAlertOf } from '../config';
 import { usePruef, usePendingSync } from '../context';
 import { loadPruefData, withPendingMeta } from '../data';
 import { dueInfo, lastDueByUnit, unitState, type UnitState } from '../due';
@@ -60,7 +61,7 @@ export function Standorte() {
                 Noch keine aktiven {S.many}.{' '}
                 {owner ? (
                   <>
-                    Lege zuerst unter <Link to={`${base}/standorte`}>{S.many} verwalten</Link> {S.many} und {U.many} an —
+                    Lege zuerst unter <Link to={`${base}/${sitesPathOf(cfg)}`}>{S.many} verwalten</Link> {S.many} und {U.many} an —
                     danach kannst du hier prüfen.
                   </>
                 ) : (
@@ -76,7 +77,8 @@ export function Standorte() {
             if (u.retired) continue;
             const c = bySite.get(u.siteId) ?? { total: 0, blocked: 0, overdue: 0, never: 0, soon: 0, ok: 0 };
             c.total++;
-            c[unitState(dueInfo(last.get(u.id), intervalDays), blocked.has(u.id))]++;
+            // Einheiten mit Warnung aus den Stammdaten (z. B. ablegereif) zählen hier wie gesperrte — wie in der App.
+            c[unitState(dueInfo(last.get(u.id), intervalDays), blocked.has(u.id) || !!unitAlertOf(cfg, u))]++;
             bySite.set(u.siteId, c);
           }
           const q = query.trim().toLowerCase();

@@ -5,6 +5,7 @@
 // Rahmen und Reiter nutzen die Klassen .ad-* des WinterDex-Außendienstes (gleiche Optik in der ganzen Suite).
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Building2, ClipboardCheck, Menu, TriangleAlert } from 'lucide-react';
+import { sitesPathOf } from './config';
 import { usePruef, type VorOrtPages } from './context';
 import { Mehr } from './pages/Mehr';
 import { Pruefen } from './pages/Pruefen';
@@ -15,15 +16,17 @@ import { Standorte } from './pages/Standorte';
  * Erwartet den Kontext (PruefCtx) vom Aufrufer.
  * Die Unterpfade der eingebundenen Dashboard-Seiten heißen wie im Dashboard (standorte, pruefungen, maengel,
  * bericht) — deren relative Links („../pruefungen“, „../standorte/<id>“) bleiben so im Handy-Rahmen.
+ * Heißt die Standort-Verwaltung in einer App anders (ToreDex: „objekte“), steht das in cfg.sitesPath.
  */
 export function VorOrt({ pages }: { pages: VorOrtPages }) {
   const { base, cfg } = usePruef();
   const { pathname } = useLocation();
   const first = pathname.slice(base.length).split('/')[1] ?? '';
+  const sitesPath = sitesPathOf(cfg);
   const tab =
     first === 'pruefungen' ? 'pruefungen'
     : first === 'maengel' ? 'maengel'
-    : ['mehr', 'bericht', 'team', 'abo', 'standorte'].includes(first) ? 'mehr'
+    : ['mehr', 'bericht', 'team', 'abo', sitesPath].includes(first) ? 'mehr'
     : 'orte';
   // Nur auf den Erfassungs-Seiten nötig; auf Listen/PDF/Team stört der PC-Hinweis.
   const fieldPage = tab === 'orte';
@@ -44,8 +47,8 @@ export function VorOrt({ pages }: { pages: VorOrtPages }) {
           <Route path="pruefungen" element={pages.inspections} />
           <Route path="pruefungen/:id" element={pages.inspectionDetail} />
           <Route path="maengel" element={pages.defects} />
-          <Route path="standorte" element={pages.sites} />
-          <Route path="standorte/:id" element={pages.siteDetail} />
+          <Route path={sitesPath} element={pages.sites} />
+          <Route path={`${sitesPath}/:id`} element={pages.siteDetail} />
           <Route path="bericht" element={pages.report} />
           <Route path="team" element={pages.team} />
           <Route path="abo" element={pages.abo} />

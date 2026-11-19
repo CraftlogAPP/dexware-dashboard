@@ -12,7 +12,7 @@ import { fmtDateTime, fmtTime } from '../../lib/format';
 import { GPS_GOOD_M, GPS_WEAK_M, useGpsStamp } from '../../winterdex/einsatz/gps';
 import { fileToPhoto } from '../../winterdex/einsatz/photo';
 import type { Site, Unit } from '../backend';
-import { RESULT_LABELS, kindOf, severityOf, type CheckResult, type PruefConfig } from '../config';
+import { RESULT_LABELS, canBlock, kindOf, severityOf, unitAlertOf, type CheckResult, type PruefConfig } from '../config';
 import { usePruef, usePendingSync } from '../context';
 import { getPrefs, loadPruefData, newId, setPrefs, withPendingMeta, type InspectorPrefs } from '../data';
 import { dueInfo, fmtDay, lastDueByUnit, nextDueAfter } from '../due';
@@ -50,6 +50,12 @@ function initialForm(cfg: PruefConfig, prefs: InspectorPrefs): FormValues {
   };
 }
 
+/** Checklisten-Vorbelegung aus der Einheiten-Warnung (cfg.unitAlert) — nur Punkte, die es in der Checkliste gibt. */
+function alertPrefill(cfg: PruefConfig, unit: Unit): Record<string, CheckResult> {
+  const pre = unitAlertOf(cfg, unit)?.checklist ?? {};
+  return Object.fromEntries(cfg.checklist.filter((c) => RESULTS.includes(pre[c.id])).map((c) => [c.id, pre[c.id]]));
+}
+
 type Phase = 'loading' | 'ask' | 'form' | 'done';
 type Ask = null | 'defect' | 'gps' | 'name';
 
@@ -62,6 +68,8 @@ interface DoneInfo {
   at: string;
   blocked: boolean;
   serious: boolean;
+  /** Einheiten-Warnung (z. B. „Ablegereif — …“): ersetzt „Wieder fällig am …“, keine Serienprüfung. */
+  alertDone: string | null;
 }
 
 function Formular({ unitId }: { unitId: string }) {
@@ -83,6 +91,9 @@ function Formular({ unitId }: { unitId: string }) {
   const firstAttemptRef = useRef<string | null>(null);
   const [restoredStart, setRestoredStart] = useState<GpsFix | null>(null);
   const [form, setForm] = useState<FormValues>(() => initialForm(cfg, getPrefs(app, userId)));
+  // Vorbelegung aus einer Einheiten-Warnung (z. B. GurtDex: ablegereif → Punkt „Ablegereife“ auf Mangel) — je Formular einmal.
+  const [prefill, setPrefill] = useState<Record<string, CheckResult>>({});
+  const prefilledRef = useRef(false);
   const [photos, setPhotos] = useState<string[]>([]);
   const [defects, setDefects] = useState<DefectDraft[]>([]);
   const [editing, setEditing] = useState<DefectDraft | null>(null);
@@ -115,10 +126,16 @@ function Formular({ unitId }: { unitId: string }) {
         setUnit(u);
         setSite(data.sites.find((s) => s.id === u.siteId) ?? null);
         setBlockedBefore(data.openDefects.some((d) => d.blocked && d.unitId === unitId));
+        const pre = alertPrefill(cfg, u);
+        setPrefill(pre);
         if (draft) {
           setFound(draft);
           setPhase('ask');
         } else {
+          if (!prefilledRef.current) {
+            prefilledRef.current = true;
+            setForm((f) => ({ ...f, checklist: { ...f.checklist, ...pre } }));
+          }
           openedAtRef.current = new Date().toISOString();
           setPhase('form');
         }
@@ -130,7 +147,7 @@ function Formular({ unitId }: { unitId: string }) {
     return () => {
       alive = false;
     };
-  }, [be, app, userId, unitId, U.one]);
+  }, [be, app, userId, unitId, U.one, cfg]);
   useEffect(() => load(), [load]);
 
   const resume = (d: Draft) => {
@@ -141,6 +158,9 @@ function Formular({ unitId }: { unitId: string }) {
     const base0 = initialForm(cfg, getPrefs(app, userId));
     const checklist = { ...base0.checklist };
     for (const c of cfg.checklist) if (RESULTS.includes(d.form.checklist[c.id])) checklist[c.id] = d.form.checklist[c.id];
+    // Entwurf von vor der Warnung (z. B. inzwischen ablegereif): Vorbelegung einmal nachholen
+    if (!d.prefilled && !prefilledRef.current) Object.assign(checklist, prefill);
+    prefilledRef.current = true;
     setForm({ ...d.form, type: kindOf(cfg, d.form.type).id, checklist });
     setPhotos(d.photos);
     setDefects(d.defects);
@@ -153,6 +173,8 @@ function Formular({ unitId }: { unitId: string }) {
     void deleteDraft(app, userId, unitId);
     idRef.current = newId();
     openedAtRef.current = new Date().toISOString();
+    prefilledRef.current = true;
+    setForm((f) => ({ ...f, checklist: { ...f.checklist, ...prefill } }));
     setFound(null);
     setPhase('form');
   };
@@ -172,7 +194,8 @@ function Formular({ unitId }: { unitId: string }) {
     editing !== null ||
     form.notes.trim() !== '' ||
     form.type !== firstKind ||
-    Object.values(form.checklist).some((r) => r !== 'ok');
+    // geändert gegenüber dem Anfangszustand (alles OK bzw. die Vorbelegung aus einer Einheiten-Warnung)
+    cfg.checklist.some((c) => (form.checklist[c.id] ?? 'ok') !== (prefill[c.id] ?? 'ok'));
   // Kamera geöffnet: Entwurf auch ohne Eingaben sichern (Safari kann die Seite dabei neu laden)
   const [forceDraft, setForceDraft] = useState(false);
   const [draftOnDevice, setDraftOnDevice] = useState(true);
@@ -194,6 +217,7 @@ function Formular({ unitId }: { unitId: string }) {
           photos,
           defects,
           editing,
+          ...(Object.keys(prefill).length > 0 ? { prefilled: true } : {}),
           updatedAt: new Date().toISOString(),
         }
       : null;
@@ -386,6 +410,7 @@ function Formular({ unitId }: { unitId: string }) {
         at,
         blocked: blockedBefore || defects.some((d) => d.blocked),
         serious: defects.some((d) => severityOf(cfg, d.severity).tone !== 'green'),
+        alertDone: unitAlertOf(cfg, unit)?.doneText ?? null,
       });
       setPhase('done');
       window.scrollTo({ top: 0 });
@@ -460,6 +485,7 @@ function Formular({ unitId }: { unitId: string }) {
   const gpsTone = gps.status === 'denied' || gps.status === 'unsupported' ? 'red' : gpsWeak ? 'amber' : 'green';
   const kind = kindOf(cfg, form.type);
   const editingSeverity = editing ? severityOf(cfg, editing.severity) : null;
+  const alert = unitAlertOf(cfg, unit);
 
   return (
     <div className="ez">
@@ -474,6 +500,14 @@ function Formular({ unitId }: { unitId: string }) {
           Andere wählen
         </Link>
       </div>
+      {alert && (
+        <div className="info-box pv-blocked" role="alert" data-testid="unit-alert">
+          <TriangleAlert className="i" aria-hidden /> {/* Beginnt der Text schon mit dem Kurzwort („Ablegereif seit …“), wird es nicht doppelt gezeigt */}
+          {!alert.text.startsWith(alert.badge) && <b>{alert.badge}: </b>}
+          {alert.text}
+          {alert.formHint ? ` ${alert.formHint}` : ''}
+        </div>
+      )}
       {blockedBefore && (
         <div className="info-box pv-blocked">
           <TriangleAlert className="i" aria-hidden /> {cfg.labels.blockedShort}: Es gibt einen offenen Mangel mit Sperre.
@@ -562,7 +596,8 @@ function Formular({ unitId }: { unitId: string }) {
         </span>
       </h2>
       <p className="muted small" style={{ marginTop: -4 }}>
-        Alles steht auf OK. Weicht etwas ab, beim Punkt „Mangel“ oder „n. z.“ (nicht zutreffend) antippen.
+        Alles steht auf OK. Weicht etwas ab, beim Punkt „Mangel“ oder „n. z.“ (nicht zutreffend
+        {cfg.labels.naExample ? `, z. B. ${cfg.labels.naExample}` : ''}) antippen.
       </p>
       <button type="button" className="btn ghost small pv-tap" onClick={() => setShowHints((v) => !v)}>
         {showHints ? 'Prüfhinweise ausblenden' : 'Prüfhinweise zu jedem Punkt anzeigen'}
@@ -743,7 +778,7 @@ function Formular({ unitId }: { unitId: string }) {
                     aria-pressed={editing.severity === s.id}
                     onClick={() =>
                       // Stufe ohne Sperre (z. B. Grün): ein früher gesetzter Sperr-Vermerk darf nicht unsichtbar mitgehen
-                      setEditing({ ...editing, severity: s.id, blocked: s.blockQuestion ? editing.blocked : false })
+                      setEditing({ ...editing, severity: s.id, blocked: canBlock(s) ? editing.blocked : false })
                     }
                   >
                     {s.label}
@@ -751,7 +786,7 @@ function Formular({ unitId }: { unitId: string }) {
                 ))}
               </div>
               {editingSeverity.hint && <p className="muted small pv-hint">{editingSeverity.hint}</p>}
-              {editingSeverity.blockQuestion && (
+              {canBlock(editingSeverity) && (
                 <button
                   type="button"
                   className={`ez-chip pv-block${editing.blocked ? ' on' : ''}`}
@@ -767,7 +802,7 @@ function Formular({ unitId }: { unitId: string }) {
                   rows={3}
                   value={editing.description}
                   maxLength={2000}
-                  placeholder="Details für die Instandsetzung (Position, Ersatzteil …)"
+                  placeholder={cfg.labels.defectDescriptionExample ?? 'Details für die Instandsetzung (Position, Ersatzteil …)'}
                   onChange={(e) => setEditing({ ...editing, description: e.target.value })}
                 />
               </label>
@@ -957,7 +992,7 @@ function Done({ unit, info }: { unit: Unit; info: DoneInfo }) {
 
   // Serienprüfung wie in der App: nach einer Prüfung der Fälligkeits-Art ohne ernsten Mangel die nächste fällige anbieten.
   useEffect(() => {
-    if (info.type !== cfg.dueKind || info.serious) return;
+    if (info.type !== cfg.dueKind || info.serious || info.alertDone) return;
     let alive = true;
     loadPruefData(be, cfg.appId, userId).then(
       (data) => {
@@ -966,6 +1001,8 @@ function Done({ unit, info }: { unit: Unit; info: DoneInfo }) {
         const here = data.units.filter((u) => u.siteId === unit.siteId);
         const last = lastDueByUnit(withPendingMeta(data.meta, pending, cfg.cols.unitFk), cfg.dueKind);
         const blocked = new Set(data.openDefects.filter((d) => d.blocked).map((d) => d.unitId));
+        // Einheiten mit Warnung aus den Stammdaten (z. B. ablegereif) nicht als „nächste fällige“ anbieten
+        for (const u of here) if (unitAlertOf(cfg, u)) blocked.add(u.id);
         const exclude = new Set([unit.id, ...pending.map((p) => String(p.inspection[cfg.cols.unitFk]))]);
         const res = nextDueAfter(here, last, intervalDays, exclude, blocked);
         setNext(res ? { unit: res.next, count: res.count } : null);
@@ -1037,7 +1074,9 @@ function Done({ unit, info }: { unit: Unit; info: DoneInfo }) {
           gesichert.
         </div>
       )}
-      {info.blocked ? (
+      {info.alertDone ? (
+        <p className="pv-bad">{info.alertDone}</p>
+      ) : info.blocked ? (
         <p className="pv-bad">{cfg.labels.blockedShort} — erst nach Mängelbehebung wieder benutzen.</p>
       ) : (
         dueAt && <p className="muted">Wieder fällig am {fmtDay(dueAt)}.</p>

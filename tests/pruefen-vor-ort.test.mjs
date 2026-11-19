@@ -1,12 +1,15 @@
-// Prüft gegen das ECHTE LeiterDex-Schema (PGlite = Postgres im Speicher — NIE die echte Datenbank), ob der Server
+// Prüft gegen das ECHTE Schema der Prüf-Apps (PGlite = Postgres im Speicher — NIE die echte Datenbank), ob der Server
 // die Zeilen annimmt, die „Vor Ort“ im Browser schreibt: Prüfung (mit/ohne GPS, mit Unterschrift) und Mangel.
-// Die Zeilen baut genau der Code der Web-Oberfläche (src/pruefen/rows.ts).
+// Die Zeilen baut genau der Code der Web-Oberfläche (src/pruefen/rows.ts); bei FeuerDex, ToreDex und GurtDex kommt
+// auch die Konfiguration (Tabellen, Spalten, Checkliste, Prüfarten, Ampel, Foto-Ordner) direkt aus src/<app>/vorOrt.ts.
 //
-//   Aufruf:  node tests/pruefen-vor-ort.test.mjs
-//   Braucht: das LeiterDex-Repo (Standard: ../LeiterDex neben dem Dashboard-Ordner auf dem Desktop, sonst
-//            Umgebungsvariable LEITERDEX_REPO) mit installierten SQL-Tests (supabase/tests: npm install) —
-//            von dort kommt PGlite, das Dashboard bekommt keine neue Abhängigkeit.
-//   Node ab 22.18 (liest die .ts-Datei direkt).
+//   Aufruf:  node tests/pruefen-vor-ort.test.mjs              (alle Apps)
+//            node tests/pruefen-vor-ort.test.mjs gurtdex      (nur eine App; mehrere mit Leerzeichen)
+//   Braucht: die App-Repos (Standard: ../LeiterDex, ../FeuerDex, ../ToreDex, ../GurtDex neben dem Dashboard-Ordner auf
+//            dem Desktop, sonst Umgebungsvariable LEITERDEX_REPO, FEUERDEX_REPO, TOREDEX_REPO, GURTDEX_REPO) mit
+//            installierten SQL-Tests (supabase/tests: npm install) — von dort kommt PGlite, das Dashboard bekommt
+//            keine neue Abhängigkeit.
+//   Node ab 22.18 (liest die .ts-Dateien direkt).
 //
 // NICHT geprüft wird hier (läuft nicht in PGlite): PostgREST (Fehlercode PGRST204 bei fehlender Spalte), der echte
 // Foto-Speicher (nur dessen Zugriffsregeln an einer nachgebauten Tabelle storage.objects) und die Erweiterung http
@@ -16,37 +19,132 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const REPO = process.env.LEITERDEX_REPO ?? 'C:/Users/2easy/Desktop/LeiterDex';
-const sqlDir = path.join(REPO, 'supabase');
-const pglite = path.join(sqlDir, 'tests/node_modules/@electric-sql/pglite/dist/index.js');
-if (!existsSync(pglite)) {
-  console.error(`PGlite nicht gefunden: ${pglite}\nBitte im LeiterDex-Repo unter supabase/tests einmal „npm install“ ausführen (oder LEITERDEX_REPO setzen).`);
+const DESKTOP = 'C:/Users/2easy/Desktop';
+
+// ---------------------------------------------------------------- je App verschieden
+// vor/nach: Reihenfolge wie live / Neuinstallation (schema.sql → vor → team-stufen.sql → nach), wie im SQL-Test des App-Repos.
+// unitCols: Pflichtspalten der Einheit (außer id, org_id, site_id, name).
+const APPS = {
+  leiterdex: {
+    name: 'LeiterDex',
+    repo: process.env.LEITERDEX_REPO ?? `${DESKTOP}/LeiterDex`,
+    vor: ['migration-2026-07-11-org-expert-interval.sql', 'migrations/2026-10-29_signatur.sql', 'fix-membership-rls.sql'],
+    nach: ['gps-pruefnachweis.sql', 'NACHTRAG-RUNDUMCHECK-2026-11-10.sql', 'NACHTRAG-TEAM-PRO-2026-11-12.sql'],
+    unitCols: { category: 'Stehleiter', material: 'Aluminium' },
+    // LeiterDex (Vorlage, unverändert): Die Konfiguration lässt sich mit Node nicht laden (Importe ohne Dateiendung) —
+    // geprüft wird am Text, dass sie dieselben Spalten nennt wie hier.
+    cfgText: {
+      file: 'src/leiterdex/vorOrt.ts',
+      muss: ["unitFk: 'ladder_id'", "blocked: 'ladder_blocked'", "inspection: 'inspection', defect: 'defect'", "photoFolders: { inspection: 'inspection', defect: 'defect' }"],
+      cfg: {
+        tables: { site: 'site', unit: 'ladder', inspection: 'inspection', defect: 'defect' },
+        cols: { unitFk: 'ladder_id', blocked: 'ladder_blocked', retired: 'retired' },
+        unitSelect: 'id, site_id, name, category, material, retired',
+        photoFolders: { inspection: 'inspection', defect: 'defect' },
+      },
+      checklist: ['stiles', 'rungs', 'feet', 'spreader', 'joints', 'connections', 'hooks', 'platform', 'accessories', 'wood', 'marking', 'cleanliness'],
+    },
+  },
+  feuerdex: {
+    name: 'FeuerDex',
+    repo: process.env.FEUERDEX_REPO ?? `${DESKTOP}/FeuerDex`,
+    vor: ['migrations/2026-10-29_signatur.sql', 'fix-membership-rls.sql'],
+    nach: ['gps-pruefnachweis.sql', 'NACHTRAG-RUNDUMCHECK-2026-11-10.sql', 'NACHTRAG-TEAM-PRO-2026-11-12.sql'],
+    unitCols: { category: 'Pulver (ABC)', build_type: 'Aufladelöscher' },
+    cfgModule: { file: 'src/feuerdex/vorOrt.ts', name: 'FEUERDEX_VOR_ORT' },
+    extra: feuerdexExtra,
+  },
+  toredex: {
+    name: 'ToreDex',
+    repo: process.env.TOREDEX_REPO ?? `${DESKTOP}/ToreDex`,
+    vor: ['migrations/2026-10-29_signatur.sql', 'fix-membership-rls.sql'],
+    nach: ['gps-pruefnachweis.sql', 'NACHTRAG-RUNDUMCHECK-2026-11-10.sql', 'NACHTRAG-TEAM-PRO-2026-11-12.sql'],
+    unitCols: { category: 'Sectionaltor', drive_type: 'Kraftbetätigt' },
+    cfgModule: { file: 'src/toredex/vorOrt.ts', name: 'TOREDEX_VOR_ORT' },
+    extra: toredexExtra,
+  },
+  gurtdex: {
+    name: 'GurtDex',
+    repo: process.env.GURTDEX_REPO ?? `${DESKTOP}/GurtDex`,
+    vor: ['migrations/2026-10-29_signatur.sql', 'fix-membership-rls.sql'],
+    nach: ['fix-invite-prefix.sql', 'gps-pruefnachweis.sql', 'NACHTRAG-RUNDUMCHECK-2026-11-10.sql', 'NACHTRAG-TEAM-PRO-2026-11-12.sql'],
+    unitCols: { category: 'Auffanggurt (EN 361)' },
+    cfgModule: { file: 'src/gurtdex/vorOrt.ts', name: 'GURTDEX_VOR_ORT' },
+    extra: gurtdexExtra,
+    // Die Live-Datenbank wurde am 15.07.2026 mit repair-psa-item.sql neu aufgebaut (Tabellen gelöscht und neu angelegt)
+    // — dieser Weg wird zusätzlich geprüft.
+    variante: { name: 'nach repair-psa-item.sql (Weg der Live-Datenbank)', nachSchema: ['repair-psa-item.sql'] },
+  },
+};
+// ----------------------------------------------------------------
+
+const wahl = process.argv.slice(2).map((a) => a.toLowerCase());
+const unbekannt = wahl.filter((a) => !APPS[a]);
+if (unbekannt.length) {
+  console.error(`Unbekannte App: ${unbekannt.join(', ')} — möglich: ${Object.keys(APPS).join(', ')}`);
   process.exit(2);
 }
-const { PGlite } = await import(pathToFileURL(pglite).href);
+const dran = Object.keys(APPS).filter((a) => wahl.length === 0 || wahl.includes(a));
+
+const pglitePfad = (repo) => path.join(repo, 'supabase/tests/node_modules/@electric-sql/pglite/dist/index.js');
+for (const a of dran) {
+  if (!existsSync(pglitePfad(APPS[a].repo))) {
+    console.error(
+      `PGlite nicht gefunden: ${pglitePfad(APPS[a].repo)}\nBitte im ${APPS[a].name}-Repo unter supabase/tests einmal „npm install“ ausführen (oder ${a.toUpperCase()}_REPO setzen).`,
+    );
+    process.exit(2);
+  }
+}
+const { PGlite } = await import(pathToFileURL(pglitePfad(APPS[dran[0]].repo)).href);
 const { buildInspectionRow, buildDefectRow, photoPath, STORAGE_PREFIX } = await import(
   pathToFileURL(path.join(here, '../src/pruefen/rows.ts')).href
 );
 
-const lies = (n) => readFileSync(path.join(sqlDir, n), 'utf8').replace(/\r\n/g, '\n');
-// Was Supabase mitbringt (Rollen, auth.uid(), Storage-Tabellen, http-Attrappe): derselbe Nachbau wie im SQL-Test des App-Repos.
-const vorlage = lies('tests/verwalter.test.mjs');
-const basis = vorlage.match(/const BASIS = `([\s\S]*?)`;/)?.[1];
-if (!basis) throw new Error('BASIS in supabase/tests/verwalter.test.mjs nicht gefunden');
 const ohneErweiterungen = (sql) => sql.replace(/^create extension if not exists [^;]+;/gim, '');
 const KEY = 'goog_TESTschluesselABCDEFGHIJKLMN';
 
-// Reihenfolge wie live / Neuinstallation (schema.sql → Zusatz → team-stufen.sql → GPS-Prüfnachweis → Nachträge)
-const VOR = ['migration-2026-07-11-org-expert-interval.sql', 'migrations/2026-10-29_signatur.sql', 'fix-membership-rls.sql'];
-const NACH = ['gps-pruefnachweis.sql', 'NACHTRAG-RUNDUMCHECK-2026-11-10.sql', 'NACHTRAG-TEAM-PRO-2026-11-12.sql'];
+let ok = 0;
+let fail = 0;
+let marke = '';
+const check = (name, cond, extra = '') => {
+  cond ? ok++ : fail++;
+  console.log(`${cond ? '  ok  ' : 'FEHLER'}  ${marke}${name}${cond || !extra ? '' : '  → ' + (typeof extra === 'string' ? extra : JSON.stringify(extra))}`);
+};
 
-async function aufbau({ ohneSignatur = false } = {}) {
+// jsonb sortiert die Schlüssel um — verglichen wird der Inhalt, nicht die Reihenfolge
+const gleich = (a, b) => JSON.stringify(Object.entries(a ?? {}).sort()) === JSON.stringify(Object.entries(b ?? {}).sort());
+const istHash = (h) => /^[0-9a-f]{64}$/.test(h ?? '');
+
+// ---------------------------------------------------------------- Daten (in jeder App gleich)
+const U = '00000000-0000-4000-8000-0000000000b1'; // Inhaber
+const W = '00000000-0000-4000-8000-0000000000b2'; // Mitarbeiter (prüft)
+const X = '00000000-0000-4000-8000-0000000000b9'; // Inhaber eines FREMDEN Betriebs
+const ORG = '00000000-0000-4000-8000-0000000000a1';
+const ORG2 = '00000000-0000-4000-8000-0000000000a2';
+const SITE = '00000000-0000-4000-8000-0000000000e1';
+const UNIT = '00000000-0000-4000-8000-0000000000c1';
+// 1 × 1 px PNG — steht für die Unterschrift (PNG-Daten-URI wie aus dem Zeichenfeld)
+const SIG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const AT = '2026-11-19T10:56:01.207Z';
+const I1 = '00000000-0000-4000-8000-0000000000d1';
+const I2 = '00000000-0000-4000-8000-0000000000d2';
+const D1 = '00000000-0000-4000-8000-0000000000f1';
+
+const sqlText = (v) => `'${String(v).replace(/'/g, "''")}'`;
+
+async function aufbau(app, { ohneSignatur = false, nachSchema = [] } = {}) {
+  const sqlDir = path.join(app.repo, 'supabase');
+  const lies = (n) => readFileSync(path.join(sqlDir, n), 'utf8').replace(/\r\n/g, '\n');
+  // Was Supabase mitbringt (Rollen, auth.uid(), Storage-Tabellen, http-Attrappe): derselbe Nachbau wie im SQL-Test des App-Repos.
+  const basis = lies('tests/verwalter.test.mjs').match(/const BASIS = `([\s\S]*?)`;/)?.[1];
+  if (!basis) throw new Error(`BASIS in ${app.name}/supabase/tests/verwalter.test.mjs nicht gefunden`);
   const db = new PGlite();
   await db.exec(basis);
   await db.exec(ohneErweiterungen(lies('schema.sql')));
-  for (const f of VOR) if (!(ohneSignatur && f.includes('signatur'))) await db.exec(ohneErweiterungen(lies(f)));
+  for (const f of nachSchema) await db.exec(ohneErweiterungen(lies(f)));
+  for (const f of app.vor) if (!(ohneSignatur && f.includes('signatur'))) await db.exec(ohneErweiterungen(lies(f)));
   await db.exec(ohneErweiterungen(lies('team-stufen.sql')).replace('__RC_PUBLIC_KEY__', KEY));
-  for (const f of NACH) await db.exec(ohneErweiterungen(lies(f)));
+  for (const f of app.nach) await db.exec(ohneErweiterungen(lies(f)));
   const als = async (uid, fn) => {
     await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [uid]);
     await db.exec('set role authenticated');
@@ -75,167 +173,285 @@ async function aufbau({ ohneSignatur = false } = {}) {
   return { db, als, insert, versuch };
 }
 
-let ok = 0;
-let fail = 0;
-const check = (name, cond, extra = '') => {
-  cond ? ok++ : fail++;
-  console.log(`${cond ? '  ok  ' : 'FEHLER'}  ${name}${cond || !extra ? '' : '  → ' + (typeof extra === 'string' ? extra : JSON.stringify(extra))}`);
-};
-
-// jsonb sortiert die Schlüssel um — verglichen wird der Inhalt, nicht die Reihenfolge
-const gleich = (a, b) => JSON.stringify(Object.entries(a ?? {}).sort()) === JSON.stringify(Object.entries(b ?? {}).sort());
-
-// ---------------------------------------------------------------- Konfiguration: Test und Oberfläche müssen dieselben Spalten meinen
-const cfgText = readFileSync(path.join(here, '../src/leiterdex/vorOrt.ts'), 'utf8');
-const CFG = { cols: { unitFk: 'ladder_id', blocked: 'ladder_blocked', retired: 'retired' } };
-check(
-  'LeiterDex-Konfiguration nennt die Spalten, die hier geprüft werden',
-  cfgText.includes("unitFk: 'ladder_id'") && cfgText.includes("blocked: 'ladder_blocked'") && cfgText.includes("inspection: 'inspection', defect: 'defect'") &&
-    cfgText.includes("photoFolders: { inspection: 'inspection', defect: 'defect' }"),
-);
-
-// ---------------------------------------------------------------- Daten
-const U = '00000000-0000-4000-8000-0000000000b1'; // Inhaber
-const W = '00000000-0000-4000-8000-0000000000b2'; // Mitarbeiter (prüft)
-const X = '00000000-0000-4000-8000-0000000000b9'; // Inhaber eines FREMDEN Betriebs
-const ORG = '00000000-0000-4000-8000-0000000000a1';
-const ORG2 = '00000000-0000-4000-8000-0000000000a2';
-const SITE = '00000000-0000-4000-8000-0000000000e1';
-const LADDER = '00000000-0000-4000-8000-0000000000c1';
-const DATEN = `
+function daten(app, cfg) {
+  const cols = Object.keys(app.unitCols);
+  return `
   insert into auth.users (id, email) values ('${U}', 'chef@example.com'), ('${W}', 'pruefer@example.com'), ('${X}', 'fremd@example.com');
   insert into public.org (id, name) values ('${ORG}', 'Testbetrieb'), ('${ORG2}', 'Fremder Betrieb');
   insert into public.membership (org_id, user_id, role) values ('${ORG}', '${U}', 'owner'), ('${ORG}', '${W}', 'worker'), ('${ORG2}', '${X}', 'owner');
-  insert into public.site (id, org_id, name, address, lat, lng) values ('${SITE}', '${ORG}', 'Werkstatt Nord', 'Industriestraße 12', 47.0712, 15.4412);
-  insert into public.ladder (id, org_id, site_id, name, category, material) values ('${LADDER}', '${ORG}', '${SITE}', 'L-001', 'Stehleiter', 'Aluminium');
+  insert into public.${cfg.tables.site} (id, org_id, name, address, lat, lng) values ('${SITE}', '${ORG}', 'Werkstatt Nord', 'Industriestraße 12', 47.0712, 15.4412);
+  insert into public.${cfg.tables.unit} (id, org_id, site_id, name, ${cols.join(', ')}) values ('${UNIT}', '${ORG}', '${SITE}', 'E-001', ${cols.map((c) => sqlText(app.unitCols[c])).join(', ')});
 `;
-const t = await aufbau();
-await t.db.exec(DATEN);
-
-// 1 × 1 px PNG — steht für die Unterschrift (PNG-Daten-URI wie aus dem Zeichenfeld)
-const SIG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-const CHECKLIST = { stiles: 'ok', rungs: 'defect', feet: 'ok', spreader: 'na', joints: 'ok', connections: 'ok', hooks: 'na', platform: 'na', accessories: 'ok', wood: 'na', marking: 'ok', cleanliness: 'ok' };
-const AT = '2026-11-19T10:56:01.207Z';
-
-// ---------------------------------------------------------------- 1) Prüfung mit GPS (Beginn + Ende), Unterschrift, Foto — als Mitarbeiter
-const I1 = '00000000-0000-4000-8000-0000000000d1';
-const insp1 = {
-  ...buildInspectionRow(CFG, {
-    id: I1, orgId: ORG, userId: W, siteId: SITE, unitId: LADDER, type: 'expert', at: AT,
-    start: { lat: 47.0712, lng: 15.4412, accuracy: 8, at: '2026-11-19T10:50:29.326Z' },
-    end: { lat: 47.07121, lng: 15.44119, accuracy: 9, at: '2026-11-19T10:55:58.000Z' },
-    checklist: CHECKLIST, notes: '  Fußkappen vorsorglich erneuert ', inspectorName: ' Max Muster ', qualification: 'befähigte Person nach TRBS 1203', signature: SIG,
-  }),
-  photo_urls: [STORAGE_PREFIX + photoPath(ORG, 'inspection', I1, 1)],
-};
-check('Zeile: Einheit steht unter ladder_id, Name mit Qualifikation, Notiz getrimmt, Fake-GPS-Felder leer',
-  insp1.ladder_id === LADDER && insp1.inspector_name === 'Max Muster (befähigte Person nach TRBS 1203)' && insp1.notes === 'Fußkappen vorsorglich erneuert' &&
-    insp1.gps_mocked === null && insp1.end_mocked === null && insp1.started_at === AT && insp1.created_at === AT && insp1.performed_by === W, insp1);
-let r = await t.versuch(W, 'public.inspection', insp1);
-check('Prüfung mit GPS + Unterschrift wird angenommen (Mitarbeiter)', r === null, r);
-let row = (await t.db.query(`select * from public.inspection where id = '${I1}'`)).rows[0];
-check('Prüfcode (entry_hash), Version 2 und Server-Eingang entstehen', /^[0-9a-f]{64}$/.test(row?.entry_hash ?? '') && row.hash_version === 2 && !!row.received_at, { h: row?.entry_hash, v: row?.hash_version });
-check('Abstand zum Standort rechnet der Server (Beginn 0 m, Ende > 0 m)', row?.distance_m === 0 && row.end_distance_m > 0 && row.end_distance_m < 5, { d: row?.distance_m, e: row?.end_distance_m });
-check('Unterschrift, Checkliste, Foto-Pfad und GPS-Stempel stehen unverändert in der Zeile',
-  row?.signature === SIG && gleich(row.checklist, CHECKLIST) && row.photo_urls?.[0] === `storage:${ORG}/inspection/${I1}/1.jpg` &&
-    row.gps_accuracy_m === 8 && row.end_accuracy_m === 9 && new Date(row.gps_at).toISOString() === '2026-11-19T10:50:29.326Z' && row.gps_mocked === null,
-  { sig: row?.signature === SIG, checklist: row?.checklist, foto: row?.photo_urls, gps: [row?.gps_accuracy_m, row?.end_accuracy_m, row?.gps_at, row?.gps_mocked] });
-r = (await t.als(W, () => t.db.query(`select * from public.verify_inspection('${I1}')`))).rows[0];
-check('Prüfcode lässt sich bestätigen (verify_inspection)', r?.ok === true, r);
-
-// ---------------------------------------------------------------- 2) Prüfung OHNE GPS und ohne Unterschrift
-const I2 = '00000000-0000-4000-8000-0000000000d2';
-const insp2 = {
-  ...buildInspectionRow(CFG, {
-    id: I2, orgId: ORG, userId: W, siteId: SITE, unitId: LADDER, type: 'visual', at: AT, start: null, end: null,
-    checklist: CHECKLIST, notes: '', inspectorName: '', qualification: 'wird ohne Namen nicht angehängt', signature: '',
-  }),
-  photo_urls: [],
-};
-check('Zeile ohne GPS: alle Ortsfelder leer, kein Feld „signature“, kein Name', insp2.lat === null && insp2.end_lat === null && insp2.gps_at === null && !('signature' in insp2) && insp2.inspector_name === null && insp2.notes === null);
-r = await t.versuch(W, 'public.inspection', insp2);
-check('Prüfung ohne GPS und ohne Unterschrift wird angenommen', r === null, r);
-row = (await t.db.query(`select entry_hash, distance_m, end_distance_m, signature, lat from public.inspection where id = '${I2}'`)).rows[0];
-check('… mit Prüfcode, ohne Abstand, ohne Unterschrift', /^[0-9a-f]{64}$/.test(row?.entry_hash ?? '') && row.distance_m === null && row.end_distance_m === null && row.signature === null && row.lat === null, row);
-
-// ---------------------------------------------------------------- 3) Wiederholung, fremde Angaben
-r = await t.versuch(W, 'public.inspection', insp1);
-check('Prüfung doppelt gesendet → Fehler 23505 (wertet der Browser als „schon gespeichert“)', r?.code === '23505', r);
-check('… und es gibt sie weiterhin genau einmal', (await t.db.query(`select count(*)::int as n from public.inspection where id = '${I1}'`)).rows[0].n === 1);
-r = await t.versuch(W, 'public.inspection', { ...insp2, id: '00000000-0000-4000-8000-0000000000d3', performed_by: U });
-check('Prüfung im Namen eines anderen Kontos wird abgelehnt', /row-level security/i.test(r?.message ?? ''), r);
-r = await t.versuch(X, 'public.inspection', { ...insp2, id: '00000000-0000-4000-8000-0000000000d4', performed_by: X });
-check('Konto eines fremden Betriebs kann hier keine Prüfung anlegen', /row-level security/i.test(r?.message ?? ''), r);
-
-// ---------------------------------------------------------------- 4) Mangel zur Prüfung (mit Sperre und Foto)
-const D1 = '00000000-0000-4000-8000-0000000000f1';
-const def1 = {
-  ...buildDefectRow(CFG, {
-    id: D1, orgId: ORG, userId: W, siteId: SITE, unitId: LADDER, inspectionId: I1, at: AT,
-    title: ' Sprosse locker ', description: '', severity: 'amber', blocked: true, inspectorName: 'Max Muster',
-  }),
-  photo_urls: [STORAGE_PREFIX + photoPath(ORG, 'defect', D1, 1), STORAGE_PREFIX + photoPath(ORG, 'defect', D1, 2)],
-};
-check('Mangel-Zeile: ladder_id, ladder_blocked, Titel getrimmt, Melder = Prüfername (ohne Qualifikation)',
-  def1.ladder_id === LADDER && def1.ladder_blocked === true && def1.title === 'Sprosse locker' && def1.description === null && def1.reporter_name === 'Max Muster' && def1.reported_by === W && def1.inspection_id === I1, def1);
-r = await t.versuch(W, 'public.defect', def1);
-check('Mangel wird angenommen (Mitarbeiter)', r === null, r);
-row = (await t.db.query(`select status, severity, ladder_blocked, inspection_id, photo_urls, created_at from public.defect where id = '${D1}'`)).rows[0];
-check('Mangel: offen, Orange, gesperrt, hängt an der Prüfung, zwei Foto-Pfade',
-  row?.status === 'open' && row.severity === 'amber' && row.ladder_blocked === true && row.inspection_id === I1 && row.photo_urls?.length === 2 && row.photo_urls[1] === `storage:${ORG}/defect/${D1}/2.jpg`, row);
-r = await t.versuch(W, 'public.defect', def1);
-check('Mangel doppelt gesendet → Fehler 23505', r?.code === '23505', r);
-r = await t.versuch(W, 'public.defect', { ...def1, id: '00000000-0000-4000-8000-0000000000f2', reported_by: U });
-check('Mangel im Namen eines anderen Kontos wird abgelehnt', /row-level security/i.test(r?.message ?? ''), r);
-r = await t.versuch(W, 'public.defect', { ...def1, id: '00000000-0000-4000-8000-0000000000f3', severity: 'gelb' });
-check('Unbekannte Ampel-Stufe wird abgelehnt (nur green/amber/red)', r?.code === '23514', r);
-r = await t.versuch(W, 'public.inspection', { ...insp2, id: '00000000-0000-4000-8000-0000000000d5', type: 'jaehrlich' });
-check('Unbekannte Prüfart wird abgelehnt (nur visual/expert)', r?.code === '23514', r);
-
-// ---------------------------------------------------------------- 5) Unveränderlich
-const geaendert = await t.als(W, async () => (await t.db.query(`update public.inspection set notes = 'x' where id = '${I1}'`)).affectedRows);
-check('Prüfung nachträglich ändern: für App-Konten wirkungslos (0 Zeilen)', geaendert === 0, String(geaendert));
-let gesperrt = '';
-try {
-  await t.db.query(`update public.inspection set notes = 'x' where id = '${I1}'`);
-} catch (e) {
-  gesperrt = String(e.message);
 }
-check('… und selbst mit vollen Rechten verhindert der Schutz-Trigger die Änderung', /append-only/i.test(gesperrt), gesperrt);
 
-// ---------------------------------------------------------------- 6) Foto-Speicher: Zugriffsregeln (nachgebaute Tabelle storage.objects)
-const foto = (uid, name) => t.versuch(uid, 'storage.objects', { bucket_id: 'photos', name });
-check('Foto-Pfad der Prüfung (<org>/inspection/<id>/1.jpg) darf der Mitarbeiter anlegen', (await foto(W, photoPath(ORG, 'inspection', I1, 1))) === null);
-check('Foto-Pfad des Mangels (<org>/defect/<id>/1.jpg) darf der Mitarbeiter anlegen', (await foto(W, photoPath(ORG, 'defect', D1, 1))) === null);
-r = await foto(W, photoPath(ORG2, 'inspection', I1, 1));
-check('Foto in den Ordner eines fremden Betriebs wird abgelehnt', /row-level security/i.test(r?.message ?? ''), r);
-const bucket = (await t.db.query(`select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'photos'`)).rows[0];
-check('Bucket „photos“: privat, 3 MB, nur JPEG (so verkleinert der Browser die Fotos)', bucket?.public === false && Number(bucket.file_size_limit) === 3145728 && String(bucket.allowed_mime_types) === 'image/jpeg', bucket);
+/** Konfiguration der App: echt aus src/<app>/vorOrt.ts — oder (LeiterDex) am Text geprüft. */
+async function konfiguration(app) {
+  if (app.cfgModule) {
+    const mod = await import(pathToFileURL(path.join(here, '..', app.cfgModule.file)).href);
+    const cfg = mod[app.cfgModule.name];
+    check(`Konfiguration ${app.cfgModule.name} lädt (src/${app.cfgModule.file.slice(4)}) — der Test nutzt genau sie`, !!cfg?.tables && !!cfg.cols && Array.isArray(cfg.checklist), Object.keys(mod));
+    return { cfg, checklistIds: cfg.checklist.map((c) => c.id), mod };
+  }
+  const text = readFileSync(path.join(here, '..', app.cfgText.file), 'utf8');
+  check(`${app.name}-Konfiguration nennt die Spalten, die hier geprüft werden`, app.cfgText.muss.every((m) => text.includes(m)));
+  return { cfg: app.cfgText.cfg, checklistIds: app.cfgText.checklist, mod: null };
+}
 
-// ---------------------------------------------------------------- 7) Was die Listen lesen (Mitarbeiter)
-r = (await t.als(W, () => t.db.query(`select id, ladder_id, severity, ladder_blocked from public.defect where status = 'open'`))).rows;
-check('Offene Mängel mit Sperr-Vermerk sind für den Mitarbeiter lesbar', r.length === 1 && r[0].ladder_blocked === true && r[0].ladder_id === LADDER, r);
-r = (await t.als(W, () => t.db.query(`select id, site_id, name, category, material, retired from public.ladder`))).rows;
-check('Einheiten-Liste (Spalten der Konfiguration) ist lesbar', r.length === 1 && r[0].retired === false, r);
-r = (await t.als(X, () => t.db.query(`select id from public.inspection`))).rows;
-check('Fremder Betrieb sieht keine der Prüfungen', r.length === 0, r);
-r = await t.versuch(W, 'public.ladder', { id: '00000000-0000-4000-8000-0000000000c2', org_id: ORG, site_id: SITE, name: 'L-002', category: 'Tritt', material: 'Aluminium' });
-check('Einheit anlegen darf nur der Inhaber (Mitarbeiter wird abgelehnt)', /row-level security/i.test(r?.message ?? ''), r);
+// ---------------------------------------------------------------- der gemeinsame Ablauf (für jede App derselbe)
+async function pruefe(app, { nachSchema = [] } = {}) {
+  const { cfg, checklistIds, mod } = await konfiguration(app);
+  const FK = cfg.cols.unitFk;
+  const BLOCKED = cfg.cols.blocked;
+  const T = { insp: `public.${cfg.tables.inspection}`, def: `public.${cfg.tables.defect}`, unit: `public.${cfg.tables.unit}`, site: `public.${cfg.tables.site}` };
+  const t = await aufbau(app, { nachSchema });
+  const DATEN = daten(app, cfg);
+  await t.db.exec(DATEN);
 
-// ---------------------------------------------------------------- 8) Pro-Auskunft: Anbieter nicht erreichbar → „unbekannt“
-r = (await t.als(W, () => t.db.query(`select public.org_pro_active() as pro`))).rows[0];
-check('org_pro_active() antwortet „unbekannt“ (NULL), wenn der Anbieter nicht erreichbar ist → Browser sperrt dann nicht', r?.pro === null, r);
-const aufrufe = (await t.db.query(`select count(*)::int as n from public.test_http_aufrufe where uri not like '%revenuecat%' and uri not like '%suite-status%'`)).rows[0].n;
-check('Kein unerwarteter Aufruf nach außen', aufrufe === 0, String(aufrufe));
+  // Checkliste wie aus dem Formular: alle Punkte der App, der zweite auf „Mangel“, der vierte „n. z.“
+  const CHECKLIST = Object.fromEntries(checklistIds.map((id, i) => [id, i === 1 ? 'defect' : i === 3 ? 'na' : 'ok']));
 
-// ---------------------------------------------------------------- 9) Datenbank OHNE Unterschrift-Spalte (Stand vor dem 29.10.): Ersatzweg der Oberfläche
-const alt = await aufbau({ ohneSignatur: true });
-await alt.db.exec(DATEN);
-r = await alt.versuch(W, 'public.inspection', insp1);
-check('Ohne Spalte „signature“: Postgres meldet 42703 (Spalte fehlt) — darauf reagiert der Ersatzweg', r?.code === '42703' && /signature/.test(r.message), r);
-const { signature: _weg, ...ohneSig } = insp1;
-r = await alt.versuch(W, 'public.inspection', ohneSig);
-check('… dieselbe Prüfung ohne das Feld wird angenommen, mit Prüfcode', r === null && /^[0-9a-f]{64}$/.test((await alt.db.query(`select entry_hash from public.inspection where id = '${I1}'`)).rows[0]?.entry_hash ?? ''), r);
+  if (mod) {
+    // -------------------------------------------------------------- Konfiguration in sich stimmig (nur echte Konfigurationen)
+    check('Checkliste: 12 Punkte mit eindeutiger Kennung, Bezeichnung und Prüfhinweis', cfg.checklist.length === 12 && new Set(checklistIds).size === 12 && cfg.checklist.every((c) => c.label && c.hint), checklistIds);
+    check('Prüfarten und Ampel-Stufen haben Bezeichnung und Erklärung; Fälligkeits-Art und Vorbelegung gibt es',
+      cfg.kinds.every((k) => k.label && k.short && k.hint) && cfg.severities.every((s) => s.label && s.short && s.hint) &&
+        cfg.kinds.some((k) => k.id === cfg.dueKind) && cfg.severities.some((s) => s.id === cfg.defaultSeverity) && cfg.kinds[0].id === 'visual',
+      { kinds: cfg.kinds.map((k) => k.id), sev: cfg.severities.map((s) => s.id), due: cfg.dueKind, def: cfg.defaultSeverity });
+    check('Gratis-Grenze 2 Einheiten (wie FREE_LIMITS der App)', cfg.freeUnits === 2, String(cfg.freeUnits));
+  }
+
+  // ---------------------------------------------------------------- 1) Prüfung mit GPS (Beginn + Ende), Unterschrift, Foto — als Mitarbeiter
+  const insp1 = {
+    ...buildInspectionRow(cfg, {
+      id: I1, orgId: ORG, userId: W, siteId: SITE, unitId: UNIT, type: 'expert', at: AT,
+      start: { lat: 47.0712, lng: 15.4412, accuracy: 8, at: '2026-11-19T10:50:29.326Z' },
+      end: { lat: 47.07121, lng: 15.44119, accuracy: 9, at: '2026-11-19T10:55:58.000Z' },
+      checklist: CHECKLIST, notes: '  Vorsorglich erneuert ', inspectorName: ' Max Muster ', qualification: 'befähigte Person nach TRBS 1203', signature: SIG,
+    }),
+    photo_urls: [STORAGE_PREFIX + photoPath(ORG, cfg.photoFolders.inspection, I1, 1)],
+  };
+  check(`Zeile: Einheit steht unter ${FK}, Name mit Qualifikation, Notiz getrimmt, Fake-GPS-Felder leer`,
+    insp1[FK] === UNIT && insp1.inspector_name === 'Max Muster (befähigte Person nach TRBS 1203)' && insp1.notes === 'Vorsorglich erneuert' &&
+      insp1.gps_mocked === null && insp1.end_mocked === null && insp1.started_at === AT && insp1.created_at === AT && insp1.performed_by === W, insp1);
+  let r = await t.versuch(W, T.insp, insp1);
+  check('Prüfung mit GPS + Unterschrift wird angenommen (Mitarbeiter)', r === null, r);
+  let row = (await t.db.query(`select * from ${T.insp} where id = '${I1}'`)).rows[0];
+  check('Prüfcode (entry_hash), Version 2 und Server-Eingang entstehen', istHash(row?.entry_hash) && row.hash_version === 2 && !!row.received_at, { h: row?.entry_hash, v: row?.hash_version });
+  check('Abstand zum Standort rechnet der Server (Beginn 0 m, Ende > 0 m)', row?.distance_m === 0 && row.end_distance_m > 0 && row.end_distance_m < 5, { d: row?.distance_m, e: row?.end_distance_m });
+  check('Unterschrift, Checkliste, Foto-Pfad und GPS-Stempel stehen unverändert in der Zeile',
+    row?.signature === SIG && gleich(row.checklist, CHECKLIST) && row.photo_urls?.[0] === `storage:${ORG}/inspection/${I1}/1.jpg` &&
+      row.gps_accuracy_m === 8 && row.end_accuracy_m === 9 && new Date(row.gps_at).toISOString() === '2026-11-19T10:50:29.326Z' && row.gps_mocked === null,
+    { sig: row?.signature === SIG, checklist: row?.checklist, foto: row?.photo_urls, gps: [row?.gps_accuracy_m, row?.end_accuracy_m, row?.gps_at, row?.gps_mocked] });
+  r = (await t.als(W, () => t.db.query(`select * from public.verify_inspection('${I1}')`))).rows[0];
+  check('Prüfcode lässt sich bestätigen (verify_inspection)', r?.ok === true, r);
+
+  // ---------------------------------------------------------------- 2) Prüfung OHNE GPS und ohne Unterschrift
+  const insp2 = {
+    ...buildInspectionRow(cfg, {
+      id: I2, orgId: ORG, userId: W, siteId: SITE, unitId: UNIT, type: 'visual', at: AT, start: null, end: null,
+      checklist: CHECKLIST, notes: '', inspectorName: '', qualification: 'wird ohne Namen nicht angehängt', signature: '',
+    }),
+    photo_urls: [],
+  };
+  check('Zeile ohne GPS: alle Ortsfelder leer, kein Feld „signature“, kein Name', insp2.lat === null && insp2.end_lat === null && insp2.gps_at === null && !('signature' in insp2) && insp2.inspector_name === null && insp2.notes === null);
+  r = await t.versuch(W, T.insp, insp2);
+  check('Prüfung ohne GPS und ohne Unterschrift wird angenommen', r === null, r);
+  row = (await t.db.query(`select entry_hash, distance_m, end_distance_m, signature, lat from ${T.insp} where id = '${I2}'`)).rows[0];
+  check('… mit Prüfcode, ohne Abstand, ohne Unterschrift', istHash(row?.entry_hash) && row.distance_m === null && row.end_distance_m === null && row.signature === null && row.lat === null, row);
+
+  // ---------------------------------------------------------------- 3) Wiederholung, fremde Angaben
+  r = await t.versuch(W, T.insp, insp1);
+  check('Prüfung doppelt gesendet → Fehler 23505 (wertet der Browser als „schon gespeichert“)', r?.code === '23505', r);
+  check('… und es gibt sie weiterhin genau einmal', (await t.db.query(`select count(*)::int as n from ${T.insp} where id = '${I1}'`)).rows[0].n === 1);
+  r = await t.versuch(W, T.insp, { ...insp2, id: '00000000-0000-4000-8000-0000000000d3', performed_by: U });
+  check('Prüfung im Namen eines anderen Kontos wird abgelehnt', /row-level security/i.test(r?.message ?? ''), r);
+  r = await t.versuch(X, T.insp, { ...insp2, id: '00000000-0000-4000-8000-0000000000d4', performed_by: X });
+  check('Konto eines fremden Betriebs kann hier keine Prüfung anlegen', /row-level security/i.test(r?.message ?? ''), r);
+
+  // ---------------------------------------------------------------- 4) Mangel zur Prüfung (mit Sperre und Foto)
+  const def1 = {
+    ...buildDefectRow(cfg, {
+      id: D1, orgId: ORG, userId: W, siteId: SITE, unitId: UNIT, inspectionId: I1, at: AT,
+      title: ' Bauteil locker ', description: '', severity: 'amber', blocked: true, inspectorName: 'Max Muster',
+    }),
+    photo_urls: [STORAGE_PREFIX + photoPath(ORG, cfg.photoFolders.defect, D1, 1), STORAGE_PREFIX + photoPath(ORG, cfg.photoFolders.defect, D1, 2)],
+  };
+  check(`Mangel-Zeile: ${FK}, ${BLOCKED}, Titel getrimmt, Melder = Prüfername (ohne Qualifikation)`,
+    def1[FK] === UNIT && def1[BLOCKED] === true && def1.title === 'Bauteil locker' && def1.description === null && def1.reporter_name === 'Max Muster' && def1.reported_by === W && def1.inspection_id === I1, def1);
+  r = await t.versuch(W, T.def, def1);
+  check('Mangel wird angenommen (Mitarbeiter)', r === null, r);
+  row = (await t.db.query(`select status, severity, ${BLOCKED} as blocked, inspection_id, photo_urls, created_at from ${T.def} where id = '${D1}'`)).rows[0];
+  check('Mangel: offen, Orange, gesperrt, hängt an der Prüfung, zwei Foto-Pfade',
+    row?.status === 'open' && row.severity === 'amber' && row.blocked === true && row.inspection_id === I1 && row.photo_urls?.length === 2 && row.photo_urls[1] === `storage:${ORG}/defect/${D1}/2.jpg`, row);
+  r = await t.versuch(W, T.def, def1);
+  check('Mangel doppelt gesendet → Fehler 23505', r?.code === '23505', r);
+  r = await t.versuch(W, T.def, { ...def1, id: '00000000-0000-4000-8000-0000000000f2', reported_by: U });
+  check('Mangel im Namen eines anderen Kontos wird abgelehnt', /row-level security/i.test(r?.message ?? ''), r);
+  r = await t.versuch(W, T.def, { ...def1, id: '00000000-0000-4000-8000-0000000000f3', severity: 'gelb' });
+  check('Unbekannte Ampel-Stufe wird abgelehnt (nur green/amber/red)', r?.code === '23514', r);
+  r = await t.versuch(W, T.insp, { ...insp2, id: '00000000-0000-4000-8000-0000000000d5', type: 'jaehrlich' });
+  check('Unbekannte Prüfart wird abgelehnt (nur visual/expert)', r?.code === '23514', r);
+  if (mod) {
+    // jede Ampel-Stufe und jede Prüfart der Konfiguration nimmt der Server an (Mangel ohne Sperre, ohne Fotos)
+    const abgelehnt = [];
+    let n = 0;
+    for (const s of cfg.severities) {
+      const id = `00000000-0000-4000-8000-0000000001f${++n}`;
+      const e = await t.versuch(W, T.def, {
+        ...buildDefectRow(cfg, { id, orgId: ORG, userId: W, siteId: SITE, unitId: UNIT, inspectionId: I1, at: AT, title: `Stufe ${s.id}`, description: 'Text', severity: s.id, blocked: false, inspectorName: '' }),
+        photo_urls: [],
+      });
+      if (e) abgelehnt.push({ stufe: s.id, e });
+    }
+    for (const k of cfg.kinds) {
+      const id = `00000000-0000-4000-8000-0000000001d${++n}`;
+      const e = await t.versuch(W, T.insp, { ...insp2, id, type: k.id });
+      if (e) abgelehnt.push({ art: k.id, e });
+    }
+    check(`Alle Ampel-Stufen (${cfg.severities.map((s) => s.id).join('/')}) und Prüfarten (${cfg.kinds.map((k) => k.id).join('/')}) der Konfiguration nimmt der Server an`, abgelehnt.length === 0, abgelehnt);
+  }
+
+  // ---------------------------------------------------------------- 5) Unveränderlich
+  const geaendert = await t.als(W, async () => (await t.db.query(`update ${T.insp} set notes = 'x' where id = '${I1}'`)).affectedRows);
+  check('Prüfung nachträglich ändern: für App-Konten wirkungslos (0 Zeilen)', geaendert === 0, String(geaendert));
+  let gesperrt = '';
+  try {
+    await t.db.query(`update ${T.insp} set notes = 'x' where id = '${I1}'`);
+  } catch (e) {
+    gesperrt = String(e.message);
+  }
+  check('… und selbst mit vollen Rechten verhindert der Schutz-Trigger die Änderung', /append-only/i.test(gesperrt), gesperrt);
+
+  // ---------------------------------------------------------------- 6) Foto-Speicher: Zugriffsregeln (nachgebaute Tabelle storage.objects)
+  const foto = (uid, name) => t.versuch(uid, 'storage.objects', { bucket_id: 'photos', name });
+  check('Foto-Pfad der Prüfung (<org>/inspection/<id>/1.jpg) darf der Mitarbeiter anlegen', (await foto(W, photoPath(ORG, cfg.photoFolders.inspection, I1, 1))) === null);
+  check('Foto-Pfad des Mangels (<org>/defect/<id>/1.jpg) darf der Mitarbeiter anlegen', (await foto(W, photoPath(ORG, cfg.photoFolders.defect, D1, 1))) === null);
+  r = await foto(W, photoPath(ORG2, cfg.photoFolders.inspection, I1, 1));
+  check('Foto in den Ordner eines fremden Betriebs wird abgelehnt', /row-level security/i.test(r?.message ?? ''), r);
+  const bucket = (await t.db.query(`select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'photos'`)).rows[0];
+  check('Bucket „photos“: privat, 3 MB, nur JPEG (so verkleinert der Browser die Fotos)', bucket?.public === false && Number(bucket.file_size_limit) === 3145728 && String(bucket.allowed_mime_types) === 'image/jpeg', bucket);
+
+  // ---------------------------------------------------------------- 7) Was die Listen lesen (Mitarbeiter) — dieselben Spalten wie src/pruefen/backend.ts
+  r = (await t.als(W, () => t.db.query(`select id, ${FK}, severity, ${BLOCKED} from ${T.def} where status = 'open'`))).rows;
+  check('Offene Mängel mit Sperr-Vermerk sind für den Mitarbeiter lesbar',
+    r.length === 1 + (mod ? cfg.severities.length : 0) && r.some((d) => d.id === D1 && d[BLOCKED] === true && d[FK] === UNIT) && r.filter((d) => d[BLOCKED]).length === 1, r);
+  r = (await t.als(W, () => t.db.query(`select ${cfg.unitSelect} from ${T.unit}`))).rows;
+  check(`Einheiten-Liste (Spalten der Konfiguration: ${cfg.unitSelect}) ist lesbar`, r.length === 1 && r[0][cfg.cols.retired] === false && r[0].name === 'E-001' && r[0].site_id === SITE, r);
+  r = (await t.als(W, () => t.db.query(`select id, name, address, active from ${T.site}`))).rows;
+  check('Standort-Liste (id, name, address, active) ist lesbar', r.length === 1 && r[0].active === true, r);
+  r = (await t.als(W, () => t.db.query(`select id, ${FK}, type, started_at, canceled from ${T.insp} where id in ('${I1}', '${I2}') order by type`))).rows;
+  check('Prüf-Daten für die Fälligkeit (Einheit, Art, Zeitpunkt, storniert) sind lesbar', r.length === 2 && r[0].type === 'expert' && r[0][FK] === UNIT && r[0].canceled === false, r);
+  r = (await t.als(W, () => t.db.query(`select count(*)::int as n from ${T.unit} where ${cfg.cols.retired} = false`))).rows[0];
+  check('Zählung für die Gratis-Grenze (Einheiten im Bestand) klappt', r?.n === 1, r);
+  r = (await t.als(X, () => t.db.query(`select id from ${T.insp}`))).rows;
+  check('Fremder Betrieb sieht keine der Prüfungen', r.length === 0, r);
+  r = await t.versuch(W, T.unit, { id: '00000000-0000-4000-8000-0000000000c2', org_id: ORG, site_id: SITE, name: 'E-002', ...app.unitCols });
+  check('Einheit anlegen darf nur der Inhaber (Mitarbeiter wird abgelehnt)', /row-level security/i.test(r?.message ?? ''), r);
+
+  // ---------------------------------------------------------------- 8) Pro-Auskunft: Anbieter nicht erreichbar → „unbekannt“
+  r = (await t.als(W, () => t.db.query(`select public.org_pro_active() as pro`))).rows[0];
+  check('org_pro_active() antwortet „unbekannt“ (NULL), wenn der Anbieter nicht erreichbar ist → Browser sperrt dann nicht', r?.pro === null, r);
+  const aufrufe = (await t.db.query(`select count(*)::int as n from public.test_http_aufrufe where uri not like '%revenuecat%' and uri not like '%suite-status%'`)).rows[0].n;
+  check('Kein unerwarteter Aufruf nach außen', aufrufe === 0, String(aufrufe));
+
+  // ---------------------------------------------------------------- App-eigene Punkte (Fälligkeit je Land, Sperr-Rückfragen, Ablegereife …)
+  if (app.extra) await app.extra({ t, cfg, mod, T });
+
+  // ---------------------------------------------------------------- 9) Datenbank OHNE Unterschrift-Spalte (Stand vor dem 29.10.): Ersatzweg der Oberfläche
+  const alt = await aufbau(app, { ohneSignatur: true, nachSchema });
+  await alt.db.exec(DATEN);
+  r = await alt.versuch(W, T.insp, insp1);
+  check('Ohne Spalte „signature“: Postgres meldet 42703 (Spalte fehlt) — darauf reagiert der Ersatzweg', r?.code === '42703' && /signature/.test(r.message), r);
+  const { signature: _weg, ...ohneSig } = insp1;
+  r = await alt.versuch(W, T.insp, ohneSig);
+  check('… dieselbe Prüfung ohne das Feld wird angenommen, mit Prüfcode', r === null && istHash((await alt.db.query(`select entry_hash from ${T.insp} where id = '${I1}'`)).rows[0]?.entry_hash), r);
+}
+
+// ---------------------------------------------------------------- FeuerDex: Frist je Land (DE/AT 2 Jahre, Schweiz 3 Jahre)
+async function feuerdexExtra({ t, cfg }) {
+  const org = async () => (await t.als(W, () => t.db.query(`select * from public.org where id = '${ORG}'`))).rows[0];
+  let o = await org();
+  check('Frist der Sachkundigen-Prüfung aus der Betriebs-Zeile: Land DE → 730 Tage', o?.land === 'DE' && cfg.dueIntervalDays(o) === 730, { land: o?.land, tage: cfg.dueIntervalDays(o ?? {}) });
+  await t.db.query(`update public.org set land = 'CH' where id = '${ORG}'`);
+  o = await org();
+  check('… Land CH → 1095 Tage (3 Jahre)', o?.land === 'CH' && cfg.dueIntervalDays(o) === 1095, { land: o?.land, tage: cfg.dueIntervalDays(o ?? {}) });
+  await t.db.query(`update public.org set land = 'AT' where id = '${ORG}'`);
+  o = await org();
+  check('… Land AT → 730 Tage; ohne Angabe ebenfalls 730', cfg.dueIntervalDays(o) === 730 && cfg.dueIntervalDays({}) === 730);
+  const frage = Object.fromEntries(cfg.severities.map((s) => [s.id, !!s.blockQuestion]));
+  check('Sperr-Rückfrage bei Orange und Rot, nicht bei Grün', frage.green === false && frage.amber === true && frage.red === true, frage);
+}
+
+// ---------------------------------------------------------------- ToreDex: „Objekt“, Rückfrage nur bei Rot
+async function toredexExtra({ cfg }) {
+  check('Der Ort heißt „Objekt“, die Verwaltung liegt unter „objekte“ (wie im Dashboard)', cfg.labels.site.one === 'Objekt' && cfg.labels.site.many === 'Objekte' && cfg.sitesPath === 'objekte', cfg.sitesPath);
+  check('Frist der Sachkundigen-Prüfung: 365 Tage in jedem Land', ['DE', 'AT', 'CH'].every((land) => cfg.dueIntervalDays({ land }) === 365) && cfg.dueIntervalDays({}) === 365);
+  const sev = Object.fromEntries(cfg.severities.map((s) => [s.id, { frage: !!s.blockQuestion, schalter: !!s.blockQuestion || s.blockable === true }]));
+  check('Sperr-Rückfrage nur bei Rot; den Sperr-Schalter gibt es bei Orange und Rot (wie in der App), nicht bei Grün',
+    sev.red.frage && !sev.amber.frage && !sev.green.frage && sev.red.schalter && sev.amber.schalter && !sev.green.schalter, sev);
+}
+
+// ---------------------------------------------------------------- GurtDex: Ablegereife (Herstellungsdatum + max. Gebrauchsdauer)
+async function gurtdexExtra({ t, cfg, T }) {
+  const ALT = '00000000-0000-4000-8000-0000000000c5'; // Gebrauchsdauer überschritten
+  const ALT2 = '00000000-0000-4000-8000-0000000000c6'; // überschritten, Datum als „03/2014“ eingetragen
+  const NEU = '00000000-0000-4000-8000-0000000000c7'; // noch lange gut
+  const dieses = new Date().getFullYear();
+  await t.db.exec(`
+    insert into ${T.unit} (id, org_id, site_id, name, category, serial_no, wearer_name, manufacture_date, max_life_years) values
+      ('${ALT}', '${ORG}', '${SITE}', 'Gurt alt', 'Auffanggurt (EN 361)', '14-A-0311', 'M. Krause', '2014-03', '10'),
+      ('${ALT2}', '${ORG}', '${SITE}', 'Gurt alt 2', 'Auffanggurt (EN 361)', null, null, '03/2014', '10'),
+      ('${NEU}', '${ORG}', '${SITE}', 'Gurt neu', 'Auffanggurt (EN 361)', null, null, '${dieses - 1}-01', '10');
+  `);
+  check('Frist der Sachkundigen-Prüfung: 365 Tage in jedem Land', ['DE', 'AT', 'CH'].every((land) => cfg.dueIntervalDays({ land }) === 365) && cfg.dueIntervalDays({}) === 365);
+  const frage = Object.fromEntries(cfg.severities.map((s) => [s.id, !!s.blockQuestion]));
+  check('Sperr-Rückfrage bei Orange und Rot, nicht bei Grün', frage.green === false && frage.amber === true && frage.red === true, frage);
+
+  // Zeilen so, wie die Liste sie liest (Spalten aus unitSelect, als Mitarbeiter)
+  const rows = (await t.als(W, () => t.db.query(`select ${cfg.unitSelect} from ${T.unit}`))).rows;
+  const zeile = (id) => rows.find((x) => x.id === id);
+  const a = cfg.unitAlert(zeile(ALT));
+  check('Ablegereif (2014-03 + 10 Jahre): Warnung „Ablegereif“ mit Text, Vorbelegung lifetime = Mangel, eigener Abschluss-Text',
+    a?.badge === 'Ablegereif' && /^Ablegereif seit März 2024 \(max\. Gebrauchsdauer 10 Jahre überschritten\)/.test(a.text) && a.checklist?.lifetime === 'defect' &&
+      Object.keys(a.checklist).length === 1 && /Ablegereife & Gebrauchsdauer/.test(a.formHint ?? '') && /aussondern/.test(a.doneText), a);
+  check('… der vorbelegte Punkt „lifetime“ ist ein Punkt der Checkliste', cfg.checklist.some((c) => c.id === 'lifetime'));
+  check('… auch wenn das Herstellungsdatum als „03/2014“ eingetragen ist (wie in der App)', cfg.unitAlert(zeile(ALT2))?.badge === 'Ablegereif', cfg.unitAlert(zeile(ALT2)));
+  check('Nicht ablegereif (Vorjahr + 10 Jahre) und ohne Angaben: keine Warnung', cfg.unitAlert(zeile(NEU)) === null && cfg.unitAlert(zeile(UNIT)) === null, [cfg.unitAlert(zeile(NEU)), cfg.unitAlert(zeile(UNIT))]);
+  check('Unterzeile wie in der App: Art · Nr. · Träger/in', cfg.unitInfo(zeile(ALT)) === 'Auffanggurt (EN 361) · Nr. 14-A-0311 · Träger/in: M. Krause' && cfg.unitInfo(zeile(NEU)) === 'Auffanggurt (EN 361)', cfg.unitInfo(zeile(ALT)));
+
+  // Prüfung des ablegereifen Artikels: Checkliste mit der Vorbelegung, dazu der Rot-Mangel mit Sperre
+  const IA = '00000000-0000-4000-8000-0000000000da';
+  const DA = '00000000-0000-4000-8000-0000000000fa';
+  const checklist = { ...Object.fromEntries(cfg.checklist.map((c) => [c.id, 'ok'])), ...a.checklist };
+  let r = await t.versuch(W, T.insp, {
+    ...buildInspectionRow(cfg, { id: IA, orgId: ORG, userId: W, siteId: SITE, unitId: ALT, type: 'expert', at: AT, start: null, end: null, checklist, notes: '', inspectorName: 'Max Muster', qualification: '', signature: SIG }),
+    photo_urls: [],
+  });
+  check('Prüfung des ablegereifen Artikels (lifetime = Mangel) wird angenommen', r === null, r);
+  r = await t.versuch(W, T.def, {
+    ...buildDefectRow(cfg, { id: DA, orgId: ORG, userId: W, siteId: SITE, unitId: ALT, inspectionId: IA, at: AT, title: 'Ablegereife & Gebrauchsdauer', description: a.text, severity: 'red', blocked: true, inspectorName: 'Max Muster' }),
+    photo_urls: [STORAGE_PREFIX + photoPath(ORG, cfg.photoFolders.defect, DA, 1)],
+  });
+  check('… und der Rot-Mangel mit Sperre dazu', r === null, r);
+  const row = (await t.db.query(`select i.checklist, i.entry_hash, d.severity, d.item_blocked from ${T.insp} i join ${T.def} d on d.inspection_id = i.id where i.id = '${IA}'`)).rows[0];
+  check('… in der Datenbank: lifetime = defect, Prüfcode, Rot, gesperrt', row?.checklist?.lifetime === 'defect' && istHash(row.entry_hash) && row.severity === 'red' && row.item_blocked === true, row);
+}
+
+// ---------------------------------------------------------------- Lauf
+for (const a of dran) {
+  const app = APPS[a];
+  console.log(`\n=== ${app.name} — echtes Schema aus ${path.join(app.repo, 'supabase')}`);
+  marke = '';
+  const vorher = { ok, fail };
+  await pruefe(app);
+  if (app.variante) {
+    console.log(`--- ${app.name}: ${app.variante.name}`);
+    marke = '[Variante] ';
+    await pruefe(app, { nachSchema: app.variante.nachSchema });
+    marke = '';
+  }
+  console.log(`--- ${app.name}: ${ok - vorher.ok} bestanden, ${fail - vorher.fail} fehlgeschlagen`);
+}
 
 console.log(`\n${ok} bestanden, ${fail} fehlgeschlagen`);
 process.exit(fail ? 1 : 0);

@@ -43,6 +43,8 @@ export interface Draft {
   defects: DefectDraft[];
   /** gerade geöffneter Mangel (Kamera im Mangel-Dialog kann die Seite neu laden) */
   editing: DefectDraft | null;
+  /** Die Checkliste wurde wegen einer Einheiten-Warnung vorbelegt (z. B. ablegereif) — beim Fortsetzen nicht noch einmal. */
+  prefilled?: boolean;
   updatedAt: string;
 }
 

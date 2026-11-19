@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, Search } from 'lucide-react';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
-import { kindOf } from '../config';
+import { kindOf, sitesPathOf, unitAlertOf } from '../config';
 import { usePruef, usePendingSync } from '../context';
 import { loadPruefData, withPendingMeta } from '../data';
 import { STATE_ORDER, dueInfo, dueLine, lastDueByUnit, unitState, type UnitState } from '../due';
@@ -77,9 +77,15 @@ export function Standort() {
             .filter((u) => u.siteId === site.id && !u.retired)
             .map((u) => {
               const info = dueInfo(last.get(u.id), intervalDays);
-              return { u, info, st: unitState(info, blocked.has(u.id)) };
+              // Warnung aus den Stammdaten (z. B. GurtDex: ablegereif) — nur wenn nicht ohnehin gesperrt
+              const alert = blocked.has(u.id) ? null : unitAlertOf(cfg, u);
+              return { u, info, alert, st: unitState(info, blocked.has(u.id)) };
             })
-            .sort((a, b) => STATE_ORDER[a.st] - STATE_ORDER[b.st] || a.u.name.localeCompare(b.u.name, 'de', { numeric: true }));
+            .sort(
+              (a, b) =>
+                (a.alert ? 0 : STATE_ORDER[a.st]) - (b.alert ? 0 : STATE_ORDER[b.st]) ||
+                a.u.name.localeCompare(b.u.name, 'de', { numeric: true }),
+            );
           const q = query.trim().toLowerCase();
           const shown = here.filter(({ u }) => !q || `${u.name} ${u.info}`.toLowerCase().includes(q));
 
@@ -102,7 +108,7 @@ export function Standort() {
                 <div className="card empty">
                   Hier sind noch keine {U.many} erfasst — geprüft wird immer je {U.full}.{' '}
                   {owner ? (
-                    <Link to={`${base}/standorte/${site.id}`}>{U.one} anlegen</Link>
+                    <Link to={`${base}/${sitesPathOf(cfg)}/${site.id}`}>{U.one} anlegen</Link>
                   ) : (
                     <>Bitte den Inhaber bitten, die {U.many} anzulegen.</>
                   )}
@@ -128,7 +134,7 @@ export function Standort() {
                     <div className="card empty">Keine Treffer.</div>
                   ) : (
                     <ul className="ez-list">
-                      {shown.map(({ u, info, st }) => {
+                      {shown.map(({ u, info, alert, st }) => {
                         const open = openCount.get(u.id) ?? 0;
                         return (
                           <li key={u.id}>
@@ -142,11 +148,12 @@ export function Standort() {
                                     : dueLine(info, dueShort)}
                                   {st !== 'blocked' && open > 0 ? ` · ${open} ${open === 1 ? 'offener Mangel' : 'offene Mängel'}` : ''}
                                 </span>
+                                {alert && <span className="pv-bad">{alert.text}</span>}
                               </span>
                               <span className="ez-prop-side">
                                 {draftUnits.has(u.id) && <span className="badge amber">Angefangen</span>}
                                 {waitingUnits.has(u.id) && <span className="badge amber">Wartet auf Netz</span>}
-                                <span className={BADGE[st].cls}>{BADGE[st].label}</span>
+                                {alert ? <span className="badge red">{alert.badge}</span> : <span className={BADGE[st].cls}>{BADGE[st].label}</span>}
                                 <ChevronRight className="i" aria-hidden />
                               </span>
                             </Link>
@@ -157,7 +164,7 @@ export function Standort() {
                   )}
                   {owner && (
                     <p className="small" style={{ marginTop: 16 }}>
-                      <Link to={`${base}/standorte/${site.id}`}>{U.many} verwalten (anlegen, bearbeiten)</Link>
+                      <Link to={`${base}/${sitesPathOf(cfg)}/${site.id}`}>{U.many} verwalten (anlegen, bearbeiten)</Link>
                     </p>
                   )}
                 </>

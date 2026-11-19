@@ -22,6 +22,12 @@ export const INSPECTION_SHORT: Record<InspectionType, string> = {
   expert: 'Sachkundigen-Prüfung',
 };
 
+/** Erklärung je Prüfart — wortgleich zur App (mobile/src/types.ts), erscheint beim Erfassen „Vor Ort“. */
+export const INSPECTION_HINTS: Record<InspectionType, string> = {
+  visual: 'Sicht- und Zustandskontrolle durch den Betreiber bzw. eine beauftragte Person (ASR A2.2): Standort, Zugänglichkeit, Plombe, Druckanzeige, äußerer Zustand — dokumentiert empfohlen z. B. vierteljährlich.',
+  expert: 'Instandhaltung durch einen Sachkundigen nach DIN 14406-4 — spätestens alle 2 Jahre. Zusätzlich gelten die Druckbehälter-Fristen der BetrSichV (innere Prüfung alle 5 Jahre, Festigkeitsprüfung alle 10 Jahre). FeuerDex dokumentiert Termin und Ergebnis.',
+};
+
 /** Empfohlenes Intervall in Tagen je Prüfart (Fälligkeits-Anzeige). */
 export const INSPECTION_INTERVAL_DAYS: Record<InspectionType, number> = {
   visual: 90,
@@ -45,21 +51,23 @@ export type CheckResult = 'ok' | 'defect' | 'na';
 export interface ChecklistItem {
   id: string;
   label: string;
+  /** Prüfhinweis wie in der App (beim Erfassen „Vor Ort“) */
+  hint: string;
 }
 
 export const CHECKLIST: ChecklistItem[] = [
-  { id: 'location', label: 'Standort & Zugänglichkeit' },
-  { id: 'mounting', label: 'Halterung / Befestigung' },
-  { id: 'signage', label: 'Beschilderung' },
-  { id: 'seal', label: 'Plombe / Sicherungsstift' },
-  { id: 'gauge', label: 'Druckanzeige' },
-  { id: 'body', label: 'Behälter / Gehäuse' },
-  { id: 'hose', label: 'Schlauch / Düse' },
-  { id: 'valve', label: 'Armatur / Auslösehebel' },
-  { id: 'label', label: 'Etikett / Bedienanleitung' },
-  { id: 'badge', label: 'Prüfplakette / Instandhaltungsnachweis' },
-  { id: 'pressure_dates', label: 'Druckprüffristen (BetrSichV)' },
-  { id: 'cleanliness', label: 'Verschmutzung / Umgebung' },
+  { id: 'location', label: 'Standort & Zugänglichkeit', hint: 'Löscher am vorgesehenen, gekennzeichneten Platz? Frei zugänglich, nicht zugestellt oder verhängt? Griffhöhe 0,80–1,20 m?' },
+  { id: 'mounting', label: 'Halterung / Befestigung', hint: 'Wandhalterung fest, Löscher sicher eingehängt und dennoch leicht zu entnehmen? Fahrbare Löscher standsicher?' },
+  { id: 'signage', label: 'Beschilderung', hint: 'Brandschutzzeichen F001 „Feuerlöscher" vorhanden, sichtbar und ggf. langnachleuchtend? Standort auch aus der Entfernung erkennbar?' },
+  { id: 'seal', label: 'Plombe / Sicherungsstift', hint: 'Plombe unversehrt, Sicherungsstift vorhanden? Fehlende Plombe deutet auf (Teil-)Entleerung hin — Löscher gilt als nicht einsatzbereit.' },
+  { id: 'gauge', label: 'Druckanzeige', hint: 'Bei Dauerdrucklöschern mit Manometer: Zeiger im grünen Bereich? Zeiger im roten Bereich = Druckverlust, sofort instand setzen lassen.' },
+  { id: 'body', label: 'Behälter / Gehäuse', hint: 'Korrosion, Dellen, Risse oder großflächige Lackschäden am Behälter? Beschädigte Druckbehälter nicht weiterverwenden — Sachkundigen hinzuziehen.' },
+  { id: 'hose', label: 'Schlauch / Düse', hint: 'Schlauch rissfrei und nicht versprödet? Düse/Pistole frei, unbeschädigt, nicht verstopft?' },
+  { id: 'valve', label: 'Armatur / Auslösehebel', hint: 'Ventil, Schlagknopf bzw. Auslösehebel unbeschädigt und nicht verbogen? Hebel nicht bereits betätigt?' },
+  { id: 'label', label: 'Etikett / Bedienanleitung', hint: 'Typenschild und Bedienaufdruck vollständig lesbar? Brandklassen (A/B/C/D/F) und Löschmittelmenge erkennbar?' },
+  { id: 'badge', label: 'Prüfplakette / Instandhaltungsnachweis', hint: 'Plakette des Sachkundigen vorhanden und lesbar? Letzte Instandhaltung nicht länger als 2 Jahre her (DIN 14406-4)?' },
+  { id: 'pressure_dates', label: 'Druckprüffristen (BetrSichV)', hint: 'Innere Prüfung (alle 5 Jahre) und Festigkeitsprüfung (alle 10 Jahre) laut Plakette/Nachweis nicht überschritten?' },
+  { id: 'cleanliness', label: 'Verschmutzung / Umgebung', hint: 'Löscher sauber und ablesbar? Keine aggressive Umgebung (Nässe, Chemikalien)? Bei Frostgefahr: frostsicheres Löschmittel bzw. geschützter Standort?' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -160,6 +168,13 @@ export const SEVERITY_LABELS: Record<DefectSeverity, string> = {
   green: 'Grün — beobachten',
   amber: 'Orange — außer Betrieb & instand setzen',
   red: 'Rot — aussondern & ersetzen',
+};
+
+/** Erklärung je Ampel-Stufe — wortgleich zur App, erscheint beim Erfassen eines Mangels „Vor Ort“. */
+export const SEVERITY_HINTS: Record<DefectSeverity, string> = {
+  green: 'Geringfügiger Mangel ohne Einfluss auf die Einsatzbereitschaft (z. B. Beschilderung) — kennzeichnen, beheben, bei der nächsten Kontrolle erneut bewerten.',
+  amber: 'Einsatzbereitschaft nicht sichergestellt — Löscher der Benutzung entziehen, Sachkundigen mit der Instandsetzung beauftragen und für die Übergangszeit gleichwertigen Ersatz bereitstellen (Löschmittel-Abdeckung nach ASR A2.2 muss erhalten bleiben).',
+  red: 'Nicht instandsetzbar (z. B. beschädigter Druckbehälter, Lebensdauer überschritten) — Löscher unverzüglich aussondern, fachgerecht entsorgen lassen und gleichwertigen Ersatz beschaffen.',
 };
 
 export const SEVERITY_SHORT: Record<DefectSeverity, string> = {

@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
-import { FormDialog, orNull, s, type FormValues } from '../../components/form';
+import { FormDialog, Modal, orNull, s, type FormValues } from '../../components/form';
 import { fmtDateTime, gpsLabel } from '../../lib/format';
 import {
   fetchDefects,
@@ -16,6 +16,8 @@ import {
 import { DefectStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, itemNameMap, itemMetaLabel } from '../labels';
 import { SiteDialog } from '../dialogs';
+import { gateText, unitGate } from '../../pruefen/pro';
+import { GURTDEX_VOR_ORT } from '../vorOrt';
 import {
   ITEM_CATEGORIES,
   lifespanWarning,
@@ -40,6 +42,20 @@ export function SiteDetail() {
     PsaItem | 'new' | null
   >(null);
   const [editingSite, setEditingSite] = useState(false);
+  // Gratis-Grenze wie in der App (2 PSA-Artikel im Bestand, ausgesonderte zählen nicht); Pro laut Server, im Zweifel erlaubt.
+  const [gate, setGate] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  async function onAddItem() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      if ((await unitGate(client, GURTDEX_VOR_ORT)).allowed) setEditingItem('new');
+      else setGate(true);
+    } finally {
+      setChecking(false);
+    }
+  }
 
   const state = useAsync<Data>(async () => {
     const [site, items, inspections, defects] = await Promise.all([
@@ -53,6 +69,9 @@ export function SiteDetail() {
 
   async function onSaveItem(v: FormValues) {
     if (!org || !id) throw new Error('Kein Betrieb geladen');
+    // Wieder in Betrieb nehmen zählt wie Anlegen (in der App genauso).
+    const backInUse = editingItem !== 'new' && editingItem?.retired === true && v.retired !== true;
+    if (backInUse && !(await unitGate(client, GURTDEX_VOR_ORT)).allowed) throw new Error(gateText(GURTDEX_VOR_ORT));
     await saveItem(
       client,
       org.org.id,
@@ -135,10 +154,7 @@ export function SiteDetail() {
 
             <div className="section-head">
               <h2>PSA-Artikel ({items.length})</h2>
-              <button
-                className="btn small"
-                onClick={() => setEditingItem('new')}
-              >
+              <button className="btn small" onClick={() => void onAddItem()} disabled={checking}>
                 ＋ Artikel anlegen
               </button>
             </div>
@@ -201,6 +217,20 @@ export function SiteDetail() {
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {gate && (
+              <Modal title="Mehr PSA-Artikel mit Pro" onClose={() => setGate(false)} dirty={false}>
+                <p>{gateText(GURTDEX_VOR_ORT)}</p>
+                <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+                  <Link className="btn ghost" to="../abo">
+                    Abo ansehen
+                  </Link>
+                  <button type="button" className="btn" onClick={() => setGate(false)}>
+                    Verstanden
+                  </button>
+                </div>
+              </Modal>
             )}
 
             {editingItem && (

@@ -21,6 +21,12 @@ export const INSPECTION_SHORT: Record<InspectionType, string> = {
   expert: 'Sachkundigen-Prüfung',
 };
 
+/** Erklärung je Prüfart — wortgleich zur App (mobile/src/types.ts), erscheint beim Erfassen „Vor Ort“. */
+export const INSPECTION_HINTS: Record<InspectionType, string> = {
+  visual: 'Sicht- und Funktionskontrolle durch den Betreiber bzw. eine beauftragte Person: Torlauf, Schließkanten, Lichtschranke, Notentriegelung, äußerer Zustand — dokumentiert empfohlen z. B. monatlich.',
+  expert: 'Prüfung durch einen Sachkundigen (zur Prüfung befähigte Person) nach ASR A1.7 / DGUV Information 208-022 — kraftbetätigte Tore mindestens jährlich, außerdem vor der ersten Inbetriebnahme und nach wesentlichen Änderungen. ToreDex dokumentiert Termin und Ergebnis.',
+};
+
 /** Empfohlenes Intervall in Tagen je Prüfart (Fälligkeits-Anzeige). */
 export const INSPECTION_INTERVAL_DAYS: Record<InspectionType, number> = {
   visual: 30,
@@ -45,21 +51,23 @@ export type CheckResult = 'ok' | 'defect' | 'na';
 export interface ChecklistItem {
   id: string;
   label: string;
+  /** Prüfhinweis wie in der App (beim Erfassen „Vor Ort“) */
+  hint: string;
 }
 
 export const CHECKLIST: ChecklistItem[] = [
-  { id: 'marking', label: 'Kennzeichnung & Typenschild' },
-  { id: 'closing_edge', label: 'Schließkantensicherung' },
-  { id: 'photocell', label: 'Lichtschranke / Lichtgitter' },
-  { id: 'force_limit', label: 'Kraftbegrenzung des Antriebs' },
-  { id: 'fall_protection', label: 'Absturzsicherung / Fangvorrichtung' },
-  { id: 'springs_cables', label: 'Federn, Seile & Ketten' },
-  { id: 'guides_rollers', label: 'Führungsschienen & Laufrollen' },
-  { id: 'emergency_release', label: 'Notentriegelung / Handbetrieb' },
-  { id: 'crush_shear', label: 'Quetsch- & Scherstellen' },
-  { id: 'wicket_door', label: 'Schlupftür' },
-  { id: 'electrical', label: 'Elektrische Ausrüstung' },
-  { id: 'body_function', label: 'Torblatt & Funktionslauf' },
+  { id: 'marking', label: 'Kennzeichnung & Typenschild', hint: 'Typenschild lesbar (Hersteller, Baujahr, CE-Kennzeichnung)? Warnhinweise und ggf. Prüfplakette vorhanden?' },
+  { id: 'closing_edge', label: 'Schließkantensicherung', hint: 'Kontaktleiste an der Hauptschließkante vorhanden und wirksam? Tor reversiert bzw. stoppt bei Berührung? Gummiprofil unbeschädigt?' },
+  { id: 'photocell', label: 'Lichtschranke / Lichtgitter', hint: 'Absicherung des Torbereichs wirksam? Unterbrechen des Strahls stoppt/reversiert das Tor? Optiken sauber und ausgerichtet?' },
+  { id: 'force_limit', label: 'Kraftbegrenzung des Antriebs', hint: 'Betriebskräfte begrenzt (EN 12453)? Tor reversiert bei Hindernis im Torlauf? Keine manipulierten Einstellungen?' },
+  { id: 'fall_protection', label: 'Absturzsicherung / Fangvorrichtung', hint: 'Bei vertikal bewegten Toren: Fangvorrichtung bzw. Federbruchsicherung vorhanden und funktionsfähig? Torblatt gegen Absturz gesichert?' },
+  { id: 'springs_cables', label: 'Federn, Seile & Ketten', hint: 'Torsions-/Zugfedern ohne Bruch und stark verschlissene Stellen? Drahtseile ohne gebrochene Litzen, richtig aufgetrommelt? Kettenspannung in Ordnung?' },
+  { id: 'guides_rollers', label: 'Führungsschienen & Laufrollen', hint: 'Schienen fest, unverformt, sauber? Laufrollen ohne starkes Spiel oder Verschleiß? Torblatt läuft ohne Verkanten?' },
+  { id: 'emergency_release', label: 'Notentriegelung / Handbetrieb', hint: 'Notentriegelung zugänglich, gekennzeichnet und funktionsfähig? Tor von Hand mit vertretbarem Kraftaufwand zu bewegen (z. B. bei Stromausfall)?' },
+  { id: 'crush_shear', label: 'Quetsch- & Scherstellen', hint: 'Sicherheitsabstände zu festen Bauteilen eingehalten oder Stellen gesichert/verdeckt? Keine neuen Gefahrstellen durch Umbauten oder Anbauten?' },
+  { id: 'wicket_door', label: 'Schlupftür', hint: 'Falls vorhanden: Schlupftürkontakt wirksam (Torlauf nur bei geschlossener Schlupftür)? Türschließer und Bänder in Ordnung, Schwelle gekennzeichnet?' },
+  { id: 'electrical', label: 'Elektrische Ausrüstung', hint: 'Leitungen unbeschädigt, Steuerung/Endschalter funktionsfähig, Befehlsgeräte (Taster, Funk, Schlüsselschalter) in Ordnung? Not-Halt wirksam, Gehäuse geschlossen?' },
+  { id: 'body_function', label: 'Torblatt & Funktionslauf', hint: 'Torblatt/Beschläge ohne Verformung, Risse, starke Korrosion? Kompletter Öffnungs- und Schließlauf ohne ungewöhnliche Geräusche, Endlagen werden sauber erreicht?' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -162,6 +170,13 @@ export const SEVERITY_LABELS: Record<DefectSeverity, string> = {
   green: 'Grün — beobachten',
   amber: 'Orange — zeitnah instand setzen',
   red: 'Rot — Tor stilllegen & sichern',
+};
+
+/** Erklärung je Ampel-Stufe — wortgleich zur App, erscheint beim Erfassen eines Mangels „Vor Ort“. */
+export const SEVERITY_HINTS: Record<DefectSeverity, string> = {
+  green: 'Geringfügiger Mangel ohne Einfluss auf die Sicherheit (z. B. Kennzeichnung, Optik) — vermerken, beheben, bei der nächsten Kontrolle erneut bewerten.',
+  amber: 'Sicherheit oder Funktion beeinträchtigt — Fachbetrieb zeitnah mit der Instandsetzung beauftragen; bis dahin Betrieb nur, wenn keine unmittelbare Gefahr besteht (z. B. nur Handbetrieb, Bereich freihalten).',
+  red: 'Unmittelbare Gefahr (z. B. Schließkantensicherung/Fangvorrichtung unwirksam, Federbruch) — Tor sofort stilllegen, gegen Benutzung sichern (Kennzeichnung, ggf. Absperrung) und erst nach Instandsetzung und erneuter Prüfung wieder freigeben.',
 };
 
 export const SEVERITY_SHORT: Record<DefectSeverity, string> = {

@@ -23,6 +23,8 @@ export interface Unit {
   /** Unterzeile, z. B. „Stehleiter · Aluminium“ */
   info: string;
   retired: boolean;
+  /** Stammdaten-Zeile (Spalten aus cfg.unitSelect) — nur bei Apps mit Einheiten-Warnung (cfg.unitAlert). */
+  row?: Record<string, unknown>;
 }
 
 export interface OpenDefect {
@@ -110,6 +112,7 @@ export function supabasePruefBackend(sb: SupabaseClient, cfg: PruefConfig, dueIn
         name: r.name as string,
         info: cfg.unitInfo(r),
         retired: r[cols.retired] === true,
+        ...(cfg.unitAlert ? { row: r } : {}),
       }));
     },
 

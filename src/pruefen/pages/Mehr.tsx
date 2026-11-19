@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, ChevronRight, CreditCard, FileDown, LogOut, Monitor, Users } from 'lucide-react';
+import { sitesPathOf } from '../config';
 import { usePruef } from '../context';
 import { getPrefs, setPrefs } from '../data';
 import { Unterschrift } from '../Unterschrift';
@@ -35,12 +36,12 @@ export function Mehr() {
         <Link to={`${base}/bericht`}>
           <FileDown className="i" aria-hidden />
           <span>
-            <b>Prüfbericht-PDF</b>
+            <b>{cfg.labels.report ?? 'Prüfbericht-PDF'}</b>
             <small>Je {S.one} und Zeitraum, mit Fotos und Unterschrift</small>
           </span>
           <ChevronRight className="i go" aria-hidden />
         </Link>
-        <Link to={`${base}/standorte`}>
+        <Link to={`${base}/${sitesPathOf(cfg)}`}>
           <Building2 className="i" aria-hidden />
           <span>
             <b>{S.many} verwalten</b>

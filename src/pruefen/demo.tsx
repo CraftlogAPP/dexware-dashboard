@@ -24,20 +24,31 @@ const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0
 const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function createBackend(cfg: PruefConfig, netz: () => Netz, log: (line: string) => void): PruefBackend {
+function createBackend(
+  cfg: PruefConfig,
+  netz: () => Netz,
+  log: (line: string) => void,
+  rows: Record<string, unknown>[],
+): PruefBackend {
   const U = cfg.labels.unit;
   const sites: Site[] = [
     { id: uuid(1), name: 'Werkstatt Nord', address: 'Industriestraße 12, 8010 Musterstadt', active: true },
     { id: uuid(2), name: 'Lager Süd', address: 'Hafenweg 3, 8010 Musterstadt', active: true },
     { id: uuid(3), name: 'Altes Büro (pausiert)', address: 'Gartenweg 1', active: false },
   ];
-  const unit = (n: number, site: number, name: string, info: string, retired = false): Unit => ({
-    id: uuid(100 + n),
-    siteId: uuid(site),
-    name,
-    info,
-    retired,
-  });
+  // Die ersten Einheiten kommen aus den Beispiel-Stammdaten der App (falls mitgegeben) — so sieht man die echte
+  // Unterzeile und, wo es sie gibt, die Einheiten-Warnung (z. B. GurtDex: ablegereif).
+  const unit = (n: number, site: number, name: string, info: string, retired = false): Unit => {
+    const row = rows[n - 1];
+    return {
+      id: uuid(100 + n),
+      siteId: uuid(site),
+      name: row ? String(row.name) : name,
+      info: row ? cfg.unitInfo(row) : info,
+      retired,
+      ...(row && cfg.unitAlert ? { row } : {}),
+    };
+  };
   const units: Unit[] = [
     unit(1, 1, `${U.one} 001`, 'Beispiel A'),
     unit(2, 1, `${U.one} 002`, 'Beispiel B'),
@@ -155,7 +166,12 @@ const DEMO_PAGES: VorOrtPages = {
   abo: <Stub title="Abo" />,
 };
 
-export function VorOrtDemoArea({ app, cfg }: { app: AppConfig; cfg: PruefConfig }) {
+const NO_ROWS: Record<string, unknown>[] = [];
+
+/**
+ * @param rows Beispiel-Stammdaten der App (Spalten wie cfg.unitSelect) für die ersten Einheiten — optional.
+ */
+export function VorOrtDemoArea({ app, cfg, rows = NO_ROWS }: { app: AppConfig; cfg: PruefConfig; rows?: Record<string, unknown>[] }) {
   const [netz, setNetz] = useState<Netz>(() => {
     const v = new URLSearchParams(window.location.search).get('netz');
     return v === 'aus' || v === 'nein' || v === 'teil' ? v : 'an';
@@ -163,7 +179,10 @@ export function VorOrtDemoArea({ app, cfg }: { app: AppConfig; cfg: PruefConfig 
   const [log, setLog] = useState<string[]>([]);
   const netzRef = useMemo(() => ({ current: netz }), []); // eslint-disable-line react-hooks/exhaustive-deps
   netzRef.current = netz;
-  const be = useMemo(() => createBackend(cfg, () => netzRef.current, (l) => setLog((prev) => [...prev, l])), [cfg, netzRef]);
+  const be = useMemo(
+    () => createBackend(cfg, () => netzRef.current, (l) => setLog((prev) => [...prev, l]), rows),
+    [cfg, netzRef, rows],
+  );
   const base = `/app/${app.id}`;
   const value = useMemo<PruefCtxValue>(
     () => ({

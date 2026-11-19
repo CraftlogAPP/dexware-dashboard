@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
-import { FormDialog, orNull, s, type FormValues } from '../../components/form';
+import { FormDialog, Modal, orNull, s, type FormValues } from '../../components/form';
 import { fmtDateTime, gpsLabel } from '../../lib/format';
 import {
   fetchDefects,
@@ -16,6 +16,8 @@ import {
 import { DefectStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, gateNameMap, buildLabel } from '../labels';
 import { SiteDialog } from '../dialogs';
+import { gateText, unitGate } from '../../pruefen/pro';
+import { TOREDEX_VOR_ORT } from '../vorOrt';
 import {
   GATE_DRIVE_TYPES,
   GATE_CATEGORIES,
@@ -40,6 +42,20 @@ export function SiteDetail() {
     Gate | 'new' | null
   >(null);
   const [editingSite, setEditingSite] = useState(false);
+  // Gratis-Grenze wie in der App (2 Tore im Bestand, stillgelegte zählen nicht); Pro laut Server, im Zweifel erlaubt.
+  const [gate, setGate] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  async function onAddGate() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      if ((await unitGate(client, TOREDEX_VOR_ORT)).allowed) setEditingGate('new');
+      else setGate(true);
+    } finally {
+      setChecking(false);
+    }
+  }
 
   const state = useAsync<Data>(async () => {
     const [site, gates, inspections, defects] = await Promise.all([
@@ -53,6 +69,9 @@ export function SiteDetail() {
 
   async function onSaveGate(v: FormValues) {
     if (!org || !id) throw new Error('Kein Betrieb geladen');
+    // Wieder in Betrieb nehmen zählt wie Anlegen (in der App genauso).
+    const backInUse = editingGate !== 'new' && editingGate?.retired === true && v.retired !== true;
+    if (backInUse && !(await unitGate(client, TOREDEX_VOR_ORT)).allowed) throw new Error(gateText(TOREDEX_VOR_ORT));
     await saveGate(
       client,
       org.org.id,
@@ -133,10 +152,7 @@ export function SiteDetail() {
 
             <div className="section-head">
               <h2>Tore ({gates.length})</h2>
-              <button
-                className="btn small"
-                onClick={() => setEditingGate('new')}
-              >
+              <button className="btn small" onClick={() => void onAddGate()} disabled={checking}>
                 ＋ Tor anlegen
               </button>
             </div>
@@ -186,6 +202,20 @@ export function SiteDetail() {
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {gate && (
+              <Modal title="Mehr Tore mit Pro" onClose={() => setGate(false)} dirty={false}>
+                <p>{gateText(TOREDEX_VOR_ORT)}</p>
+                <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+                  <Link className="btn ghost" to="../abo">
+                    Abo ansehen
+                  </Link>
+                  <button type="button" className="btn" onClick={() => setGate(false)}>
+                    Verstanden
+                  </button>
+                </div>
+              </Modal>
             )}
 
             {editingGate && (

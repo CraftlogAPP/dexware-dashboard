@@ -22,6 +22,14 @@ export const INSPECTION_SHORT: Record<InspectionType, string> = {
   expert: 'Sachkundigen-Prüfung',
 };
 
+/** Erklärung je Prüfart — wortgleich zur App (mobile/src/types.ts), erscheint beim Erfassen „Vor Ort“. */
+export const INSPECTION_HINTS: Record<InspectionType, string> = {
+  visual:
+    'Sicht- und Funktionskontrolle durch Benutzerin/Benutzer vor jeder Benutzung: Gurtband, Nähte, Beschläge, Karabiner-Funktion, Falldämpfer-Indikator, Kennzeichnung — dokumentiert empfohlen z. B. monatlich oder zu Einsatzbeginn.',
+  expert:
+    'Prüfung durch eine sachkundige Person (DGUV Grundsatz 312-906) nach DGUV Regel 112-198 / EN 365 — mindestens alle 12 Monate, außerdem nach Sturzbelastung oder erkennbarer Beschädigung (Ausrüstung bis dahin der Benutzung entziehen). GurtDex dokumentiert Termin und Ergebnis.',
+};
+
 /** Empfohlenes Intervall in Tagen je Prüfart (Fälligkeits-Anzeige). */
 export const INSPECTION_INTERVAL_DAYS: Record<InspectionType, number> = {
   visual: 30,
@@ -47,21 +55,23 @@ export type CheckResult = 'ok' | 'defect' | 'na';
 export interface ChecklistItem {
   id: string;
   label: string;
+  /** Prüfhinweis wie in der App (beim Erfassen „Vor Ort“) */
+  hint: string;
 }
 
 export const CHECKLIST: ChecklistItem[] = [
-  { id: 'marking', label: 'Kennzeichnung & Etikett' },
-  { id: 'lifetime', label: 'Ablegereife & Gebrauchsdauer' },
-  { id: 'webbing', label: 'Gurtband & Bandmaterial' },
-  { id: 'seams', label: 'Nähte' },
-  { id: 'rope', label: 'Seil & Kernmantel' },
-  { id: 'metal', label: 'Metallbeschläge' },
-  { id: 'connectors', label: 'Karabiner & Verbindungselemente' },
-  { id: 'absorber', label: 'Falldämpfer & Sturzindikator' },
-  { id: 'srl', label: 'Höhensicherungsgerät (HSG)' },
-  { id: 'adjusters', label: 'Einstell- & Verschlusselemente' },
-  { id: 'plastic', label: 'Kunststoffteile & Helm' },
-  { id: 'docs', label: 'Herstellerinformation & Historie' },
+  { id: 'marking', label: 'Kennzeichnung & Etikett', hint: 'Etikett nach EN 365 lesbar (Hersteller, Typ, Seriennummer, Herstellungsdatum, CE-Kennzeichnung, Norm)? Prüfplakette/Banderole vorhanden und aktuell?' },
+  { id: 'lifetime', label: 'Ablegereife & Gebrauchsdauer', hint: 'Maximale Gebrauchs-/Lebensdauer laut Herstellerinformation nicht überschritten (ab Herstellungsdatum, Lagerzeit beachten)? Kein Ablegekriterium aus der Gebrauchsanleitung erfüllt?' },
+  { id: 'webbing', label: 'Gurtband & Bandmaterial', hint: 'Keine Schnitte, Ausfransungen, aufgeraute/pelzige Stellen, Abrieb, Verbrennungen/Verschmelzungen, UV-Ausbleichung oder Chemikalien-/Mörtelspuren? Kanten intakt?' },
+  { id: 'seams', label: 'Nähte', hint: 'Keine gerissenen, losen oder abgescheuerten Nähfäden? Kontrast-/Indikatorfäden unauffällig? Vernähungen und Endabschlüsse vollständig?' },
+  { id: 'rope', label: 'Seil & Kernmantel', hint: 'Falls Seil/Verbindungsmittel: keine Mantelverschiebung, Verdickungen oder Kernbrüche, keine steifen/weichen Stellen? Spleiße/Endverbindungen intakt, keine starke Verschmutzung?' },
+  { id: 'metal', label: 'Metallbeschläge', hint: 'Ösen, D-Ringe, Schnallen, Klemmen: keine Verformung, Risse, Korrosion, scharfen Kanten oder starker Abrieb? Beweglichkeit gegeben?' },
+  { id: 'connectors', label: 'Karabiner & Verbindungselemente', hint: 'Schnapper schließt selbsttätig und vollständig? Verriegelung (Schraub-/Twistlock) wirksam? Gelenke leichtgängig, keine Verformung, keine Fremdkörper (EN 362)?' },
+  { id: 'absorber', label: 'Falldämpfer & Sturzindikator', hint: 'Bandfalldämpfer nicht ausgelöst/aufgerissen, Schutzhülle intakt? Sturzindikatoren (an Gurt, HSG, Verbindungsmittel) unauffällig? Nach Sturz: sofort ablegen!' },
+  { id: 'srl', label: 'Höhensicherungsgerät (HSG)', hint: 'Falls zutreffend: Seil/Gurtband zieht vollständig und zügig ein? Blockierfunktion greift beim ruckartigen Ziehen? Gehäuse und Wirbel unbeschädigt, Hersteller-Revision nicht überfällig?' },
+  { id: 'adjusters', label: 'Einstell- & Verschlusselemente', hint: 'Schnallen rasten sicher ein und halten unter Zug? Gurtband läuft ohne Beschädigung durch die Versteller? Keine fehlenden oder fremden Ersatzteile?' },
+  { id: 'plastic', label: 'Kunststoffteile & Helm', hint: 'Kunststoffelemente ohne Risse/Versprödung (UV)? Falls Helm dabei: Schale ohne Risse, Innenausstattung und Kinnriemen intakt (EN 397/EN 12492), Helm-Gebrauchsdauer beachtet?' },
+  { id: 'docs', label: 'Herstellerinformation & Historie', hint: 'Gebrauchsanleitung des Herstellers verfügbar? Prüfhistorie/Dokumentation vollständig? Mängel aus der Vorprüfung behoben, Zubehör vollständig?' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -91,15 +101,48 @@ const TEXTILE_CATEGORIES: ReadonlyArray<string> = [
   'Bandschlinge / Anschlagmittel (EN 566/795 B)',
 ];
 
-/** "YYYY-MM" oder "YYYY-MM-DD" → Date (Monatsanfang), sonst undefined. */
+/**
+ * Monatsangabe in gängigen Schreibweisen → "YYYY-MM", sonst undefined (wie mobile normalizeIsoMonth).
+ * Akzeptiert „2023-04", „2023-4", „2023/04", „04/2023", „4.2023", „15.04.2023", „2023-04-15" — wer „04/2023"
+ * eingetragen hat, bekommt die Ablegereife-Warnung genauso wie in der App (sicherheitsrelevant bei PSAgA).
+ */
+export function normalizeIsoMonth(s?: string | null): string | undefined {
+  const t = (s ?? '').trim();
+  if (!t) return undefined;
+  let y: number | undefined;
+  let m: number | undefined;
+  let r: RegExpExecArray | null;
+  if ((r = /^(\d{4})[-/.](\d{1,2})(?:[-/.](\d{1,2}))?$/.exec(t))) {
+    y = +r[1];
+    m = +r[2];
+  } else if ((r = /^(?:(\d{1,2})[./-])?(\d{1,2})[./-](\d{4})$/.exec(t))) {
+    y = +r[3];
+    m = +r[2];
+  }
+  if (!y || !m || y < 1980 || y > 2100 || m < 1 || m > 12) return undefined;
+  return `${y}-${String(m).padStart(2, '0')}`;
+}
+
+/** Monatsangabe (siehe normalizeIsoMonth) → Date (Monatsanfang), sonst undefined. */
 export function parseIsoMonth(s?: string | null): Date | undefined {
-  if (!s) return undefined;
-  const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(s.trim());
-  if (!m) return undefined;
-  const year = parseInt(m[1], 10);
-  const month = parseInt(m[2], 10);
-  if (year < 1980 || year > 2100 || month < 1 || month > 12) return undefined;
+  const n = normalizeIsoMonth(s);
+  if (!n) return undefined;
+  const [year, month] = n.split('-').map((x) => parseInt(x, 10));
   return new Date(year, month - 1, 1);
+}
+
+/** Ende der Hersteller-Gebrauchsdauer (Monatsanfang), sonst undefined (keine plausible Angabe). Wie mobile lifespanEnd. */
+export function lifespanEnd(l: Pick<PsaItem, 'manufacture_date' | 'max_life_years'>): Date | undefined {
+  const made = parseIsoMonth(l.manufacture_date);
+  const years = parseInt(l.max_life_years ?? '', 10);
+  if (!made || !Number.isFinite(years) || years <= 0 || years >= 50) return undefined;
+  return new Date(made.getFullYear() + years, made.getMonth(), 1);
+}
+
+/** true, wenn die Hersteller-Gebrauchsdauer ab Herstellungsdatum überschritten ist (wie mobile lifespanExpired). */
+export function lifespanExpired(l: Pick<PsaItem, 'manufacture_date' | 'max_life_years'>, at: Date = new Date()): boolean {
+  const end = lifespanEnd(l);
+  return !!end && end.getTime() < at.getTime();
 }
 
 /**
@@ -113,7 +156,13 @@ export function lifespanWarning(l: Pick<PsaItem, 'manufacture_date' | 'max_life_
   const years = parseInt(l.max_life_years ?? '', 10);
   if (made && Number.isFinite(years) && years > 0 && years < 50) {
     const retireAt = new Date(made.getFullYear() + years, made.getMonth(), 1);
-    const monthsLeft = Math.floor((retireAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 30.44));
+    // Kalendermonate statt Millisekunden/30,44 — und „abgelaufen" exakt wie lifespanExpired (ab dem Monatsersten),
+    // sonst widersprächen sich Hinweis und Prüf-Vorbelegung im Ablaufmonat (wie in der App).
+    const now = new Date();
+    const monthsLeft =
+      retireAt.getTime() < now.getTime()
+        ? -1
+        : (retireAt.getFullYear() - now.getFullYear()) * 12 + (retireAt.getMonth() - now.getMonth());
     const when = retireAt.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
     if (monthsLeft < 0)
       return `Ablegereif seit ${when} (max. Gebrauchsdauer ${years} Jahre überschritten) — der Benutzung entziehen und aussondern.`;
@@ -212,6 +261,13 @@ export const SEVERITY_LABELS: Record<DefectSeverity, string> = {
   green: 'Grün — beobachten',
   amber: 'Orange — instand setzen lassen',
   red: 'Rot — ablegereif, Benutzung entziehen',
+};
+
+/** Erklärung je Ampel-Stufe — wortgleich zur App, erscheint beim Erfassen eines Mangels „Vor Ort“. */
+export const SEVERITY_HINTS: Record<DefectSeverity, string> = {
+  green: 'Geringfügiger Mangel ohne Einfluss auf die Schutzwirkung (z. B. Kennzeichnung verblasst, Verschmutzung) — vermerken, beheben, bei der nächsten Prüfung erneut bewerten.',
+  amber: 'Schutzwirkung möglicherweise beeinträchtigt — PSAgA darf nur der Hersteller bzw. eine von ihm autorisierte Stelle instand setzen; bis zur Klärung den Artikel nicht benutzen.',
+  red: 'Ablegekriterium erfüllt (z. B. ausgelöster Falldämpfer, beschädigte Nähte oder Gurtband, verformte Beschläge, Sturzbelastung) — Artikel sofort der Benutzung entziehen, kennzeichnen und aussondern; Ersatz beschaffen.',
 };
 
 export const SEVERITY_SHORT: Record<DefectSeverity, string> = {

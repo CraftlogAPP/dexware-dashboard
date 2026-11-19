@@ -33,12 +33,37 @@ export interface SeverityKind {
    * Benutzung entzogen werden. Ist sie gesperrt?“). Ohne Text gibt es bei dieser Stufe weder Rückfrage noch Sperr-Schalter.
    */
   blockQuestion?: string;
+  /**
+   * Sperr-Schalter OHNE Rückfrage (z. B. ToreDex bei Orange: eingeschränkter Betrieb ist erlaubt, die Sperre lässt
+   * sich aber vermerken). Mit blockQuestion ist der Schalter ohnehin da.
+   */
+  blockable?: boolean;
+}
+
+/**
+ * Warnung an EINER Einheit, die aus ihren Stammdaten folgt — z. B. GurtDex: Hersteller-Gebrauchsdauer überschritten
+ * („ablegereif“). Wie in der App: rote Warnkarte beim Prüfen, Checklisten-Punkt vorbelegt, kein „Wieder fällig am …“,
+ * die Einheit zählt in den Listen wie gesperrt und wird in der Serienprüfung nicht angeboten.
+ */
+export interface UnitAlert {
+  /** Kurz für Plaketten, z. B. „Ablegereif“ */
+  badge: string;
+  /** Was los ist (Liste und Warnkarte), z. B. „Ablegereif seit März 2024 (…) — der Benutzung entziehen und aussondern.“ */
+  text: string;
+  /** Zusatz nur in der Warnkarte beim Prüfen, z. B. was mit der Checkliste geschehen ist. */
+  formHint?: string;
+  /** Checklisten-Punkte, die deshalb einmal vorbelegt werden, z. B. { lifetime: 'defect' }. Bleibt änderbar. */
+  checklist?: Record<string, CheckResult>;
+  /** Zeile nach dem Speichern statt „Wieder fällig am …“ */
+  doneText: string;
 }
 
 export interface PruefConfig {
   /** Kennung der App (wie in der Registry) — trennt Entwürfe, Warteschlange und gemerkte Angaben je App. */
   appId: string;
   appName: string;
+  /** Unterpfad der Standort-Verwaltung im Dashboard der App. Standard: 'standorte' (ToreDex: 'objekte'). */
+  sitesPath?: string;
 
   tables: {
     site: string;
@@ -58,6 +83,11 @@ export interface PruefConfig {
   unitSelect: string;
   /** Unterzeile der Einheit, z. B. „Stehleiter · Aluminium“ */
   unitInfo: (row: Record<string, unknown>) => string;
+  /**
+   * Optional: Warnung aus den Stammdaten einer Einheit (Zeile mit den Spalten aus unitSelect). null = nichts.
+   * Ohne diese Angabe verhält sich „Vor Ort“ wie bisher (LeiterDex, FeuerDex, ToreDex).
+   */
+  unitAlert?: (row: Record<string, unknown>) => UnitAlert | null;
 
   labels: {
     site: { one: string; many: string };
@@ -76,6 +106,12 @@ export interface PruefConfig {
     defectTitleExample: string;
     qualificationExample: string;
     notesExample: string;
+    /** Optional: Platzhalter der Mangel-Beschreibung (Standard: „Details für die Instandsetzung (Position, Ersatzteil …)“) */
+    defectDescriptionExample?: string;
+    /** Optional: Beispiel für „n. z.“ unter der Checkliste, z. B. „Druckanzeige bei Aufladelöschern“ */
+    naExample?: string;
+    /** Optional: Name des PDF-Berichts im Reiter „Mehr“ (Standard: „Prüfbericht-PDF“) */
+    report?: string;
   };
 
   checklist: ChecklistPoint[];
@@ -103,6 +139,21 @@ export const RESULT_LABELS: Record<CheckResult, string> = { ok: 'OK', defect: 'M
 
 export function kindOf(cfg: PruefConfig, id: string): InspectionKind {
   return cfg.kinds.find((k) => k.id === id) ?? cfg.kinds[0];
+}
+
+/** Gibt es bei dieser Stufe den Sperr-Schalter? */
+export function canBlock(s: SeverityKind): boolean {
+  return !!s.blockQuestion || s.blockable === true;
+}
+
+/** Unterpfad der Standort-Verwaltung (wie im Dashboard der App). */
+export function sitesPathOf(cfg: Pick<PruefConfig, 'sitesPath'>): string {
+  return cfg.sitesPath ?? 'standorte';
+}
+
+/** Warnung einer Einheit laut Konfiguration — null, wenn die App keine kennt oder die Stammdaten fehlen. */
+export function unitAlertOf(cfg: Pick<PruefConfig, 'unitAlert'>, unit: { row?: Record<string, unknown> }): UnitAlert | null {
+  return cfg.unitAlert && unit.row ? cfg.unitAlert(unit.row) : null;
 }
 
 export function severityOf(cfg: PruefConfig, id: string): SeverityKind {
