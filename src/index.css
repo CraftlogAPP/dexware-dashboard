@@ -2685,3 +2685,18 @@ a.due-row:hover {
   height: 16px;
   color: var(--green);
 }
+
+/* Checkliste am schmalen Handy: Tasten etwas schmaler, damit lange Prüfpunkte seltener umbrechen (Tipphöhe bleibt 48 px). */
+@media (max-width: 420px) {
+  .pv-check {
+    padding-left: 12px;
+    gap: 8px 8px;
+  }
+  .pv-seg-btn {
+    min-width: 50px;
+    padding: 0 6px;
+  }
+  .pv-check-text {
+    font-size: 14.5px;
+  }
+}
