@@ -21,6 +21,12 @@ export function Aussendienst() {
   return (
     <div className={`ad${recording ? ' ad-full' : ''}`}>
       <main className="ad-main">
+        {!recording && (
+          <div className="info-box ad-pc-hint">
+            Der Außendienst ist fürs Handy gedacht. Am PC ist der Standort meist ungenau (Ortung über WLAN statt GPS) —
+            Einsätze und Fahrten vor Ort bitte mit dem Handy erfassen. Fürs Büro gibt es oben rechts das Dashboard.
+          </div>
+        )}
         <Routes>
           <Route index element={<Einsatz />} />
           <Route path="objekt/:id" element={<EinsatzErfassen />} />

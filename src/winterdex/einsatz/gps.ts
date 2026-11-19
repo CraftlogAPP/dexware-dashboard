@@ -37,6 +37,7 @@ function toFix(pos: GeolocationPosition): GpsFix {
 export function useGpsStamp(active: boolean, restored: GpsFix | null, onFirstFix: (fix: GpsFix) => void) {
   const [gps, setGps] = useState<GpsState>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const [rewatch, setRewatch] = useState(0);
   const lastFixRef = useRef<GpsFix | null>(null);
   const bestRef = useRef<GpsFix | null>(null);
   const lockedRef = useRef(false);
@@ -103,7 +104,18 @@ export function useGpsStamp(active: boolean, restored: GpsFix | null, onFirstFix
       clearTimeout(timer);
       navigator.geolocation.clearWatch(id);
     };
-  }, [active, attempt]);
+  }, [active, attempt, rewatch]);
+
+  // Zurück auf der Seite (z. B. nach der Kamera): Ortung neu anmelden — am iPhone verstummt sie sonst manchmal,
+  // und der End-Stempel beim Speichern wäre veraltet. Der schon erfasste Beginn bleibt unverändert.
+  useEffect(() => {
+    if (!active) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setRewatch((n) => n + 1);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [active]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   return { gps, lastFixRef, retry };

@@ -176,6 +176,7 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
       clearInterval(t);
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
+      snap.current(); // Seite wird verlassen: letzten Stand sofort sichern
     };
   }, [phase]);
   useEffect(() => {
@@ -317,7 +318,7 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
       </div>
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [plan, rec.points, cov, phase],
+    [plan, phase === 'recording' ? Math.floor(Date.now() / 3000) : rec.points, cov, phase],
   );
 
   const back = (

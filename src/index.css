@@ -2146,3 +2146,17 @@ a.due-row:hover {
     flex: none;
   }
 }
+
+/* Außendienst am PC: mittig, und ein ehrlicher Hinweis zur Ortung (nur mit Maus und großem Bildschirm sichtbar) */
+.ad-main .ez {
+  max-width: none;
+}
+.ad-pc-hint {
+  display: none;
+}
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .ad-pc-hint {
+    display: block;
+    margin: 0 0 16px;
+  }
+}

@@ -17,6 +17,7 @@ const MAX_SPEED_MS = 55; // > 200 km/h = GPS-Sprung
 const MAX_JUMP_M = 150;
 const GAP_MIN_MS = 10000; // kürzere Unterbrechungen nicht als Pause vermerken
 const STALE_FIX_MS = 15000;
+const REWATCH_MS = 20000; // so lange ohne Position → Ortung neu anmelden
 
 export type GpsLive =
   | { state: 'wait' }
@@ -117,7 +118,12 @@ export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) 
       setGps({ state: 'unsupported' });
       return;
     }
-    const id = navigator.geolocation.watchPosition(
+    let id = 0;
+    let watchedAt = 0;
+    const watch = () => {
+      if (id) navigator.geolocation.clearWatch(id);
+      watchedAt = Date.now();
+      id = navigator.geolocation.watchPosition(
       (pos) => {
         const acc = Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : 999;
         const raw = Number(pos.timestamp);
@@ -135,15 +141,24 @@ export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) 
         if (err.code === err.PERMISSION_DENIED) setGps({ state: 'denied' });
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 },
-    );
+      );
+    };
+    watch();
     const timer = setInterval(() => {
       setTick((n) => n + 1); // Uhr/Strecke in der Anzeige weiterzählen
       const at = lastFixAtRef.current;
       if (at && Date.now() - at > STALE_FIX_MS) setGps({ state: 'lost', since: at });
+      // Verstummt (z. B. nach dem Entsperren am iPhone): Ortung neu anmelden, solange die Seite sichtbar ist
+      if (document.visibilityState === 'visible' && Date.now() - Math.max(at, watchedAt) > REWATCH_MS) watch();
     }, 1000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') watch();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       navigator.geolocation.clearWatch(id);
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [recordFix]);
 

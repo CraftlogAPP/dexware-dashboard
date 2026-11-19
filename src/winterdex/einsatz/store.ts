@@ -68,6 +68,8 @@ let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 function openDb(): Promise<IDBDatabase | null> {
   if (!dbPromise) {
+    // dauerhaft behalten (sonst darf der Browser selten genutzte Seiten-Daten von selbst löschen)
+    void navigator.storage?.persist?.().catch(() => undefined);
     dbPromise = new Promise((resolve) => {
       try {
         const req = indexedDB.open(DB_NAME, 1);
