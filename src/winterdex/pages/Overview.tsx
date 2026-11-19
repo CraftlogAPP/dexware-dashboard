@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { MapPinCheck } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import {
@@ -43,6 +44,12 @@ export function Overview() {
           {orgCtx.org.name} · Saison im Blick — live aus der WinterDex-App.
         </p>
       )}
+
+      <div className="ez-cta">
+        <Link to="einsatz" className="btn">
+          <MapPinCheck className="i" aria-hidden /> Einsatz erfassen
+        </Link>
+      </div>
 
       <LoadGuard state={state}>
         {({ properties, meta, recentOps }) => {

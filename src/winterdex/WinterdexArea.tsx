@@ -1,5 +1,6 @@
+import { lazy, useEffect, useMemo, type ReactNode } from 'react';
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
-import { Building2, CreditCard, FileDown, LayoutDashboard, Route as RouteIcon, Snowflake, Users } from 'lucide-react';
+import { Building2, CreditCard, FileDown, LayoutDashboard, MapPinCheck, Route as RouteIcon, Snowflake, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
@@ -15,8 +16,28 @@ import { Report } from './pages/Report';
 import { Routes as RoutesPage } from './pages/Routes';
 import { RouteDetail } from './pages/RouteDetail';
 import { RunDetail } from './pages/RunDetail';
+import { Einsatz } from './pages/Einsatz';
+import { EinsatzErfassen } from './pages/EinsatzErfassen';
+import { supabaseBackend } from './einsatz/backend';
+import { EinsatzCtx } from './einsatz/context';
+
+// „Einsatz erfassen“ mit Beispieldaten — nur im Dev-Server (/app/winterdex/einsatz?demo), fehlt im Produktions-Build.
+const EinsatzDemo = import.meta.env.DEV
+  ? lazy(() => import('./einsatz/demo').then((m) => ({ default: m.EinsatzDemoArea })))
+  : null;
+
+function demoWanted(): boolean {
+  try {
+    if (new URLSearchParams(window.location.search).has('demo')) sessionStorage.setItem('wd-einsatz-demo', '1');
+    return sessionStorage.getItem('wd-einsatz-demo') === '1';
+  } catch {
+    return new URLSearchParams(window.location.search).has('demo');
+  }
+}
 
 export function WinterdexArea({ app }: { app: AppConfig }) {
+  useHomeScreenIcon();
+  if (EinsatzDemo && demoWanted()) return <EinsatzDemo app={app} />;
   return (
     <AppArea app={app}>
       <OrgProvider>
@@ -26,6 +47,8 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
               <Route index element={<Overview />} />
               <Route path="objekte" element={<Properties />} />
               <Route path="objekte/:id" element={<PropertyDetail />} />
+              <Route path="einsatz" element={<EinsatzScope><Einsatz /></EinsatzScope>} />
+              <Route path="einsatz/:id" element={<EinsatzScope><EinsatzErfassen /></EinsatzScope>} />
               <Route path="einsaetze" element={<Operations />} />
               <Route path="einsaetze/:id" element={<OperationDetail />} />
               <Route path="strecken" element={<RoutesPage />} />
@@ -42,6 +65,53 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
   );
 }
 
+/** Stellt dem Einsatz-Bereich Server-Zugriff, Konto und Betrieb bereit. */
+function EinsatzScope({ children }: { children: ReactNode }) {
+  const { app, client, session } = useAppAuth();
+  const { data } = useOrg();
+  const userId = session?.user.id;
+  const orgId = data?.org.id;
+  const value = useMemo(
+    () =>
+      userId && orgId
+        ? {
+            be: supabaseBackend(client, app.backend),
+            userId,
+            orgId,
+            base: `/app/${app.id}/einsatz`,
+            propertiesUrl: `/app/${app.id}/objekte`,
+          }
+        : null,
+    [client, app, userId, orgId],
+  );
+  if (!value) return null;
+  return <EinsatzCtx.Provider value={value}>{children}</EinsatzCtx.Provider>;
+}
+
+/**
+ * „Zum Home-Bildschirm“ am iPhone: Symbol und Name von WinterDex statt des allgemeinen Dashboards,
+ * solange dieser Bereich offen ist (Safari liest beides beim Hinzufügen aus der Seite).
+ */
+function useHomeScreenIcon() {
+  useEffect(() => {
+    const head = document.head;
+    const icon = head.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+    const beforeIcon = icon?.getAttribute('href') ?? null;
+    const beforeTitle = document.title;
+    const meta = document.createElement('meta');
+    meta.name = 'apple-mobile-web-app-title';
+    meta.content = 'WinterDex';
+    head.appendChild(meta);
+    icon?.setAttribute('href', '/icons/winterdex-180.png');
+    document.title = 'WinterDex';
+    return () => {
+      meta.remove();
+      if (icon && beforeIcon) icon.setAttribute('href', beforeIcon);
+      document.title = beforeTitle;
+    };
+  }, []);
+}
+
 function Shell() {
   const { app } = useAppAuth();
   const { data } = useOrg();
@@ -55,6 +125,7 @@ function Shell() {
         <NavLink to={base} end>
           <LayoutDashboard className="i" aria-hidden /> Übersicht
         </NavLink>
+        <NavLink to={`${base}/einsatz`}><MapPinCheck className="i" aria-hidden /> Einsatz erfassen</NavLink>
         <NavLink to={`${base}/objekte`}><Building2 className="i" aria-hidden /> Objekte</NavLink>
         <NavLink to={`${base}/einsaetze`}><Snowflake className="i" aria-hidden /> Einsätze</NavLink>
         <NavLink to={`${base}/strecken`}><RouteIcon className="i" aria-hidden /> Strecken</NavLink>

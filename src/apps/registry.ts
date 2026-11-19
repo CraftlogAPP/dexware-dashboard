@@ -36,6 +36,11 @@ export interface AppConfig {
    * Erlaubt nur das Lesen/Anlegen des eigenen Subscriber-Datensatzes (Abo-Anzeige).
    */
   revenueCat?: string;
+  /**
+   * App-Backend (Cloudflare Worker) mit dem App-Token, das auch im App-Build steckt (öffentlich wie dort,
+   * je IP begrenzt). WinterDex: Wetter-Snapshot zum Einsatz, damit der Browser-Einsatz dasselbe archiviert wie die App.
+   */
+  backend?: { url: string; token: string };
   /** Emoji als Kachel-Icon */
   emoji: string;
   /**
@@ -182,6 +187,7 @@ export const APPS: AppConfig[] = [
     theme: { accent: '#0EA5E9', onAccent: '#03202f', bg: '#08111a' },
     landingUrl: 'https://winterdex.dexware.app',
     revenueCat: 'goog_EFamBqKZmcNVjBZZoYgveMeyoUw',
+    backend: { url: 'https://winterdex-backend.alex-pfalz03.workers.dev', token: '3a7cb86ec4a4b7947147e6f425626b4827eb243ccadb98f5ca3903daea4bf5dc' },
     supabase: {
       url: 'https://nppmhxpnynziuavvqmvd.supabase.co',
       anonKey:

@@ -22,6 +22,12 @@ Kachel pro App, dahinter pro App ein Dashboard auf das jeweilige Supabase-Projek
   (Beitrittscodes per RPC), Nachweis-PDF über den Browser-Druckdialog.
   **Wichtig:** `operation.photo_urls` enthält Base64-Fotos — Listen laden diese
   Spalte nie (siehe `OPERATION_COLS` in `src/winterdex/api.ts`), nur Detail/Bericht.
+  **Einsatz erfassen** (`/app/winterdex/einsatz`, `src/winterdex/einsatz/` + `pages/Einsatz*.tsx`, seit 19.11.2026):
+  Erfassung vor Ort im Browser fürs Handy (Übergang fürs iPhone) — gleicher Ablauf und gleiche Daten wie die App
+  (GPS-Stempel Beginn/Ende, Wetter, Maßnahme, Streumittel, Fotos in den Bucket `photos`, Prüfcode vom Server).
+  Entwürfe und nicht gesendete Einsätze liegen in IndexedDB und werden automatisch nachgesendet.
+  Nicht enthalten: Strecken-Aufzeichnung (braucht Hintergrund-Ortung). Ohne Konto testen: Dev-Server →
+  `/app/winterdex/einsatz?demo` (`&netz=aus` = Funkloch, `&netz=nein` = Server lehnt ab).
 - **SpielDex** (`src/spieldex/`): zweiter Dashboard-Bereich nach dem WinterDex-
   Muster — Übersicht mit Fälligkeits-Ampel (visuell 7 T / operativ 90 T /
   Hauptinspektion 365 T), Spielplätze mit Geräte-Inventar, Kontrollen mit
