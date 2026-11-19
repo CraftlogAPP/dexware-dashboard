@@ -185,11 +185,11 @@ export async function loadAboInfo(app: AppConfig, session: Session): Promise<Abo
 }
 
 /** Google-Play-Abo-Übersicht — funktioniert am Handy und im Browser (gleiches Google-Konto). */
-/** Adresse des Web-Kaufs für dieses Konto (RevenueCat-Kauf-Link + Dexware-ID) oder null, wenn nicht eingerichtet. */
-export async function webCheckoutUrl(link: string | undefined, email: string | null | undefined): Promise<string | null> {
-  if (!link || !link.startsWith('https://') || !email) return null;
+/** Adresse des Web-Kaufs für dieses Konto: RevenueCat-Kauf-Link + Dexware-ID (+ Tarif). */
+export function webCheckoutUrl(link: string, dexId: string, pkg?: string): string {
   const base = link.endsWith('/') ? link.slice(0, -1) : link;
-  return `${base}/${await dexwareId(email)}`;
+  // Mit Paket-Kennung direkt zur Kasse (überspringt die schlichte Auswahlseite von RevenueCat).
+  return pkg ? `${base}/${dexId}/checkout?package_id=${encodeURIComponent(pkg)}` : `${base}/${dexId}`;
 }
 
 export const PLAY_SUBSCRIPTIONS_URL = 'https://play.google.com/store/account/subscriptions';

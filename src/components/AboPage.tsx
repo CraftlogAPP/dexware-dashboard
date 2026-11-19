@@ -2,11 +2,12 @@ import { useAppAuth } from '../auth/AppAuthContext';
 import {
   loadAboInfo,
   PLAY_SUBSCRIPTIONS_URL,
-  webCheckoutUrl,
+  dexwareId,
   type AboInfo,
   type EntitlementInfo,
 } from '../lib/abo';
 import { LoadGuard, useAsync } from './ui';
+import { WebBuy, type WebBuyGroup } from './WebBuy';
 
 /**
  * Abo-Verwaltung (generisch für alle App-Bereiche): aktueller Tarif
@@ -36,14 +37,10 @@ function AboContent({ info }: { info: AboInfo }) {
   const { app, session } = useAppAuth();
   // Kauf im Browser (nur wenn für die App eingerichtet): Adressen vorab bauen, damit der Knopf ein echter Link ist.
   const email = session?.user.email;
-  const links = useAsync(
-    async () => ({
-      pro: await webCheckoutUrl(app.webCheckout?.pro, email),
-      suite: app.notInSuite ? null : await webCheckoutUrl(app.webCheckout?.suite, email),
-    }),
-    [app.id, email],
-  );
-  const buy = links.data;
+  const dexId = useAsync(async () => (email ? dexwareId(email) : null), [email]).data;
+  const groups: WebBuyGroup[] = [];
+  if (app.webCheckout?.pro) groups.push({ title: `${app.name} Pro`, lead: app.webCheckoutLead ?? 'Alle Pro-Funktionen dieser App', offer: app.webCheckout.pro });
+  if (app.webCheckout?.suite && !app.notInSuite) groups.push({ title: 'Dexware Suite', lead: 'Pro in allen Prüf-Apps mit einem Abo', offer: app.webCheckout.suite });
   const suiteActive = !!info.suite?.active || info.suiteBackendActive;
   const proActive = !!info.pro?.active;
 
@@ -74,30 +71,7 @@ function AboContent({ info }: { info: AboInfo }) {
         </p>
       </div>
 
-      {!suiteActive && !proActive && buy && (buy.pro || buy.suite) && (
-        <div className="card">
-          <h3 style={{ marginTop: 0 }}>Direkt hier kaufen</h3>
-          <p className="muted">
-            Ohne Google Play, zum Beispiel am iPhone: Bezahlt wird sicher über unseren Zahlungspartner Paddle (Karte oder
-            PayPal). Der Tarif gilt für dieses Konto <b>{email}</b> — im Browser und in der App.
-          </p>
-          <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-            {buy.pro && (
-              <a className="btn" href={buy.pro} target="_blank" rel="noreferrer">
-                {app.webCheckout?.proLabel ?? `${app.name} Pro kaufen`} ↗
-              </a>
-            )}
-            {buy.suite && (
-              <a className="btn ghost" href={buy.suite} target="_blank" rel="noreferrer">
-                {app.webCheckout?.suiteLabel ?? 'Dexware Suite kaufen'} ↗
-              </a>
-            )}
-          </div>
-          <p className="muted small" style={{ marginBottom: 0, marginTop: 10 }}>
-            Nach dem Kauf diese Seite neu laden — die Freischaltung dauert meist unter einer Minute.
-          </p>
-        </div>
-      )}
+      {!suiteActive && !proActive && dexId && email && <WebBuy groups={groups} dexId={dexId} email={email} />}
 
       {current && <EntitlementDetails info={current} />}
 
@@ -115,27 +89,45 @@ function AboContent({ info }: { info: AboInfo }) {
         </div>
       )}
 
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>Abo verwalten oder kündigen</h3>
-        <p className="muted">
-          Abos laufen über <b>Google Play</b> — kündigen, pausieren oder Zahlungsdaten
-          ändern geht daher nicht direkt hier, sondern in deinem Play-Konto: am Handy
-          über <i>Play Store → Profilbild → Zahlungen &amp; Abos → Abos</i> oder direkt im
-          Browser (mit demselben Google-Konto angemeldet):
-        </p>
-        <a
-          className="btn"
-          href={info.managementUrl ?? PLAY_SUBSCRIPTIONS_URL}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Abos bei Google Play öffnen ↗
-        </a>
-        <p className="muted small" style={{ marginBottom: 0, marginTop: 10 }}>
-          Nach einer Kündigung bleibt der Tarif bis zum Ende des bezahlten Zeitraums
-          aktiv und läuft dann automatisch aus.
-        </p>
-      </div>
+      {current?.store === 'paddle' ? (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Abo verwalten oder kündigen</h3>
+          <p className="muted">
+            Dieses Abo hast du <b>im Browser</b> gekauft; Verkäufer ist unser Zahlungspartner <b>Paddle</b>. Kündigen oder
+            die Zahlungsart ändern kannst du über den Link in der Kaufbestätigung (E-Mail von Paddle) oder hier:
+          </p>
+          <a className="btn" href={info.managementUrl ?? 'https://paddle.net'} target="_blank" rel="noreferrer">
+            Abo bei Paddle verwalten ↗
+          </a>
+          <p className="muted small" style={{ marginBottom: 0, marginTop: 10 }}>
+            Nach einer Kündigung bleibt der Tarif bis zum Ende des bezahlten Zeitraums aktiv. Innerhalb von 14 Tagen nach
+            dem Kauf bekommst du dein Geld zurück — schreib an support@dexware.app.{' '}
+            <a href="https://dexware.app/erstattung.html" target="_blank" rel="noreferrer">Widerruf &amp; Erstattung</a>
+          </p>
+        </div>
+      ) : (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Abo verwalten oder kündigen</h3>
+          <p className="muted">
+            Abos laufen über <b>Google Play</b> — kündigen, pausieren oder Zahlungsdaten
+            ändern geht daher nicht direkt hier, sondern in deinem Play-Konto: am Handy
+            über <i>Play Store → Profilbild → Zahlungen &amp; Abos → Abos</i> oder direkt im
+            Browser (mit demselben Google-Konto angemeldet):
+          </p>
+          <a
+            className="btn"
+            href={info.managementUrl ?? PLAY_SUBSCRIPTIONS_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Abos bei Google Play öffnen ↗
+          </a>
+          <p className="muted small" style={{ marginBottom: 0, marginTop: 10 }}>
+            Nach einer Kündigung bleibt der Tarif bis zum Ende des bezahlten Zeitraums
+            aktiv und läuft dann automatisch aus.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -146,7 +138,7 @@ function EntitlementDetails({ info }: { info: EntitlementInfo }) {
       <div className="kpi">
         <div className="kpi-label">Abrechnung</div>
         <div className="kpi-value">{periodLabel(info.periodType)}</div>
-        {info.productId && <div className="kpi-sub">{tierLabel(info.productId)}{info.productId}</div>}
+        {info.productId && info.store !== 'paddle' && <div className="kpi-sub">{tierLabel(info.productId)}{info.productId}</div>}
       </div>
       <div className="kpi">
         <div className="kpi-label">

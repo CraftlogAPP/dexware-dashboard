@@ -2468,3 +2468,106 @@ a.due-row:hover {
   margin: 14px 0 0;
   overflow-wrap: anywhere;
 }
+
+/* Kauf im Browser: Tarif-Kacheln */
+.buy-group {
+  margin-top: 18px;
+}
+.buy-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.buy-head b {
+  font-size: 17px;
+}
+.buy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.buy-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 16px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.buy-plan:hover {
+  text-decoration: none;
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.buy-plan.best {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 14px 34px -22px var(--accent);
+}
+.buy-tag {
+  position: absolute;
+  top: -10px;
+  left: 14px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent, #04121c);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.buy-title {
+  font-weight: 650;
+  color: var(--muted);
+}
+.buy-price {
+  font-size: 28px;
+  font-weight: 760;
+  letter-spacing: -0.03em;
+}
+.buy-price small {
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.buy-note {
+  font-size: 13px;
+  color: var(--accent-text);
+  min-height: 18px;
+}
+.buy-btn {
+  margin-top: 12px;
+  min-height: 46px;
+  justify-content: center;
+  width: 100%;
+}
+.buy-plan:not(.best) .buy-btn {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+}
+.buy-trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 18px 0 10px;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.buy-trust li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.buy-trust .i {
+  width: 16px;
+  height: 16px;
+  color: var(--green);
+}

@@ -64,6 +64,7 @@ const AREAS: Record<string, ComponentType<{ app: AppConfig }>> = {
 };
 
 // Design-Vorschau mit Beispieldaten — nur im Dev-Server, fehlt im Produktions-Build.
+const KaufVorschau = import.meta.env.DEV ? lazy(() => import('./dev/KaufVorschau')) : null;
 const Vorschau = import.meta.env.DEV
   ? lazy(() => import('./dev/Vorschau').then((m) => ({ default: m.Vorschau })))
   : null;
@@ -100,6 +101,7 @@ export default function App() {
           {/* Laufzettel (intern pinndex): sprechende Adresse /app/laufzettel/… leitet weiter */}
           <Route path="/app/laufzettel/*" element={<LaufzettelRedirect />} />
           {Vorschau && <Route path="/vorschau" element={<Vorschau />} />}
+          {KaufVorschau && <Route path="/vorschau-kauf" element={<KaufVorschau />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

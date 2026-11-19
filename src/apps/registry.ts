@@ -19,6 +19,22 @@ export interface SupabaseConfig {
   anonKey: string;
 }
 
+/** Ein Tarif im Web-Kauf: Paket-Kennung aus dem RevenueCat-Angebot ($rc_monthly, $rc_six_month, $rc_annual) + Anzeige. */
+export interface WebPlan {
+  pkg: string;
+  title: string;
+  price: string;
+  per: string;
+  note?: string;
+  best?: boolean;
+  tag?: string;
+}
+/** Kauf-Link (https://pay.rev.cat/<token>, ohne Kennung) mit seinen Tarifen. Leerer Link = nicht eingerichtet. */
+export interface WebOffer {
+  link: string;
+  plans: WebPlan[];
+}
+
 export interface AppConfig {
   id: string;
   /** Anzeigename wie auf dexware.app (z. B. „WinterDex") */
@@ -54,7 +70,9 @@ export interface AppConfig {
    * E-Mail) an — dieselbe Kennung wie in der App, deshalb erkennen App und Server den Kauf ohne Änderung.
    * Leer/fehlend = kein Web-Kauf (Knopf erscheint nicht). Einrichtung: dexware-suite/vertrieb/web-checkout/README.md
    */
-  webCheckout?: { pro?: string; proLabel?: string; suite?: string; suiteLabel?: string };
+  webCheckout?: { pro?: WebOffer; suite?: WebOffer };
+  /** Eine Zeile unter „<App> Pro“ im Web-Kauf (was Pro bringt). */
+  webCheckoutLead?: string;
   /** Emoji als Kachel-Icon */
   emoji: string;
   /**
@@ -203,6 +221,18 @@ export const APPS: AppConfig[] = [
     revenueCat: 'goog_EFamBqKZmcNVjBZZoYgveMeyoUw',
     webSignup: true,
     teamNeedsPro: true,
+    // Web-Kauf (Paddle über RevenueCat-Kauf-Link). link leer = Kacheln bleiben unsichtbar. Erst den LIVE-Link eintragen
+    // (nie den Test-Link) — Anleitung: dexware-suite/vertrieb/web-checkout/README.md
+    webCheckoutLead: 'Unbegrenzt Objekte und Strecken, PDF ohne Wasserzeichen, Team bis 20 Mitarbeiter',
+    webCheckout: {
+      pro: {
+        link: '',
+        plans: [
+          { pkg: '$rc_six_month', title: 'Saison', price: '39,99 €', per: 'für 6 Monate', note: 'entspricht 6,67 € im Monat', best: true, tag: 'Meist gewählt' },
+          { pkg: '$rc_monthly', title: 'Monatlich', price: '9,99 €', per: 'pro Monat', note: 'monatlich kündbar' },
+        ],
+      },
+    },
     backend: { url: 'https://winterdex-backend.alex-pfalz03.workers.dev', token: '3a7cb86ec4a4b7947147e6f425626b4827eb243ccadb98f5ca3903daea4bf5dc' },
     supabase: {
       url: 'https://nppmhxpnynziuavvqmvd.supabase.co',
