@@ -1,6 +1,6 @@
 import { lazy, useEffect, useMemo, type ReactNode } from 'react';
-import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
-import { Building2, CreditCard, FileDown, LayoutDashboard, MapPinCheck, Route as RouteIcon, Snowflake, Users } from 'lucide-react';
+import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { Building2, CreditCard, FileDown, LayoutDashboard, Monitor, Route as RouteIcon, Snowflake, Truck, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
@@ -16,12 +16,11 @@ import { Report } from './pages/Report';
 import { Routes as RoutesPage } from './pages/Routes';
 import { RouteDetail } from './pages/RouteDetail';
 import { RunDetail } from './pages/RunDetail';
-import { Einsatz } from './pages/Einsatz';
-import { EinsatzErfassen } from './pages/EinsatzErfassen';
+import { Aussendienst, EinsatzRedirect } from './aussendienst/Aussendienst';
 import { supabaseBackend } from './einsatz/backend';
 import { EinsatzCtx } from './einsatz/context';
 
-// „Einsatz erfassen“ mit Beispieldaten — nur im Dev-Server (/app/winterdex/einsatz?demo), fehlt im Produktions-Build.
+// Außendienst mit Beispieldaten — nur im Dev-Server (/app/winterdex/aussendienst?demo), fehlt im Produktions-Build.
 const EinsatzDemo = import.meta.env.DEV
   ? lazy(() => import('./einsatz/demo').then((m) => ({ default: m.EinsatzDemoArea })))
   : null;
@@ -39,16 +38,17 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
   useHomeScreenIcon();
   if (EinsatzDemo && demoWanted()) return <EinsatzDemo app={app} />;
   return (
-    <AppArea app={app}>
+    <AppArea app={app} headerAction={<ModeSwitch />}>
       <OrgProvider>
         <OrgGate>
           <Routes>
+            <Route path="aussendienst/*" element={<EinsatzScope><Aussendienst /></EinsatzScope>} />
+            <Route path="einsatz" element={<EinsatzRedirect to={`/app/${app.id}/aussendienst`} />} />
+            <Route path="einsatz/:id" element={<EinsatzRedirect to={`/app/${app.id}/aussendienst`} />} />
             <Route element={<Shell />}>
               <Route index element={<Overview />} />
               <Route path="objekte" element={<Properties />} />
               <Route path="objekte/:id" element={<PropertyDetail />} />
-              <Route path="einsatz" element={<EinsatzScope><Einsatz /></EinsatzScope>} />
-              <Route path="einsatz/:id" element={<EinsatzScope><EinsatzErfassen /></EinsatzScope>} />
               <Route path="einsaetze" element={<Operations />} />
               <Route path="einsaetze/:id" element={<OperationDetail />} />
               <Route path="strecken" element={<RoutesPage />} />
@@ -65,7 +65,26 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
   );
 }
 
-/** Stellt dem Einsatz-Bereich Server-Zugriff, Konto und Betrieb bereit. */
+/**
+ * Umschalter oben rechts: vom Dashboard (Büro, großer Bildschirm) in den Außendienst (Handy-Ansicht wie die App:
+ * Einsatz erfassen, Strecke fahren) und zurück.
+ */
+function ModeSwitch() {
+  const { app } = useAppAuth();
+  const { pathname } = useLocation();
+  const field = pathname.startsWith(`/app/${app.id}/aussendienst`);
+  return field ? (
+    <Link className="btn ghost small" to={`/app/${app.id}`} title="Zurück zum Dashboard (Büro)">
+      <Monitor className="i" aria-hidden /> Dashboard
+    </Link>
+  ) : (
+    <Link className="btn small mode-field" to={`/app/${app.id}/aussendienst`} title="Handy-Ansicht: Einsatz erfassen und Strecke fahren">
+      <Truck className="i" aria-hidden /> Außendienst
+    </Link>
+  );
+}
+
+/** Stellt dem Außendienst Server-Zugriff, Konto und Betrieb bereit. */
 function EinsatzScope({ children }: { children: ReactNode }) {
   const { app, client, session } = useAppAuth();
   const { data } = useOrg();
@@ -78,11 +97,13 @@ function EinsatzScope({ children }: { children: ReactNode }) {
             be: supabaseBackend(client, app.backend),
             userId,
             orgId,
-            base: `/app/${app.id}/einsatz`,
+            base: `/app/${app.id}/aussendienst`,
             propertiesUrl: `/app/${app.id}/objekte`,
+            dashboardUrl: `/app/${app.id}`,
+            owner: data?.role === 'owner',
           }
         : null,
-    [client, app, userId, orgId],
+    [client, app, userId, orgId, data?.role],
   );
   if (!value) return null;
   return <EinsatzCtx.Provider value={value}>{children}</EinsatzCtx.Provider>;
@@ -125,7 +146,6 @@ function Shell() {
         <NavLink to={base} end>
           <LayoutDashboard className="i" aria-hidden /> Übersicht
         </NavLink>
-        <NavLink to={`${base}/einsatz`}><MapPinCheck className="i" aria-hidden /> Einsatz erfassen</NavLink>
         <NavLink to={`${base}/objekte`}><Building2 className="i" aria-hidden /> Objekte</NavLink>
         <NavLink to={`${base}/einsaetze`}><Snowflake className="i" aria-hidden /> Einsätze</NavLink>
         <NavLink to={`${base}/strecken`}><RouteIcon className="i" aria-hidden /> Strecken</NavLink>

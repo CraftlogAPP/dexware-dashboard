@@ -22,12 +22,16 @@ Kachel pro App, dahinter pro App ein Dashboard auf das jeweilige Supabase-Projek
   (Beitrittscodes per RPC), Nachweis-PDF über den Browser-Druckdialog.
   **Wichtig:** `operation.photo_urls` enthält Base64-Fotos — Listen laden diese
   Spalte nie (siehe `OPERATION_COLS` in `src/winterdex/api.ts`), nur Detail/Bericht.
-  **Einsatz erfassen** (`/app/winterdex/einsatz`, `src/winterdex/einsatz/` + `pages/Einsatz*.tsx`, seit 19.11.2026):
-  Erfassung vor Ort im Browser fürs Handy (Übergang fürs iPhone) — gleicher Ablauf und gleiche Daten wie die App
-  (GPS-Stempel Beginn/Ende, Wetter, Maßnahme, Streumittel, Fotos in den Bucket `photos`, Prüfcode vom Server).
-  Entwürfe und nicht gesendete Einsätze liegen in IndexedDB und werden automatisch nachgesendet.
-  Nicht enthalten: Strecken-Aufzeichnung (braucht Hintergrund-Ortung). Ohne Konto testen: Dev-Server →
-  `/app/winterdex/einsatz?demo` (`&netz=aus` = Funkloch, `&netz=nein` = Server lehnt ab).
+  **Außendienst** (`/app/winterdex/aussendienst`, Umschalter oben rechts; `src/winterdex/aussendienst/` + `einsatz/`,
+  seit 19.11.2026): Handy-Ansicht wie die App, getrennt vom Dashboard (Übergang fürs iPhone). Reiter „Objekte“
+  (Einsatz erfassen: GPS-Stempel Beginn/Ende, Wetter, Maßnahme, Streumittel, Fotos) und „Strecken“ (Freie Fahrt,
+  Strecke fahren mit Live-Abdeckung, neue Strecke abfahren oder aus Objekten, umbenennen/pausieren — nur Inhaber).
+  Geschrieben werden dieselben Zeilen wie aus der App (operation, route, route_run; Fotos im Bucket `photos`),
+  Prüfcode/Länge/Abdeckung rechnet der Server. Entwürfe, laufende Aufzeichnung (alle 10 s) und nicht Gesendetes liegen
+  in IndexedDB und werden automatisch nachgesendet. **Grenze des Browsers:** aufgezeichnet wird nur bei offener Seite
+  und eingeschaltetem Bildschirm (Wake Lock); Verlassen/Sperren wird als Pause im Nachweis vermerkt.
+  Ohne Konto testen: Dev-Server → `/app/winterdex/aussendienst?demo` (`&netz=aus`, `&netz=nein`, `&pro=0`, `&rolle=mitarbeiter`).
+  Die alte Adresse `/app/winterdex/einsatz` leitet weiter.
 - **SpielDex** (`src/spieldex/`): zweiter Dashboard-Bereich nach dem WinterDex-
   Muster — Übersicht mit Fälligkeits-Ampel (visuell 7 T / operativ 90 T /
   Hauptinspektion 365 T), Spielplätze mit Geräte-Inventar, Kontrollen mit

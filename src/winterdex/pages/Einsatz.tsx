@@ -149,7 +149,7 @@ export function Einsatz() {
                     const at = doneAt.get(p.id);
                     return (
                       <li key={p.id}>
-                        <Link to={`${base}/${p.id}`} className={`ez-prop${at ? ' done' : ''}`}>
+                        <Link to={`${base}/objekt/${p.id}`} className={`ez-prop${at ? ' done' : ''}`}>
                           <span className="ez-prop-text">
                             <b>{p.name}</b>
                             <span className="muted">{p.address}</span>

@@ -713,7 +713,7 @@ function Done({
           </span>
           <b>{open[0].name}</b>
           <div className="ez-actions">
-            <Link to={`${base}/${open[0].id}`} className="btn ez-big">
+            <Link to={`${base}/objekt/${open[0].id}`} className="btn ez-big">
               Weiter dokumentieren
             </Link>
             <Link to={base} className="btn ghost ez-big">

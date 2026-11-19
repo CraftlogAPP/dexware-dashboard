@@ -6,7 +6,9 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllOf } from '../../lib/completeQueries';
+import { fetchRoute, fetchRoutes, fetchRuns } from '../routes';
 import type { OperationAction, Property, WeatherSnapshot } from '../types';
+import type { LatLng, Route, RunMeta, Track } from '../routes';
 
 export interface TodayOp {
   id: string;
@@ -48,7 +50,53 @@ export interface WeatherResult {
   netError: boolean;
 }
 
+/** Strecke (Vorlage) — die 8 Felder, die auch die App sendet; Länge, Ersteller und Datum setzt der Server. */
+export interface RouteRow {
+  id: string;
+  org_id: string;
+  name: string;
+  notes: string | null;
+  path: LatLng[];
+  source: 'recorded' | 'objects';
+  property_ids: string[];
+  active: boolean;
+}
+
+/** Fahrt ohne Fotos — so, wie sie in die Tabelle route_run geht (Abdeckung, Länge, Prüfcode rechnet der Server). */
+export interface RunRow {
+  id: string;
+  org_id: string;
+  route_id: string | null;
+  started_at: string;
+  ended_at: string;
+  track: Track;
+  gaps: [string, string][];
+  gps_mocked: true | null;
+  action: OperationAction;
+  grit_material: string | null;
+  grit_amount: string | null;
+  weather: WeatherSnapshot | null;
+  notes: string | null;
+  performed_by: string;
+  performer_name: string | null;
+  created_at: string;
+}
+
 export interface EinsatzBackend {
+  /** Strecken des Betriebs (ohne Linie). Wirft RoutesMissingError, wenn die Datenbank sie noch nicht kennt. */
+  listRoutes(): Promise<Route[]>;
+  /** Eine Strecke mit Linie. */
+  getRoute(id: string): Promise<Route | null>;
+  /** Strecke anlegen/ändern (nur Inhaber) — Upsert wie die App. */
+  saveRoute(row: RouteRow): Promise<void>;
+  /** Fahrten seit lokaler Mitternacht (für „heute gefahren“). */
+  listTodayRuns(): Promise<RunMeta[]>;
+  /** Jüngste Fahrten einer Strecke. */
+  listRouteRuns(routeId: string, limit: number): Promise<RunMeta[]>;
+  /** Fahrt anlegen; „ID gibt es schon“ (Wiederholung) zählt als Erfolg. */
+  insertRun(row: RunRow, photoUrls: string[]): Promise<void>;
+  /** Pro des Betriebs laut Server (Abo, Team, Kommunal-Lizenz, Suite). Im Zweifel true — nie zu Unrecht sperren. */
+  isPro(): Promise<boolean>;
   listProperties(): Promise<Property[]>;
   /** Einsätze seit lokaler Mitternacht (für „heute erledigt“). */
   listTodayOps(): Promise<TodayOp[]>;
@@ -168,5 +216,36 @@ export function supabaseBackend(
     },
 
     weather: (lat, lng, timeoutMs) => requestWeather(weatherCfg, lat, lng, timeoutMs),
+
+    listRoutes: () => fetchRoutes(sb),
+    getRoute: (id) => fetchRoute(sb, id),
+
+    async saveRoute(row) {
+      const { error } = await withTimeout(sb.from('route').upsert(row), 20000);
+      if (error) throw error;
+    },
+
+    async listTodayRuns() {
+      const midnight = new Date();
+      midnight.setHours(0, 0, 0, 0);
+      return fetchRuns(sb, { from: midnight, all: true });
+    },
+
+    listRouteRuns: (routeId, limit) => fetchRuns(sb, { routeId, limit }),
+
+    async insertRun(row, photoUrls) {
+      const { error } = await withTimeout(sb.from('route_run').insert({ ...row, photo_urls: photoUrls }), 30000);
+      if (error && error.code !== '23505') throw error; // 23505 = ID schon vorhanden (Wiederholung)
+    },
+
+    async isPro() {
+      try {
+        const { data, error } = await withTimeout(sb.rpc('org_pro_active'), 10000);
+        if (error || data === null || data === undefined) return true;
+        return data === true;
+      } catch {
+        return true;
+      }
+    },
   };
 }

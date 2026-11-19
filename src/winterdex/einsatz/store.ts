@@ -52,7 +52,14 @@ export interface Pending {
   lastError?: string;
 }
 
-type Rec = Draft | Pending;
+/** Weitere Einträge desselben Speichers (Strecken-Aufzeichnung, wartende Fahrten) — siehe aussendienst/runStore.ts */
+export interface OtherRec {
+  key: string;
+  kind: string;
+  userId: string;
+}
+
+type Rec = Draft | Pending | OtherRec;
 
 const DB_NAME = 'dexware-winterdex-einsatz';
 const STORE = 'kv';
@@ -95,7 +102,7 @@ function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<
 }
 
 /** true = dauerhaft auf dem Gerät gesichert; false = nur im Arbeitsspeicher dieser Seite. */
-async function put(rec: Rec): Promise<boolean> {
+export async function kvPut(rec: Rec): Promise<boolean> {
   memory.set(rec.key, rec);
   try {
     await run('readwrite', (s) => s.put(rec));
@@ -107,12 +114,12 @@ async function put(rec: Rec): Promise<boolean> {
   }
 }
 
-async function del(key: string): Promise<void> {
+export async function kvDel(key: string): Promise<void> {
   memory.delete(key);
   await run('readwrite', (s) => s.delete(key)).catch(() => undefined);
 }
 
-async function all(): Promise<Rec[]> {
+export async function kvAll(): Promise<Rec[]> {
   const fromDb = await run<Rec[]>('readonly', (s) => s.getAll() as IDBRequest<Rec[]>).catch(() => undefined);
   if (!fromDb) return [...memory.values()];
   // Arbeitsspeicher gewinnt (dort steht nur, was IndexedDB nicht annehmen konnte)
@@ -124,20 +131,20 @@ async function all(): Promise<Rec[]> {
 export const draftKey = (userId: string, propertyId: string) => `draft:${userId}:${propertyId}`;
 export const pendingKey = (opId: string) => `pending:${opId}`;
 
-export const saveDraft = (d: Draft) => put(d);
-export const deleteDraft = (userId: string, propertyId: string) => del(draftKey(userId, propertyId));
+export const saveDraft = (d: Draft) => kvPut(d);
+export const deleteDraft = (userId: string, propertyId: string) => kvDel(draftKey(userId, propertyId));
 export async function getDraft(userId: string, propertyId: string): Promise<Draft | null> {
   const key = draftKey(userId, propertyId);
-  return ((await all()).find((r) => r.key === key && r.kind === 'draft') as Draft | undefined) ?? null;
+  return ((await kvAll()).find((r) => r.key === key && r.kind === 'draft') as Draft | undefined) ?? null;
 }
 export async function listDrafts(userId: string): Promise<Draft[]> {
-  return (await all()).filter((r): r is Draft => r.kind === 'draft' && r.userId === userId);
+  return (await kvAll()).filter((r): r is Draft => r.kind === 'draft' && r.userId === userId) as Draft[];
 }
 
-export const savePending = (p: Pending) => put(p);
-export const deletePending = (opId: string) => del(pendingKey(opId));
+export const savePending = (p: Pending) => kvPut(p);
+export const deletePending = (opId: string) => kvDel(pendingKey(opId));
 export async function listPending(userId: string): Promise<Pending[]> {
-  return (await all())
+  return (await kvAll())
     .filter((r): r is Pending => r.kind === 'pending' && r.userId === userId)
     .sort((a, b) => a.row.started_at.localeCompare(b.row.started_at));
 }

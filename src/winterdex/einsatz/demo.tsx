@@ -5,14 +5,13 @@
 //   ?demo&netz=nein  Server lehnt ab → „vom Server nicht angenommen“
 // Der Schalter lässt sich im Banner oben umstellen (Nachsenden testen).
 import { useMemo, useState } from 'react';
-import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
-import { Snowflake } from 'lucide-react';
+import { Link, Route as RouterRoute, Routes } from 'react-router-dom';
 import type { AppConfig } from '../../apps/registry';
 import type { Property } from '../types';
-import type { EinsatzBackend, OperationRow, TodayOp } from './backend';
+import type { EinsatzBackend, OperationRow, RouteRow, RunRow, TodayOp } from './backend';
+import type { Route, RunMeta } from '../routes';
+import { Aussendienst } from '../aussendienst/Aussendienst';
 import { EinsatzCtx } from './context';
-import { Einsatz } from '../pages/Einsatz';
-import { EinsatzErfassen } from '../pages/EinsatzErfassen';
 
 type Netz = 'an' | 'aus' | 'nein';
 
@@ -50,6 +49,22 @@ function createBackend(netz: () => Netz, log: (line: string) => void): EinsatzBa
     { id: 'demo-op-1', property_id: PROPS[1].id, started_at: new Date(Date.now() - 45 * 60000).toISOString(), canceled: false },
   ];
   const rows: OperationRow[] = [];
+  const routes: (Route & { path: [number, number][] })[] = [
+    {
+      id: '00000000-0000-4000-8000-0000000000c1',
+      org_id: ORG,
+      name: 'Gehweg Hauptstraße',
+      notes: 'beidseitig, inkl. Bushaltestelle',
+      path: [[47.0712, 15.4412], [47.0718, 15.4425], [47.0726, 15.4431], [47.0733, 15.4452]],
+      length_m: 420,
+      source: 'recorded',
+      property_ids: [],
+      active: true,
+      created_at: '2026-11-01T06:00:00.000Z',
+    },
+  ];
+  const runs: RunMeta[] = [];
+  const pro = () => new URLSearchParams(window.location.search).get('pro') !== '0' && sessionStorage.getItem('wd-demo-pro') !== '0';
   const gate = async () => {
     await sleep(350);
     if (netz() === 'aus') throw new TypeError('Failed to fetch');
@@ -75,6 +90,41 @@ function createBackend(netz: () => Netz, log: (line: string) => void): EinsatzBa
       ops.push({ id: row.id, property_id: row.property_id, started_at: row.started_at, canceled: false });
       log(`Einsatz ${JSON.stringify({ ...row, photo_urls: photoUrls })}`);
     },
+    async listRoutes() {
+      await gate();
+      return routes.map(({ path: _p, ...r }) => r);
+    },
+    async getRoute(id) {
+      await gate();
+      return routes.find((r) => r.id === id) ?? null;
+    },
+    async saveRoute(row: RouteRow) {
+      await gate();
+      const i = routes.findIndex((r) => r.id === row.id);
+      const full = { ...row, length_m: 400, created_at: new Date().toISOString() };
+      if (i >= 0) routes[i] = { ...routes[i], ...full };
+      else routes.push(full);
+      log(`Strecke ${JSON.stringify({ ...row, path: `${row.path.length} Punkte` })}`);
+    },
+    async listTodayRuns() {
+      await gate();
+      return runs;
+    },
+    async listRouteRuns(routeId) {
+      await gate();
+      return runs.filter((r) => r.route_id === routeId);
+    },
+    async insertRun(row: RunRow, photoUrls) {
+      await gate();
+      if (netz() === 'nein') throw Object.assign(new Error('new row violates row-level security policy for table "route_run"'), { code: '42501' });
+      if (runs.some((r) => r.id === row.id)) return;
+      const { track, ...meta } = row;
+      runs.unshift({ ...meta, route_name: routes.find((r) => r.id === row.route_id)?.name ?? null, canceled: false, cancel_reason: null, canceled_at: null, received_at: new Date().toISOString(), track_length_m: null, coverage_pct: row.route_id ? 87.5 : null, missed_m: null, entry_hash: 'demo' });
+      log(`Fahrt ${JSON.stringify({ ...meta, track: track.map((s) => `${s.length} Punkte, erster ${JSON.stringify(s[0])}, letzter ${JSON.stringify(s[s.length - 1])}`), photo_urls: photoUrls })}`);
+    },
+    async isPro() {
+      return pro();
+    },
     async weather() {
       await sleep(600);
       if (netz() === 'aus') return { weather: null, netError: true };
@@ -97,7 +147,7 @@ export function EinsatzDemoArea({ app }: { app: AppConfig }) {
   );
   const base = `/app/${app.id}`;
   const value = useMemo(
-    () => ({ be, userId: USER, orgId: ORG, base: `${base}/einsatz`, propertiesUrl: `${base}/objekte` }),
+    () => ({ be, userId: USER, orgId: ORG, base: `${base}/aussendienst`, propertiesUrl: `${base}/objekte`, dashboardUrl: base, owner: new URLSearchParams(window.location.search).get('rolle') !== 'mitarbeiter' }),
     [be, base],
   );
   const style = { '--accent': app.theme.accent, '--on-accent': app.theme.onAccent, '--bg': app.theme.bg } as React.CSSProperties;
@@ -123,24 +173,8 @@ export function EinsatzDemoArea({ app }: { app: AppConfig }) {
       </header>
       <EinsatzCtx.Provider value={value}>
         <Routes>
-          <Route
-            element={
-              <div className="app-shell">
-                <nav className="app-nav">
-                  <NavLink to={`${base}/einsatz`}>
-                    <Snowflake className="i" aria-hidden /> Einsatz erfassen
-                  </NavLink>
-                </nav>
-                <main className="app-main">
-                  <Outlet />
-                </main>
-              </div>
-            }
-          >
-            <Route path="einsatz" element={<Einsatz />} />
-            <Route path="einsatz/:id" element={<EinsatzErfassen />} />
-            <Route path="*" element={<Einsatz />} />
-          </Route>
+          <RouterRoute path="aussendienst/*" element={<Aussendienst />} />
+          <RouterRoute path="*" element={<div className="page"><Link className="btn" to={`${base}/aussendienst`}>Zum Außendienst (Beispieldaten)</Link></div>} />
         </Routes>
       </EinsatzCtx.Provider>
       <pre data-testid="demo-log" style={{ margin: 16, fontSize: 11, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', color: 'var(--muted)' }}>

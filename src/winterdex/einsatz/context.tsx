@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { EinsatzBackend } from './backend';
 import { flushPending } from './send';
+import { flushPendingRuns } from '../aussendienst/runStore';
 import { listPending, onPendingChanged, type Pending } from './store';
 
 export interface EinsatzCtxValue {
@@ -11,6 +12,10 @@ export interface EinsatzCtxValue {
   base: string;
   /** Adresse des Objekte-Bereichs (zum Anlegen), z. B. /app/winterdex/objekte */
   propertiesUrl: string;
+  /** Adresse des Dashboards, z. B. /app/winterdex (Nachweise mit Karte und PDF) */
+  dashboardUrl: string;
+  /** Inhaber des Betriebs? Nur er darf Strecken anlegen und ändern (wie in der App). */
+  owner: boolean;
 }
 
 export const EinsatzCtx = createContext<EinsatzCtxValue | null>(null);
@@ -43,6 +48,7 @@ export function usePendingSync(): { pending: Pending[]; loaded: boolean; sending
     const flush = () => {
       if (document.visibilityState !== 'visible') return;
       void flushPending(be, userId).then(read, read);
+      void flushPendingRuns(be, userId).catch(() => undefined);
     };
     read();
     flush();
