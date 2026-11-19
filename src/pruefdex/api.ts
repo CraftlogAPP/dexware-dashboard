@@ -155,7 +155,7 @@ export interface InspectionInput {
   notes: string | null;
 }
 
-/** Prüfung erfassen + nächste Frist am Gerät fortschreiben (wie die App). */
+/** Prüfung erfassen; die Frist am Gerät folgt der jüngsten gültigen Prüfung (wie App + Server). */
 export async function addInspection(
   sb: SupabaseClient,
   orgId: string,
@@ -169,13 +169,13 @@ export async function addInspection(
     created_at: new Date().toISOString(),
   });
   if (error) fail('Prüfung konnte nicht gespeichert werden', error);
-  const { error: upError } = await sb
-    .from('device')
-    .update({ next_due_date: input.next_due_date })
-    .eq('id', input.device_id);
+  // Die Frist am Gerät gehört der JÜNGSTEN gültigen Prüfung (Server-Trigger inspection_set_device_due, App seit 10.11.).
+  // Nicht blind die eben erfasste Frist setzen: eine nachgetragene ältere Prüfung würde sonst die Frist einer neueren
+  // überschreiben. Die Neuberechnung liefert dasselbe wie der Trigger und trägt auch, falls er (noch) fehlt.
+  const upError = await recomputeDeviceDue(sb, input.device_id);
   // Prüfung ist schon gespeichert — Throw hieße Dialog offen + Duplikat bei Retry.
   return upError
-    ? `Die Prüfung wurde gespeichert, aber die Prüffrist am Gerät konnte nicht aktualisiert werden (${upError.message}). Bitte nicht erneut speichern.`
+    ? `Die Prüfung wurde gespeichert, aber die Prüffrist am Gerät konnte nicht aktualisiert werden (${upError}). Bitte nicht erneut speichern.`
     : null;
 }
 

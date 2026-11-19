@@ -198,7 +198,9 @@ export async function addUvvInspection(
   const { error: upError } = await sb
     .from('vehicle')
     .update({ last_uvv: input.date, updated_at: new Date().toISOString() })
-    .eq('id', input.vehicle_id);
+    .eq('id', input.vehicle_id)
+    // Nur vorziehen: eine nachgetragene ältere Erfassung darf ein neueres Datum nicht überschreiben (wie „Vor Ort“).
+    .or(`last_uvv.is.null,last_uvv.lt.${input.date}`);
   // Die Prüfung ist zu diesem Zeitpunkt schon gespeichert — ein Throw hielte
   // den Dialog offen und ein erneutes Speichern legte ein Duplikat an.
   return upError
@@ -219,7 +221,9 @@ export async function addLicenseCheck(
   const { error: upError } = await sb
     .from('driver')
     .update({ last_check: input.date, updated_at: new Date().toISOString() })
-    .eq('id', input.driver_id);
+    .eq('id', input.driver_id)
+    // Nur vorziehen: eine nachgetragene ältere Erfassung darf ein neueres Datum nicht überschreiben (wie „Vor Ort“).
+    .or(`last_check.is.null,last_check.lt.${input.date}`);
   // Kontrolle ist schon gespeichert — Throw hieße Dialog offen + Duplikat bei Retry.
   return upError
     ? `Die Kontrolle wurde gespeichert, aber das Kontrolldatum am Fahrer konnte nicht aktualisiert werden (${upError.message}). Bitte nicht erneut speichern.`
