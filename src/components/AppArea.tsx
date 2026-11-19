@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, type ReactNode } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutGrid, LogOut } from 'lucide-react';
 import { appIcon, type AppConfig } from '../apps/registry';
 import { AppAuthProvider, useAppAuth } from '../auth/AppAuthContext';
-import { LoginScreen } from '../auth/LoginScreen';
+import { LoginScreen, takeReturnPath } from '../auth/LoginScreen';
 
 /**
  * Generische Hülle für jeden App-Dashboard-Bereich:
@@ -28,6 +28,19 @@ export function AppArea({ app, children }: { app: AppConfig; children: ReactNode
 
 function Gate({ app, children }: { app: AppConfig; children: ReactNode }) {
   const { session, loading } = useAppAuth();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const signedIn = !!session;
+
+  // Nach der Google-Anmeldung landet man auf der Startseite des Bereichs — zurück auf die Unterseite,
+  // auf der die Anmeldung begonnen wurde (z. B. WinterDex „Einsatz erfassen“ vom Startbildschirm-Symbol).
+  useEffect(() => {
+    if (!signedIn) return;
+    const base = `/app/${app.id}`;
+    if (pathname !== base && pathname !== `${base}/`) return;
+    const back = takeReturnPath(app.id);
+    if (back) navigate(back, { replace: true });
+  }, [signedIn, pathname, app.id, navigate]);
 
   return (
     <>

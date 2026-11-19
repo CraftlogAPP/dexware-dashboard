@@ -59,6 +59,9 @@ export function LoginScreen() {
 
   function onGoogle() {
     void run(async () => {
+      // Google kehrt immer zur Startseite des Bereichs zurück — die gewünschte Unterseite (z. B. …/einsatz)
+      // merken, AppArea leitet nach der Anmeldung dorthin weiter.
+      rememberReturnPath(app.id);
       const { error: err } = await client.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -300,4 +303,35 @@ function googleErrorText(raw: string): string {
     return 'Google-Login ist für diese App noch nicht freigeschaltet — bitte mit E-Mail + Passwort anmelden.';
   }
   return raw;
+}
+
+const RETURN_KEY = 'dexware-dash-return';
+
+/** Vor der Google-Anmeldung: Unterseite merken, auf der die Anmeldung begonnen wurde. */
+function rememberReturnPath(appId: string): void {
+  try {
+    const path = window.location.pathname;
+    if (path.startsWith(`/app/${appId}/`) && path.length > `/app/${appId}/`.length) {
+      localStorage.setItem(RETURN_KEY, JSON.stringify({ appId, path, at: Date.now() }));
+    } else {
+      localStorage.removeItem(RETURN_KEY);
+    }
+  } catch {
+    /* nur Komfort */
+  }
+}
+
+/** Nach der Anmeldung: gemerkte Unterseite einmalig abholen (höchstens 10 Minuten alt, nur für diese App). */
+export function takeReturnPath(appId: string): string | null {
+  try {
+    const raw = localStorage.getItem(RETURN_KEY);
+    if (!raw) return null;
+    localStorage.removeItem(RETURN_KEY);
+    const v = JSON.parse(raw) as { appId?: string; path?: string; at?: number };
+    if (v.appId !== appId || typeof v.path !== 'string' || !v.path.startsWith(`/app/${appId}/`)) return null;
+    if (Date.now() - (v.at ?? 0) > 10 * 60 * 1000) return null;
+    return v.path;
+  } catch {
+    return null;
+  }
 }
