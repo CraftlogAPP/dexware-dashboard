@@ -6,6 +6,9 @@
 // ZWEI FAMILIEN (mode):
 //   'unit' (Standard) — LeiterDex, FeuerDex, ToreDex, GurtDex: geprüft wird EINE Einheit (Leiter, Löscher, Tor …);
 //                       Prüfung und Mangel tragen den Fremdschlüssel der Einheit.
+//                       HebeDex gehört dazu, mit zwei Besonderheiten (alles optionale Angaben): Checkliste und
+//                       Prüfarten hängen vom Typ der Einheit ab (checklistFor, kindsFor), dazu kommen Messwerte mit
+//                       Rechner (measure) und eine Frist, die sich nicht in Tagen ausdrücken lässt (dueDate).
 //   'site'            — GerüstDex, RegalDex, SpielDex: die Prüfung/Inspektion/Kontrolle hängt am ganzen ORT
 //                       (Baustelle, Lager, Spielplatz). Mängel/Schäden nennen die betroffene Einheit des Orts
 //                       (Gerüst, Regalzeile, Spielgerät) — oder keine („Lager allgemein“).
@@ -26,6 +29,12 @@ export interface InspectionKind {
   label: string;
   short: string;
   hint?: string;
+  /** Optional: Überschrift der Beweisfotos bei dieser Prüfart (HebeDex Rissprüfung: „Foto der Bescheinigung / Fotos“). */
+  photosTitle?: string;
+  /** Optional: Platzhalter der Notiz bei dieser Prüfart (sonst labels.notesExample). */
+  notesExample?: string;
+  /** Optional: Zeile nach dem Speichern dieser Prüfart, wenn nichts gesperrt ist (HebeDex: „Nächste Rissprüfung in 3 Jahren.“). */
+  doneText?: string;
 }
 
 export interface SeverityKind {
@@ -50,6 +59,82 @@ export interface SeverityKind {
    * sich aber vermerken). Mit blockQuestion ist der Schalter ohnehin da.
    */
   blockable?: boolean;
+  /**
+   * Optional: Der Sperr-Vermerk ist bei dieser Stufe von Anfang an gesetzt (HebeDex bei Rot — „ablegereif, gesperrt“).
+   * Er bleibt abwählbar; dann kommt wie üblich die Rückfrage.
+   */
+  autoBlock?: boolean;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Messwerte (HebeDex: Ablegereife-Rechner für Kette, Drahtseil, Haken) — nur Apps mit cfg.measure.
+// Die Werte gehen als Text, so wie eingegeben, in die Spalte `measurements` der Prüfung (wie in der App).
+// ---------------------------------------------------------------------------------------------------------
+
+export interface MeasureField {
+  /** Schlüssel im JSON der Spalte measurements, z. B. 'd1' */
+  key: string;
+  label: string;
+  /** Einheit hinter der Bezeichnung, z. B. 'mm' */
+  unit?: string;
+  /** nur ganze Zahlen (z. B. gezählte Drahtbrüche) */
+  integer?: boolean;
+  /** Platzhalter aus den übrigen Werten, z. B. die Normteilung 3 × d */
+  placeholder?: (values: Record<string, string>) => string;
+}
+
+/** Ergebnis des Rechners zu den eingegebenen Werten. */
+export interface MeasureOutcome {
+  /** true = Grenzwert erreicht (ablegereif) */
+  red: boolean;
+  /** Kurzer Satz fürs Protokoll, z. B. „Glieddicke −4,2 % · Längung 1,8 %“ */
+  text: string;
+  /** Genug Werte für eine Aussage? */
+  complete: boolean;
+  /** Messwert eingetragen, aber der Bezugswert fehlt (z. B. „Nenndicke d“) → keine Bewertung möglich */
+  missing?: string;
+  /** Wie nah am Grenzwert (1 = Grenze) — für den Balken */
+  ratio?: number;
+  ratioLabel?: string;
+}
+
+export interface MeasureSpec {
+  /** Überschrift der Karte, z. B. „Ablegereife-Rechner“ */
+  title: string;
+  /** Erklärung über den Feldern (kann von den Werten abhängen, z. B. Grenzen je Seilart) */
+  hint: (values: Record<string, string>) => string;
+  /** Optional: Auswahl über den Feldern (Seilart) */
+  choice?: { key: string; label: string; options: { id: string; label: string }[]; fallback: string };
+  /** Eingabefelder, zeilenweise */
+  rows: MeasureField[][];
+  /** Nur wenn eines dieser Felder ausgefüllt ist, werden die Messwerte gespeichert (sonst `{}`). */
+  measuredKeys: string[];
+  /** Checklisten-Punkt, der bei Rot von selbst auf „Mangel“ springt */
+  checkId?: string;
+  evaluate: (values: Record<string, string>) => MeasureOutcome | undefined;
+  /** Vorbelegung beim Öffnen aus den Messwerten der letzten Prüfung dieser Einheit (Neumaße, Nenndicke, Seilart). */
+  prefill: (previous: Record<string, string>) => Record<string, string>;
+  texts: {
+    /** Ergebnis-Zeilen, z. B. „✕ Ablegereif — Teil sperren“ / „✓ Innerhalb der Grenzen“ */
+    red: string;
+    ok: string;
+    /** Knopf unter einem roten Ergebnis, z. B. „Als roten Mangel erfassen & sperren“ */
+    redAction: string;
+    /** Rückfrage beim Speichern mit rotem Ergebnis ohne passenden Mangel */
+    redAskTitle: string;
+    redAsk: (text: string) => string;
+    /** Titel des vorbelegten Mangels, z. B. „Ablegereif: …“ */
+    defectTitle: (text: string) => string;
+  };
+  /** Stufe des vorbelegten Mangels bei Rot, z. B. 'red' */
+  redSeverity: string;
+}
+
+/** Zweite Frist an EINER Einheit (HebeDex: Rissprüfung der Rundstahlkette alle 3 Jahre) — für die Listen. */
+export interface UnitExtraDue {
+  state: 'overdue' | 'soon' | 'ok';
+  /** Zeile in der Liste, z. B. „Rissprüfung überfällig (seit 01.01.2026)“ */
+  text: string;
 }
 
 /**
@@ -124,6 +209,8 @@ export interface PruefConfig {
     blocked: string;
     /** „außer Betrieb“-Spalte der Einheit, z. B. 'retired' */
     retired: string;
+    /** Optional: Spalte „Beispieldaten“ der Einheit (HebeDex: 'is_demo') — solche Einheiten zählen nicht gegen die Gratis-Grenze. */
+    demo?: string;
   };
   /** Spalten der Einheit für die Liste (ohne Foto-Spalten!). Muss id, den Orts-Fremdschlüssel (site_id bzw. cols.siteFk), name und cols.retired enthalten. */
   unitSelect: string;
@@ -134,6 +221,20 @@ export interface PruefConfig {
    * Ohne diese Angabe verhält sich „Vor Ort“ wie bisher (LeiterDex, FeuerDex, ToreDex).
    */
   unitAlert?: (row: Record<string, unknown>) => UnitAlert | null;
+
+  // --- Optional, nur Einheiten-Modus: was von den Stammdaten der Einheit abhängt (HebeDex). Ohne diese Angaben
+  //     gilt für jede Einheit dasselbe (checklist, kinds) — so arbeiten alle anderen Apps.
+  /** Checkliste je Einheit (HebeDex: je Teil-Typ). Punkte und Reihenfolge wie in der App. */
+  checklistFor?: (row: Record<string, unknown>) => ChecklistPoint[];
+  /** Prüfarten je Einheit (HebeDex: Rissprüfung nur bei Rundstahlketten). Die erste ist vorbelegt. */
+  kindsFor?: (row: Record<string, unknown>) => InspectionKind[];
+  /** Messwerte mit Rechner je Einheit; null = diese Einheit hat keinen. */
+  measure?: (row: Record<string, unknown>) => MeasureSpec | null;
+  /**
+   * Zweite Frist je Einheit für die Listen. `lastOf(kind)` liefert die jüngste gültige Prüfung dieser Art (ISO) oder undefined.
+   * null = für diese Einheit nicht nötig.
+   */
+  unitExtraDue?: (row: Record<string, unknown>, lastOf: (kind: string) => string | undefined) => UnitExtraDue | null;
 
   labels: {
     site: { one: string; many: string };
@@ -191,6 +292,10 @@ export interface PruefConfig {
      * nicht mitgezählte Orte heißen („stillgelegte“, bei GerüstDex „abgeschlossene“).
      */
     freeSites?: { one: string; many: string; inactive: string };
+    /** Optional: Überschrift der Checkliste je Einheit (HebeDex: „Checkliste Rundstahlkette“). Sonst gilt `checklist`. */
+    checklistFor?: (row: Record<string, unknown>) => string;
+    /** Optional: was an der Gratis-Grenze der Einheiten nicht mitzählt (Standard: „außer Betrieb genommene zählen nicht“). */
+    freeUnitsNote?: string;
   };
 
   checklist: ChecklistPoint[];
@@ -200,6 +305,12 @@ export interface PruefConfig {
   dueKind: string;
   /** Frist der Fälligkeits-Prüfart in Tagen — je Betrieb (z. B. org.expert_interval_days) oder je Land. */
   dueIntervalDays: (org: Record<string, unknown>) => number;
+  /**
+   * Optional: Fälligkeitstag nach einer Prüfung am Tag `last`, wenn die Frist keine feste Zahl von Tagen ist
+   * (HebeDex Österreich: 15 Monate, spätestens 31.12. des Folgejahres). Dann zählt für die Anzeige NUR das hier;
+   * dueIntervalDays bestimmt weiter, wie weit die Prüf-Daten zurück geladen werden.
+   */
+  dueDate?: (last: Date, org: Record<string, unknown>) => Date;
   /** Optional: ab so vielen Tagen Rest gilt die Fälligkeits-Art als „bald fällig“ (Standard 30; GerüstDex 14). */
   dueSoonDays?: number;
   /** Optional, Orts-Modus: zweite Frist (SpielDex: operative Kontrolle). */
@@ -234,6 +345,29 @@ export function canBlock(s: SeverityKind): boolean {
 /** Unterpfad der Standort-Verwaltung (wie im Dashboard der App). */
 export function sitesPathOf(cfg: Pick<PruefConfig, 'sitesPath'>): string {
   return cfg.sitesPath ?? 'standorte';
+}
+
+type RowCfg = Pick<PruefConfig, 'unitAlert' | 'checklistFor' | 'kindsFor' | 'measure' | 'unitExtraDue'>;
+
+/** Braucht die App die Stammdaten-Zeile je Einheit (Warnung, eigene Checkliste, Messwerte …)? */
+export function needsUnitRow(cfg: Partial<RowCfg>): boolean {
+  return !!(cfg.unitAlert || cfg.checklistFor || cfg.kindsFor || cfg.measure || cfg.unitExtraDue);
+}
+
+/** Checkliste dieser Einheit — die der App oder (HebeDex) die des Teil-Typs. */
+export function checklistOf(cfg: Pick<PruefConfig, 'checklist' | 'checklistFor'>, unit: { row?: Record<string, unknown> } | null): ChecklistPoint[] {
+  return cfg.checklistFor && unit?.row ? cfg.checklistFor(unit.row) : cfg.checklist;
+}
+
+/** Prüfarten dieser Einheit — die der App oder (HebeDex) die zum Teil-Typ passenden. */
+export function kindsOf(cfg: Pick<PruefConfig, 'kinds' | 'kindsFor'>, unit: { row?: Record<string, unknown> } | null): InspectionKind[] {
+  const list = cfg.kindsFor && unit?.row ? cfg.kindsFor(unit.row) : cfg.kinds;
+  return list.length > 0 ? list : cfg.kinds;
+}
+
+/** Messwerte mit Rechner dieser Einheit — null, wenn die App oder die Einheit keinen hat. */
+export function measureOf(cfg: Pick<PruefConfig, 'measure'>, unit: { row?: Record<string, unknown> } | null): MeasureSpec | null {
+  return cfg.measure && unit?.row ? cfg.measure(unit.row) : null;
 }
 
 /** Warnung einer Einheit laut Konfiguration — null, wenn die App keine kennt oder die Stammdaten fehlen. */

@@ -4,7 +4,9 @@
 // Konfiguration (Tabellen, Spalten, Checkliste, Prüfarten, Einstufung, Foto-Ordner) direkt aus src/<app>/vorOrt.ts.
 //
 // Zwei Familien:
-//   Einheiten-Modus  LeiterDex, FeuerDex, ToreDex, GurtDex — die Prüfung trägt die Einheit            → pruefe()
+//   Einheiten-Modus  LeiterDex, FeuerDex, ToreDex, GurtDex, HebeDex — die Prüfung trägt die Einheit   → pruefe()
+//                    HebeDex zusätzlich: Checkliste je Teil-Typ, Messwerte-JSON (Spalte measurements), Prüfcode mit
+//                    Messwerten, Rissprüfung, Gratis-Grenze ohne Beispieldaten (der Rechner selbst: hebedex-rechner.test.mjs)
 //   Orts-Modus       GerüstDex, RegalDex, SpielDex — die Prüfung trägt nur den Ort (site_id / warehouse_id /
 //                    playground_id), der Mangel/Schaden die betroffene Einheit oder keine              → pruefeOrt()
 //                    Dort wird zusätzlich am Quelltext der App geprüft, dass die Web-Zeilen dieselben Spalten haben
@@ -13,8 +15,8 @@
 //   Aufruf:  node tests/pruefen-vor-ort.test.mjs              (alle Apps)
 //            node tests/pruefen-vor-ort.test.mjs gurtdex      (nur eine App; mehrere mit Leerzeichen)
 //   Braucht: die App-Repos (Standard: ../LeiterDex, ../FeuerDex, ../ToreDex, ../GurtDex, ../GeruestDex, ../RegalDex,
-//            ../SpielDex neben dem Dashboard-Ordner auf dem Desktop, sonst Umgebungsvariable LEITERDEX_REPO,
-//            FEUERDEX_REPO, TOREDEX_REPO, GURTDEX_REPO, GERUESTDEX_REPO, REGALDEX_REPO, SPIELDEX_REPO) mit
+//            ../SpielDex, ../HebeDex neben dem Dashboard-Ordner auf dem Desktop, sonst Umgebungsvariable LEITERDEX_REPO,
+//            FEUERDEX_REPO, TOREDEX_REPO, GURTDEX_REPO, GERUESTDEX_REPO, REGALDEX_REPO, SPIELDEX_REPO, HEBEDEX_REPO) mit
 //            installierten SQL-Tests (supabase/tests: npm install) — von dort kommt PGlite, das Dashboard bekommt
 //            keine neue Abhängigkeit.
 //   Node ab 22.18 (liest die .ts-Dateien direkt).
@@ -82,6 +84,20 @@ const APPS = {
     // Die Live-Datenbank wurde am 15.07.2026 mit repair-psa-item.sql neu aufgebaut (Tabellen gelöscht und neu angelegt)
     // — dieser Weg wird zusätzlich geprüft.
     variante: { name: 'nach repair-psa-item.sql (Weg der Live-Datenbank)', nachSchema: ['repair-psa-item.sql'] },
+  },
+  // einheit: was bei HebeDex anders ist als bei den vier anderen Einheiten-Apps — Zahl der Checklisten-Punkte (des
+  // Teil-Typs der Test-Einheit), vorbelegte Prüfart, Gratis-Grenze; die Unterschrift-Spalte steht schon in schema.sql
+  // (kein Stand „ohne Unterschrift“); messwerte: was die Test-Prüfung in die Spalte measurements schreibt.
+  hebedex: {
+    name: 'HebeDex',
+    repo: process.env.HEBEDEX_REPO ?? `${DESKTOP}/HebeDex`,
+    vor: [],
+    nach: ['gps-pruefnachweis.sql', 'demo-schutz.sql', 'NACHTRAG-RUNDUMCHECK-2026-11-10.sql', 'NACHTRAG-TEAM-PRO-2026-11-12.sql'],
+    unitCols: { kind: 'chain' },
+    cfgModule: { file: 'src/hebedex/vorOrt.ts', name: 'HEBEDEX_VOR_ORT' },
+    einheit: { punkte: 6, erste: 'expert', frei: 3, ohneSignaturStand: false },
+    messwerte: { nominal: '10', d1: '9.7', d2: '9.8', pitchNew: '30', pitchMeasured: '30.4' },
+    extra: hebedexExtra,
   },
   // ------------------------------------------------------------ Orts-Modus (Prüfung je Ort)
   // ort: was die App vorgibt — Gratis-Grenze in entitlement.ts, Name der Einfüge-Funktion des Mangels, Zahl der Punkte.
@@ -232,7 +248,8 @@ async function konfiguration(app) {
     const mod = await import(pathToFileURL(path.join(here, '..', app.cfgModule.file)).href);
     const cfg = mod[app.cfgModule.name];
     check(`Konfiguration ${app.cfgModule.name} lädt (src/${app.cfgModule.file.slice(4)}) — der Test nutzt genau sie`, !!cfg?.tables && !!cfg.cols && Array.isArray(cfg.checklist), Object.keys(mod));
-    return { cfg, checklistIds: cfg.checklist.map((c) => c.id), mod };
+    const liste = cfg.checklistFor ? cfg.checklistFor(app.unitCols) : cfg.checklist;
+    return { cfg, checklistIds: liste.map((c) => c.id), liste, mod };
   }
   const text = readFileSync(path.join(here, '..', app.cfgText.file), 'utf8');
   check(`${app.name}-Konfiguration nennt die Spalten, die hier geprüft werden`, app.cfgText.muss.every((m) => text.includes(m)));
@@ -241,7 +258,11 @@ async function konfiguration(app) {
 
 // ---------------------------------------------------------------- der gemeinsame Ablauf (für jede App derselbe)
 async function pruefe(app, { nachSchema = [] } = {}) {
-  const { cfg, checklistIds, mod } = await konfiguration(app);
+  const { cfg, checklistIds, liste, mod } = await konfiguration(app);
+  const E = { punkte: 12, erste: 'visual', frei: 2, ohneSignaturStand: true, ...app.einheit };
+  // Apps mit Messwerten (HebeDex): die Prüfung trägt die Spalte measurements — mit Messung die Werte, ohne {}
+  const MW1 = app.messwerte ? { measurements: app.messwerte } : {};
+  const MW0 = app.messwerte ? { measurements: {} } : {};
   const FK = cfg.cols.unitFk;
   const BLOCKED = cfg.cols.blocked;
   const T = { insp: `public.${cfg.tables.inspection}`, def: `public.${cfg.tables.defect}`, unit: `public.${cfg.tables.unit}`, site: `public.${cfg.tables.site}` };
@@ -254,12 +275,12 @@ async function pruefe(app, { nachSchema = [] } = {}) {
 
   if (mod) {
     // -------------------------------------------------------------- Konfiguration in sich stimmig (nur echte Konfigurationen)
-    check('Checkliste: 12 Punkte mit eindeutiger Kennung, Bezeichnung und Prüfhinweis', cfg.checklist.length === 12 && new Set(checklistIds).size === 12 && cfg.checklist.every((c) => c.label && c.hint), checklistIds);
+    check(`Checkliste: ${E.punkte} Punkte mit eindeutiger Kennung, Bezeichnung und Prüfhinweis`, liste.length === E.punkte && new Set(checklistIds).size === E.punkte && liste.every((c) => c.label && c.hint), checklistIds);
     check('Prüfarten und Ampel-Stufen haben Bezeichnung und Erklärung; Fälligkeits-Art und Vorbelegung gibt es',
       cfg.kinds.every((k) => k.label && k.short && k.hint) && cfg.severities.every((s) => s.label && s.short && s.hint) &&
-        cfg.kinds.some((k) => k.id === cfg.dueKind) && cfg.severities.some((s) => s.id === cfg.defaultSeverity) && cfg.kinds[0].id === 'visual',
+        cfg.kinds.some((k) => k.id === cfg.dueKind) && cfg.severities.some((s) => s.id === cfg.defaultSeverity) && cfg.kinds[0].id === E.erste,
       { kinds: cfg.kinds.map((k) => k.id), sev: cfg.severities.map((s) => s.id), due: cfg.dueKind, def: cfg.defaultSeverity });
-    check('Gratis-Grenze 2 Einheiten (wie FREE_LIMITS der App)', cfg.freeUnits === 2, String(cfg.freeUnits));
+    check(`Gratis-Grenze ${E.frei} Einheiten (wie FREE_LIMITS der App)`, cfg.freeUnits === E.frei, String(cfg.freeUnits));
   }
 
   // ---------------------------------------------------------------- 1) Prüfung mit GPS (Beginn + Ende), Unterschrift, Foto — als Mitarbeiter
@@ -268,7 +289,7 @@ async function pruefe(app, { nachSchema = [] } = {}) {
       id: I1, orgId: ORG, userId: W, siteId: SITE, unitId: UNIT, type: 'expert', at: AT,
       start: { lat: 47.0712, lng: 15.4412, accuracy: 8, at: '2026-11-19T10:50:29.326Z' },
       end: { lat: 47.07121, lng: 15.44119, accuracy: 9, at: '2026-11-19T10:55:58.000Z' },
-      checklist: CHECKLIST, notes: '  Vorsorglich erneuert ', inspectorName: ' Max Muster ', qualification: 'befähigte Person nach TRBS 1203', signature: SIG,
+      checklist: CHECKLIST, notes: '  Vorsorglich erneuert ', inspectorName: ' Max Muster ', qualification: 'befähigte Person nach TRBS 1203', signature: SIG, ...MW1,
     }),
     photo_urls: [STORAGE_PREFIX + photoPath(ORG, cfg.photoFolders.inspection, I1, 1)],
   };
@@ -291,10 +312,11 @@ async function pruefe(app, { nachSchema = [] } = {}) {
   const insp2 = {
     ...buildInspectionRow(cfg, {
       id: I2, orgId: ORG, userId: W, siteId: SITE, unitId: UNIT, type: 'visual', at: AT, start: null, end: null,
-      checklist: CHECKLIST, notes: '', inspectorName: '', qualification: 'wird ohne Namen nicht angehängt', signature: '',
+      checklist: CHECKLIST, notes: '', inspectorName: '', qualification: 'wird ohne Namen nicht angehängt', signature: '', ...MW0,
     }),
     photo_urls: [],
   };
+  check('Spalte measurements nur bei Apps mit Messwerten — sonst fehlt das Feld ganz', 'measurements' in insp1 === !!app.messwerte && 'measurements' in insp2 === !!app.messwerte, Object.keys(insp1));
   check('Zeile ohne GPS: alle Ortsfelder leer, kein Feld „signature“, kein Name', insp2.lat === null && insp2.end_lat === null && insp2.gps_at === null && !('signature' in insp2) && insp2.inspector_name === null && insp2.notes === null);
   r = await t.versuch(W, T.insp, insp2);
   check('Prüfung ohne GPS und ohne Unterschrift wird angenommen', r === null, r);
@@ -400,6 +422,8 @@ async function pruefe(app, { nachSchema = [] } = {}) {
   if (app.extra) await app.extra({ t, cfg, mod, T });
 
   // ---------------------------------------------------------------- 9) Datenbank OHNE Unterschrift-Spalte (Stand vor dem 29.10.): Ersatzweg der Oberfläche
+  // (HebeDex: die Spalte steht von Anfang an in schema.sql — diesen Stand gab es dort nie)
+  if (!E.ohneSignaturStand) return;
   const alt = await aufbau(app, { ohneSignatur: true, nachSchema });
   await alt.db.exec(DATEN);
   r = await alt.versuch(W, T.insp, insp1);
@@ -719,6 +743,117 @@ async function toredexExtra({ cfg }) {
   const sev = Object.fromEntries(cfg.severities.map((s) => [s.id, { frage: !!s.blockQuestion, schalter: !!s.blockQuestion || s.blockable === true }]));
   check('Sperr-Rückfrage nur bei Rot; den Sperr-Schalter gibt es bei Orange und Rot (wie in der App), nicht bei Grün',
     sev.red.frage && !sev.amber.frage && !sev.green.frage && sev.red.schalter && sev.amber.schalter && !sev.green.schalter, sev);
+}
+
+// ---------------------------------------------------------------- HebeDex: Messwerte-JSON, Prüfcode, Checkliste je Teil-Typ, Rissprüfung, Gratis-Grenze
+async function hebedexExtra({ t, cfg, mod, T }) {
+  const { measurementsForRow } = await import(pathToFileURL(path.join(here, '../src/pruefen/rows.ts')).href);
+  const app = APPS.hebedex;
+  const SEIL = '00000000-0000-4000-8000-0000000000c5';
+  const HAKEN = '00000000-0000-4000-8000-0000000000c6';
+  const BAND = '00000000-0000-4000-8000-0000000000c7';
+  const DEMO = '00000000-0000-4000-8000-0000000000c8';
+  await t.db.exec(`
+    insert into ${T.unit} (id, org_id, site_id, name, kind, wll_kg, length_m, nominal_mm, rope_kind, build_year, is_demo) values
+      ('${SEIL}', '${ORG}', '${SITE}', 'S-001', 'wire_rope', 1500, '4', '12', 'cable', '2023', false),
+      ('${HAKEN}', '${ORG}', '${SITE}', 'H-001', 'hook', 3200, null, null, null, '2022', false),
+      ('${BAND}', '${ORG}', '${SITE}', 'HB-001', 'webbing_sling', 2000, '3', null, null, '2024', false),
+      ('${DEMO}', '${ORG}', '${SITE}', 'Beispiel-Kette', 'chain', 2000, '2', '10', null, '2020', true);
+  `);
+
+  // ---- Spalten wie die App
+  const insp = buildInspectionRow(cfg, { id: I1, orgId: ORG, userId: W, siteId: SITE, unitId: UNIT, type: 'expert', at: AT, start: null, end: null, checklist: {}, notes: '', inspectorName: 'M', qualification: '', signature: SIG, measurements: {} });
+  const appInsp = appZeile(app, 'addInspection');
+  check('Prüfung: dieselben Spalten wie addInspection der App (samt measurements), Tabelle und Foto-Ordner gleich',
+    JSON.stringify([...Object.keys(insp), 'photo_urls'].sort()) === JSON.stringify(appInsp.keys) && appInsp.tabelle === cfg.tables.inspection && appInsp.ordner === cfg.photoFolders.inspection,
+    { web: [...Object.keys(insp), 'photo_urls'].sort(), app: appInsp });
+  const def = buildDefectRow(cfg, { id: D1, orgId: ORG, userId: W, siteId: SITE, unitId: UNIT, inspectionId: I1, at: AT, title: 'x', description: '', severity: 'red', blocked: true, inspectorName: 'M' });
+  const appDef = appZeile(app, 'addDefect');
+  check('Mangel: dieselben Spalten wie addDefect der App, Tabelle und Foto-Ordner gleich',
+    JSON.stringify([...Object.keys(def), 'photo_urls'].sort()) === JSON.stringify(appDef.keys) && appDef.tabelle === cfg.tables.defect && appDef.ordner === cfg.photoFolders.defect, { web: Object.keys(def).sort(), app: appDef });
+  check('Die App schreibt ohne Messung „{}“ in measurements (so auch der Browser)', readFileSync(path.join(app.repo, 'mobile/src/data/supabaseRepository.ts'), 'utf8').includes('measurements: i.measurements ?? {},'));
+
+  // ---- Messwerte in der Datenbank (Prüfung I1 aus dem gemeinsamen Ablauf: Kette mit Messung; I2: ohne)
+  let row = (await t.db.query(`select measurements, entry_hash from ${T.insp} where id = '${I1}'`)).rows[0];
+  check('Messwerte-JSON der Kette steht unverändert in der Zeile (Text wie eingegeben), mit Prüfcode', gleich(row?.measurements, app.messwerte) && Object.values(row.measurements).every((v) => typeof v === 'string') && istHash(row.entry_hash), row);
+  row = (await t.db.query(`select measurements from ${T.insp} where id = '${I2}'`)).rows[0];
+  check('Ohne Messung steht „{}“ in measurements', gleich(row?.measurements, {}) && row.measurements !== null, row);
+  let geschuetzt = '';
+  try {
+    await t.db.query(`update ${T.insp} set measurements = '{"d1":"10"}'::jsonb where id = '${I1}'`);
+  } catch (e) {
+    geschuetzt = String(e.message);
+  }
+  check('Messwerte nachträglich ändern verhindert der Schutz-Trigger (sie gehören zum Nachweis)', /append-only/i.test(geschuetzt), geschuetzt);
+  row = (await t.als(W, () => t.db.query(`select * from public.verify_inspection('${I1}')`))).rows[0];
+  check('… der Prüfcode der Prüfung mit Messwerten bestätigt sich weiter', row?.ok === true, row);
+
+  // ---- was das Formular speichert (measurementsForRow) — und was die Datenbank daraus macht
+  check('Nur Vorbelegung (Nenndicke/Seilart), nichts gemessen → {}; mit Messwert alle ausgefüllten Felder, leere fallen weg',
+    gleich(measurementsForRow({ nominal: '12', ropeKind: 'cable', b3: '' }, cfg.measure({ kind: 'wire_rope' }).measuredKeys), {}) &&
+      gleich(measurementsForRow({ nominal: '12', ropeKind: 'cable', b3: '4', b6: '', b30: ' ' }, cfg.measure({ kind: 'wire_rope' }).measuredKeys), { nominal: '12', ropeKind: 'cable', b3: '4' }) &&
+      gleich(measurementsForRow({ nominal: '10', d2: '9' }, cfg.measure({ kind: 'chain' }).measuredKeys), {}));
+  const rows = (await t.als(W, () => t.db.query(`select ${cfg.unitSelect} from ${T.unit}`))).rows;
+  const zeile = (id) => rows.find((x) => x.id === id);
+  check(`Einheiten-Liste liefert, was Checkliste, Rechner und Rissprüfung brauchen (${cfg.unitSelect})`, rows.length === 5 && zeile(SEIL).rope_kind === 'cable' && zeile(SEIL).nominal_mm === '12' && zeile(DEMO).is_demo === true && !!zeile(UNIT).created_at, zeile(SEIL));
+  check('Unterzeile wie in der App: „Drahtseil · 1,5 t · 4 m · Ø 12 mm“', cfg.unitInfo(zeile(SEIL)) === 'Drahtseil · 1,5 t · 4 m · Ø 12 mm' && cfg.unitInfo(zeile(BAND)) === 'Hebeband · 2 t · 3 m', [cfg.unitInfo(zeile(SEIL)), cfg.unitInfo(zeile(BAND))]);
+
+  // Drahtseil: 4 Brüche auf 3d bei Kabelschlagseil (Grenze 10) → grün; Haken 25 → 28 → rot, Rot-Mangel mit Sperre
+  const fall = async (id, unit, type, werte, defId) => {
+    const spec = cfg.measure(zeile(unit));
+    const o = spec ? spec.evaluate(werte) : undefined;
+    const checklist = Object.fromEntries(cfg.checklistFor(zeile(unit)).map((c) => [c.id, o?.red && c.id === spec.checkId ? 'defect' : 'ok']));
+    const measurements = spec ? measurementsForRow(werte, spec.measuredKeys) : {};
+    let r = await t.versuch(W, T.insp, { ...buildInspectionRow(cfg, { id, orgId: ORG, userId: W, siteId: SITE, unitId: unit, type, at: AT, start: null, end: null, checklist, notes: '', inspectorName: 'Max Muster', qualification: '', signature: '', measurements }), photo_urls: [] });
+    if (!r && defId) {
+      r = await t.versuch(W, T.def, { ...buildDefectRow(cfg, { id: defId, orgId: ORG, userId: W, siteId: SITE, unitId: unit, inspectionId: id, at: AT, title: spec.texts.defectTitle(o.text), description: '', severity: spec.redSeverity, blocked: true, inspectorName: 'Max Muster' }), photo_urls: [] });
+    }
+    const db = (await t.db.query(`select checklist, measurements, entry_hash, type from ${T.insp} where id = '${id}'`)).rows[0];
+    return { r, o, db, checklist, measurements };
+  };
+  const IS = '00000000-0000-4000-8000-0000000002d1';
+  const IH = '00000000-0000-4000-8000-0000000002d2';
+  const IB = '00000000-0000-4000-8000-0000000002d3';
+  const IR = '00000000-0000-4000-8000-0000000002d4';
+  const DH = '00000000-0000-4000-8000-0000000002f2';
+  let f = await fall(IS, SEIL, 'expert', { ...cfg.measure(zeile(SEIL)).prefill({}), b3: '4' });
+  check('Drahtseil (Kabelschlagseil aus den Stammdaten), 4 Brüche auf 3d: grün, angenommen, Messwerte samt Seilart gespeichert',
+    f.r === null && f.o.red === false && gleich(f.db?.measurements, { nominal: '12', ropeKind: 'cable', b3: '4' }) && Object.keys(f.db.checklist).length === 7 && f.db.checklist.wireBreaks === 'ok' && istHash(f.db.entry_hash), f);
+  f = await fall(IH, HAKEN, 'expert', { openingNew: '25', openingMeasured: '28' }, DH);
+  check('Lasthaken 25 → 28 mm: rot („Maulaufweitung 12 %“), Punkt „Maulaufweitung“ = Mangel, Prüfung + Rot-Mangel mit Sperre angenommen',
+    f.r === null && f.o.red === true && f.o.text === 'Maulaufweitung 12 %' && f.db?.checklist?.opening === 'defect' && Object.keys(f.db.checklist).length === 6 && gleich(f.db.measurements, { openingNew: '25', openingMeasured: '28' }), f);
+  row = (await t.db.query(`select title, severity, item_blocked from ${T.def} where id = '${DH}'`)).rows[0];
+  check('… Mangel „Ablegereif: Maulaufweitung 12 %“, Rot, gesperrt', row?.title === 'Ablegereif: Maulaufweitung 12 %' && row.severity === 'red' && row.item_blocked === true, row);
+  f = await fall(IB, BAND, 'visual', {});
+  check('Hebeband (kein Rechner): Checkliste des Typs (6 Punkte), measurements = {}', f.r === null && cfg.measure(zeile(BAND)) === null && Object.keys(f.db?.checklist ?? {}).length === 6 && 'webbing' in f.db.checklist && gleich(f.db.measurements, {}), f);
+  f = await fall(IR, UNIT, 'crack', {});
+  check('Rissprüfung (Prüfart „crack“) der Kette wird angenommen', f.r === null && f.db?.type === 'crack', f);
+
+  // ---- Vorbelegung beim nächsten Mal: Messwerte der jüngsten gültigen Prüfung (Abfrage wie src/pruefen/backend.ts)
+  row = (await t.als(W, () => t.db.query(`select measurements from ${T.insp} where item_id = '${HAKEN}' and canceled = false order by started_at desc limit 1`))).rows[0];
+  check('Jüngste Messwerte je Teil sind für den Mitarbeiter lesbar → nächstes Mal ist „Maulweite neu“ vorbelegt', gleich(cfg.measure(zeile(HAKEN)).prefill(row?.measurements ?? {}), { openingNew: '25', nominal: '' }), row);
+
+  // ---- Rissprüfungs-Frist (Kette: 3 Jahre ab letzter Rissprüfung, sonst ab Herstelljahr)
+  check('Rissprüfung: Kette Bj. 2020 ohne Rissprüfung → überfällig; nach einer Rissprüfung heute → nicht fällig; Haken → keine',
+    cfg.unitExtraDue(zeile(DEMO), () => undefined)?.state === 'overdue' && /^Rissprüfung überfällig \(seit 01\.01\.2023\)$/.test(cfg.unitExtraDue(zeile(DEMO), () => undefined).text) &&
+      cfg.unitExtraDue(zeile(UNIT), () => new Date().toISOString())?.state === 'ok' && cfg.unitExtraDue(zeile(HAKEN), () => undefined) === null, cfg.unitExtraDue(zeile(DEMO), () => undefined));
+
+  // ---- Frist je Land aus der Betriebs-Zeile
+  const org = async () => (await t.als(W, () => t.db.query(`select * from public.org where id = '${ORG}'`))).rows[0];
+  const tag = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  let o = await org();
+  check('Frist aus der Betriebs-Zeile: Land DE → 12 Monate', o?.land === 'DE' && tag(cfg.dueDate(new Date('2026-11-19T10:00:00'), o)) === '2027-11-19', o?.land);
+  await t.db.query(`update public.org set land = 'AT' where id = '${ORG}'`);
+  o = await org();
+  check('… Land AT → 15 Monate, spätestens 31.12. des Folgejahres', o?.land === 'AT' && tag(cfg.dueDate(new Date('2026-11-19T10:00:00'), o)) === '2027-12-31' && tag(cfg.dueDate(new Date('2026-03-10T10:00:00'), o)) === '2027-06-10');
+
+  // ---- Gratis-Grenze: 3 aktive Teile, Beispieldaten und ausgesonderte zählen nicht (Zählung wie src/pruefen/pro.ts)
+  const zahl = async () => (await t.als(W, () => t.db.query(`select count(*)::int as n from ${T.unit} where ${cfg.cols.retired} = false and ${cfg.cols.demo} = false`))).rows[0].n;
+  check('Gratis-Grenze: 4 eigene Teile + 1 Beispiel-Teil → gezählt werden 4 (≥ 3 → Pro-Frage an den Server)', (await zahl()) === 4 && cfg.freeUnits === 3, String(await zahl()));
+  await t.db.query(`update ${T.unit} set retired = true, retired_at = now(), retire_reason = 'Test' where id in ('${BAND}', '${HAKEN}')`);
+  check('… nach dem Aussondern von zwei Teilen: 2 (< 3 → ein weiteres Teil ist frei)', (await zahl()) === 2);
+  const { gateText } = await import(pathToFileURL(path.join(here, '../src/pruefen/pro.ts')).href);
+  check('Hinweistext der Grenze (gateText) nennt 3 Teile und was nicht zählt', !!mod && gateText(cfg).startsWith('Im Gratis-Paket sind 3 Teile im Bestand möglich (ausgesonderte Teile und Beispieldaten zählen nicht)'), gateText(cfg));
 }
 
 // ---------------------------------------------------------------- GurtDex: Ablegereife (Herstellungsdatum + max. Gebrauchsdauer)

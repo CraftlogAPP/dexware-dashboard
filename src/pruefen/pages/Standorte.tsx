@@ -7,12 +7,12 @@ import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { sitesPathOf, unitAlertOf } from '../config';
 import { usePruef, usePendingSync } from '../context';
 import { loadPruefData, withPendingMeta } from '../data';
-import { dueInfo, lastDueByUnit, unitState, type UnitState } from '../due';
+import { DUE_SOON_DAYS, dueInfo, lastDueByUnit, unitState, type UnitState } from '../due';
 import { listDrafts, type Draft } from '../store';
 import { Wartend } from './Wartend';
 
 export function Standorte() {
-  const { be, cfg, userId, base, owner, intervalDays } = usePruef();
+  const { be, cfg, userId, base, owner, intervalDays, dueDate } = usePruef();
   const state = useAsync(() => loadPruefData(be, cfg.appId, userId), [be, cfg.appId, userId]);
   useLiveRefresh([state.refresh], 60000);
   const { pending, sending, sendNow } = usePendingSync();
@@ -70,7 +70,14 @@ export function Standorte() {
               </div>
             );
           }
-          const last = lastDueByUnit(withPendingMeta(meta, pending, cfg.cols.unitFk), cfg.dueKind);
+          const allMeta = withPendingMeta(meta, pending, cfg.cols.unitFk);
+          const last = lastDueByUnit(allMeta, cfg.dueKind);
+          // Zweite Frist je Einheit (HebeDex: Rissprüfung) — zählt hier wie in der App mit zu „fällig“ / „bald fällig“
+          const lastByKind = new Map<string, Map<string, string>>();
+          const lastOf = (unitId: string) => (kind: string) => {
+            if (!lastByKind.has(kind)) lastByKind.set(kind, lastDueByUnit(allMeta, kind));
+            return lastByKind.get(kind)!.get(unitId);
+          };
           const blocked = new Set(openDefects.filter((d) => d.blocked).map((d) => d.unitId));
           const bySite = new Map<string, Record<UnitState, number> & { total: number }>();
           for (const u of units) {
@@ -78,7 +85,11 @@ export function Standorte() {
             const c = bySite.get(u.siteId) ?? { total: 0, blocked: 0, overdue: 0, never: 0, soon: 0, ok: 0 };
             c.total++;
             // Einheiten mit Warnung aus den Stammdaten (z. B. ablegereif) zählen hier wie gesperrte — wie in der App.
-            c[unitState(dueInfo(last.get(u.id), intervalDays), blocked.has(u.id) || !!unitAlertOf(cfg, u))]++;
+            let st = unitState(dueInfo(last.get(u.id), intervalDays, DUE_SOON_DAYS, dueDate), blocked.has(u.id) || !!unitAlertOf(cfg, u));
+            const extra = cfg.unitExtraDue && u.row && st !== 'blocked' ? cfg.unitExtraDue(u.row, lastOf(u.id)) : null;
+            if (extra?.state === 'overdue' && (st === 'ok' || st === 'soon')) st = 'overdue';
+            else if (extra?.state === 'soon' && st === 'ok') st = 'soon';
+            c[st]++;
             bySite.set(u.siteId, c);
           }
           const q = query.trim().toLowerCase();

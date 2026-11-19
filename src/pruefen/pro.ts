@@ -40,10 +40,10 @@ export interface UnitGate {
 export async function unitGate(sb: SupabaseClient, cfg: PruefConfig): Promise<UnitGate> {
   const limit = cfg.freeUnits ?? Infinity;
   if (!Number.isFinite(limit)) return { allowed: true, count: 0, limit }; // die App kennt keine Einheiten-Grenze
-  const { count, error } = await sb
-    .from(cfg.tables.unit)
-    .select('id', { count: 'exact', head: true })
-    .eq(cfg.cols.retired, false);
+  let q = sb.from(cfg.tables.unit).select('id', { count: 'exact', head: true }).eq(cfg.cols.retired, false);
+  // Beispieldaten zählen nicht mit (HebeDex — wie gateItem in der App)
+  if (cfg.cols.demo) q = q.eq(cfg.cols.demo, false);
+  const { count, error } = await q;
   if (error || count === null) return { allowed: true, count: 0, limit };
   if (count < limit) return { allowed: true, count, limit };
   return { allowed: await fetchOrgPro(sb, true), count, limit };
@@ -73,5 +73,5 @@ export function siteGateText(cfg: PruefConfig): string {
 
 /** Hinweistext an der Gratis-Grenze. */
 export function gateText(cfg: PruefConfig): string {
-  return `Im Gratis-Paket sind ${cfg.freeUnits} ${cfg.labels.unit.many} im Bestand möglich (außer Betrieb genommene zählen nicht) — unbegrenzt viele gibt es mit Pro. ${cfg.proHow}`;
+  return `Im Gratis-Paket sind ${cfg.freeUnits} ${cfg.labels.unit.many} im Bestand möglich (${cfg.labels.freeUnitsNote ?? 'außer Betrieb genommene zählen nicht'}) — unbegrenzt viele gibt es mit Pro. ${cfg.proHow}`;
 }

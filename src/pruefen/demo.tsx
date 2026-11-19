@@ -11,7 +11,7 @@ import { useMemo, useState } from 'react';
 import { Link, Route, Routes } from 'react-router-dom';
 import type { AppConfig } from '../apps/registry';
 import type { OpenDefect, PruefBackend, Site, Unit } from './backend';
-import { dueFkOf, inspectionsPathOf, isSiteMode, siteFkOf, sitesPathOf, wordsOf, type PruefConfig } from './config';
+import { dueFkOf, inspectionsPathOf, isSiteMode, needsUnitRow, siteFkOf, sitesPathOf, wordsOf, type PruefConfig } from './config';
 import { PruefCtx, type PruefCtxValue, type VorOrtPages } from './context';
 import type { InspMeta } from './due';
 import { VOR_ORT_PATH } from './Scope';
@@ -49,7 +49,7 @@ function createBackend(
       name: row ? String(row.name) : name,
       info: row ? cfg.unitInfo(row) : info,
       retired,
-      ...(row && cfg.unitAlert ? { row } : {}),
+      ...(row && needsUnitRow(cfg) ? { row } : {}),
     };
   };
   const units: Unit[] = [
@@ -76,6 +76,8 @@ function createBackend(
   const defects: OpenDefect[] = [
     { id: uuid(900), siteId: uuid(1), unitId: uuid(104), severity: cfg.severities[cfg.severities.length - 1].id, blocked: true },
   ];
+  // Apps mit Messwerten: was zuletzt je Einheit gemessen wurde (Vorbelegung der Neumaße beim nächsten Mal)
+  const lastMeasured = new Map<string, Record<string, string>>();
   const inspectionIds = new Set<string>();
   const defectIds = new Set<string>();
   const pro = () => new URLSearchParams(window.location.search).get('pro') !== '0';
@@ -114,6 +116,7 @@ function createBackend(
         return { signatureDropped: false };
       }
       inspectionIds.add(row.id);
+      if (row.measurements) lastMeasured.set(String(row[dueFk]), row.measurements);
       meta.push({ unitId: String(row[dueFk]), type: row.type, startedAt: row.started_at, canceled: false });
       const { signature, ...rest } = row;
       log(
@@ -143,6 +146,14 @@ function createBackend(
     async isPro() {
       return pro();
     },
+    ...(cfg.measure
+      ? {
+          async lastMeasurements(unitId: string) {
+            await gate();
+            return lastMeasured.get(unitId) ?? null;
+          },
+        }
+      : {}),
   };
 }
 
@@ -215,6 +226,7 @@ export function VorOrtDemoArea({ app, cfg, rows = NO_ROWS }: { app: AppConfig; c
       email: 'beispiel@example.com',
       owner: new URLSearchParams(window.location.search).get('rolle') !== 'mitarbeiter',
       intervalDays: cfg.dueIntervalDays({}),
+      ...(cfg.dueDate ? { dueDate: (last: Date) => cfg.dueDate!(last, {}) } : {}),
       base: `${base}/${VOR_ORT_PATH}`,
       dashboardUrl: base,
       signOut: () => undefined,

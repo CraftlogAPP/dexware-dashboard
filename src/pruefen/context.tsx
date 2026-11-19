@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { PruefBackend } from './backend';
 import type { PruefConfig } from './config';
+import type { DueDateFn } from './due';
 import { flushPending } from './send';
 import { listPending, onPendingChanged, type Pending } from './store';
 
@@ -31,6 +32,8 @@ export interface PruefCtxValue {
   owner: boolean;
   /** Frist der Fälligkeits-Prüfart dieses Betriebs in Tagen */
   intervalDays: number;
+  /** Nur Apps mit eigener Frist-Regel (cfg.dueDate, HebeDex): Fälligkeitstag für diesen Betrieb. Sonst undefined. */
+  dueDate?: DueDateFn;
   /** Adresse der Handy-Ansicht, z. B. /app/leiterdex/vor-ort */
   base: string;
   /** Adresse des Dashboards, z. B. /app/leiterdex */

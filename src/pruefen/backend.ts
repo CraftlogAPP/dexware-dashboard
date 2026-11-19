@@ -4,7 +4,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllOf, fetchLatestWindow } from '../lib/completeQueries';
-import { dueFkOf, isSiteMode, siteFkOf, type PruefConfig } from './config';
+import { dueFkOf, isSiteMode, needsUnitRow, siteFkOf, type PruefConfig } from './config';
 import type { InspMeta } from './due';
 import { fetchOrgPro } from './pro';
 import type { DefectRow, InspectionRow } from './rows';
@@ -23,7 +23,7 @@ export interface Unit {
   /** Unterzeile, z. B. „Stehleiter · Aluminium“ */
   info: string;
   retired: boolean;
-  /** Stammdaten-Zeile (Spalten aus cfg.unitSelect) — nur bei Apps mit Einheiten-Warnung (cfg.unitAlert). */
+  /** Stammdaten-Zeile (Spalten aus cfg.unitSelect) — nur bei Apps, die sie brauchen (Warnung, eigene Checkliste, Messwerte). */
   row?: Record<string, unknown>;
 }
 
@@ -58,6 +58,11 @@ export interface PruefBackend {
   insertDefect(row: DefectRow, photoUrls: string[]): Promise<void>;
   /** Pro des Betriebs laut Server. Im Zweifel true — nie zu Unrecht sperren. */
   isPro(): Promise<boolean>;
+  /**
+   * Nur Apps mit Messwerten (cfg.measure, HebeDex): Messwerte der jüngsten gültigen Prüfung dieser Einheit —
+   * daraus belegt das Formular Neumaße, Nenndicke und Seilart vor (wie die App). null = noch keine Prüfung.
+   */
+  lastMeasurements?(unitId: string): Promise<Record<string, string> | null>;
 }
 
 export const PHOTO_BUCKET = 'photos';
@@ -94,6 +99,17 @@ function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T> {
   });
 }
 
+/** Messwerte aus der Datenbank als Text-Werte (die App speichert Text; Zahlen aus älteren Zeilen werden zu Text). null = keine. */
+export function textValues(v: unknown): Record<string, string> | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const out: Record<string, string> = {};
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof x === 'string') out[k] = x;
+    else if (typeof x === 'number' && Number.isFinite(x)) out[k] = String(x);
+  }
+  return out;
+}
+
 /**
  * @param dueIntervalDays Frist der Fälligkeits-Prüfart dieses Betriebs — bestimmt, wie weit die Prüf-Daten zurückreichen.
  */
@@ -118,7 +134,7 @@ export function supabasePruefBackend(sb: SupabaseClient, cfg: PruefConfig, dueIn
         name: r.name as string,
         info: cfg.unitInfo(r),
         retired: r[cols.retired] === true,
-        ...(cfg.unitAlert ? { row: r } : {}),
+        ...(needsUnitRow(cfg) ? { row: r } : {}),
       }));
     },
 
@@ -198,5 +214,24 @@ export function supabasePruefBackend(sb: SupabaseClient, cfg: PruefConfig, dueIn
 
     // frisch gefragt — hier wird über das Anlegen entschieden
     isPro: () => fetchOrgPro(sb, true),
+
+    ...(cfg.measure
+      ? {
+          async lastMeasurements(unitId: string) {
+            const { data, error } = await withTimeout(
+              sb
+                .from(tables.inspection)
+                .select('measurements')
+                .eq(cols.unitFk, unitId)
+                .eq('canceled', false)
+                .order('started_at', { ascending: false })
+                .limit(1),
+              15000,
+            );
+            if (error) throw error;
+            return textValues((data as { measurements?: unknown }[] | null)?.[0]?.measurements);
+          },
+        }
+      : {}),
   };
 }

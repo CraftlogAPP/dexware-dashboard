@@ -43,6 +43,49 @@ export async function loadPruefData(be: PruefBackend, app: string, userId: strin
   }
 }
 
+// --- Messwerte der letzten Prüfung (nur Apps mit cfg.measure) — je Konto gemerkt, damit die Vorbelegung auch im Funkloch da ist ----
+
+const measureKey = (app: string, userId: string) => `dexware-${app}-messwerte:${userId}`;
+
+function measureCache(app: string, userId: string): Record<string, Record<string, string>> {
+  try {
+    const v = JSON.parse(localStorage.getItem(measureKey(app, userId)) ?? 'null') as Record<string, Record<string, string>> | null;
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Messwerte der jüngsten gültigen Prüfung einer Einheit — erst wartende (noch nicht übertragene) Prüfungen dieses
+ * Geräts, dann der Server, ohne Netz der zuletzt geladene Stand. Nie ein Fehler: Die Vorbelegung ist nur Komfort.
+ */
+export async function loadLastMeasurements(
+  be: PruefBackend,
+  app: string,
+  userId: string,
+  unitId: string,
+  unitFk: string,
+  pending: Pending[],
+): Promise<Record<string, string>> {
+  const own = pending
+    .filter((p) => String(p.inspection[unitFk]) === unitId)
+    .sort((a, b) => b.inspection.started_at.localeCompare(a.inspection.started_at))[0];
+  if (own) return own.inspection.measurements ?? {};
+  if (!be.lastMeasurements) return {};
+  try {
+    const m = (await be.lastMeasurements(unitId)) ?? {};
+    try {
+      localStorage.setItem(measureKey(app, userId), JSON.stringify({ ...measureCache(app, userId), [unitId]: m }));
+    } catch {
+      /* nur Komfort */
+    }
+    return m;
+  } catch {
+    return measureCache(app, userId)[unitId] ?? {};
+  }
+}
+
 // --- „Geprüft von“, Qualifikation und Unterschrift: je Konto auf diesem Gerät gemerkt (wie in der App) ---------
 
 export interface InspectorPrefs {

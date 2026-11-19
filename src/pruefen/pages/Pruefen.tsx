@@ -10,7 +10,11 @@
 //            mit warehouseId/siteId/playgroundId); die Adresse nennt den Ort. Mängel/Schäden wählen die betroffene
 //            Einheit des Orts aus einer Liste — oder „… allgemein“. Keine Serienprüfung, kein Einheiten-Hinweis.
 // Die Wörter (Prüfung/Inspektion/Kontrolle, Mangel/Schaden, „Geprüft von“) kommen aus wordsOf(cfg).
-import { useCallback, useEffect, useRef, useState } from 'react';
+//
+// HebeDex (Einheiten-Modus, alles über optionale Angaben der Konfiguration): Checkliste und Prüfarten hängen vom
+// Teil-Typ ab (checklistOf/kindsOf), dazu die Karte „Ablegereife-Rechner“ (measureOf) — Messwerte als Text wie in der
+// App, rotes Ergebnis stellt den passenden Checklisten-Punkt auf „Mangel“ und fragt beim Speichern nach dem Rot-Mangel.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Camera, Check, CloudOff, MapPin, Plus, TriangleAlert, X } from 'lucide-react';
 import { useUnsavedGuard } from '../../components/ui';
@@ -22,25 +26,31 @@ import type { Site, Unit } from '../backend';
 import {
   blockWords,
   canBlock,
+  checklistOf,
   countWord,
   dueFkOf,
   isSiteMode,
   kindOf,
+  kindsOf,
+  measureOf,
   severityOf,
   unitAlertOf,
   wordsOf,
   type CheckResult,
+  type MeasureOutcome,
+  type MeasureSpec,
   type PruefConfig,
 } from '../config';
 import { usePruef, usePendingSync } from '../context';
-import { getPrefs, loadPruefData, newId, setPrefs, withPendingMeta, type InspectorPrefs } from '../data';
+import { getPrefs, loadLastMeasurements, loadPruefData, newId, setPrefs, withPendingMeta, type InspectorPrefs } from '../data';
 import { dueInfo, fmtDay, lastDueByUnit, nextDueAfter } from '../due';
-import { buildDefectRow, buildInspectionRow, type GpsFix } from '../rows';
+import { buildDefectRow, buildInspectionRow, measurementsForRow, type GpsFix } from '../rows';
 import { defectsMissing, submit, type SubmitOutcome } from '../send';
 import {
   deleteDraft,
   draftKey,
   getDraft,
+  listPending,
   pendingKey,
   saveDraft,
   type DefectDraft,
@@ -58,11 +68,12 @@ export function Pruefen() {
   return unitId ? <Formular key={unitId} unitId={unitId} /> : null;
 }
 
-function initialForm(cfg: PruefConfig, prefs: InspectorPrefs): FormValues {
+/** @param unit Die Einheit, sobald sie geladen ist — bei HebeDex hängen Prüfarten und Checkliste von ihr ab. */
+function initialForm(cfg: PruefConfig, prefs: InspectorPrefs, unit: Unit | null = null): FormValues {
   return {
-    type: cfg.kinds[0].id,
+    type: kindsOf(cfg, unit)[0].id,
     // Vorbelegung OK: abweichende Punkte werden aktiv auf „Mangel“ oder „n. z.“ gestellt (wie in der App).
-    checklist: Object.fromEntries(cfg.checklist.map((c) => [c.id, 'ok' as CheckResult])),
+    checklist: Object.fromEntries(checklistOf(cfg, unit).map((c) => [c.id, 'ok' as CheckResult])),
     notes: '',
     inspectorName: prefs.name,
     qualification: prefs.qualification,
@@ -73,11 +84,11 @@ function initialForm(cfg: PruefConfig, prefs: InspectorPrefs): FormValues {
 /** Checklisten-Vorbelegung aus der Einheiten-Warnung (cfg.unitAlert) — nur Punkte, die es in der Checkliste gibt. */
 function alertPrefill(cfg: PruefConfig, unit: Unit): Record<string, CheckResult> {
   const pre = unitAlertOf(cfg, unit)?.checklist ?? {};
-  return Object.fromEntries(cfg.checklist.filter((c) => RESULTS.includes(pre[c.id])).map((c) => [c.id, pre[c.id]]));
+  return Object.fromEntries(checklistOf(cfg, unit).filter((c) => RESULTS.includes(pre[c.id])).map((c) => [c.id, pre[c.id]]));
 }
 
 type Phase = 'loading' | 'ask' | 'form' | 'done';
-type Ask = null | 'defect' | 'gps' | 'name';
+type Ask = null | 'defect' | 'gps' | 'name' | 'measure-missing' | 'measure-red';
 
 interface DoneInfo {
   outcome: SubmitOutcome;
@@ -90,6 +101,8 @@ interface DoneInfo {
   serious: boolean;
   /** Einheiten-Warnung (z. B. „Ablegereif — …“): ersetzt „Wieder fällig am …“, keine Serienprüfung. */
   alertDone: string | null;
+  /** Eigene Zeile der Prüfart (HebeDex Rissprüfung: „Nächste Rissprüfung in 3 Jahren.“) — sonst null. */
+  kindDone: string | null;
 }
 
 /** Was geprüft wird: die Einheit — im Orts-Modus der Ort selbst (dann ist siteId = id). */
@@ -141,10 +154,21 @@ function Formular({ unitId }: { unitId: string }) {
   const confirmedDefectRef = useRef(false);
   const confirmedGpsRef = useRef(false);
   const confirmedNameRef = useRef(false);
+  const confirmedMissingRef = useRef(false);
+  const confirmedRedRef = useRef(false);
+  // Aus einem Entwurf fortgesetzt? Dann überschreibt die Vorbelegung der Messwerte nur noch leere Felder.
+  const resumedRef = useRef(false);
+  const calcRef = useRef<HTMLDivElement>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [done, setDone] = useState<DoneInfo | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+
+  // Je Einheit (HebeDex: je Teil-Typ) — bei allen anderen Apps die Checkliste und die Prüfarten der App.
+  const perUnit = !!(cfg.checklistFor || cfg.kindsFor || cfg.measure);
+  const checks = useMemo(() => checklistOf(cfg, unit), [cfg, unit]);
+  const kinds = useMemo(() => kindsOf(cfg, unit), [cfg, unit]);
+  const spec = useMemo(() => measureOf(cfg, unit), [cfg, unit]);
 
   // --- Laden: Einheit, Standort, offene Sperre, angefangene Prüfung ---------------------------
   const load = useCallback(() => {
@@ -155,6 +179,7 @@ function Formular({ unitId }: { unitId: string }) {
       ([data, draft]) => {
         if (!alive) return;
         let pre: Record<string, CheckResult> = {};
+        let loaded: Unit | null = null;
         if (siteMode) {
           const s = data.sites.find((x) => x.id === unitId) ?? null;
           if (!s) return setLoadError(`${S.one} nicht gefunden — gelöscht oder aus einem anderen Betrieb?`);
@@ -175,6 +200,11 @@ function Formular({ unitId }: { unitId: string }) {
           const u = data.units.find((x) => x.id === unitId) ?? null;
           if (!u) return setLoadError(`${U.one} nicht gefunden — gelöscht oder aus einem anderen Betrieb?`);
           if (u.retired) return setLoadError(`„${u.name}“ ist außer Betrieb genommen und kann nicht geprüft werden.`);
+          // Ohne Stammdaten wäre die Checkliste die falsche (und nach dem Speichern nicht mehr änderbar) — wie in der App.
+          if (perUnit && !u.row) {
+            return setLoadError(`Die Stammdaten von „${u.name}“ fehlen auf diesem Gerät. Bitte mit Empfang erneut versuchen.`);
+          }
+          loaded = u;
           setUnit(u);
           setSite(data.sites.find((s) => s.id === u.siteId) ?? null);
           setBlockedBefore(data.openDefects.some((d) => d.blocked && d.unitId === unitId));
@@ -187,7 +217,14 @@ function Formular({ unitId }: { unitId: string }) {
         } else {
           if (!prefilledRef.current) {
             prefilledRef.current = true;
-            setForm((f) => ({ ...f, checklist: { ...f.checklist, ...pre } }));
+            if (perUnit) {
+              // Prüfarten, Checkliste und Rechner dieses Teils (Nenndicke/Seilart aus den Stammdaten)
+              const fresh = initialForm(cfg, getPrefs(app, userId), loaded);
+              const measure = measureOf(cfg, loaded)?.prefill({});
+              setForm((f) => ({ ...f, type: fresh.type, checklist: { ...fresh.checklist, ...pre }, ...(measure ? { measure } : {}) }));
+            } else {
+              setForm((f) => ({ ...f, checklist: { ...f.checklist, ...pre } }));
+            }
           }
           openedAtRef.current = new Date().toISOString();
           setPhase('form');
@@ -200,7 +237,7 @@ function Formular({ unitId }: { unitId: string }) {
     return () => {
       alive = false;
     };
-  }, [be, app, userId, unitId, U.one, S.one, S.many, I.one, siteMode, cfg]);
+  }, [be, app, userId, unitId, U.one, S.one, S.many, I.one, siteMode, cfg, perUnit]);
   useEffect(() => load(), [load]);
 
   const resume = (d: Draft) => {
@@ -208,13 +245,21 @@ function Formular({ unitId }: { unitId: string }) {
     openedAtRef.current = d.openedAt;
     setRestoredStart(d.start);
     // nur Punkte der heutigen Checkliste übernehmen; fehlende stehen auf OK
-    const base0 = initialForm(cfg, getPrefs(app, userId));
+    const base0 = initialForm(cfg, getPrefs(app, userId), unit);
     const checklist = { ...base0.checklist };
-    for (const c of cfg.checklist) if (RESULTS.includes(d.form.checklist[c.id])) checklist[c.id] = d.form.checklist[c.id];
+    for (const c of checks) if (RESULTS.includes(d.form.checklist[c.id])) checklist[c.id] = d.form.checklist[c.id];
     // Entwurf von vor der Warnung (z. B. inzwischen ablegereif): Vorbelegung einmal nachholen
     if (!d.prefilled && !prefilledRef.current) Object.assign(checklist, prefill);
     prefilledRef.current = true;
-    setForm({ ...d.form, type: kindOf(cfg, d.form.type).id, checklist });
+    resumedRef.current = true;
+    const measure = spec ? (d.form.measure ?? spec.prefill({})) : undefined;
+    setForm({
+      ...d.form,
+      // Prüfart nur, wenn es sie für diese Einheit gibt (HebeDex: Rissprüfung nur bei Ketten)
+      type: kinds.some((k) => k.id === d.form.type) ? d.form.type : kinds[0].id,
+      checklist,
+      ...(measure ? { measure } : {}),
+    });
     setPhotos(d.photos);
     setDefects(d.defects);
     setEditing(d.editing);
@@ -227,10 +272,59 @@ function Formular({ unitId }: { unitId: string }) {
     idRef.current = newId();
     openedAtRef.current = new Date().toISOString();
     prefilledRef.current = true;
-    setForm((f) => ({ ...f, checklist: { ...f.checklist, ...prefill } }));
+    const fresh = initialForm(cfg, getPrefs(app, userId), unit);
+    const measure = spec?.prefill({});
+    setForm((f) => ({ ...f, type: fresh.type, checklist: { ...fresh.checklist, ...prefill }, ...(measure ? { measure } : {}) }));
     setFound(null);
     setPhase('form');
   };
+
+  // --- Messwerte (nur Apps mit Rechner): Vorbelegung aus der letzten Prüfung dieser Einheit ---------------------
+  // Wie in der App: Neumaße, Nenndicke und Seilart kommen aus der jüngsten gültigen Prüfung; schon Getipptes bleibt.
+  const formOpen = phase === 'form';
+  useEffect(() => {
+    if (!formOpen || !spec) return;
+    let alive = true;
+    void listPending(app, userId)
+      .then((p) => loadLastMeasurements(be, app, userId, unitId, cfg.cols.unitFk, p))
+      .then((previous) => {
+        if (!alive) return;
+        const base0 = spec.prefill({});
+        const keep = spec.prefill(previous);
+        setForm((f) => {
+          const cur = f.measure ?? {};
+          const next = { ...cur };
+          let changed = false;
+          for (const [k, v] of Object.entries(keep)) {
+            if (!v || v === cur[k]) continue;
+            const empty = !String(cur[k] ?? '').trim();
+            // Steht noch der Wert aus den Stammdaten da, gewinnt der aus der letzten Prüfung — nicht bei einem Entwurf.
+            if (empty || (!resumedRef.current && cur[k] === base0[k])) {
+              next[k] = v;
+              changed = true;
+            }
+          }
+          return changed ? { ...f, measure: next } : f;
+        });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [formOpen, spec, be, app, userId, unitId, cfg.cols.unitFk]);
+  const measure = useMemo(() => form.measure ?? {}, [form.measure]);
+  const outcome = useMemo(() => (spec ? spec.evaluate(measure) : undefined), [spec, measure]);
+  const setM = (key: string, value: string) => {
+    confirmedMissingRef.current = false;
+    confirmedRedRef.current = false;
+    setForm((f) => ({ ...f, measure: { ...f.measure, [key]: value } }));
+  };
+  // Rechner rot → passenden Checklisten-Punkt von selbst auf „Mangel“ (bleibt änderbar) — wie in der App.
+  const redNow = outcome?.red === true;
+  const checkId = spec?.checkId;
+  useEffect(() => {
+    if (!redNow || !checkId) return;
+    setForm((f) => (f.checklist[checkId] !== undefined && f.checklist[checkId] !== 'defect' ? { ...f, checklist: { ...f.checklist, [checkId]: 'defect' } } : f));
+  }, [redNow, checkId]);
 
   const subject: Subject | null = siteMode
     ? site
@@ -257,7 +351,7 @@ function Formular({ unitId }: { unitId: string }) {
   const gpsWeak = !gpsOk || (gps.accuracy ?? 9999) > GPS_WEAK_M;
 
   // --- Entwurf auf dem Gerät sichern ----------------------------------------------------------
-  const firstKind = cfg.kinds[0].id;
+  const firstKind = kinds[0].id;
   const dirty =
     photos.length > 0 ||
     defects.length > 0 ||
@@ -265,7 +359,9 @@ function Formular({ unitId }: { unitId: string }) {
     form.notes.trim() !== '' ||
     form.type !== firstKind ||
     // geändert gegenüber dem Anfangszustand (alles OK bzw. die Vorbelegung aus einer Einheiten-Warnung)
-    cfg.checklist.some((c) => (form.checklist[c.id] ?? 'ok') !== (prefill[c.id] ?? 'ok'));
+    checks.some((c) => (form.checklist[c.id] ?? 'ok') !== (prefill[c.id] ?? 'ok')) ||
+    // ein Messwert eingetragen (die Vorbelegung wie Nenndicke oder Seilart zählt nicht)
+    (spec ? spec.measuredKeys.some((k) => String(measure[k] ?? '').trim() !== '') : false);
   // Kamera geöffnet: Entwurf auch ohne Eingaben sichern (Safari kann die Seite dabei neu laden)
   const [forceDraft, setForceDraft] = useState(false);
   const [draftOnDevice, setDraftOnDevice] = useState(true);
@@ -368,14 +464,23 @@ function Formular({ unitId }: { unitId: string }) {
     confirmedDefectRef.current = false;
     setForm((f) => ({ ...f, checklist: { ...f.checklist, [id]: r } }));
   };
-  const defectPoints = cfg.checklist.filter((c) => form.checklist[c.id] === 'defect');
+  const defectPoints = checks.filter((c) => form.checklist[c.id] === 'defect');
 
-  const openEditor = () => {
+  /** @param title Vorgabe für den Titel (HebeDex: „Ablegereif: …“ aus dem Rechner) — sonst der erste offene Checklisten-Punkt. */
+  const openEditor = (title?: string, severity: string = cfg.defaultSeverity) => {
     // Steht schon ein Punkt auf „Mangel“, ist der Titel mit dem ersten noch nicht beschriebenen Punkt vorbelegt.
     const used = new Set(defects.map((d) => d.title));
-    const prefill = defectPoints.find((c) => !used.has(c.label))?.label ?? '';
+    const prefill = title ?? defectPoints.find((c) => !used.has(c.label))?.label ?? '';
     setAskBlock(false);
-    setEditing({ key: newId(), title: prefill, description: '', severity: cfg.defaultSeverity, blocked: false, photos: [] });
+    setEditing({
+      key: newId(),
+      title: prefill,
+      description: '',
+      severity,
+      // Stufe mit gesetztem Sperr-Vermerk von Anfang an (HebeDex Rot) — sonst wie bisher ohne
+      blocked: severityOf(cfg, severity).autoBlock === true,
+      photos: [],
+    });
   };
   const commitDefect = (draft: DefectDraft) => {
     confirmedDefectRef.current = false;
@@ -414,6 +519,12 @@ function Formular({ unitId }: { unitId: string }) {
   // --- Speichern ------------------------------------------------------------------------------
   const save = async () => {
     if (saving || !subject) return;
+    if (spec && outcome) {
+      // Messwert ohne Bezugswert (z. B. Nenndicke fehlt): Der Rechner kann nicht bewerten — einmal nachfragen.
+      if (outcome.missing && !confirmedMissingRef.current) return setAsk('measure-missing');
+      // Grenzwert erreicht, aber kein Mangel dieser Stufe erfasst — einmal nachfragen (wie in der App).
+      if (outcome.red && !defects.some((d) => d.severity === spec.redSeverity) && !confirmedRedRef.current) return setAsk('measure-red');
+    }
     // Punkt auf „Mangel“, aber kein Mangel beschrieben → nachfragen (das Prüfprotokoll soll aussagekräftig sein).
     if (defectPoints.length > 0 && defects.length === 0 && !confirmedDefectRef.current) return setAsk('defect');
     // Ungenaue oder fehlende Ortung: einmal nachfragen statt still einen schwachen Stempel zu speichern.
@@ -436,11 +547,14 @@ function Formular({ unitId }: { unitId: string }) {
         at,
         start: startFix,
         end: lastFixRef.current,
-        checklist: form.checklist,
+        // genau die Punkte dieser Checkliste (bei HebeDex die des Teil-Typs), in ihrer Reihenfolge
+        checklist: Object.fromEntries(checks.map((c) => [c.id, form.checklist[c.id] ?? 'ok'])),
         notes: form.notes,
         inspectorName: form.inspectorName,
         qualification: form.qualification,
         signature: form.signature,
+        // Apps mit Messwerten: ausgefüllte Felder als Text, ohne Messung {} — alle anderen Apps haben die Spalte nicht
+        ...(cfg.measure ? { measurements: spec ? measurementsForRow(measure, spec.measuredKeys) : {} } : {}),
       });
       finishedRef.current = true;
       const outcome = await submit(be, cfg, {
@@ -484,6 +598,7 @@ function Formular({ unitId }: { unitId: string }) {
         blocked: blockedBefore || defects.some((d) => d.blocked),
         serious: defects.some((d) => severityOf(cfg, d.severity).tone !== 'green'),
         alertDone: unit ? (unitAlertOf(cfg, unit)?.doneText ?? null) : null,
+        kindDone: kindOf(cfg, form.type).doneText ?? null,
       });
       setPhase('done');
       window.scrollTo({ top: 0 });
@@ -608,7 +723,7 @@ function Formular({ unitId }: { unitId: string }) {
 
       <h2 className="ez-section">{I.kind}</h2>
       <div className="ez-chips" role="group" aria-label={I.kind}>
-        {cfg.kinds.map((k) => (
+        {kinds.map((k) => (
           <button
             key={k.id}
             type="button"
@@ -680,8 +795,19 @@ function Formular({ unitId }: { unitId: string }) {
         )}
       </div>
 
+      {spec && (
+        <MeasureCard
+          spec={spec}
+          values={measure}
+          outcome={outcome}
+          cardRef={calcRef}
+          onChange={setM}
+          onDefect={(text) => openEditor(spec.texts.defectTitle(text), spec.redSeverity)}
+        />
+      )}
+
       <h2 className="ez-section">
-        {cfg.labels.checklist}
+        {cfg.labels.checklistFor && unit?.row ? cfg.labels.checklistFor(unit.row) : cfg.labels.checklist}
         <span className={defectPoints.length > 0 ? 'pv-bad' : 'muted'}>
           {defectPoints.length > 0 ? ` · ${countWord(defectPoints.length, D)}` : ' · alles OK'}
         </span>
@@ -694,7 +820,7 @@ function Formular({ unitId }: { unitId: string }) {
         {showHints ? 'Prüfhinweise ausblenden' : 'Prüfhinweise zu jedem Punkt anzeigen'}
       </button>
       <ul className="pv-checks">
-        {cfg.checklist.map((item) => {
+        {checks.map((item) => {
           const result = form.checklist[item.id] ?? 'ok';
           return (
             <li key={item.id} className={`pv-check${result === 'defect' ? ' defect' : ''}`}>
@@ -759,11 +885,11 @@ function Formular({ unitId }: { unitId: string }) {
           kurz beschreiben und einstufen.
         </p>
       )}
-      <button type="button" className="btn ghost ez-big" onClick={openEditor}>
+      <button type="button" className="btn ghost ez-big" onClick={() => openEditor()}>
         <Plus className="i" aria-hidden /> {D.one} erfassen
       </button>
 
-      <h2 className="ez-section">Beweisfotos</h2>
+      <h2 className="ez-section">{kind.photosTitle ?? 'Beweisfotos'}</h2>
       <PhotoRow
         photos={photos}
         busy={photoBusy > 0 && !editing}
@@ -814,7 +940,7 @@ function Formular({ unitId }: { unitId: string }) {
             rows={3}
             value={form.notes}
             maxLength={2000}
-            placeholder={cfg.labels.notesExample}
+            placeholder={kind.notesExample ?? cfg.labels.notesExample}
             onChange={(e) => set({ notes: e.target.value })}
           />
         </label>
@@ -899,7 +1025,8 @@ function Formular({ unitId }: { unitId: string }) {
                     aria-pressed={editing.severity === s.id}
                     onClick={() =>
                       // Stufe ohne Sperre (z. B. Grün): ein früher gesetzter Sperr-Vermerk darf nicht unsichtbar mitgehen
-                      setEditing({ ...editing, severity: s.id, blocked: canBlock(s) ? editing.blocked : false })
+                      // Stufe mit Sperre von Anfang an (HebeDex Rot): Vermerk setzen, er bleibt abwählbar
+                      setEditing({ ...editing, severity: s.id, blocked: s.autoBlock ? true : canBlock(s) ? editing.blocked : false })
                     }
                   >
                     {s.label}
@@ -983,6 +1110,67 @@ function Formular({ unitId }: { unitId: string }) {
           </div>
         </Modal>
       )}
+      {ask === 'measure-missing' && spec && outcome?.missing && (
+        <Modal title="Keine Bewertung möglich" onClose={() => setAsk(null)} dirty={false}>
+          <p>
+            Der {spec.title} kann die Messwerte nicht bewerten — {outcome.missing} fehlt. Bezugswert nachtragen oder trotzdem
+            speichern?
+          </p>
+          <div className="ez-actions">
+            <button
+              type="button"
+              className="btn ez-big"
+              onClick={() => {
+                setAsk(null);
+                setTimeout(() => calcRef.current?.scrollIntoView({ block: 'center' }), 60);
+              }}
+            >
+              Nachtragen
+            </button>
+            <button
+              type="button"
+              className="btn ghost ez-big"
+              onClick={() => {
+                confirmedMissingRef.current = true;
+                setAsk(null);
+                void save();
+              }}
+            >
+              Trotzdem speichern
+            </button>
+          </div>
+        </Modal>
+      )}
+      {ask === 'measure-red' && spec && outcome && (
+        <Modal title={spec.texts.redAskTitle} onClose={() => setAsk(null)} dirty={false}>
+          <p>{spec.texts.redAsk(outcome.text)}</p>
+          <div className="ez-actions">
+            <button
+              type="button"
+              className="btn ez-big"
+              onClick={() => {
+                setAsk(null);
+                openEditor(spec.texts.defectTitle(outcome.text), spec.redSeverity);
+              }}
+            >
+              {D.one} erfassen
+            </button>
+            <button
+              type="button"
+              className="btn ghost ez-big"
+              onClick={() => {
+                // wie in der App: „Trotzdem speichern“ fragt danach nicht noch einmal nach dem fehlenden Mangel
+                confirmedRedRef.current = true;
+                confirmedDefectRef.current = true;
+                setAsk(null);
+                void save();
+              }}
+            >
+              Trotzdem speichern
+            </button>
+          </div>
+        </Modal>
+      )}
       {ask === 'gps' && (
         <Modal
           title={gpsOk ? 'Ortung noch ungenau' : gps.status === 'loading' ? 'Noch kein GPS-Stempel' : 'Kein GPS-Stempel möglich'}
@@ -1055,6 +1243,94 @@ function Formular({ unitId }: { unitId: string }) {
   );
 }
 
+/**
+ * Karte „Messwerte mit Rechner“ (HebeDex: Ablegereife-Rechner) — Felder, Grenzen und Rechenregeln kommen aus der
+ * Konfiguration der App (cfg.measure), hier steht nur die Darstellung.
+ */
+function MeasureCard({
+  spec,
+  values,
+  outcome,
+  cardRef,
+  onChange,
+  onDefect,
+}: {
+  spec: MeasureSpec;
+  values: Record<string, string>;
+  outcome: MeasureOutcome | undefined;
+  cardRef: React.RefObject<HTMLDivElement | null>;
+  onChange: (key: string, value: string) => void;
+  onDefect: (text: string) => void;
+}) {
+  const choice = spec.choice;
+  const ratio = outcome?.ratio ?? 0;
+  return (
+    <div ref={cardRef} className={`card pv-calc${outcome?.red ? ' red' : ''}`} style={{ marginTop: 18 }} data-testid="pv-calc">
+      <b>{spec.title}</b>
+      <p className="muted small">{spec.hint(values)}</p>
+      {choice && (
+        <div className="ez-chips" role="group" aria-label={choice.label}>
+          {choice.options.map((o) => {
+            const on = (values[choice.key] || choice.fallback) === o.id;
+            return (
+              <button key={o.id} type="button" className={`ez-chip${on ? ' on' : ''}`} aria-pressed={on} onClick={() => onChange(choice.key, o.id)}>
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {spec.rows.map((row) => (
+        <div className="pv-calc-row" key={row.map((f) => f.key).join('-')}>
+          {row.map((f) => (
+            <label className="field" key={f.key}>
+              {f.unit ? `${f.label} (${f.unit})` : f.label}
+              <input
+                value={values[f.key] ?? ''}
+                inputMode={f.integer ? 'numeric' : 'decimal'}
+                maxLength={12}
+                autoComplete="off"
+                placeholder={f.placeholder?.(values) ?? ''}
+                data-testid={`pv-m-${f.key}`}
+                // nur Ziffern (und Komma/Punkt) — wie das Zahlenfeld der App
+                onChange={(e) => onChange(f.key, e.target.value.replace(f.integer ? /[^0-9]/g : /[^0-9.,]/g, ''))}
+              />
+            </label>
+          ))}
+        </div>
+      ))}
+      {outcome?.missing && (
+        <div className="pv-calc-result red" role="status">
+          <b>Keine Bewertung möglich ({outcome.missing} fehlt)</b>
+          <span>Ohne Bezugswert kann der Rechner die Messung nicht gegen die Grenze prüfen — bitte nachtragen.</span>
+        </div>
+      )}
+      {outcome?.complete && (
+        <div className={`pv-calc-result ${outcome.red ? 'red' : 'green'}`} role="status" data-testid="pv-calc-result">
+          <b>{outcome.red ? spec.texts.red : spec.texts.ok}</b>
+          <span>{outcome.text}</span>
+          {outcome.ratio !== undefined && (
+            <>
+              <span className="pv-calc-bar" aria-hidden>
+                <span
+                  className={outcome.red ? 'red' : ratio >= 0.7 ? 'amber' : 'green'}
+                  style={{ width: `${Math.max(3, Math.min(1, ratio) * 100)}%` }}
+                />
+              </span>
+              {outcome.ratioLabel && <span className="muted small">{outcome.ratioLabel}</span>}
+            </>
+          )}
+          {outcome.red && (
+            <button type="button" className="btn ez-danger ez-big" onClick={() => onDefect(outcome.text)}>
+              {spec.texts.redAction}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PhotoRow({
   photos,
   busy,
@@ -1099,7 +1375,7 @@ function PhotoRow({
  * Im Orts-Modus gibt es keine Serienprüfung — dort steht, bis wann die Prüfung des Orts gilt.
  */
 function Done({ subject, info }: { subject: Subject; info: DoneInfo }) {
-  const { be, cfg, userId, base, intervalDays } = usePruef();
+  const { be, cfg, userId, base, intervalDays, dueDate } = usePruef();
   const siteMode = isSiteMode(cfg);
   const { insp: I, defect: D } = wordsOf(cfg);
   const { pending, loaded } = usePendingSync();
@@ -1134,7 +1410,7 @@ function Done({ subject, info }: { subject: Subject; info: DoneInfo }) {
         // Einheiten mit Warnung aus den Stammdaten (z. B. ablegereif) nicht als „nächste fällige“ anbieten
         for (const u of here) if (unitAlertOf(cfg, u)) blocked.add(u.id);
         const exclude = new Set([subject.id, ...pending.map((p) => String(p.inspection[cfg.cols.unitFk]))]);
-        const res = nextDueAfter(here, last, intervalDays, exclude, blocked);
+        const res = nextDueAfter(here, last, intervalDays, exclude, blocked, dueDate);
         setNext(res ? { unit: res.next, count: res.count } : null);
       },
       () => undefined,
@@ -1145,7 +1421,7 @@ function Done({ subject, info }: { subject: Subject; info: DoneInfo }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [be, cfg, userId, subject.id, subject.siteId, pending.length]);
 
-  const dueAt = info.type === cfg.dueKind && !info.blocked ? dueInfo(info.at, intervalDays).dueAt : null;
+  const dueAt = info.type === cfg.dueKind && !info.blocked ? dueInfo(info.at, intervalDays, undefined, dueDate).dueAt : null;
   // Zweite Frist (SpielDex: operative Kontrolle) — nur im Orts-Modus und nach genau dieser Prüfart
   const extra = siteMode && cfg.extraDue && info.type === cfg.extraDue.doneKind && !info.blocked ? cfg.extraDue : null;
   const extraAt = extra ? dueInfo(info.at, extra.intervalDays).dueAt : null;
@@ -1224,8 +1500,10 @@ function Done({ subject, info }: { subject: Subject; info: DoneInfo }) {
             </p>
           )}
         </>
+      ) : dueAt ? (
+        <p className="muted">Wieder fällig am {fmtDay(dueAt)}.</p>
       ) : (
-        dueAt && <p className="muted">Wieder fällig am {fmtDay(dueAt)}.</p>
+        info.kindDone && <p className="muted">{info.kindDone}</p>
       )}
 
       {next ? (

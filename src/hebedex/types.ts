@@ -26,6 +26,16 @@ export const INSPECTION_SHORT: Record<InspectionType, string> = {
   crack: 'Rissprüfung',
 };
 
+/** Erklärung je Prüfart — wortgleich zur App (mobile/src/types.ts). */
+export const INSPECTION_HINTS: Record<InspectionType, string> = {
+  visual:
+    'Kurze Sicht- und Funktionskontrolle durch die anschlagende Person vor dem Einsatz: Etikett, sichtbare Schäden, Haken-Sicherung. Dokumentation freiwillig, z. B. zu Einsatzbeginn.',
+  expert:
+    'Prüfung durch eine befähigte Person: in Deutschland mindestens alle 12 Monate (DGUV Regel 109-017, BetrSichV), in Österreich mindestens einmal im Kalenderjahr und höchstens 15 Monate Abstand (AM-VO § 8). Zusätzlich nach Schadensfällen oder besonderen Vorkommnissen.',
+  crack:
+    'Rissprüfung von Rundstahlketten (z. B. Magnetpulver- oder Farbeindringverfahren) mindestens alle 3 Jahre (DGUV Regel 109-017) — meist durch einen Fachbetrieb. Ergebnis hier mit Bescheinigung (Foto) festhalten.',
+};
+
 const DAY_MS = 86_400_000;
 /** Ab so vielen Tagen Restlaufzeit gilt eine Prüfung als „bald fällig" (wie die App). */
 export const DUE_SOON_DAYS = 30;
@@ -205,6 +215,43 @@ const C: Record<string, string> = {
   condition: 'Zustand',
   func: 'Funktion',
   docs: 'Herstellerangaben & Historie',
+};
+
+/** Prüfhinweis je Checklisten-Punkt — wortgleich zur App (mobile/src/types.ts), für „Vor Ort“. */
+export const CHECK_HINTS: Record<string, string> = {
+  marking: 'Etikett bzw. Anhänger mit Tragfähigkeit (WLL/LC), Hersteller und Kennzeichnung vorhanden und lesbar? Fehlendes oder unlesbares Etikett: Teil nicht mehr verwenden.',
+  links: 'Keine Risse, Kerben, Riefen, Verformungen (verbogen, verdreht, gestaucht) oder Schweißspritzer? Glieder frei beweglich?',
+  chainWear: 'Glieddicke an der Auflagestelle gemessen, Längung geprüft — Grenzen: Glieddicke −10 %, Längung ≥ 5 % (Rechner unten).',
+  fittings: 'Aufhängering, Verbindungsglieder und Verkürzungshaken ohne Verformung, Risse oder Aufweitung? Bolzen und Sicherungen vollständig?',
+  corrosion: 'Keine starke Korrosion (Narben), keine Anlauffarben durch Hitze, keine Einwirkung von Säuren/Laugen?',
+  webbing: 'Keine Schnitte, Einrisse, Garnbrüche oder Abrieb über 10 % des Querschnitts? Kanten intakt?',
+  seams: 'Tragende Nähte vollständig, keine gerissenen oder abgescheuerten Fäden?',
+  cover: 'Hülle ohne Schnitte und Löcher? Tragende Einlage (Fasern) nirgends sichtbar?',
+  heatChem: 'Keine Schmelz-/Brandstellen, Verhärtungen, Verfärbungen oder Chemikalienschäden?',
+  eyes: 'Schlaufen und Endbeschläge ohne Beschädigung, Verformung oder Risse?',
+  wireBreaks: 'Sichtbare Drahtbrüche auf 3d / 6d / 30d gezählt — Grenzen siehe Rechner unten.',
+  strand: 'Kein gebrochener Litzenstrang (sonst sofort ablegereif)?',
+  ropeDeform: 'Keine Knicke, Quetschungen, Klanken, Aufdoldungen, Korbbildung oder Lockerung der äußeren Lage?',
+  terminations: 'Pressklemmen, Spleiße und Kauschen ohne Risse, Verschiebung oder herausstehende Drähte?',
+  body: 'Keine Verformung, Aufweitung, Risse, Kerben oder starker Verschleiß?',
+  pin: 'Bolzen gerade, Gewinde intakt, Bolzen vollständig eingeschraubt bzw. gesichert? Nur Original-Bolzen?',
+  opening: 'Hakenmaul gemessen — Aufweitung über 10 % gegenüber neu: ablegereif (Rechner unten).',
+  latch: 'Hakensicherung vorhanden, schließt selbsttätig und vollständig?',
+  swivel: 'Wirbel dreht leicht, kein übermäßiges Spiel, Mutter/Sicherung vorhanden?',
+  structure: 'Träger und Schweißnähte ohne Risse, Verformung oder Korrosion?',
+  suspension: 'Aufhängeöse und Lastanschlagpunkte unbeschädigt, Bolzen gesichert?',
+  wllPlate: 'Tragfähigkeit und Eigengewicht dauerhaft und lesbar angegeben?',
+  jaws: 'Zähne/Klemmsegmente nicht verschlissen oder verschmutzt, Backen ohne Risse?',
+  lock: 'Verriegelung rastet ein und hält, Feder spannt, Funktion wie vom Hersteller beschrieben?',
+  loadChain: 'Lastkette ohne Verschleiß, Längung, Verformung; geschmiert; läuft sauber über das Kettenrad?',
+  hooks: 'Last- und Aufhängehaken ohne Aufweitung, Sicherungsfalle schließt?',
+  brake: 'Bremse hält die Last sicher, Endanschläge vorhanden, Bedienung leichtgängig?',
+  ratchet: 'Ratsche bzw. Spannelement ohne Risse, Verformung oder starke Korrosion, Sperrklinke rastet ein?',
+  endFittings: 'Haken, Ringe und Verbindungsteile ohne Aufweitung (> 5 %), Risse oder Verformung?',
+  tensioner: 'Spannschloss/Ratschlastspanner ohne Verformung, Sicherung wirksam?',
+  condition: 'Keine Verformung, Risse, Verschleiß oder Korrosion, die die Sicherheit beeinträchtigen?',
+  func: 'Bewegliche Teile und Sicherungen funktionieren wie vom Hersteller beschrieben?',
+  docs: 'Gebrauchsanleitung verfügbar? Mängel aus der letzten Prüfung behoben?',
 };
 
 const KIND_CHECKS: Record<ItemKind, string[]> = {
@@ -440,6 +487,13 @@ export const SEVERITY_SHORT: Record<DefectSeverity, string> = {
   green: 'Grün',
   amber: 'Orange',
   red: 'Rot',
+};
+
+/** Erklärung je Ampel-Stufe — wortgleich zur App (mobile/src/types.ts). */
+export const SEVERITY_HINTS: Record<DefectSeverity, string> = {
+  green: 'Kleiner Mangel ohne Einfluss auf die Tragfähigkeit (z. B. Verschmutzung, leichter Abrieb) — vermerken und bei der nächsten Prüfung erneut bewerten.',
+  amber: 'Sicherheit möglicherweise beeinträchtigt — nur Hersteller oder Fachbetrieb darf instand setzen; bis dahin das Teil nicht benutzen.',
+  red: 'Ablegekriterium erreicht — Teil sofort sperren („nicht mehr benutzen"), kennzeichnen und aussondern; Ersatz beschaffen.',
 };
 
 export type DefectStatus = 'open' | 'resolved';

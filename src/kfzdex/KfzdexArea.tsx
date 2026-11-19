@@ -1,3 +1,4 @@
+import { lazy } from 'react';
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { CreditCard, IdCard, LayoutDashboard, Truck, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
@@ -12,15 +13,54 @@ import { VehicleDetail } from './pages/VehicleDetail';
 import { Drivers } from './pages/Drivers';
 import { DriverDetail } from './pages/DriverDetail';
 import { Team } from './pages/Team';
+import { VOR_ORT_PATH } from '../pruefen/Scope';
+import { VorOrtSwitch } from '../pruefen/ModeSwitch';
+import { useHomeScreenIcon } from '../pruefen/homeScreen';
+import { KfzVorOrtScope } from './vorOrt/Scope';
+import { KfzVorOrt, type KfzVorOrtPages } from './vorOrt/KfzVorOrt';
+
+// „Vor Ort“ mit Beispieldaten — nur im Dev-Server (/app/kfzdex/vor-ort?demo), fehlt im Produktions-Build.
+const VorOrtDemo = import.meta.env.DEV
+  ? lazy(() => import('./vorOrt/demo').then((m) => ({ default: m.KfzVorOrtDemoArea })))
+  : null;
+
+function demoWanted(): boolean {
+  try {
+    if (new URLSearchParams(window.location.search).has('demo')) sessionStorage.setItem('kd-vorort-demo', '1');
+    return sessionStorage.getItem('kd-vorort-demo') === '1';
+  } catch {
+    return new URLSearchParams(window.location.search).has('demo');
+  }
+}
+
+// Dieselben Seiten wie im Dashboard, eingebunden in die Handy-Ansicht „Vor Ort“ (eine Quelle).
+const VOR_ORT_PAGES: KfzVorOrtPages = {
+  vehicles: <Vehicles />,
+  vehicleDetail: <VehicleDetail />,
+  drivers: <Drivers />,
+  driverDetail: <DriverDetail />,
+  team: <Team />,
+  abo: <AboPage />,
+};
 
 // KfzDex nutzt das Betrieb/Team-Modell, aber mit eigener org_member-Tabelle
 // und permanentem Invite-Code — daher eigener Org-Fetcher + eigene Team-Seite.
 export function KfzdexArea({ app }: { app: AppConfig }) {
+  useHomeScreenIcon('KfzDex', '/icons/kfzdex-180.png');
+  if (VorOrtDemo && demoWanted()) return <VorOrtDemo app={app} />;
   return (
-    <AppArea app={app}>
+    <AppArea app={app} headerAction={<VorOrtSwitch />}>
       <OrgProvider fetch={fetchKfzOrgContext}>
         <OrgGate>
           <Routes>
+            <Route
+              path={`${VOR_ORT_PATH}/*`}
+              element={
+                <KfzVorOrtScope>
+                  <KfzVorOrt pages={VOR_ORT_PAGES} />
+                </KfzVorOrtScope>
+              }
+            />
             <Route element={<Shell />}>
               <Route index element={<Overview />} />
               <Route path="fahrzeuge" element={<Vehicles />} />

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { Modal } from '../../components/form';
 import { fmtDate } from '../../lib/format';
 import { fetchVehicles } from '../api';
 import { DueBadge, dueLabel } from '../badges';
@@ -9,6 +10,8 @@ import { UvvDialog, VehicleDialog } from '../dialogs';
 import { uvvDue } from '../due';
 import type { Vehicle, VehicleType } from '../types';
 import { VEHICLE_TYPE_LABEL } from '../types';
+import { GATE_TEXT, fleetGate } from '../vorOrt/backend';
+import { FREE_LIMITS } from '../vorOrt/rows';
 
 export function Vehicles() {
   const { client } = useAppAuth();
@@ -18,13 +21,27 @@ export function Vehicles() {
   const [inspecting, setInspecting] = useState<Vehicle | null>(null);
 
   const state = useAsync<Vehicle[]>(() => fetchVehicles(client), [client]);
+  // Gratis-Grenze wie in der App (1 Fahrzeug); Pro laut Server, im Zweifel erlaubt.
+  const [gate, setGate] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  async function onAdd() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      if ((await fleetGate(client, 'vehicle', FREE_LIMITS.vehicles)).allowed) setEditing('new');
+      else setGate(true);
+    } finally {
+      setChecking(false);
+    }
+  }
 
   return (
     <>
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Fahrzeuge</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => setEditing('new')}>
+        <button className="btn" onClick={() => void onAdd()} disabled={checking}>
           ＋ Fahrzeug anlegen
         </button>
       </div>
@@ -117,6 +134,20 @@ export function Vehicles() {
           );
         }}
       </LoadGuard>
+
+      {gate && (
+        <Modal title="Mehr Fahrzeuge mit Pro" onClose={() => setGate(false)} dirty={false}>
+          <p>{GATE_TEXT.vehicle}</p>
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+            <Link className="btn ghost" to="../abo">
+              Abo ansehen
+            </Link>
+            <button type="button" className="btn" onClick={() => setGate(false)}>
+              Verstanden
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {editing && (
         <VehicleDialog

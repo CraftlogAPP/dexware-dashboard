@@ -35,10 +35,18 @@ function calendarDaysUntil(day: Date): number {
   return Math.round((d.getTime() - today.getTime()) / DAY_MS);
 }
 
-export function dueInfo(lastAt: string | undefined, intervalDays: number, soonDays: number = DUE_SOON_DAYS): DueInfo {
+/** Eigene Frist-Regel einer App: Fälligkeitstag nach einer Prüfung am Tag `last` (HebeDex: Monate, in Österreich mit Jahresgrenze). */
+export type DueDateFn = (last: Date) => Date;
+
+export function dueInfo(
+  lastAt: string | undefined,
+  intervalDays: number,
+  soonDays: number = DUE_SOON_DAYS,
+  custom?: DueDateFn,
+): DueInfo {
   if (!lastAt) return { state: 'never', dueAt: null, daysLeft: null };
   const days = Number.isFinite(intervalDays) && intervalDays > 0 ? intervalDays : 365;
-  const dueAt = dueDay(lastAt, days);
+  const dueAt = custom ? custom(new Date(lastAt)) : dueDay(lastAt, days);
   const daysLeft = calendarDaysUntil(dueAt);
   const state: DueState = daysLeft <= 0 ? 'overdue' : daysLeft <= soonDays ? 'soon' : 'ok';
   return { state, dueAt, daysLeft };
@@ -99,10 +107,11 @@ export function nextDueAfter<T extends { id: string; retired: boolean }>(
   intervalDays: number,
   excludeIds: Set<string>,
   blocked: Set<string>,
+  custom?: DueDateFn,
 ): { next: T; count: number } | null {
   const due = units
     .filter((u) => !excludeIds.has(u.id) && !u.retired && !blocked.has(u.id))
-    .map((u) => ({ u, info: dueInfo(last.get(u.id), intervalDays) }))
+    .map((u) => ({ u, info: dueInfo(last.get(u.id), intervalDays, DUE_SOON_DAYS, custom) }))
     .filter((e) => e.info.state !== 'ok')
     .sort((a, b) => STATE_ORDER[a.info.state] - STATE_ORDER[b.info.state]);
   return due.length ? { next: due[0].u, count: due.length } : null;

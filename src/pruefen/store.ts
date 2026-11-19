@@ -26,6 +26,8 @@ export interface FormValues {
   inspectorName: string;
   qualification: string;
   signature: string;
+  /** Nur Apps mit Messwerten (HebeDex): Eingaben des Rechners, als Text wie getippt. */
+  measure?: Record<string, string>;
 }
 
 /** Angefangene Prüfung einer Einheit — im Orts-Modus eines Orts (unitId ist dann die ID des Orts). */

@@ -7,7 +7,7 @@ import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { kindOf, sitesPathOf, unitAlertOf } from '../config';
 import { usePruef, usePendingSync } from '../context';
 import { loadPruefData, withPendingMeta } from '../data';
-import { STATE_ORDER, dueInfo, dueLine, lastDueByUnit, unitState, type UnitState } from '../due';
+import { DUE_SOON_DAYS, STATE_ORDER, dueInfo, dueLine, lastDueByUnit, unitState, type UnitState } from '../due';
 import { listDrafts, type Draft } from '../store';
 import { Wartend } from './Wartend';
 
@@ -21,7 +21,7 @@ const BADGE: Record<UnitState, { cls: string; label: string }> = {
 
 export function Standort() {
   const { id } = useParams();
-  const { be, cfg, userId, base, owner, intervalDays } = usePruef();
+  const { be, cfg, userId, base, owner, intervalDays, dueDate } = usePruef();
   const state = useAsync(() => loadPruefData(be, cfg.appId, userId), [be, cfg.appId, userId]);
   useLiveRefresh([state.refresh], 60000);
   const { pending, sending, sendNow } = usePendingSync();
@@ -69,17 +69,25 @@ export function Standort() {
         {({ sites, units, meta, openDefects, offline }) => {
           const site = sites.find((s) => s.id === id);
           if (!site) return <div className="error-box">{S.one} nicht gefunden — gelöscht oder aus einem anderen Betrieb?</div>;
-          const last = lastDueByUnit(withPendingMeta(meta, pending, cfg.cols.unitFk), cfg.dueKind);
+          const allMeta = withPendingMeta(meta, pending, cfg.cols.unitFk);
+          const last = lastDueByUnit(allMeta, cfg.dueKind);
+          // Zweite Frist je Einheit (HebeDex: Rissprüfung der Kette) — eigene Zeile, wenn fällig oder bald fällig
+          const lastByKind = new Map<string, Map<string, string>>();
+          const lastOf = (unitId: string) => (kind: string) => {
+            if (!lastByKind.has(kind)) lastByKind.set(kind, lastDueByUnit(allMeta, kind));
+            return lastByKind.get(kind)!.get(unitId);
+          };
           const blocked = new Set(openDefects.filter((d) => d.blocked).map((d) => d.unitId));
           const openCount = new Map<string, number>();
           for (const d of openDefects) if (d.unitId) openCount.set(d.unitId, (openCount.get(d.unitId) ?? 0) + 1);
           const here = units
             .filter((u) => u.siteId === site.id && !u.retired)
             .map((u) => {
-              const info = dueInfo(last.get(u.id), intervalDays);
+              const info = dueInfo(last.get(u.id), intervalDays, DUE_SOON_DAYS, dueDate);
+              const extra = cfg.unitExtraDue && u.row ? cfg.unitExtraDue(u.row, lastOf(u.id)) : null;
               // Warnung aus den Stammdaten (z. B. GurtDex: ablegereif) — nur wenn nicht ohnehin gesperrt
               const alert = blocked.has(u.id) ? null : unitAlertOf(cfg, u);
-              return { u, info, alert, st: unitState(info, blocked.has(u.id)) };
+              return { u, info, alert, extra, st: unitState(info, blocked.has(u.id)) };
             })
             .sort(
               (a, b) =>
@@ -134,7 +142,7 @@ export function Standort() {
                     <div className="card empty">Keine Treffer.</div>
                   ) : (
                     <ul className="ez-list">
-                      {shown.map(({ u, info, alert, st }) => {
+                      {shown.map(({ u, info, alert, extra, st }) => {
                         const open = openCount.get(u.id) ?? 0;
                         return (
                           <li key={u.id}>
@@ -149,6 +157,9 @@ export function Standort() {
                                   {st !== 'blocked' && open > 0 ? ` · ${open} ${open === 1 ? 'offener Mangel' : 'offene Mängel'}` : ''}
                                 </span>
                                 {alert && <span className="pv-bad">{alert.text}</span>}
+                                {extra && extra.state !== 'ok' && st !== 'blocked' && (
+                                  <span className={extra.state === 'overdue' ? 'pv-bad' : 'pv-soon'}>{extra.text}</span>
+                                )}
                               </span>
                               <span className="ez-prop-side">
                                 {draftUnits.has(u.id) && <span className="badge amber">Angefangen</span>}

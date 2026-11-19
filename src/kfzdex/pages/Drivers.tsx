@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { Modal } from '../../components/form';
 import { fmtDate } from '../../lib/format';
 import { fetchDrivers } from '../api';
 import { DueBadge, dueLabel } from '../badges';
 import { DriverDialog, LicenseCheckDialog } from '../dialogs';
 import { licenseDue } from '../due';
 import type { Driver } from '../types';
+import { GATE_TEXT, fleetGate } from '../vorOrt/backend';
+import { FREE_LIMITS } from '../vorOrt/rows';
 
 export function Drivers() {
   const { client } = useAppAuth();
@@ -16,13 +19,27 @@ export function Drivers() {
   const [checking, setChecking] = useState<Driver | null>(null);
 
   const state = useAsync<Driver[]>(() => fetchDrivers(client), [client]);
+  // Gratis-Grenze wie in der App (2 Fahrer, inaktive zählen mit); Pro laut Server, im Zweifel erlaubt.
+  const [gate, setGate] = useState(false);
+  const [gateBusy, setGateBusy] = useState(false);
+
+  async function onAdd() {
+    if (gateBusy) return;
+    setGateBusy(true);
+    try {
+      if ((await fleetGate(client, 'driver', FREE_LIMITS.drivers)).allowed) setEditing('new');
+      else setGate(true);
+    } finally {
+      setGateBusy(false);
+    }
+  }
 
   return (
     <>
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Fahrer</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => setEditing('new')}>
+        <button className="btn" onClick={() => void onAdd()} disabled={gateBusy}>
           ＋ Fahrer anlegen
         </button>
       </div>
@@ -110,6 +127,20 @@ export function Drivers() {
           );
         }}
       </LoadGuard>
+
+      {gate && (
+        <Modal title="Mehr Fahrer mit Pro" onClose={() => setGate(false)} dirty={false}>
+          <p>{GATE_TEXT.driver}</p>
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+            <Link className="btn ghost" to="../abo">
+              Abo ansehen
+            </Link>
+            <button type="button" className="btn" onClick={() => setGate(false)}>
+              Verstanden
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {editing && (
         <DriverDialog

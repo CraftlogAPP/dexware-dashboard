@@ -19,7 +19,9 @@ export function VorOrtScope({ cfg, children }: { cfg: PruefConfig; children: Rea
   const role = data?.role;
   const value = useMemo<PruefCtxValue | null>(() => {
     if (!userId || !org) return null;
-    const intervalDays = cfg.dueIntervalDays(org as unknown as Record<string, unknown>);
+    const orgRow = org as unknown as Record<string, unknown>;
+    const intervalDays = cfg.dueIntervalDays(orgRow);
+    const dueDate = cfg.dueDate;
     return {
       cfg,
       be: supabasePruefBackend(client, cfg, intervalDays),
@@ -29,6 +31,7 @@ export function VorOrtScope({ cfg, children }: { cfg: PruefConfig; children: Rea
       email,
       owner: role === 'owner',
       intervalDays,
+      ...(dueDate ? { dueDate: (last: Date) => dueDate(last, orgRow) } : {}),
       base: `/app/${app.id}/${VOR_ORT_PATH}`,
       dashboardUrl: `/app/${app.id}`,
       signOut: () => void signOut(),

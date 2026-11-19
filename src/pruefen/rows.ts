@@ -4,6 +4,7 @@
 // Abstand zum Standort, Server-Eingang und Prüfcode ergänzt der Server selbst (Trigger inspection_zz_seal).
 // Zwei Familien (cfg.mode): 'unit' — die Prüfung trägt die Einheit (ladder_id …); 'site' — die Prüfung trägt nur den
 // Ort (site_id / warehouse_id / playground_id), der Mangel/Schaden zusätzlich die betroffene Einheit oder NULL.
+// HebeDex: zusätzlich die Spalte `measurements` (Messwerte des Ablegereife-Rechners als Text, ohne Messung `{}`).
 
 import type { CheckResult, PruefConfig } from './config.ts';
 
@@ -42,6 +43,8 @@ export interface InspectionRow {
   created_at: string;
   /** PNG-Daten-URI; fehlt ganz, wenn nicht unterschrieben wurde (wie die App). */
   signature?: string;
+  /** Nur Apps mit Messwerten (HebeDex): Werte wie eingegeben; ohne Messung `{}`. Fehlt bei allen anderen Apps ganz. */
+  measurements?: Record<string, string>;
   [siteOrUnitFk: string]: unknown;
 }
 
@@ -78,6 +81,11 @@ export interface InspectionInput {
   inspectorName: string;
   qualification: string;
   signature: string;
+  /**
+   * Nur Apps mit Messwerten (HebeDex): die ausgefüllten Felder des Rechners, ohne Messung `{}`.
+   * Weglassen (undefined) = die Tabelle hat keine Spalte measurements.
+   */
+  measurements?: Record<string, string>;
 }
 
 export interface DefectInput {
@@ -134,6 +142,7 @@ export function buildInspectionRow(cfg: Cols, i: InspectionInput): InspectionRow
     created_at: i.at,
   };
   if (i.signature) row.signature = i.signature;
+  if (i.measurements !== undefined) row.measurements = i.measurements;
   return row;
 }
 
@@ -152,6 +161,15 @@ export function buildDefectRow(cfg: Cols, d: DefectInput): DefectRow {
     reporter_name: d.inspectorName.trim() || null,
     created_at: d.at,
   };
+}
+
+/**
+ * Messwerte für die Spalte measurements — wie die App (InspectionScreen → doSave): alle ausgefüllten Felder als Text;
+ * ist keines der „gemessen“-Felder ausgefüllt (nur Vorbelegung wie Nenndicke oder Seilart), wird `{}` gespeichert.
+ */
+export function measurementsForRow(values: Record<string, string>, measuredKeys: readonly string[]): Record<string, string> {
+  const filled = Object.fromEntries(Object.entries(values).filter(([, v]) => String(v ?? '').trim() !== ''));
+  return measuredKeys.some((k) => !!filled[k]) ? filled : {};
 }
 
 /**
