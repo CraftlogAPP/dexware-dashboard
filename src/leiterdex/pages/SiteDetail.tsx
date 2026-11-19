@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
-import { FormDialog, orNull, s, type FormValues } from '../../components/form';
+import { FormDialog, Modal, orNull, s, type FormValues } from '../../components/form';
 import { fmtDateTime, gpsLabel } from '../../lib/format';
 import {
   fetchDefects,
@@ -16,6 +16,8 @@ import {
 import { DefectStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, dimensionLabel, ladderNameMap } from '../labels';
 import { SiteDialog } from '../dialogs';
+import { gateText, unitGate } from '../../pruefen/pro';
+import { LEITERDEX_VOR_ORT } from '../vorOrt';
 import {
   LADDER_CATEGORIES,
   LADDER_MATERIALS,
@@ -38,6 +40,20 @@ export function SiteDetail() {
   const { data: org } = useOrg();
   const [editingLadder, setEditingLadder] = useState<Ladder | 'new' | null>(null);
   const [editingSite, setEditingSite] = useState(false);
+  // Gratis-Grenze wie in der App (2 Leitern im Bestand, ausgesonderte zählen nicht); Pro laut Server, im Zweifel erlaubt.
+  const [gate, setGate] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  async function onAddLadder() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      if ((await unitGate(client, LEITERDEX_VOR_ORT)).allowed) setEditingLadder('new');
+      else setGate(true);
+    } finally {
+      setChecking(false);
+    }
+  }
 
   const state = useAsync<Data>(async () => {
     const [site, ladders, inspections, defects] = await Promise.all([
@@ -51,6 +67,9 @@ export function SiteDetail() {
 
   async function onSaveLadder(v: FormValues) {
     if (!org || !id) throw new Error('Kein Betrieb geladen');
+    // Wieder in Betrieb nehmen zählt wie Anlegen (in der App genauso).
+    const backInUse = editingLadder !== 'new' && editingLadder?.retired === true && v.retired !== true;
+    if (backInUse && !(await unitGate(client, LEITERDEX_VOR_ORT)).allowed) throw new Error(gateText(LEITERDEX_VOR_ORT));
     await saveLadder(
       client,
       org.org.id,
@@ -131,7 +150,7 @@ export function SiteDetail() {
 
             <div className="section-head">
               <h2>Leitern & Tritte ({ladders.length})</h2>
-              <button className="btn small" onClick={() => setEditingLadder('new')}>
+              <button className="btn small" onClick={() => void onAddLadder()} disabled={checking}>
                 ＋ Leiter anlegen
               </button>
             </div>
@@ -181,6 +200,20 @@ export function SiteDetail() {
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {gate && (
+              <Modal title="Mehr Leitern mit Pro" onClose={() => setGate(false)} dirty={false}>
+                <p>{gateText(LEITERDEX_VOR_ORT)}</p>
+                <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+                  <Link className="btn ghost" to="../abo">
+                    Abo ansehen
+                  </Link>
+                  <button type="button" className="btn" onClick={() => setGate(false)}>
+                    Verstanden
+                  </button>
+                </div>
+              </Modal>
             )}
 
             {editingLadder && (

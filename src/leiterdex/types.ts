@@ -20,6 +20,12 @@ export const INSPECTION_SHORT: Record<InspectionType, string> = {
   expert: 'Regelmäßige Prüfung',
 };
 
+/** Erklärung je Prüfart — wortgleich zur App (mobile/src/types.ts), erscheint beim Erfassen „Vor Ort“. */
+export const INSPECTION_HINTS: Record<InspectionType, string> = {
+  visual: 'Sicht- und Funktionskontrolle durch den Benutzer bzw. eine beauftragte Person — vor der Benutzung; dokumentiert empfohlen z. B. monatlich.',
+  expert: 'Wiederkehrende Prüfung durch eine zur Prüfung befähigte Person (BetrSichV § 14) — Frist aus der Gefährdungsbeurteilung, üblich: alle 12 Monate. LeiterDex dokumentiert Termin und Ergebnis.',
+};
+
 /** Empfohlenes Intervall in Tagen je Prüfart (Fälligkeits-Anzeige). */
 export const INSPECTION_INTERVAL_DAYS: Record<InspectionType, number> = {
   visual: 30,
@@ -35,21 +41,23 @@ export type CheckResult = 'ok' | 'defect' | 'na';
 export interface ChecklistItem {
   id: string;
   label: string;
+  /** Prüfhinweis wie in der App (beim Erfassen „Vor Ort“) */
+  hint: string;
 }
 
 export const CHECKLIST: ChecklistItem[] = [
-  { id: 'stiles', label: 'Holme' },
-  { id: 'rungs', label: 'Sprossen / Stufen' },
-  { id: 'feet', label: 'Leiter-/Trittfüße' },
-  { id: 'spreader', label: 'Spreizsicherung' },
-  { id: 'joints', label: 'Gelenke / Beschläge' },
-  { id: 'connections', label: 'Verbindungen' },
-  { id: 'hooks', label: 'Führungen / Fallhaken / Zugseil' },
-  { id: 'platform', label: 'Plattform / Podest' },
-  { id: 'accessories', label: 'Traverse / Zubehör' },
-  { id: 'wood', label: 'Holz: Oberfläche & Anstrich' },
-  { id: 'marking', label: 'Kennzeichnung' },
-  { id: 'cleanliness', label: 'Verschmutzung' },
+  { id: 'stiles', label: 'Holme', hint: 'Verbogen, geknickt, gerissen, aufgescheuerte Kanten, Korrosion? Beschädigte Alu-Holme sind nicht reparabel — aussondern.' },
+  { id: 'rungs', label: 'Sprossen / Stufen', hint: 'Alle vorhanden, fest verbunden, unverformt? Trittflächen rutschhemmend und nicht abgenutzt?' },
+  { id: 'feet', label: 'Leiter-/Trittfüße', hint: 'Fußkappen und Endstopfen vorhanden, unbeschädigt, rutschhemmend? Abgenutzte Füße = Wegrutschgefahr.' },
+  { id: 'spreader', label: 'Spreizsicherung', hint: 'Bei Stehleitern: Spanngurte, Ketten oder Gelenke vorhanden, unbeschädigt, gleich lang und straff?' },
+  { id: 'joints', label: 'Gelenke / Beschläge', hint: 'Gelenke und Arretierungen (Mehrzweck-/Gelenkleitern) fest, funktionsfähig, ohne Spiel? Alle Bolzen gesichert?' },
+  { id: 'connections', label: 'Verbindungen', hint: 'Nieten, Schrauben und Bördelverbindungen fest? Keine losen oder fehlenden Verbindungselemente?' },
+  { id: 'hooks', label: 'Führungen / Fallhaken / Zugseil', hint: 'Bei Schiebe- und Seilzugleitern: Führungsbügel intakt, Fallhaken rasten sicher ein, Zugseil unbeschädigt?' },
+  { id: 'platform', label: 'Plattform / Podest', hint: 'Bei Tritten und Podestleitern: Plattform fest und unverformt, Belag rutschhemmend, Geländer/Haltebügel intakt?' },
+  { id: 'accessories', label: 'Traverse / Zubehör', hint: 'Fußverbreiterung (Traverse), Wandabstützung, Einhängehaken, Erdspitzen fest und unbeschädigt?' },
+  { id: 'wood', label: 'Holz: Oberfläche & Anstrich', hint: 'Splitter, Risse, Astabbrüche? Keine deckenden Anstriche (verdecken Risse) — nur transparente Lasur zulässig.' },
+  { id: 'marking', label: 'Kennzeichnung', hint: 'Typenschild, EN-131-Kennzeichnung, Benutzungs-Piktogramme und Prüfplakette vorhanden und lesbar?' },
+  { id: 'cleanliness', label: 'Verschmutzung', hint: 'Frei von Öl, Fett, Farbe, Mörtel und Beton? Verschmutzte Sprossen und Stufen = Abrutschgefahr.' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -147,6 +155,13 @@ export const SEVERITY_LABELS: Record<DefectSeverity, string> = {
   green: 'Grün — beobachten',
   amber: 'Orange — sperren & reparieren',
   red: 'Rot — aussondern',
+};
+
+/** Erklärung je Ampel-Stufe — wortgleich zur App, erscheint beim Erfassen eines Mangels „Vor Ort“. */
+export const SEVERITY_HINTS: Record<DefectSeverity, string> = {
+  green: 'Geringfügiger Mangel ohne Sicherheitsrisiko — kennzeichnen, beobachten, bei der nächsten Kontrolle erneut bewerten.',
+  amber: 'Sicherheitsrelevanter Mangel — Leiter sofort der Benutzung entziehen und erst nach fachgerechter Instandsetzung (Originalteile) wieder freigeben.',
+  red: 'Nicht reparabel (z. B. verbogener Alu-Holm) — Leiter unverzüglich und dauerhaft aussondern und unbrauchbar machen.',
 };
 
 export const SEVERITY_SHORT: Record<DefectSeverity, string> = {

@@ -2249,3 +2249,222 @@ a.due-row:hover {
     font-size: 11.5px;
   }
 }
+
+/* ---------- Prüf-Apps: „Vor Ort“ (Prüfung am Handy dokumentieren) — ergänzt .ez-* und .ad-* ---------- */
+.pv-bad {
+  color: #fca5a5;
+  font-weight: 600;
+}
+.pv-hint {
+  margin: 8px 0 0;
+}
+.pv-label {
+  display: block;
+  margin: 14px 0 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.btn.pv-tap {
+  min-height: 44px;
+}
+.pv-unit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+.pv-unit b {
+  font-size: 19px;
+}
+.pv-unit a {
+  align-self: flex-start;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+.pv-blocked {
+  margin-top: 12px;
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.1);
+}
+/* Checkliste: je Punkt drei große Tasten (mit Handschuhen treffbar), der gewählte Zustand ist farbig */
+.pv-checks {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pv-check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 10px 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.pv-check.defect {
+  border-color: rgba(239, 68, 68, 0.6);
+}
+.pv-check-text {
+  flex: 1 1 96px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+}
+.pv-check-hint {
+  flex: 1 1 100%;
+}
+.pv-seg {
+  flex: none;
+  display: flex;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  overflow: hidden;
+}
+.pv-seg-btn {
+  min-width: 56px;
+  min-height: 48px;
+  padding: 0 8px;
+  border: none;
+  border-left: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pv-seg-btn:first-child {
+  border-left: none;
+}
+.pv-seg-btn.on.ok {
+  background: var(--green);
+  color: #04150a;
+}
+.pv-seg-btn.on.defect {
+  background: var(--red);
+  color: #fff;
+}
+.pv-seg-btn.on.na {
+  background: rgba(255, 255, 255, 0.22);
+  color: var(--text);
+}
+.pv-seg-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.pv-defect {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  overflow-wrap: anywhere;
+}
+.pv-defect.red {
+  border-color: rgba(239, 68, 68, 0.6);
+}
+.pv-defect.amber {
+  border-color: rgba(245, 158, 11, 0.5);
+}
+.pv-defect-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.ez-chip.pv-sev.on.green {
+  background: var(--green);
+  border-color: var(--green);
+  color: #04150a;
+}
+.ez-chip.pv-sev.on.amber {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #1a1000;
+}
+.ez-chip.pv-sev.on.red {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.ez-chip.pv-block {
+  margin-top: 12px;
+}
+/* Unterschrift: immer weiße Fläche mit dunkler Schrift (so steht sie auch im PDF) */
+.pv-sig {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.pv-sig-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.pv-sig-box {
+  height: 96px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: #fff;
+  color: #6b7280;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.pv-sig-box:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pv-sig-box img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.pv-sig-actions {
+  display: flex;
+  gap: 8px;
+}
+.pv-sig-pad {
+  display: block;
+  width: 100%;
+  height: 220px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: #fff;
+  /* der Finger zeichnet — die Seite darf dabei nicht scrollen oder zoomen */
+  touch-action: none;
+  cursor: crosshair;
+}
+.pv-more {
+  margin-bottom: 16px;
+  padding: 4px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.pv-more summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: center;
+  min-height: 48px;
+  font-weight: 600;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.pv-more[open] summary {
+  margin-bottom: 10px;
+}
+.pv-summary {
+  margin: 14px 0 0;
+  overflow-wrap: anywhere;
+}

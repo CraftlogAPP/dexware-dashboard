@@ -1,0 +1,226 @@
+// „Vor Ort“ mit Beispieldaten — NUR im Dev-Server (/app/<app>/vor-ort?demo), fehlt im Produktions-Build
+// (siehe LeiterdexArea). Damit lässt sich der ganze Ablauf ohne Konto prüfen:
+//   ?demo              normaler Ablauf (Speichern klappt)
+//   ?demo&netz=aus     Server nicht erreichbar → Prüfung bleibt auf dem Gerät („wartet“)
+//   ?demo&netz=teil    Netz bricht nach der Prüfung ab → Prüfung übertragen, Mängel warten
+//   ?demo&netz=nein    Server lehnt ab → „vom Server nicht angenommen“
+//   &rolle=mitarbeiter Ansicht eines Mitarbeiters · &pro=0 Gratis-Paket
+// Der Schalter lässt sich im Banner oben umstellen (Nachsenden testen). Unten steht mit, was „gesendet“ wurde.
+import { useMemo, useState } from 'react';
+import { Link, Route, Routes } from 'react-router-dom';
+import type { AppConfig } from '../apps/registry';
+import type { OpenDefect, PruefBackend, Site, Unit } from './backend';
+import type { PruefConfig } from './config';
+import { PruefCtx, type PruefCtxValue, type VorOrtPages } from './context';
+import type { InspMeta } from './due';
+import { VOR_ORT_PATH } from './Scope';
+import { VorOrt } from './VorOrt';
+
+type Netz = 'an' | 'aus' | 'teil' | 'nein';
+
+const ORG = '00000000-0000-4000-8000-0000000000aa';
+const USER = '00000000-0000-4000-8000-0000000000bb';
+const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function createBackend(cfg: PruefConfig, netz: () => Netz, log: (line: string) => void): PruefBackend {
+  const U = cfg.labels.unit;
+  const sites: Site[] = [
+    { id: uuid(1), name: 'Werkstatt Nord', address: 'Industriestraße 12, 8010 Musterstadt', active: true },
+    { id: uuid(2), name: 'Lager Süd', address: 'Hafenweg 3, 8010 Musterstadt', active: true },
+    { id: uuid(3), name: 'Altes Büro (pausiert)', address: 'Gartenweg 1', active: false },
+  ];
+  const unit = (n: number, site: number, name: string, info: string, retired = false): Unit => ({
+    id: uuid(100 + n),
+    siteId: uuid(site),
+    name,
+    info,
+    retired,
+  });
+  const units: Unit[] = [
+    unit(1, 1, `${U.one} 001`, 'Beispiel A'),
+    unit(2, 1, `${U.one} 002`, 'Beispiel B'),
+    unit(3, 1, `${U.one} 003`, 'Beispiel A'),
+    unit(4, 1, `${U.one} 004`, 'Beispiel C'),
+    unit(5, 1, `${U.one} 005`, 'Beispiel B'),
+    unit(6, 1, `${U.one} 006`, 'Beispiel A'),
+    unit(7, 1, `${U.one} 007`, 'Beispiel C'),
+    unit(8, 1, `${U.one} 008 (alt)`, 'Beispiel A', true),
+    unit(9, 2, `${U.one} 101`, 'Beispiel B'),
+  ];
+  const meta: InspMeta[] = [
+    { unitId: uuid(101), type: cfg.dueKind, startedAt: daysAgo(40), canceled: false },
+    { unitId: uuid(102), type: cfg.dueKind, startedAt: daysAgo(350), canceled: false },
+    { unitId: uuid(103), type: cfg.dueKind, startedAt: daysAgo(400), canceled: false },
+    { unitId: uuid(104), type: cfg.dueKind, startedAt: daysAgo(10), canceled: false },
+    { unitId: uuid(109), type: cfg.dueKind, startedAt: daysAgo(100), canceled: false },
+  ];
+  const defects: OpenDefect[] = [{ id: uuid(900), unitId: uuid(104), severity: cfg.severities[cfg.severities.length - 1].id, blocked: true }];
+  const inspectionIds = new Set<string>();
+  const defectIds = new Set<string>();
+  const pro = () => new URLSearchParams(window.location.search).get('pro') !== '0';
+  const gate = async () => {
+    await sleep(350);
+    if (netz() === 'aus') throw new TypeError('Failed to fetch');
+  };
+  const reject = (table: string) =>
+    Object.assign(new Error(`new row violates row-level security policy for table "${table}"`), { code: '42501' });
+  return {
+    async listSites() {
+      await gate();
+      return sites;
+    },
+    async listUnits() {
+      await gate();
+      return units;
+    },
+    async listInspectionMeta() {
+      await gate();
+      return [...meta];
+    },
+    async listOpenDefects() {
+      await gate();
+      return [...defects];
+    },
+    async uploadPhoto(path, blob) {
+      await gate();
+      log(`Foto ${path} (${Math.round(blob.size / 1024)} KB, ${blob.type})`);
+    },
+    async insertInspection(row, photoUrls) {
+      await gate();
+      if (netz() === 'nein') throw reject(cfg.tables.inspection);
+      if (inspectionIds.has(row.id)) {
+        log(`Prüfung ${row.id} gibt es schon (Wiederholung) — nichts doppelt`);
+        return { signatureDropped: false };
+      }
+      inspectionIds.add(row.id);
+      meta.push({ unitId: String(row[cfg.cols.unitFk]), type: row.type, startedAt: row.started_at, canceled: false });
+      const { signature, ...rest } = row;
+      log(
+        `Prüfung ${JSON.stringify({ ...rest, signature: signature ? `${signature.slice(0, 22)}… (${Math.round(signature.length / 1024)} KB)` : undefined, photo_urls: photoUrls })}`,
+      );
+      return { signatureDropped: false };
+    },
+    async insertDefect(row, photoUrls) {
+      await gate();
+      if (netz() === 'teil') throw new TypeError('Failed to fetch');
+      if (netz() === 'nein') throw reject(cfg.tables.defect);
+      if (defectIds.has(row.id)) {
+        log(`Mangel ${row.id} gibt es schon (Wiederholung) — nichts doppelt`);
+        return;
+      }
+      defectIds.add(row.id);
+      defects.push({ id: row.id, unitId: String(row[cfg.cols.unitFk]), severity: row.severity, blocked: row[cfg.cols.blocked] === true });
+      log(`Mangel ${JSON.stringify({ ...row, photo_urls: photoUrls })}`);
+    },
+    async isPro() {
+      return pro();
+    },
+  };
+}
+
+function Stub({ title, back }: { title: string; back?: string }) {
+  return (
+    <>
+      {back && (
+        <p className="small" style={{ marginBottom: 4 }}>
+          {/* relativer Link wie auf den echten Dashboard-Seiten — muss im Handy-Rahmen bleiben */}
+          <Link to={back}>← Zurück</Link>
+        </p>
+      )}
+      <h1>{title}</h1>
+      <div className="card empty">
+        In den Beispieldaten nicht enthalten — angemeldet erscheint hier die Seite aus dem Dashboard.
+      </div>
+    </>
+  );
+}
+
+const DEMO_PAGES: VorOrtPages = {
+  inspections: (
+    <>
+      <Stub title="Prüfungen" />
+      <p className="small">
+        <Link to="beispiel">Beispiel-Prüfung öffnen</Link>
+      </p>
+    </>
+  ),
+  inspectionDetail: <Stub title="Prüfung" back="../pruefungen" />,
+  defects: <Stub title="Mängel" />,
+  sites: <Stub title="Standorte verwalten" />,
+  siteDetail: <Stub title="Standort" back="../standorte" />,
+  report: <Stub title="Prüfbericht-PDF" />,
+  team: <Stub title="Team" />,
+  abo: <Stub title="Abo" />,
+};
+
+export function VorOrtDemoArea({ app, cfg }: { app: AppConfig; cfg: PruefConfig }) {
+  const [netz, setNetz] = useState<Netz>(() => {
+    const v = new URLSearchParams(window.location.search).get('netz');
+    return v === 'aus' || v === 'nein' || v === 'teil' ? v : 'an';
+  });
+  const [log, setLog] = useState<string[]>([]);
+  const netzRef = useMemo(() => ({ current: netz }), []); // eslint-disable-line react-hooks/exhaustive-deps
+  netzRef.current = netz;
+  const be = useMemo(() => createBackend(cfg, () => netzRef.current, (l) => setLog((prev) => [...prev, l])), [cfg, netzRef]);
+  const base = `/app/${app.id}`;
+  const value = useMemo<PruefCtxValue>(
+    () => ({
+      cfg,
+      be,
+      userId: USER,
+      orgId: ORG,
+      orgName: 'Beispielbetrieb',
+      email: 'beispiel@example.com',
+      owner: new URLSearchParams(window.location.search).get('rolle') !== 'mitarbeiter',
+      intervalDays: cfg.dueIntervalDays({}),
+      base: `${base}/${VOR_ORT_PATH}`,
+      dashboardUrl: base,
+      signOut: () => undefined,
+    }),
+    [cfg, be, base],
+  );
+  const style = { '--accent': app.theme.accent, '--on-accent': app.theme.onAccent, '--bg': app.theme.bg } as React.CSSProperties;
+
+  return (
+    <div className="app-scope" style={style}>
+      <header className="site-header">
+        <span className="app-chip">{app.name} · Beispieldaten</span>
+        <div className="spacer" />
+        <label className="small muted" style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <select
+            aria-label="Server (Beispieldaten)"
+            value={netz}
+            onChange={(e) => setNetz(e.target.value as Netz)}
+            style={{ width: 'auto', maxWidth: 130, margin: 0, padding: '4px 8px' }}
+            data-testid="demo-netz"
+          >
+            <option value="an">erreichbar</option>
+            <option value="aus">kein Netz</option>
+            <option value="teil">Netz weg nach Prüfung</option>
+            <option value="nein">lehnt ab</option>
+          </select>
+        </label>
+      </header>
+      <PruefCtx.Provider value={value}>
+        <Routes>
+          <Route path={`${VOR_ORT_PATH}/*`} element={<VorOrt pages={DEMO_PAGES} />} />
+          <Route
+            path="*"
+            element={
+              <div className="page">
+                <Link className="btn" to={`${base}/${VOR_ORT_PATH}`}>
+                  Zu „Vor Ort“ (Beispieldaten)
+                </Link>
+              </div>
+            }
+          />
+        </Routes>
+      </PruefCtx.Provider>
+      <pre data-testid="demo-log" style={{ margin: '16px 16px 120px', fontSize: 11, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', color: 'var(--muted)' }}>
+        {log.join('\n')}
+      </pre>
+    </div>
+  );
+}

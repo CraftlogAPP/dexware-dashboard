@@ -1,0 +1,155 @@
+// Die Zeilen, die „Vor Ort“ in die Datenbank schreibt — EXAKT wie die Apps (mobile/src/data/supabaseRepository.ts →
+// addInspection/addDefect): gleiche Spalten, gleiche Bedeutung. Bewusst ohne Abhängigkeiten (nur Typen), damit der
+// Schema-Test (tests/pruefen-vor-ort.test.mjs) genau diese Funktionen gegen das echte Schema prüft.
+// Abstand zum Standort, Server-Eingang und Prüfcode ergänzt der Server selbst (Trigger inspection_zz_seal).
+
+import type { CheckResult, PruefConfig } from './config.ts';
+
+export interface GpsFix {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  at: string;
+}
+
+export const STORAGE_PREFIX = 'storage:';
+
+/** Prüfung ohne Fotos — so, wie sie in die Tabelle inspection geht (die Einheit steht unter cfg.cols.unitFk). */
+export interface InspectionRow {
+  id: string;
+  org_id: string;
+  site_id: string;
+  type: string;
+  started_at: string;
+  lat: number | null;
+  lng: number | null;
+  gps_accuracy_m: number | null;
+  gps_at: string | null;
+  gps_mocked: null;
+  end_lat: number | null;
+  end_lng: number | null;
+  end_accuracy_m: number | null;
+  end_gps_at: string | null;
+  end_mocked: null;
+  checklist: Record<string, CheckResult>;
+  notes: string | null;
+  performed_by: string;
+  inspector_name: string | null;
+  created_at: string;
+  /** PNG-Daten-URI; fehlt ganz, wenn nicht unterschrieben wurde (wie die App). */
+  signature?: string;
+  [unitFk: string]: unknown;
+}
+
+/** Mangel ohne Fotos — so, wie er in die Tabelle defect geht. */
+export interface DefectRow {
+  id: string;
+  org_id: string;
+  site_id: string;
+  inspection_id: string;
+  title: string;
+  description: string | null;
+  severity: string;
+  reported_by: string;
+  reporter_name: string | null;
+  created_at: string;
+  [unitFkOrBlocked: string]: unknown;
+}
+
+export interface InspectionInput {
+  id: string;
+  orgId: string;
+  userId: string;
+  siteId: string;
+  unitId: string;
+  type: string;
+  /** Zeitpunkt des ERSTEN Speicher-Versuchs — Teil des Nachweises, bleibt bei Wiederholungen gleich. */
+  at: string;
+  /** Beginn-Stempel (beste Position der ersten 20 s) oder null = kein GPS. */
+  start: GpsFix | null;
+  /** End-Stempel (letzte Position beim Speichern) oder null. */
+  end: GpsFix | null;
+  checklist: Record<string, CheckResult>;
+  notes: string;
+  inspectorName: string;
+  qualification: string;
+  signature: string;
+}
+
+export interface DefectInput {
+  id: string;
+  orgId: string;
+  userId: string;
+  siteId: string;
+  unitId: string;
+  inspectionId: string;
+  at: string;
+  title: string;
+  description: string;
+  severity: string;
+  blocked: boolean;
+  inspectorName: string;
+}
+
+/** „Name (Qualifikation)“ bzw. nur der Name; leer → null. Wie mobile/src/lib/qualification.ts. */
+export function inspectorWithQualification(name: string, qualification: string): string | null {
+  const n = name.trim();
+  const q = qualification.trim();
+  if (!n) return null;
+  return q ? `${n} (${q})` : n;
+}
+
+type Cols = Pick<PruefConfig, 'cols'>;
+
+export function buildInspectionRow(cfg: Cols, i: InspectionInput): InspectionRow {
+  const row: InspectionRow = {
+    id: i.id,
+    org_id: i.orgId,
+    site_id: i.siteId,
+    [cfg.cols.unitFk]: i.unitId,
+    type: i.type,
+    started_at: i.at,
+    lat: i.start?.lat ?? null,
+    lng: i.start?.lng ?? null,
+    gps_accuracy_m: i.start?.accuracy ?? null,
+    gps_at: i.start?.at ?? null,
+    gps_mocked: null, // der Browser meldet kein Fake-GPS
+    end_lat: i.end?.lat ?? null,
+    end_lng: i.end?.lng ?? null,
+    end_accuracy_m: i.end?.accuracy ?? null,
+    end_gps_at: i.end?.at ?? null,
+    end_mocked: null,
+    checklist: i.checklist,
+    notes: i.notes.trim() || null,
+    performed_by: i.userId,
+    inspector_name: inspectorWithQualification(i.inspectorName, i.qualification),
+    created_at: i.at,
+  };
+  if (i.signature) row.signature = i.signature;
+  return row;
+}
+
+export function buildDefectRow(cfg: Cols, d: DefectInput): DefectRow {
+  return {
+    id: d.id,
+    org_id: d.orgId,
+    site_id: d.siteId,
+    inspection_id: d.inspectionId,
+    [cfg.cols.unitFk]: d.unitId,
+    title: d.title.trim(),
+    description: d.description.trim() || null,
+    severity: d.severity,
+    [cfg.cols.blocked]: d.blocked,
+    reported_by: d.userId,
+    reporter_name: d.inspectorName.trim() || null,
+    created_at: d.at,
+  };
+}
+
+/**
+ * Pfad eines Fotos im privaten Bucket „photos“: <org>/<ordner>/<id>/<n>.jpg (Ordner wie die App).
+ * Fester Name je Foto: Ein wiederholter Versuch trifft dieselbe Datei („gibt es schon“ = Erfolg) — keine Waisen.
+ */
+export function photoPath(orgId: string, folder: string, id: string, n: number): string {
+  return `${orgId}/${folder}/${id}/${n}.jpg`;
+}
