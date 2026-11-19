@@ -1063,11 +1063,24 @@ select option {
 }
 .auth-links {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   margin-top: 14px;
   font-size: 13.5px;
+}
+/* Knöpfe dürfen die Karte nie verlassen: gleich breit nebeneinander, bei wenig Platz untereinander, Text bricht um. */
+.auth-links > .btn {
+  flex: 1 1 150px;
+  min-width: 0;
+  height: auto;
+  min-height: 36px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  white-space: normal;
+  text-align: center;
+  justify-content: center;
 }
 .auth-links a {
   display: inline-flex;
