@@ -1,8 +1,19 @@
 // Außendienst — die Handy-Ansicht von WinterDex im Browser (Übergang fürs iPhone, solange es die App dort nicht gibt).
-// Bewusst getrennt vom Dashboard: eigene Oberfläche mit großen Tippflächen und zwei Reitern wie in der App
-// (Objekte, Strecken). Das Dashboard bleibt das Werkzeug fürs Büro; gewechselt wird oben rechts.
+// Bewusst getrennt vom Dashboard: eigene Oberfläche mit großen Tippflächen und Reitern wie in der App
+// (Objekte, Strecken, Einsätze, Mehr). Einsätze, Nachweis-PDF, Team, Abo und Objektverwaltung sind dieselben Seiten
+// wie im Dashboard (eine Quelle), nur im Handy-Rahmen — niemand muss fürs PDF die Ansicht wechseln.
+// Das Dashboard bleibt das Werkzeug fürs Büro; gewechselt wird oben rechts.
 import { NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
-import { Building2, Route as RouteIcon } from 'lucide-react';
+import { Building2, Menu, Route as RouteIcon, Snowflake } from 'lucide-react';
+import { TeamPage } from '../../components/TeamPage';
+import { AboPage } from '../../components/AboPage';
+import { Operations } from '../pages/Operations';
+import { OperationDetail } from '../pages/OperationDetail';
+import { Properties } from '../pages/Properties';
+import { PropertyDetail } from '../pages/PropertyDetail';
+import { Report } from '../pages/Report';
+import { RunDetail } from '../pages/RunDetail';
+import { Mehr } from './Mehr';
 import { useEinsatz } from '../einsatz/context';
 import { Einsatz } from '../pages/Einsatz';
 import { EinsatzErfassen } from '../pages/EinsatzErfassen';
@@ -14,14 +25,18 @@ import { StreckeDetail } from './StreckeDetail';
 export function Aussendienst() {
   const { base } = useEinsatz();
   const { pathname } = useLocation();
-  const inRoutes = pathname.startsWith(`${base}/strecken`);
+  const rest = pathname.slice(base.length);
+  const tab = rest.startsWith('/strecken') ? 'strecken' : rest.startsWith('/einsaetze') ? 'einsaetze'
+    : ['mehr', 'bericht', 'team', 'abo', 'objekte'].includes(rest.split('/')[1] ?? '') ? 'mehr' : 'objekte';
+  // Nur auf den Erfassungs-Seiten nötig; auf Listen/PDF/Team stört der PC-Hinweis.
+  const fieldPage = tab === 'objekte' || tab === 'strecken';
   // Während einer laufenden Fahrt keine Reiter: ein Fehlgriff würde die Aufzeichnung verlassen.
   const recording = /\/strecken\/(frei|[^/]+\/fahren)$/.test(pathname);
 
   return (
     <div className={`ad${recording ? ' ad-full' : ''}`}>
       <main className="ad-main">
-        {!recording && (
+        {!recording && fieldPage && (
           <div className="info-box ad-pc-hint">
             Der Außendienst ist fürs Handy gedacht. Am PC ist der Standort meist ungenau (Ortung über WLAN statt GPS) —
             Einsätze und Fahrten vor Ort bitte mit dem Handy erfassen. Fürs Büro gibt es oben rechts das Dashboard.
@@ -32,20 +47,37 @@ export function Aussendienst() {
           <Route path="objekt/:id" element={<EinsatzErfassen />} />
           <Route path="strecken" element={<Strecken />} />
           <Route path="strecken/frei" element={<StreckeFahren />} />
+          <Route path="strecken/fahrten/:id" element={<RunDetail />} />
           <Route path="strecken/:id" element={<StreckeDetail />} />
           <Route path="strecken/:id/fahren" element={<StreckeFahren />} />
+          <Route path="einsaetze" element={<Operations />} />
+          <Route path="einsaetze/:id" element={<OperationDetail />} />
+          <Route path="objekte" element={<Properties />} />
+          <Route path="objekte/:id" element={<PropertyDetail />} />
+          <Route path="bericht" element={<Report />} />
+          <Route path="team" element={<TeamPage />} />
+          <Route path="abo" element={<AboPage />} />
+          <Route path="mehr" element={<Mehr />} />
           <Route path="*" element={<Navigate to={base} replace />} />
         </Routes>
       </main>
       {!recording && (
         <nav className="ad-tabs" aria-label="Außendienst">
-          <NavLink to={base} className={() => (inRoutes ? '' : 'active')}>
+          <NavLink to={base} className={() => (tab === 'objekte' ? 'active' : '')}>
             <Building2 className="i" aria-hidden />
             Objekte
           </NavLink>
-          <NavLink to={`${base}/strecken`} className={() => (inRoutes ? 'active' : '')}>
+          <NavLink to={`${base}/strecken`} className={() => (tab === 'strecken' ? 'active' : '')}>
             <RouteIcon className="i" aria-hidden />
             Strecken
+          </NavLink>
+          <NavLink to={`${base}/einsaetze`} className={() => (tab === 'einsaetze' ? 'active' : '')}>
+            <Snowflake className="i" aria-hidden />
+            Einsätze
+          </NavLink>
+          <NavLink to={`${base}/mehr`} className={() => (tab === 'mehr' ? 'active' : '')}>
+            <Menu className="i" aria-hidden />
+            Mehr
           </NavLink>
         </nav>
       )}

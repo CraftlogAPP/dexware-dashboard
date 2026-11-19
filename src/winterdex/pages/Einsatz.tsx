@@ -12,7 +12,7 @@ import { isToday } from '../einsatz/amount';
 import { deletePending, emitPendingChanged, listDrafts, type Draft, type Pending } from '../einsatz/store';
 
 export function Einsatz() {
-  const { be, userId, base, propertiesUrl } = useEinsatz();
+  const { be, userId, base } = useEinsatz();
   const state = useAsync(() => loadEinsatzData(be, userId), [be, userId]);
   useLiveRefresh([state.refresh]);
   const { pending, sending, sendNow } = usePendingSync();
@@ -104,7 +104,7 @@ export function Einsatz() {
           if (active.length === 0) {
             return (
               <div className="card empty">
-                Noch keine aktiven Objekte. Lege zuerst unter <Link to={propertiesUrl}>Objekte</Link> ein Objekt an —
+                Noch keine aktiven Objekte. Lege zuerst unter <Link to={`${base}/objekte`}>Objekte</Link> ein Objekt an —
                 danach kannst du hier Einsätze erfassen.
               </div>
             );

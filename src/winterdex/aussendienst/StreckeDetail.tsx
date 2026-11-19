@@ -17,7 +17,7 @@ import { FREE_ROUTES, FREE_ROUTES_TEXT } from './Strecken';
 
 export function StreckeDetail() {
   const { id = '' } = useParams();
-  const { be, base, owner, dashboardUrl } = useEinsatz();
+  const { be, base, owner } = useEinsatz();
   const navigate = useNavigate();
   const list = `${base}/strecken`;
   const state = useAsync(async () => {
@@ -144,7 +144,7 @@ export function StreckeDetail() {
                 <ul className="ez-list">
                   {runs.map((r) => (
                     <li key={r.id}>
-                      <Link to={`${dashboardUrl}/strecken/fahrten/${r.id}`} className="sr-route">
+                      <Link to={`${base}/strecken/fahrten/${r.id}`} className="sr-route">
                         <span className="ez-prop-text">
                           <b>{fmtDateTime(r.started_at)}</b>
                           <span className="muted">
@@ -164,7 +164,7 @@ export function StreckeDetail() {
                   ))}
                 </ul>
               )}
-              <p className="muted small">Antippen öffnet den Nachweis mit Karte und PDF im Dashboard.</p>
+              <p className="muted small">Antippen öffnet den Nachweis mit Karte und PDF.</p>
 
               {editing && (
                 <Modal title="Strecke bearbeiten" onClose={() => setEditing(false)}>
