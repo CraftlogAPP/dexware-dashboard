@@ -35,10 +35,10 @@ const prop = (n: number, name: string, address: string, active = true): Property
 });
 
 const PROPS: Property[] = [
-  prop(1, 'Wohnanlage Lindenhof', 'Lindenweg 4–8, 8010 Graz'),
-  prop(2, 'Gemeindeamt', 'Hauptplatz 1, 8323 Pirching am Traubenberg'),
-  prop(3, 'Volksschule', 'Schulgasse 12, 8323 Pirching am Traubenberg'),
-  prop(4, 'Supermarkt-Parkplatz Nord mit sehr langem Namen zum Umbruch-Test', 'Industriestraße 77a, 8020 Graz'),
+  prop(1, 'Wohnanlage Lindenhof', 'Lindenweg 4–8, 8010 Musterstadt'),
+  prop(2, 'Rathaus', 'Hauptplatz 1, 8010 Musterstadt'),
+  prop(3, 'Volksschule', 'Schulgasse 12, 8010 Musterstadt'),
+  prop(4, 'Supermarkt-Parkplatz Nord', 'Industriestraße 77a, 8010 Musterstadt'),
   prop(5, 'Altes Lager (pausiert)', 'Hafenstraße 3', false),
 ];
 
