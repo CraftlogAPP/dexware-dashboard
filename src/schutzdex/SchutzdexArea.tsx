@@ -1,3 +1,4 @@
+import { lazy } from 'react';
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { BookOpenCheck, CreditCard, LayoutDashboard, ListChecks, PenLine, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
@@ -11,15 +12,52 @@ import { Members } from './pages/Members';
 import { Briefings } from './pages/Briefings';
 import { Assignments } from './pages/Assignments';
 import { Completions } from './pages/Completions';
+import { VOR_ORT_PATH } from '../pruefen/Scope';
+import { VorOrtSwitch } from '../pruefen/ModeSwitch';
+import { useHomeScreenIcon } from '../pruefen/homeScreen';
+import { SdVorOrtScope } from './vorOrt/Scope';
+import { SdVorOrt, type SdVorOrtPages } from './vorOrt/SdVorOrt';
+
+// „Vor Ort“ mit Beispieldaten — nur im Dev-Server (/app/schutzdex/vor-ort?demo), fehlt im Produktions-Build.
+const VorOrtDemo = import.meta.env.DEV
+  ? lazy(() => import('./vorOrt/demo').then((m) => ({ default: m.SdVorOrtDemoArea })))
+  : null;
+
+function demoWanted(): boolean {
+  try {
+    if (new URLSearchParams(window.location.search).has('demo')) sessionStorage.setItem('sd-vorort-demo', '1');
+    return sessionStorage.getItem('sd-vorort-demo') === '1';
+  } catch {
+    return new URLSearchParams(window.location.search).has('demo');
+  }
+}
+
+// Dieselben Seiten wie im Dashboard, eingebunden in die Handy-Ansicht „Vor Ort“ (eine Quelle).
+const VOR_ORT_PAGES: SdVorOrtPages = {
+  members: <Members />,
+  briefings: <Briefings />,
+  completions: <Completions />,
+  abo: <AboPage />,
+};
 
 // SchutzDex hat kein membership-Modell (org gehört dem Auth-User direkt) und
 // kein Team-System — Mitarbeiter sind Datensätze, keine eigenen Konten.
 export function SchutzdexArea({ app }: { app: AppConfig }) {
+  useHomeScreenIcon('SchutzDex', '/icons/schutzdex-180.png');
+  if (VorOrtDemo && demoWanted()) return <VorOrtDemo app={app} />;
   return (
-    <AppArea app={app}>
+    <AppArea app={app} headerAction={<VorOrtSwitch hint="Handy-Ansicht: Unterweisung durchführen und unterschreiben lassen" />}>
       <OrgProvider fetch={fetchOwnerOrgContext}>
         <OrgGate>
           <Routes>
+            <Route
+              path={`${VOR_ORT_PATH}/*`}
+              element={
+                <SdVorOrtScope>
+                  <SdVorOrt pages={VOR_ORT_PAGES} />
+                </SdVorOrtScope>
+              }
+            />
             <Route element={<Shell />}>
               <Route index element={<Overview />} />
               <Route path="mitarbeiter" element={<Members />} />

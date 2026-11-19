@@ -74,13 +74,17 @@ type DbError = { code?: string; message?: string };
 const missingColumn = (e: DbError) =>
   e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|could not find the .* column/i.test(e.message ?? '');
 
-/** Netz weg / Zeitüberschreitung? Dann bleibt die Prüfung auf dem Gerät und wird später gesendet. */
+/**
+ * Netz weg / Zeitüberschreitung? Dann bleibt die Prüfung auf dem Gerät und wird später gesendet.
+ * Erkennt auch die schon übersetzte Meldung der Dashboard-Abfragen (lib/orgApi → „keine Verbindung zum Server“) —
+ * sonst griffe der gemerkte Stand bei wackligem Netz nicht (KfzDex, PrüfDex, SchutzDex laden über diese Abfragen).
+ */
 export function isNetworkError(e: unknown): boolean {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
   const err = e as { name?: string; message?: string } | null;
   if (err?.name === 'StorageUnknownError' || err?.name === 'AbortError') return true;
   const m = String(err?.message ?? e ?? '');
-  return /failed to fetch|load failed|networkerror|network request failed|fetch failed|timeout|zeitüberschreitung|aborted|offline/i.test(m);
+  return /failed to fetch|load failed|networkerror|network request failed|fetch failed|timeout|zeitüberschreitung|aborted|offline|keine verbindung zum server/i.test(m);
 }
 
 function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T> {

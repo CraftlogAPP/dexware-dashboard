@@ -9,6 +9,7 @@ import {
 } from '../components/form';
 import { addMonthsLocalISO, fmtDate, toInputDate } from '../lib/format';
 import { addInspection, saveDevice } from './api';
+import { GATE_TEXT, deviceGate, inspectionGate } from './gate';
 import {
   MEASUREMENTS,
   VISUAL_CHECKS,
@@ -44,6 +45,8 @@ export function DeviceDialog({
   onSaved: () => void;
 }) {
   async function onSave(v: FormValues) {
+    // Gratis-Grenze wie in der App: ohne Pro 3 Geräte im Bestand (im Zweifel wird nicht gesperrt)
+    if (device === 'new' && !(await deviceGate(client)).allowed) throw new Error(GATE_TEXT.devices);
     await saveDevice(
       client,
       orgId,
@@ -175,6 +178,8 @@ export function InspectionDialog({
         (device ? plusMonths(inspectedAt, device.interval_months) : null),
       notes: orNull(v.notes),
     };
+    // Gratis-Grenze wie in der App: ohne Pro 5 Prüfungen (im Zweifel wird nicht gesperrt)
+    if (!(await inspectionGate(client)).allowed) throw new Error(GATE_TEXT.inspections);
     // Prüfungen sind unveränderlich — der Dialog legt nur neue an (Korrektur per Storno).
     const warning = await addInspection(client, orgId, payload);
     onSaved(warning);

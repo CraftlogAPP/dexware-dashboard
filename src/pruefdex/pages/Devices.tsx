@@ -6,6 +6,7 @@ import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate } from '../../lib/format';
 import { fetchCustomers, fetchDevices, setDeviceRetired } from '../api';
 import { DeviceDialog } from '../dialogs';
+import { GATE_TEXT, deviceGate } from '../gate';
 import { DueBadge } from '../badges';
 import { dueStatus, nameMap, skLabel, type DueStatus } from '../labels';
 import type { Device } from '../types';
@@ -37,6 +38,8 @@ export function Devices() {
     )
       return;
     try {
+      // Wieder in Betrieb nehmen zählt wie ein neues Gerät (Gratis-Grenze der App: 3 Geräte ohne Pro)
+      if (!retire && !(await deviceGate(client)).allowed) throw new Error(GATE_TEXT.devices);
       await setDeviceRetired(client, d.id, retire);
       devState.reload();
     } catch (err) {

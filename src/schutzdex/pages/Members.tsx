@@ -13,6 +13,7 @@ import {
   updateMember,
 } from '../api';
 import { isOverdue } from '../labels';
+import { MEMBER_GATE_TEXT, fetchSchutzPro, memberGate } from '../pro';
 import type { Assignment, Completion, Member } from '../types';
 
 interface Data {
@@ -22,7 +23,7 @@ interface Data {
 }
 
 export function Members() {
-  const { client } = useAppAuth();
+  const { app, client, session } = useAppAuth();
   const { data: org } = useOrg();
   const [editing, setEditing] = useState<Member | 'new' | null>(null);
 
@@ -45,6 +46,13 @@ export function Members() {
       eintritt_am: orNull(v.eintritt_am),
       aktiv: v.aktiv === true,
     };
+    // Gratis-Grenze wie in der App: ohne Pro 2 aktive Mitarbeiter (neu anlegen oder wieder aktiv setzen).
+    // Im Zweifel (Anbieter antwortet nicht) wird nicht gesperrt.
+    const becomesActive = input.aktiv && (editing === 'new' || (!!editing && !editing.aktiv));
+    if (becomesActive && session) {
+      const gate = await memberGate(client, () => fetchSchutzPro(app, session));
+      if (!gate.allowed) throw new Error(MEMBER_GATE_TEXT);
+    }
     if (editing === 'new') await insertMember(client, org.org.id, input);
     else if (editing) await updateMember(client, editing.id, input);
     state.reload();
