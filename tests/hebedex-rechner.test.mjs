@@ -172,7 +172,7 @@ check('Vorbelegung wie in der App: Nenndicke aus den Stammdaten; nach einer Prü
     gleich(spec({ kind: 'wire_rope', rope_kind: 'cable', nominal_mm: '12' }).prefill({}), { nominal: '12', ropeKind: 'cable' }) && gleich(spec({ kind: 'wire_rope' }).prefill({}), { nominal: '', ropeKind: 'strand' }) &&
     gleich(spec({ kind: 'hook' }).prefill({ openingNew: '25', openingMeasured: '28' }), { openingNew: '25', nominal: '' }));
 check('Hinweistexte der Rechner nennen die Grenzen der App',
-  s.hint({}).includes('−10 % Glieddicke, 5 % Längung') && spec({ kind: 'wire_rope' }).hint({ ropeKind: 'cable' }).includes('Ablegereif ab 10 / 15 / 40 Brüchen') && spec({ kind: 'wire_rope' }).hint({}).includes('6 / 14') && spec({ kind: 'hook' }).hint({}).includes('über 10 %'));
+  s.hint({}).includes('−10 % Glieddicke, 5 % Längung') && spec({ kind: 'wire_rope' }).hint({ ropeKind: 'cable' }).includes('Ablegereif ab 10 / 15 / 40 Brüchen') && spec({ kind: 'wire_rope' }).hint({}).includes('ab 6 Brüchen auf 6d oder 14 Brüchen auf 30d') && spec({ kind: 'hook' }).hint({}).includes('über 10 %'));
 check('Teilung neu: Platzhalter zeigt die Normteilung 3 × d', s.rows[1][0].placeholder({ nominal: '10' }) === '30' && s.rows[1][0].placeholder({ nominal: '8,5' }) === '25.5' && s.rows[1][0].placeholder({}) === '3 × d');
 check('Sperr-Rückfragen wortgleich zur App; bei Rot ist die Sperre gleich gesetzt',
   cfg.severities.filter((x) => x.blockQuestion).every((x) => schirm.includes(x.blockQuestion)) && cfg.severities.find((x) => x.id === 'red').autoBlock === true && !cfg.severities.find((x) => x.id === 'amber').autoBlock &&

@@ -28,7 +28,7 @@ export const DUE_SOON_DAYS = 14;
 // TRBS 2121-1: Orange = Bereich absperren, Rot = Gerüst SOFORT komplett sperren (Rückfragen wortgleich zur App).
 const BLOCK_QUESTION: Partial<Record<DamageSeverity, string>> = {
   amber: 'Bei Orange muss der betroffene Bereich (Ebene/Feld) abgesperrt werden. Ist er gesperrt?',
-  red: 'Bei Rot muss das Gerüst sofort komplett gesperrt werden („Zutritt verboten“). Ist das erledigt?',
+  red: 'Bei Rot muss das Gerüst sofort komplett gesperrt werden („Zutritt für Unbefugte verboten“). Ist das erledigt?',
 };
 
 /** wie in der App (SiteDetailScreen → scaffoldInfo): „Fassadengerüst · aufgebaut 03.11.2026 · Lastklasse 4 · W09 · Layher Blitz“ */

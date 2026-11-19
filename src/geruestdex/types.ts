@@ -175,7 +175,7 @@ export const SEVERITY_LABELS: Record<DamageSeverity, string> = {
 export const SEVERITY_HINTS: Record<DamageSeverity, string> = {
   green: 'Geringfügiger Mangel ohne unmittelbare Absturzgefahr — kennzeichnen, beobachten, bei der nächsten Prüfung erneut bewerten.',
   amber: 'Sicherheitsrelevanter Mangel — betroffenen Gerüstbereich (Ebene/Feld) absperren und nicht benutzen, bis der Mangel beseitigt ist.',
-  red: 'Schwerwiegender Mangel (z. B. fehlende Verankerung, mangelhafte Gründung) — Gerüst SOFORT komplett sperren („Zutritt verboten"), Ersteller informieren, erst nach erneuter Prüfung freigeben!',
+  red: 'Schwerwiegender Mangel (z. B. fehlende Verankerung, mangelhafte Gründung) — Gerüst SOFORT komplett sperren („Zutritt für Unbefugte verboten"), Ersteller informieren, erst nach erneuter Prüfung freigeben!',
 };
 
 export const SEVERITY_SHORT: Record<DamageSeverity, string> = {

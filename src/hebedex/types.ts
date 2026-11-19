@@ -298,8 +298,9 @@ export interface MeasureResult {
   text: string;
 }
 
-export const WIRE_LIMITS: Record<'strand' | 'cable', [number, number, number]> = {
-  strand: [4, 6, 16],
+/** Wie rechner.ts / App (DGUV Regel 109-017, Tabellen 1 und 2): Litzenseil nennt auf 3d keinen Wert. */
+export const WIRE_LIMITS: Record<'strand' | 'cable', [number | null, number, number]> = {
+  strand: [null, 6, 14],
   cable: [10, 15, 40],
 };
 
@@ -345,8 +346,9 @@ export function measureResult(
       if (raw === '' || raw === undefined || raw === null) return;
       const n = typeof raw === 'number' ? raw : parseInt(String(raw), 10);
       if (!Number.isFinite(n) || n < 0) return;
-      parts.push(`${n} auf ${names[i]} (Grenze ${lim[i]})`);
-      if (n >= lim[i]) red = true;
+      const g = lim[i];
+      parts.push(g === null ? `${n} auf ${names[i]} (kein Grenzwert)` : `${n} auf ${names[i]} (Grenze ${g})`);
+      if (g !== null && n >= g) red = true;
     });
     return parts.length ? { red, text: `${ROPE_KIND_LABELS[kind]}: ${parts.join(', ')}` } : undefined;
   }

@@ -13,10 +13,10 @@ import {
   HOOK_OPENING_LIMIT_PCT,
   MEASURED_KEYS,
   ROPE_KIND_LABELS,
-  WIRE_LIMITS,
   anteilAnGrenze,
   rechne,
   vorbelegung,
+  wireLimitText,
   type RechnerTeil,
 } from './rechner.ts';
 import {
@@ -145,7 +145,7 @@ export function rechnerFuer(row: Record<string, unknown>): MeasureSpec | null {
     return {
       ...common,
       hint: (v) =>
-        `Sichtbare Drahtbrüche auf der Länge 3 × d, 6 × d und 30 × d zählen (d = Seil-Nenndurchmesser). Ablegereif ab ${WIRE_LIMITS[v.ropeKind === 'cable' ? 'cable' : 'strand'].join(' / ')} Brüchen.`,
+        `Sichtbare Drahtbrüche auf der Länge 3 × d, 6 × d und 30 × d zählen (d = Seil-Nenndurchmesser). ${wireLimitText(v.ropeKind === 'cable' ? 'cable' : 'strand')}`,
       choice: {
         key: 'ropeKind',
         label: 'Seilart',
