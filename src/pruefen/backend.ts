@@ -4,7 +4,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllOf, fetchLatestWindow } from '../lib/completeQueries';
-import type { PruefConfig } from './config';
+import { dueFkOf, isSiteMode, siteFkOf, type PruefConfig } from './config';
 import type { InspMeta } from './due';
 import { fetchOrgPro } from './pro';
 import type { DefectRow, InspectionRow } from './rows';
@@ -29,7 +29,10 @@ export interface Unit {
 
 export interface OpenDefect {
   id: string;
-  unitId: string;
+  /** Ort des Mangels */
+  siteId: string;
+  /** Betroffene Einheit — im Orts-Modus null, wenn der Mangel den Ort allgemein betrifft. */
+  unitId: string | null;
   severity: string;
   /** Sperr-Mangel: die Einheit darf nicht benutzt werden, bis er behoben ist. */
   blocked: boolean;
@@ -39,7 +42,7 @@ export interface PruefBackend {
   listSites(): Promise<Site[]>;
   /** Alle Einheiten des Betriebs (ohne Fotos), auch außer Betrieb genommene. */
   listUnits(): Promise<Unit[]>;
-  /** Schmale Prüf-Daten für die Fälligkeit (jüngste Prüfung je Einheit und Art). */
+  /** Schmale Prüf-Daten für die Fälligkeit (jüngste Prüfung je Einheit und Art; im Orts-Modus je Ort — unitId ist dann die ID des Orts). */
   listInspectionMeta(): Promise<InspMeta[]>;
   /** Offene Mängel (für „gesperrt“ und die Zahl offener Mängel). */
   listOpenDefects(): Promise<OpenDefect[]>;
@@ -96,6 +99,9 @@ function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T> {
  */
 export function supabasePruefBackend(sb: SupabaseClient, cfg: PruefConfig, dueIntervalDays: number): PruefBackend {
   const { tables, cols } = cfg;
+  const siteFk = siteFkOf(cfg);
+  // Spalte, an der die Fälligkeit hängt: die Einheit — im Orts-Modus der Ort
+  const dueFk = dueFkOf(cfg);
   return {
     async listSites() {
       const { data, error } = await fetchAllOf<Site>(() => sb.from(tables.site).select('id, name, address, active'), [['name']]);
@@ -108,7 +114,7 @@ export function supabasePruefBackend(sb: SupabaseClient, cfg: PruefConfig, dueIn
       if (error) throw error;
       return (data ?? []).map((r) => ({
         id: r.id as string,
-        siteId: r.site_id as string,
+        siteId: r[siteFk] as string,
         name: r.name as string,
         info: cfg.unitInfo(r),
         retired: r[cols.retired] === true,
@@ -120,17 +126,17 @@ export function supabasePruefBackend(sb: SupabaseClient, cfg: PruefConfig, dueIn
       const { data, error } = await fetchLatestWindow<Record<string, unknown>>({
         sb,
         table: tables.inspection,
-        cols: `id, ${cols.unitFk}, type, started_at, canceled`,
+        cols: `id, ${dueFk}, type, started_at, canceled`,
         dateCol: 'started_at',
-        unitCol: cols.unitFk,
-        units: { table: tables.unit },
-        windowDays: Math.max(dueIntervalDays, 365) + 31,
+        unitCol: dueFk,
+        units: { table: isSiteMode(cfg) ? tables.site : tables.unit },
+        windowDays: Math.max(dueIntervalDays, cfg.extraDue?.intervalDays ?? 0, 365) + 31,
         types: cfg.kinds.map((k) => k.id),
         canceled: true,
       });
       if (error) throw error;
       return data.map((i) => ({
-        unitId: i[cols.unitFk] as string,
+        unitId: i[dueFk] as string,
         type: i.type as string,
         startedAt: i.started_at as string,
         canceled: i.canceled === true,
@@ -139,13 +145,14 @@ export function supabasePruefBackend(sb: SupabaseClient, cfg: PruefConfig, dueIn
 
     async listOpenDefects() {
       const { data, error } = await fetchAllOf<Record<string, unknown>>(
-        () => sb.from(tables.defect).select(`id, ${cols.unitFk}, severity, ${cols.blocked}`).eq('status', 'open'),
+        () => sb.from(tables.defect).select(`id, ${siteFk}, ${cols.unitFk}, severity, ${cols.blocked}`).eq('status', 'open'),
         [['created_at', false]],
       );
       if (error) throw error;
       return (data ?? []).map((d) => ({
         id: d.id as string,
-        unitId: d[cols.unitFk] as string,
+        siteId: d[siteFk] as string,
+        unitId: (d[cols.unitFk] as string | null) ?? null,
         severity: d.severity as string,
         blocked: d[cols.blocked] === true,
       }));

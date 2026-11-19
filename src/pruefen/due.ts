@@ -35,12 +35,12 @@ function calendarDaysUntil(day: Date): number {
   return Math.round((d.getTime() - today.getTime()) / DAY_MS);
 }
 
-export function dueInfo(lastAt: string | undefined, intervalDays: number): DueInfo {
+export function dueInfo(lastAt: string | undefined, intervalDays: number, soonDays: number = DUE_SOON_DAYS): DueInfo {
   if (!lastAt) return { state: 'never', dueAt: null, daysLeft: null };
   const days = Number.isFinite(intervalDays) && intervalDays > 0 ? intervalDays : 365;
   const dueAt = dueDay(lastAt, days);
   const daysLeft = calendarDaysUntil(dueAt);
-  const state: DueState = daysLeft <= 0 ? 'overdue' : daysLeft <= DUE_SOON_DAYS ? 'soon' : 'ok';
+  const state: DueState = daysLeft <= 0 ? 'overdue' : daysLeft <= soonDays ? 'soon' : 'ok';
   return { state, dueAt, daysLeft };
 }
 
@@ -55,11 +55,15 @@ export interface InspMeta {
   canceled: boolean;
 }
 
-/** Jüngste gültige (nicht stornierte) Prüfung der Fälligkeits-Art je Einheit. */
-export function lastDueByUnit(meta: InspMeta[], dueKind: string): Map<string, string> {
+/**
+ * Jüngste gültige (nicht stornierte) Prüfung der Fälligkeits-Art je Einheit (im Orts-Modus je Ort).
+ * @param dueKind eine Prüfart oder mehrere, die dieselbe Frist erfüllen (SpielDex: operativ + Hauptinspektion)
+ */
+export function lastDueByUnit(meta: InspMeta[], dueKind: string | readonly string[]): Map<string, string> {
   const map = new Map<string, string>();
+  const kinds = typeof dueKind === 'string' ? [dueKind] : dueKind;
   for (const i of meta) {
-    if (i.canceled || i.type !== dueKind) continue;
+    if (i.canceled || !kinds.includes(i.type)) continue;
     const prev = map.get(i.unitId);
     if (!prev || i.startedAt > prev) map.set(i.unitId, i.startedAt);
   }

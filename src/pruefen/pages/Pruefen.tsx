@@ -3,6 +3,13 @@
 // Ampel-Einstufung und Fotos, Beweisfotos, „Geprüft von“ + Qualifikation, Unterschrift, Notiz.
 // Einmal gespeichert, nie mehr änderbar (nur Storno mit Vermerk) — deshalb fragt die Seite vor dem Speichern nach,
 // wenn etwas fehlt, und sichert jeden Zwischenstand auf dem Gerät (Safari lädt nach der Kamera manchmal neu).
+//
+// Zwei Familien, EIN Formular (cfg.mode):
+//   'unit' — geprüft wird eine Einheit (LeiterDex, FeuerDex, ToreDex, GurtDex); die Adresse nennt die Einheit.
+//   'site' — geprüft wird der ganze Ort (GerüstDex, RegalDex, SpielDex; dort mobile/src/screens/InspectionScreen.tsx
+//            mit warehouseId/siteId/playgroundId); die Adresse nennt den Ort. Mängel/Schäden wählen die betroffene
+//            Einheit des Orts aus einer Liste — oder „… allgemein“. Keine Serienprüfung, kein Einheiten-Hinweis.
+// Die Wörter (Prüfung/Inspektion/Kontrolle, Mangel/Schaden, „Geprüft von“) kommen aus wordsOf(cfg).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Camera, Check, CloudOff, MapPin, Plus, TriangleAlert, X } from 'lucide-react';
@@ -12,7 +19,19 @@ import { fmtDateTime, fmtTime } from '../../lib/format';
 import { GPS_GOOD_M, GPS_WEAK_M, useGpsStamp } from '../../winterdex/einsatz/gps';
 import { fileToPhoto } from '../../winterdex/einsatz/photo';
 import type { Site, Unit } from '../backend';
-import { RESULT_LABELS, canBlock, kindOf, severityOf, unitAlertOf, type CheckResult, type PruefConfig } from '../config';
+import {
+  blockWords,
+  canBlock,
+  countWord,
+  dueFkOf,
+  isSiteMode,
+  kindOf,
+  severityOf,
+  unitAlertOf,
+  wordsOf,
+  type CheckResult,
+  type PruefConfig,
+} from '../config';
 import { usePruef, usePendingSync } from '../context';
 import { getPrefs, loadPruefData, newId, setPrefs, withPendingMeta, type InspectorPrefs } from '../data';
 import { dueInfo, fmtDay, lastDueByUnit, nextDueAfter } from '../due';
@@ -34,7 +53,8 @@ const RESULTS: CheckResult[] = ['ok', 'defect', 'na'];
 
 export function Pruefen() {
   const { unitId } = useParams();
-  // key: „Weiter prüfen“ an der nächsten Einheit beginnt mit einem frischen Formular
+  // key: „Weiter prüfen“ an der nächsten Einheit beginnt mit einem frischen Formular.
+  // Im Orts-Modus steht an dieser Stelle der Adresse die ID des Orts (Baustelle, Lager, Spielplatz).
   return unitId ? <Formular key={unitId} unitId={unitId} /> : null;
 }
 
@@ -72,10 +92,24 @@ interface DoneInfo {
   alertDone: string | null;
 }
 
+/** Was geprüft wird: die Einheit — im Orts-Modus der Ort selbst (dann ist siteId = id). */
+interface Subject {
+  id: string;
+  name: string;
+  siteId: string;
+}
+
 function Formular({ unitId }: { unitId: string }) {
   const { be, cfg, userId, orgId, base } = usePruef();
   const app = cfg.appId;
   const U = cfg.labels.unit;
+  const S = cfg.labels.site;
+  const W = wordsOf(cfg);
+  const I = W.insp;
+  const D = W.defect;
+  // Orts-Modus: „unitId“ (aus der Adresse) ist die ID des Orts; die Einheiten des Orts stehen im Mangel zur Auswahl.
+  const siteMode = isSiteMode(cfg);
+  const [siteUnits, setSiteUnits] = useState<Unit[]>([]);
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -120,13 +154,32 @@ function Formular({ unitId }: { unitId: string }) {
     Promise.all([loadPruefData(be, app, userId), getDraft(app, userId, unitId)]).then(
       ([data, draft]) => {
         if (!alive) return;
-        const u = data.units.find((x) => x.id === unitId) ?? null;
-        if (!u) return setLoadError(`${U.one} nicht gefunden — gelöscht oder aus einem anderen Betrieb?`);
-        if (u.retired) return setLoadError(`„${u.name}“ ist außer Betrieb genommen und kann nicht geprüft werden.`);
-        setUnit(u);
-        setSite(data.sites.find((s) => s.id === u.siteId) ?? null);
-        setBlockedBefore(data.openDefects.some((d) => d.blocked && d.unitId === unitId));
-        const pre = alertPrefill(cfg, u);
+        let pre: Record<string, CheckResult> = {};
+        if (siteMode) {
+          const s = data.sites.find((x) => x.id === unitId) ?? null;
+          if (!s) return setLoadError(`${S.one} nicht gefunden — gelöscht oder aus einem anderen Betrieb?`);
+          if (!s.active) {
+            return setLoadError(
+              `„${s.name}“ ist nicht mehr aktiv — hier lässt sich keine ${I.one} dokumentieren. Wieder aktivieren geht unter „Mehr“ → „${S.many} verwalten“.`,
+            );
+          }
+          setSite(s);
+          setSiteUnits(
+            data.units
+              .filter((x) => x.siteId === s.id && !x.retired)
+              .sort((a, b) => a.name.localeCompare(b.name, 'de', { numeric: true })),
+          );
+          // Schon vorher offene Sperre irgendwo an diesem Ort (mit oder ohne Einheit) — wie in der App
+          setBlockedBefore(data.openDefects.some((d) => d.blocked && d.siteId === s.id));
+        } else {
+          const u = data.units.find((x) => x.id === unitId) ?? null;
+          if (!u) return setLoadError(`${U.one} nicht gefunden — gelöscht oder aus einem anderen Betrieb?`);
+          if (u.retired) return setLoadError(`„${u.name}“ ist außer Betrieb genommen und kann nicht geprüft werden.`);
+          setUnit(u);
+          setSite(data.sites.find((s) => s.id === u.siteId) ?? null);
+          setBlockedBefore(data.openDefects.some((d) => d.blocked && d.unitId === unitId));
+          pre = alertPrefill(cfg, u);
+        }
         setPrefill(pre);
         if (draft) {
           setFound(draft);
@@ -147,7 +200,7 @@ function Formular({ unitId }: { unitId: string }) {
     return () => {
       alive = false;
     };
-  }, [be, app, userId, unitId, U.one, cfg]);
+  }, [be, app, userId, unitId, U.one, S.one, S.many, I.one, siteMode, cfg]);
   useEffect(() => load(), [load]);
 
   const resume = (d: Draft) => {
@@ -179,6 +232,23 @@ function Formular({ unitId }: { unitId: string }) {
     setPhase('form');
   };
 
+  const subject: Subject | null = siteMode
+    ? site
+      ? { id: site.id, name: site.name, siteId: site.id }
+      : null
+    : unit
+      ? { id: unit.id, name: unit.name, siteId: unit.siteId }
+      : null;
+  /** Worauf sich ein Mangel bezieht (für Karte und Dialog). */
+  const defectTarget = (d: DefectDraft): string =>
+    siteMode
+      ? d.unitId
+        ? (siteUnits.find((u) => u.id === d.unitId)?.name ?? U.one)
+        : (cfg.labels.general ?? `${S.one} allgemein`)
+      : (subject?.name ?? '');
+  /** Sperr-Texte zu einem Mangel — im Orts-Modus ohne gewählte Einheit ggf. die „allgemein“-Fassung. */
+  const blockOf = (d: DefectDraft) => blockWords(cfg, severityOf(cfg, d.severity), siteMode ? !!d.unitId : true);
+
   // --- GPS ------------------------------------------------------------------------------------
   const noop = useCallback(() => undefined, []);
   const { gps, lastFixRef, retry } = useGpsStamp(phase === 'form', restoredStart, noop);
@@ -202,13 +272,13 @@ function Formular({ unitId }: { unitId: string }) {
   const snapshot = useRef<Draft | null>(null);
   const startFix: GpsFix | null = gpsOk ? { lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy, at: gps.at } : null;
   snapshot.current =
-    phase === 'form' && unit
+    phase === 'form' && subject
       ? {
           key: draftKey(app, userId, unitId),
           kind: 'draft',
           app,
           userId,
-          siteId: unit.siteId,
+          siteId: subject.siteId,
           unitId,
           inspectionId: idRef.current,
           openedAt: openedAtRef.current,
@@ -265,7 +335,7 @@ function Formular({ unitId }: { unitId: string }) {
   // Ohne Gerätespeicher (privates Surfen) wäre beim Verlassen alles weg → dann nachfragen.
   useUnsavedGuard(
     phase === 'form' && dirty && !draftOnDevice,
-    'Diese Prüfung ist noch nicht gespeichert. Seite trotzdem verlassen? Checkliste, Mängel und Fotos gehen dann verloren.',
+    `Diese ${I.one} ist noch nicht gespeichert. Seite trotzdem verlassen? Checkliste, ${D.many} und Fotos gehen dann verloren.`,
   );
 
   // --- Fotos ----------------------------------------------------------------------------------
@@ -317,10 +387,10 @@ function Formular({ unitId }: { unitId: string }) {
   const [editorError, setEditorError] = useState<string | null>(null);
   const acceptDefect = () => {
     if (!editing) return;
-    if (!editing.title.trim()) return setEditorError('Bitte den Mangel kurz benennen.');
+    if (!editing.title.trim()) return setEditorError(`Bitte den ${D.one} kurz benennen.`);
     setEditorError(null);
     // Stufe verlangt eine Sperre, der Vermerk fehlt → einmal nachfragen, damit der Nachweis zur Einstufung passt.
-    if (severityOf(cfg, editing.severity).blockQuestion && !editing.blocked) return setAskBlock(true);
+    if (blockOf(editing).question && !editing.blocked) return setAskBlock(true);
     commitDefect(editing);
   };
   const closeEditor = () => {
@@ -330,20 +400,20 @@ function Formular({ unitId }: { unitId: string }) {
     const unsaved = saved
       ? JSON.stringify(saved) !== JSON.stringify({ ...d, title: d.title.trim() })
       : !!(d.title.trim() || d.description.trim() || d.photos.length);
-    if (unsaved && !window.confirm('Mangel verwerfen? Die Eingaben in diesem Mangel (Text und Fotos) gehen verloren.')) return;
+    if (unsaved && !window.confirm(`${D.one} verwerfen? Die Eingaben in diesem ${D.one} (Text und Fotos) gehen verloren.`)) return;
     setEditing(null);
     setAskBlock(false);
     setEditorError(null);
   };
   const removeDefect = (d: DefectDraft) => {
-    if (!window.confirm(`Mangel „${d.title}“ entfernen?`)) return;
+    if (!window.confirm(`${D.one} „${d.title}“ entfernen?`)) return;
     confirmedDefectRef.current = false;
     setDefects((prev) => prev.filter((x) => x.key !== d.key));
   };
 
   // --- Speichern ------------------------------------------------------------------------------
   const save = async () => {
-    if (saving || !unit) return;
+    if (saving || !subject) return;
     // Punkt auf „Mangel“, aber kein Mangel beschrieben → nachfragen (das Prüfprotokoll soll aussagekräftig sein).
     if (defectPoints.length > 0 && defects.length === 0 && !confirmedDefectRef.current) return setAsk('defect');
     // Ungenaue oder fehlende Ortung: einmal nachfragen statt still einen schwachen Stempel zu speichern.
@@ -359,8 +429,9 @@ function Formular({ unitId }: { unitId: string }) {
         id: idRef.current,
         orgId,
         userId,
-        siteId: unit.siteId,
-        unitId,
+        siteId: subject.siteId,
+        // Orts-Modus: die Prüfung hängt nur am Ort
+        ...(siteMode ? {} : { unitId }),
         type: form.type,
         at,
         start: startFix,
@@ -378,7 +449,8 @@ function Formular({ unitId }: { unitId: string }) {
         app,
         userId,
         siteName: site?.name ?? '',
-        unitName: unit.name,
+        // Orts-Modus: statt einer Einheit steht in der Warteliste die Prüfart
+        unitName: unit ? unit.name : kindOf(cfg, form.type).short,
         inspection,
         photos,
         defects: defects.map((d) => ({
@@ -386,8 +458,9 @@ function Formular({ unitId }: { unitId: string }) {
             id: d.key,
             orgId,
             userId,
-            siteId: unit.siteId,
-            unitId,
+            siteId: subject.siteId,
+            // Orts-Modus: die im Mangel gewählte Einheit — oder keine („… allgemein“)
+            unitId: siteMode ? (d.unitId ?? null) : unitId,
             inspectionId: inspection.id,
             at,
             title: d.title,
@@ -410,7 +483,7 @@ function Formular({ unitId }: { unitId: string }) {
         at,
         blocked: blockedBefore || defects.some((d) => d.blocked),
         serious: defects.some((d) => severityOf(cfg, d.severity).tone !== 'green'),
-        alertDone: unitAlertOf(cfg, unit)?.doneText ?? null,
+        alertDone: unit ? (unitAlertOf(cfg, unit)?.doneText ?? null) : null,
       });
       setPhase('done');
       window.scrollTo({ top: 0 });
@@ -423,10 +496,10 @@ function Formular({ unitId }: { unitId: string }) {
   };
 
   // --- Anzeige --------------------------------------------------------------------------------
-  const backTo = unit ? `${base}/ort/${unit.siteId}` : base;
+  const backTo = subject ? `${base}/ort/${subject.siteId}` : base;
   const back = (
     <Link to={backTo} className="ez-back">
-      <ArrowLeft className="i" aria-hidden /> {unit ? (site?.name ?? cfg.labels.site.one) : cfg.labels.site.many}
+      <ArrowLeft className="i" aria-hidden /> {subject ? (site?.name ?? cfg.labels.site.one) : cfg.labels.site.many}
     </Link>
   );
 
@@ -441,7 +514,7 @@ function Formular({ unitId }: { unitId: string }) {
       </div>
     );
   }
-  if (phase === 'loading' || !unit) {
+  if (phase === 'loading' || !subject) {
     return (
       <div className="empty">
         <span className="spinner" />
@@ -449,24 +522,24 @@ function Formular({ unitId }: { unitId: string }) {
     );
   }
 
-  if (phase === 'done' && done) return <Done unit={unit} info={done} />;
+  if (phase === 'done' && done) return <Done subject={subject} info={done} />;
 
   if (phase === 'ask' && found) {
     const n = found.photos.length + found.defects.reduce((s, d) => s + d.photos.length, 0);
     return (
       <div className="ez">
         {back}
-        <h1>Angefangene Prüfung</h1>
+        <h1>Angefangene {I.one}</h1>
         <p className="muted" style={{ marginTop: -6 }}>
-          {unit.name}
-          {site ? ` · ${site.name}` : ''}
+          {subject.name}
+          {!siteMode && site ? ` · ${site.name}` : ''}
         </p>
         <div className="card">
           <p style={{ marginTop: 0 }}>
-            Auf diesem Gerät liegt eine angefangene Prüfung:
+            Auf diesem Gerät liegt eine angefangene {I.one}:
             <br />
             <b>Beginn {fmtDateTime(found.openedAt)}</b>
-            {found.defects.length > 0 && ` · ${found.defects.length} ${found.defects.length === 1 ? 'Mangel' : 'Mängel'}`}
+            {found.defects.length > 0 && ` · ${countWord(found.defects.length, D)}`}
             {n > 0 && ` · ${n} ${n === 1 ? 'Foto' : 'Fotos'}`}
           </p>
           <div className="ez-actions">
@@ -485,21 +558,37 @@ function Formular({ unitId }: { unitId: string }) {
   const gpsTone = gps.status === 'denied' || gps.status === 'unsupported' ? 'red' : gpsWeak ? 'amber' : 'green';
   const kind = kindOf(cfg, form.type);
   const editingSeverity = editing ? severityOf(cfg, editing.severity) : null;
-  const alert = unitAlertOf(cfg, unit);
+  const editingBlock = editing ? blockOf(editing) : null;
+  const alert = unit ? unitAlertOf(cfg, unit) : null;
 
   return (
     <div className="ez">
       {back}
-      <h1>Prüfung dokumentieren</h1>
+      <h1>{I.one} dokumentieren</h1>
 
-      <div className="card pv-unit">
-        <span className="muted small">{U.full}</span>
-        <b>{unit.name}</b>
-        {unit.info && <span className="muted">{unit.info}</span>}
-        <Link to={backTo} className="small">
-          Andere wählen
-        </Link>
-      </div>
+      {unit ? (
+        <div className="card pv-unit">
+          <span className="muted small">{U.full}</span>
+          <b>{unit.name}</b>
+          {unit.info && <span className="muted">{unit.info}</span>}
+          <Link to={backTo} className="small">
+            Andere wählen
+          </Link>
+        </div>
+      ) : (
+        // Orts-Modus: geprüft wird der ganze Ort
+        <div className="card pv-unit" data-testid="pv-site">
+          <span className="muted small">{S.one}</span>
+          <b>{subject.name}</b>
+          {site?.address && <span className="muted">{site.address}</span>}
+          <span className="muted small">
+            {siteUnits.length > 0 ? countWord(siteUnits.length, U) : `Noch keine ${U.many} erfasst`}
+          </span>
+          <Link to={base} className="small">
+            Wechseln
+          </Link>
+        </div>
+      )}
       {alert && (
         <div className="info-box pv-blocked" role="alert" data-testid="unit-alert">
           <TriangleAlert className="i" aria-hidden /> {/* Beginnt der Text schon mit dem Kurzwort („Ablegereif seit …“), wird es nicht doppelt gezeigt */}
@@ -510,13 +599,15 @@ function Formular({ unitId }: { unitId: string }) {
       )}
       {blockedBefore && (
         <div className="info-box pv-blocked">
-          <TriangleAlert className="i" aria-hidden /> {cfg.labels.blockedShort}: Es gibt einen offenen Mangel mit Sperre.
-          Erst nach der Behebung wieder benutzen.
+          <TriangleAlert className="i" aria-hidden />{' '}
+          {siteMode
+            ? `Gesperrt: Hier gibt es einen offenen ${D.one} mit Sperre. Erst nach der Behebung wieder freigeben.`
+            : `${cfg.labels.blockedShort}: Es gibt einen offenen ${D.one} mit Sperre. Erst nach der Behebung wieder benutzen.`}
         </div>
       )}
 
-      <h2 className="ez-section">Prüfart</h2>
-      <div className="ez-chips" role="group" aria-label="Prüfart">
+      <h2 className="ez-section">{I.kind}</h2>
+      <div className="ez-chips" role="group" aria-label={I.kind}>
         {cfg.kinds.map((k) => (
           <button
             key={k.id}
@@ -565,7 +656,7 @@ function Formular({ unitId }: { unitId: string }) {
         )}
         {gps.status === 'denied' && (
           <>
-            <p className="ez-warn">⚠ Standort nicht erlaubt — die Prüfung wird ohne GPS-Stempel gespeichert.</p>
+            <p className="ez-warn">⚠ Standort nicht erlaubt — die {I.one} wird ohne GPS-Stempel gespeichert.</p>
             <p className="muted small">
               So erlaubst du ihn: am iPhone unter Einstellungen → Datenschutz &amp; Sicherheit → Ortungsdienste →
               Safari-Websites „Beim Verwenden“ und „Genauer Standort“ wählen. In anderen Browsern auf das Schloss bzw.
@@ -578,7 +669,7 @@ function Formular({ unitId }: { unitId: string }) {
         )}
         {gps.status === 'error' && (
           <>
-            <p className="ez-warn">⚠ Ort nicht verfügbar — die Prüfung wird ohne GPS-Stempel gespeichert.</p>
+            <p className="ez-warn">⚠ Ort nicht verfügbar — die {I.one} wird ohne GPS-Stempel gespeichert.</p>
             <button type="button" className="btn ghost small" onClick={retry}>
               Erneut versuchen
             </button>
@@ -592,11 +683,11 @@ function Formular({ unitId }: { unitId: string }) {
       <h2 className="ez-section">
         {cfg.labels.checklist}
         <span className={defectPoints.length > 0 ? 'pv-bad' : 'muted'}>
-          {defectPoints.length > 0 ? ` · ${defectPoints.length} ${defectPoints.length === 1 ? 'Mangel' : 'Mängel'}` : ' · alles OK'}
+          {defectPoints.length > 0 ? ` · ${countWord(defectPoints.length, D)}` : ' · alles OK'}
         </span>
       </h2>
       <p className="muted small" style={{ marginTop: -4 }}>
-        Alles steht auf OK. Weicht etwas ab, beim Punkt „Mangel“ oder „n. z.“ (nicht zutreffend
+        Alles steht auf OK. Weicht etwas ab, beim Punkt „{W.results.defect}“ oder „n. z.“ (nicht zutreffend
         {cfg.labels.naExample ? `, z. B. ${cfg.labels.naExample}` : ''}) antippen.
       </p>
       <button type="button" className="btn ghost small pv-tap" onClick={() => setShowHints((v) => !v)}>
@@ -617,7 +708,7 @@ function Formular({ unitId }: { unitId: string }) {
                     aria-pressed={result === r}
                     onClick={() => setResult(item.id, r)}
                   >
-                    {RESULT_LABELS[r]}
+                    {W.results[r]}
                   </button>
                 ))}
               </div>
@@ -628,15 +719,17 @@ function Formular({ unitId }: { unitId: string }) {
         })}
       </ul>
 
-      <h2 className="ez-section">Mängel ({defects.length})</h2>
+      <h2 className="ez-section">
+        {D.many} ({defects.length})
+      </h2>
       {defects.map((d) => {
         const sev = severityOf(cfg, d.severity);
         return (
           <div key={d.key} className={`card pv-defect ${sev.tone}`}>
             <b>{d.title}</b>
             <span className="muted small">
-              {unit.name}
-              {d.blocked ? ` · ${cfg.labels.blockedShort}` : ''}
+              {defectTarget(d)}
+              {d.blocked ? ` · ${blockOf(d).short}` : ''}
               {d.photos.length > 0 ? ` · ${d.photos.length} ${d.photos.length === 1 ? 'Foto' : 'Fotos'}` : ''}
             </span>
             <span>
@@ -662,12 +755,12 @@ function Formular({ unitId }: { unitId: string }) {
       })}
       {defectPoints.length > 0 && defects.length === 0 && (
         <p className="pv-bad">
-          {defectPoints.length === 1 ? '1 Punkt steht' : `${defectPoints.length} Punkte stehen`} auf „Mangel“ — bitte kurz
-          beschreiben und einstufen.
+          {defectPoints.length === 1 ? '1 Punkt steht' : `${defectPoints.length} Punkte stehen`} auf „{W.results.defect}“ — bitte
+          kurz beschreiben und einstufen.
         </p>
       )}
       <button type="button" className="btn ghost ez-big" onClick={openEditor}>
-        <Plus className="i" aria-hidden /> Mangel erfassen
+        <Plus className="i" aria-hidden /> {D.one} erfassen
       </button>
 
       <h2 className="ez-section">Beweisfotos</h2>
@@ -682,7 +775,7 @@ function Formular({ unitId }: { unitId: string }) {
       {photoError && !editing && <div className="error-box">{photoError}</div>}
 
       <label className="field">
-        Geprüft von
+        {W.by}
         <input
           ref={nameRef}
           value={form.inspectorName}
@@ -727,24 +820,28 @@ function Formular({ unitId }: { unitId: string }) {
         </label>
       </details>
 
-      {saveError && <div className="error-box">Prüfung nicht gespeichert: {saveError}</div>}
+      {saveError && (
+        <div className="error-box">
+          {I.one} nicht gespeichert: {saveError}
+        </div>
+      )}
       <p className="muted small pv-summary">
-        Du speicherst: <b>{kind.short}</b> für <b>{unit.name}</b>
-        {site ? ` (${site.name})` : ''}
-        {defects.length > 0 ? ` mit ${defects.length} ${defects.length === 1 ? 'Mangel' : 'Mängeln'}` : ''}.
+        Du speicherst: <b>{kind.short}</b> für <b>{subject.name}</b>
+        {!siteMode && site ? ` (${site.name})` : ''}
+        {defects.length > 0 ? ` mit ${defects.length} ${defects.length === 1 ? D.one : D.manyDative}` : ''}.
       </p>
       <button type="button" className="btn ez-save" onClick={() => void save()} disabled={saving || photoBusy > 0}>
-        <Check className="i" aria-hidden /> {saving ? 'Speichern …' : 'Prüfung speichern'}
+        <Check className="i" aria-hidden /> {saving ? 'Speichern …' : `${I.one} speichern`}
       </button>
       <p className="muted small">
-        Nach dem Speichern ist die Prüfung nicht mehr änderbar (Beweiskette) — nur Stornieren mit Begründung ist möglich.
+        Nach dem Speichern ist die {I.one} nicht mehr änderbar (Beweiskette) — nur Stornieren mit Begründung ist möglich.
       </p>
 
-      {editing && editingSeverity && (
-        <Modal title={askBlock ? cfg.labels.blockedAsk : 'Mangel erfassen'} onClose={closeEditor} dirty={false}>
+      {editing && editingSeverity && editingBlock && (
+        <Modal title={askBlock ? editingBlock.askTitle : `${D.one} erfassen`} onClose={closeEditor} dirty={false}>
           {askBlock ? (
             <>
-              <p>{editingSeverity.blockQuestion}</p>
+              <p>{editingBlock.question}</p>
               <div className="ez-actions">
                 <button type="button" className="btn ez-big" onClick={() => commitDefect({ ...editing, blocked: true })}>
                   {cfg.labels.blockedYes}
@@ -756,11 +853,35 @@ function Formular({ unitId }: { unitId: string }) {
             </>
           ) : (
             <div className="ez">
-              <p className="muted small" style={{ marginTop: 0 }}>
-                Betrifft: {unit.name}
-              </p>
+              {siteMode ? (
+                // Orts-Modus: betroffene Einheit des Orts aus der Liste wählen — oder den Ort allgemein (wie in der App)
+                <label className="field">
+                  {cfg.labels.affected ?? `Betroffene Einheit (${U.one})`}
+                  <select
+                    value={editing.unitId ?? ''}
+                    data-testid="pv-defect-unit"
+                    onChange={(e) => setEditing({ ...editing, unitId: e.target.value || undefined })}
+                  >
+                    <option value="">{cfg.labels.general ?? `${S.one} allgemein`}</option>
+                    {siteUnits.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                        {u.info ? ` — ${u.info}` : ''}
+                      </option>
+                    ))}
+                    {/* aus einem älteren Entwurf: Einheit inzwischen außer Betrieb — die Auswahl bleibt sichtbar */}
+                    {editing.unitId && !siteUnits.some((u) => u.id === editing.unitId) && (
+                      <option value={editing.unitId}>{U.one} (nicht mehr im Bestand)</option>
+                    )}
+                  </select>
+                </label>
+              ) : (
+                <p className="muted small" style={{ marginTop: 0 }}>
+                  Betrifft: {subject.name}
+                </p>
+              )}
               <label className="field">
-                Mangel *
+                {D.one} *
                 <input
                   value={editing.title}
                   maxLength={160}
@@ -768,7 +889,7 @@ function Formular({ unitId }: { unitId: string }) {
                   onChange={(e) => setEditing({ ...editing, title: e.target.value })}
                 />
               </label>
-              <span className="pv-label">Einstufung (Ampel)</span>
+              <span className="pv-label">{cfg.labels.severityTitle ?? 'Einstufung (Ampel)'}</span>
               <div className="ez-chips" role="group" aria-label="Einstufung">
                 {cfg.severities.map((s) => (
                   <button
@@ -793,7 +914,7 @@ function Formular({ unitId }: { unitId: string }) {
                   aria-pressed={editing.blocked}
                   onClick={() => setEditing({ ...editing, blocked: !editing.blocked })}
                 >
-                  {editing.blocked ? `✓ ${cfg.labels.blocked}` : `${cfg.labels.blocked}?`}
+                  {editing.blocked ? `✓ ${editingBlock.toggle}` : `${editingBlock.toggle}?`}
                 </button>
               )}
               <label className="field" style={{ marginTop: 14 }}>
@@ -810,7 +931,7 @@ function Formular({ unitId }: { unitId: string }) {
               <PhotoRow
                 photos={editing.photos}
                 busy={photoBusy > 0}
-                label="Foto zum Mangel"
+                label={`Foto zum ${D.one}`}
                 onRemove={(i) => setEditing({ ...editing, photos: editing.photos.filter((_, j) => j !== i) })}
                 onOpen={beforeCamera}
                 onFiles={(e) => void onFiles(e, 'mangel')}
@@ -819,7 +940,7 @@ function Formular({ unitId }: { unitId: string }) {
               {editorError && <div className="error-box">{editorError}</div>}
               <div className="ez-actions">
                 <button type="button" className="btn ez-big" onClick={acceptDefect} disabled={photoBusy > 0}>
-                  Mangel übernehmen
+                  {D.one} übernehmen
                 </button>
                 <button type="button" className="btn ghost ez-big" onClick={closeEditor}>
                   Abbrechen
@@ -831,10 +952,11 @@ function Formular({ unitId }: { unitId: string }) {
       )}
 
       {ask === 'defect' && (
-        <Modal title="Mangel erfassen?" onClose={() => setAsk(null)} dirty={false}>
+        <Modal title={`${D.one} erfassen?`} onClose={() => setAsk(null)} dirty={false}>
           <p>
-            Du hast {defectPoints.length === 1 ? 'einen Punkt' : `${defectPoints.length} Punkte`} auf „Mangel“ gestellt,
-            aber noch keinen Mangel beschrieben. Ohne Beschreibung und Ampel-Einstufung ist der Nachweis lückenhaft.
+            Du hast {defectPoints.length === 1 ? 'einen Punkt' : `${defectPoints.length} Punkte`} auf „{W.results.defect}“
+            gestellt, aber noch keinen {D.one} beschrieben. Ohne Beschreibung und{' '}
+            {cfg.severities.some((s) => s.id === 'amber') ? 'Ampel-Einstufung' : 'Einstufung'} ist der Nachweis lückenhaft.
           </p>
           <div className="ez-actions">
             <button
@@ -845,7 +967,7 @@ function Formular({ unitId }: { unitId: string }) {
                 openEditor();
               }}
             >
-              Mangel erfassen
+              {D.one} erfassen
             </button>
             <button
               type="button"
@@ -896,8 +1018,10 @@ function Formular({ unitId }: { unitId: string }) {
         </Modal>
       )}
       {ask === 'name' && (
-        <Modal title="Ohne Prüfernamen speichern?" onClose={() => setAsk(null)} dirty={false}>
-          <p>Im Feld „Geprüft von“ steht kein Name. Die Prüfung lässt sich nach dem Speichern nicht mehr ändern.</p>
+        <Modal title={cfg.labels.noNameTitle ?? 'Ohne Prüfernamen speichern?'} onClose={() => setAsk(null)} dirty={false}>
+          <p>
+            Im Feld „{W.by}“ steht kein Name. Die {I.one} lässt sich nach dem Speichern nicht mehr ändern.
+          </p>
           <div className="ez-actions">
             <button
               type="button"
@@ -970,9 +1094,14 @@ function PhotoRow({
   );
 }
 
-/** Nach dem Speichern: ehrliche Bestätigung (was ist wo gespeichert?) + die nächste fällige Einheit am Standort. */
-function Done({ unit, info }: { unit: Unit; info: DoneInfo }) {
+/**
+ * Nach dem Speichern: ehrliche Bestätigung (was ist wo gespeichert?) + die nächste fällige Einheit am Standort.
+ * Im Orts-Modus gibt es keine Serienprüfung — dort steht, bis wann die Prüfung des Orts gilt.
+ */
+function Done({ subject, info }: { subject: Subject; info: DoneInfo }) {
   const { be, cfg, userId, base, intervalDays } = usePruef();
+  const siteMode = isSiteMode(cfg);
+  const { insp: I, defect: D } = wordsOf(cfg);
   const { pending, loaded } = usePendingSync();
   const [next, setNext] = useState<{ unit: Unit; count: number } | null>(null);
   const { outcome } = info;
@@ -992,18 +1121,19 @@ function Done({ unit, info }: { unit: Unit; info: DoneInfo }) {
 
   // Serienprüfung wie in der App: nach einer Prüfung der Fälligkeits-Art ohne ernsten Mangel die nächste fällige anbieten.
   useEffect(() => {
-    if (info.type !== cfg.dueKind || info.serious || info.alertDone) return;
+    if (siteMode || info.type !== cfg.dueKind || info.serious || info.alertDone) return;
     let alive = true;
     loadPruefData(be, cfg.appId, userId).then(
       (data) => {
         // ohne Netz ist unbekannt, was inzwischen geprüft wurde → kein Vorschlag
         if (!alive || data.offline) return;
-        const here = data.units.filter((u) => u.siteId === unit.siteId);
-        const last = lastDueByUnit(withPendingMeta(data.meta, pending, cfg.cols.unitFk), cfg.dueKind);
-        const blocked = new Set(data.openDefects.filter((d) => d.blocked).map((d) => d.unitId));
+        const here = data.units.filter((u) => u.siteId === subject.siteId);
+        const last = lastDueByUnit(withPendingMeta(data.meta, pending, dueFkOf(cfg)), cfg.dueKind);
+        const blocked = new Set<string>();
+        for (const d of data.openDefects) if (d.blocked && d.unitId) blocked.add(d.unitId);
         // Einheiten mit Warnung aus den Stammdaten (z. B. ablegereif) nicht als „nächste fällige“ anbieten
         for (const u of here) if (unitAlertOf(cfg, u)) blocked.add(u.id);
-        const exclude = new Set([unit.id, ...pending.map((p) => String(p.inspection[cfg.cols.unitFk]))]);
+        const exclude = new Set([subject.id, ...pending.map((p) => String(p.inspection[cfg.cols.unitFk]))]);
         const res = nextDueAfter(here, last, intervalDays, exclude, blocked);
         setNext(res ? { unit: res.next, count: res.count } : null);
       },
@@ -1013,26 +1143,29 @@ function Done({ unit, info }: { unit: Unit; info: DoneInfo }) {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [be, cfg, userId, unit.id, unit.siteId, pending.length]);
+  }, [be, cfg, userId, subject.id, subject.siteId, pending.length]);
 
   const dueAt = info.type === cfg.dueKind && !info.blocked ? dueInfo(info.at, intervalDays).dueAt : null;
-  const siteUrl = `${base}/ort/${unit.siteId}`;
+  // Zweite Frist (SpielDex: operative Kontrolle) — nur im Orts-Modus und nach genau dieser Prüfart
+  const extra = siteMode && cfg.extraDue && info.type === cfg.extraDue.doneKind && !info.blocked ? cfg.extraDue : null;
+  const extraAt = extra ? dueInfo(info.at, extra.intervalDays).dueAt : null;
+  const siteUrl = `${base}/ort/${subject.siteId}`;
 
   return (
     <div className="ez ez-done">
       <div className={`ez-done-icon${waitIcon || rejected ? ' wait' : ''}`} aria-hidden>
         {waitIcon ? <CloudOff /> : rejected ? <TriangleAlert /> : <Check />}
       </div>
-      <h1>{waitIcon ? 'Auf dem Gerät gesichert' : rejected && !inspectionOnServer ? 'Noch nicht auf dem Server' : 'Prüfung gesichert'}</h1>
+      <h1>{waitIcon ? 'Auf dem Gerät gesichert' : rejected && !inspectionOnServer ? 'Noch nicht auf dem Server' : `${I.one} gesichert`}</h1>
       <p className="muted">
-        {unit.name} · {kindOf(cfg, info.type).short}
+        {subject.name} · {kindOf(cfg, info.type).short}
       </p>
 
       {rejected ? (
         <div className="error-box" style={{ textAlign: 'left' }}>
           <TriangleAlert className="i" aria-hidden />{' '}
           {inspectionOnServer
-            ? `Die Prüfung ist gespeichert, aber ${missing === 1 ? '1 Mangel wurde' : `${missing} Mängel wurden`} vom Server nicht angenommen: ${rejected}`
+            ? `Die ${I.one} ist gespeichert, aber ${missing === 1 ? `1 ${D.one} wurde` : `${missing} ${D.many} wurden`} vom Server nicht angenommen: ${rejected}`
             : `Vom Server nicht angenommen: ${rejected}`}
           <br />
           Alles liegt mit Fotos auf diesem Gerät und wird automatisch erneut gesendet. Bleibt es dabei, bitte
@@ -1042,19 +1175,19 @@ function Done({ unit, info }: { unit: Unit; info: DoneInfo }) {
         <div className="info-box" style={{ textAlign: 'left' }}>
           {inspectionOnServer ? (
             <>
-              Die Prüfung ist übertragen — {missing === 1 ? '1 Mangel wartet' : `${missing} Mängel warten`} noch auf
+              Die {I.one} ist übertragen — {missing === 1 ? `1 ${D.one} wartet` : `${missing} ${D.many} warten`} noch auf
               Empfang und {missing === 1 ? 'wird' : 'werden'} automatisch nachgesendet (nichts doppelt).
             </>
           ) : outcome.onDevice ? (
             <>
-              Gerade keine Verbindung. Die Prüfung liegt sicher auf diesem Gerät und wird automatisch übertragen, sobald
+              Gerade keine Verbindung. Die {I.one} liegt sicher auf diesem Gerät und wird automatisch übertragen, sobald
               wieder Empfang da ist — Zeit, Ort und Fotos bleiben die vom Prüfort. Bitte diese Seite später noch einmal
               öffnen, bis unter „{cfg.labels.site.many}“ nichts mehr wartet.
             </>
           ) : (
             <>
               Gerade keine Verbindung — und dieser Browser erlaubt kein dauerhaftes Speichern (privates Surfen?).
-              <b> Bitte diese Seite offen lassen</b>, bis die Prüfung übertragen ist.
+              <b> Bitte diese Seite offen lassen</b>, bis die {I.one} übertragen ist.
             </>
           )}
         </div>
@@ -1070,14 +1203,27 @@ function Done({ unit, info }: { unit: Unit; info: DoneInfo }) {
 
       {state.signatureDropped && (
         <div className="info-box" style={{ textAlign: 'left' }}>
-          Hinweis: Die Datenbank konnte die Unterschrift noch nicht speichern — die Prüfung ist ohne Unterschriftsbild
+          Hinweis: Die Datenbank konnte die Unterschrift noch nicht speichern — die {I.one} ist ohne Unterschriftsbild
           gesichert.
         </div>
       )}
       {info.alertDone ? (
         <p className="pv-bad">{info.alertDone}</p>
       ) : info.blocked ? (
-        <p className="pv-bad">{cfg.labels.blockedShort} — erst nach Mängelbehebung wieder benutzen.</p>
+        <p className="pv-bad">
+          {siteMode
+            ? 'Gesperrt — erst nach der Behebung wieder freigeben.'
+            : `${cfg.labels.blockedShort} — erst nach Mängelbehebung wieder benutzen.`}
+        </p>
+      ) : siteMode ? (
+        <>
+          {dueAt && <p className="muted">Gültig bis {fmtDay(dueAt)} — dann erneut prüfen.</p>}
+          {extra && extraAt && (
+            <p className="muted">
+              {extra.doneText} {fmtDay(extraAt)}.
+            </p>
+          )}
+        </>
       ) : (
         dueAt && <p className="muted">Wieder fällig am {fmtDay(dueAt)}.</p>
       )}

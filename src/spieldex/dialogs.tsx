@@ -2,6 +2,8 @@ import { useAppAuth } from '../auth/AppAuthContext';
 import { useOrg } from '../components/OrgContext';
 import { FormDialog, orNull, s, type FormValues } from '../components/form';
 import { savePlayground } from './api';
+import { siteGate, siteGateText } from '../pruefen/pro';
+import { SPIELDEX_VOR_ORT } from './vorOrt';
 import type { Playground } from './types';
 
 export function PlaygroundDialog({
@@ -18,6 +20,10 @@ export function PlaygroundDialog({
 
   async function onSave(v: FormValues) {
     if (!org) throw new Error('Kein Betrieb geladen');
+    // Gratis-Grenze wie in der App (1 aktiver Spielplatz): Anlegen und Wieder-Aktivieren zählen — sonst ließe sich die
+    // Grenze per Stilllegen → neu anlegen → wieder aktivieren umgehen. Pro laut Server, im Zweifel erlaubt.
+    const becomesActive = v.active === true && (playground === 'new' || !playground.active);
+    if (becomesActive && !(await siteGate(client, SPIELDEX_VOR_ORT)).allowed) throw new Error(siteGateText(SPIELDEX_VOR_ORT));
     await savePlayground(
       client,
       org.org.id,

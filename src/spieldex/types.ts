@@ -20,6 +20,13 @@ export const INSPECTION_SHORT: Record<InspectionType, string> = {
   main: 'Hauptinspektion',
 };
 
+/** Erklärung je Prüfart — wortgleich zur App (mobile/src/types.ts), erscheint beim Erfassen „Vor Ort“. */
+export const INSPECTION_HINTS: Record<InspectionType, string> = {
+  visual: 'Sichtkontrolle auf offensichtliche Gefahren — üblich: wöchentlich, bei starker Nutzung/Vandalismus täglich.',
+  operational: 'Funktions- und Verschleißkontrolle — üblich: alle 1–3 Monate.',
+  main: 'Jährliche Hauptinspektion durch eine befähigte Person (Sachkundiger) — SpielDex dokumentiert Termin und Ergebnis.',
+};
+
 /** Empfohlenes Intervall in Tagen je Kontrollart (Fälligkeits-Anzeige). */
 export const INSPECTION_INTERVAL_DAYS: Record<InspectionType, number> = {
   visual: 7,
@@ -36,19 +43,21 @@ export type CheckResult = 'ok' | 'defect' | 'na';
 export interface ChecklistItem {
   id: string;
   label: string;
+  /** Prüfhinweis wie in der App (beim Erfassen „Vor Ort“) */
+  hint: string;
 }
 
 export const CHECKLIST: ChecklistItem[] = [
-  { id: 'glass_waste', label: 'Glasscherben, Spritzen, Abfall' },
-  { id: 'fall_protection', label: 'Fallschutz (Sand, Kies, Matten)' },
-  { id: 'damage_vandalism', label: 'Beschädigung / Vandalismus' },
-  { id: 'missing_parts', label: 'Fehlende oder lose Teile' },
-  { id: 'wear', label: 'Verschleiß' },
-  { id: 'foundations', label: 'Freigelegte Fundamente' },
-  { id: 'sharp_edges', label: 'Scharfe Kanten / Fangstellen' },
-  { id: 'stability', label: 'Standsicherheit' },
-  { id: 'fence_gates', label: 'Zäune, Tore, Zugänge' },
-  { id: 'furniture', label: 'Bänke, Tische, Mülleimer' },
+  { id: 'glass_waste', label: 'Glasscherben, Spritzen, Abfall', hint: 'Gesamte Fläche absuchen — besonders Sandkasten und Fallschutzbereiche.' },
+  { id: 'fall_protection', label: 'Fallschutz (Sand, Kies, Matten)', hint: 'Füllhöhe ausreichend? Auswaschungen unter Schaukeln und Rutschenausläufen?' },
+  { id: 'damage_vandalism', label: 'Beschädigung / Vandalismus', hint: 'Zerstörte Teile, Brandspuren, beschmierte oder beklebte Flächen.' },
+  { id: 'missing_parts', label: 'Fehlende oder lose Teile', hint: 'Schrauben, Abdeckkappen, Sprossen, Sitzflächen, Kettenglieder.' },
+  { id: 'wear', label: 'Verschleiß', hint: 'Seile, Ketten, Gelenke und Aufhängungen (Schaukellager) prüfen.' },
+  { id: 'foundations', label: 'Freigelegte Fundamente', hint: 'Betonfundamente dürfen nicht sichtbar oder erreichbar sein.' },
+  { id: 'sharp_edges', label: 'Scharfe Kanten / Fangstellen', hint: 'Absplitterungen, hervorstehende Nägel, offene Rohrenden, Engstellen.' },
+  { id: 'stability', label: 'Standsicherheit', hint: 'Wackelnde Geräte, angebrochene Pfosten, Kippgefahr.' },
+  { id: 'fence_gates', label: 'Zäune, Tore, Zugänge', hint: 'Einfriedung intakt? Selbstschließende Tore funktionsfähig?' },
+  { id: 'furniture', label: 'Bänke, Tische, Mülleimer', hint: 'Beschädigungen, Standfestigkeit, überfüllte Mülleimer.' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -124,6 +133,13 @@ export const SEVERITY_LABELS: Record<DefectSeverity, string> = {
   low: 'Gering',
   medium: 'Mittel',
   danger: 'Gefahr',
+};
+
+/** Erklärung je Einstufung — wortgleich zur App, erscheint beim Erfassen „Vor Ort“. */
+export const SEVERITY_HINTS: Record<DefectSeverity, string> = {
+  low: 'Schönheitsfehler / Beobachten — bei nächster Wartung beheben.',
+  medium: 'Zeitnah beheben — Nutzung noch vertretbar.',
+  danger: 'Unmittelbare Gefahr — Gerät sperren oder Zugang verhindern!',
 };
 
 export type DefectStatus = 'open' | 'resolved';

@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
+import { Modal } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
+import { siteGate, siteGateText } from '../../pruefen/pro';
+import { SPIELDEX_VOR_ORT } from '../vorOrt';
 import {
   fetchDefects,
   fetchInspectionMeta,
@@ -22,6 +25,20 @@ interface Data {
 export function Playgrounds() {
   const { client } = useAppAuth();
   const [editing, setEditing] = useState<Playground | 'new' | null>(null);
+  // Gratis-Grenze wie in der App (1 aktiver Spielplatz, nicht aktive zählen nicht); Pro laut Server, im Zweifel erlaubt.
+  const [gate, setGate] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  async function onAdd() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      if ((await siteGate(client, SPIELDEX_VOR_ORT)).allowed) setEditing('new');
+      else setGate(true);
+    } finally {
+      setChecking(false);
+    }
+  }
 
   const state = useAsync<Data>(async () => {
     const [playgrounds, meta, openDefects] = await Promise.all([
@@ -37,7 +54,7 @@ export function Playgrounds() {
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Spielplätze</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => setEditing('new')}>
+        <button className="btn" onClick={() => void onAdd()} disabled={checking}>
           ＋ Spielplatz anlegen
         </button>
       </div>
@@ -103,6 +120,20 @@ export function Playgrounds() {
           )
         }
       </LoadGuard>
+
+      {gate && (
+        <Modal title="Mehr Spielplätze mit Pro" onClose={() => setGate(false)} dirty={false}>
+          <p>{siteGateText(SPIELDEX_VOR_ORT)}</p>
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+            <Link className="btn ghost" to="../abo">
+              Abo ansehen
+            </Link>
+            <button type="button" className="btn" onClick={() => setGate(false)}>
+              Verstanden
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {editing && (
         <PlaygroundDialog

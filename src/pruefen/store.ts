@@ -15,6 +15,8 @@ export interface DefectDraft {
   severity: string;
   blocked: boolean;
   photos: string[];
+  /** Nur Orts-Modus: betroffene Einheit des Orts (Gerüst, Regalzeile, Spielgerät); fehlt = „Ort allgemein“. */
+  unitId?: string;
 }
 
 export interface FormValues {
@@ -26,7 +28,7 @@ export interface FormValues {
   signature: string;
 }
 
-/** Angefangene Prüfung einer Einheit. */
+/** Angefangene Prüfung einer Einheit — im Orts-Modus eines Orts (unitId ist dann die ID des Orts). */
 export interface Draft {
   key: string;
   kind: 'draft';

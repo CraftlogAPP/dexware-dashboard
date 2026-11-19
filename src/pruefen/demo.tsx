@@ -6,11 +6,12 @@
 //   ?demo&netz=nein    Server lehnt ab → „vom Server nicht angenommen“
 //   &rolle=mitarbeiter Ansicht eines Mitarbeiters · &pro=0 Gratis-Paket
 // Der Schalter lässt sich im Banner oben umstellen (Nachsenden testen). Unten steht mit, was „gesendet“ wurde.
+// Orts-Modus (GerüstDex, RegalDex, SpielDex): Die Prüf-Daten hängen am Ort, Mängel nennen eine Einheit oder keine.
 import { useMemo, useState } from 'react';
 import { Link, Route, Routes } from 'react-router-dom';
 import type { AppConfig } from '../apps/registry';
 import type { OpenDefect, PruefBackend, Site, Unit } from './backend';
-import type { PruefConfig } from './config';
+import { dueFkOf, inspectionsPathOf, isSiteMode, siteFkOf, sitesPathOf, wordsOf, type PruefConfig } from './config';
 import { PruefCtx, type PruefCtxValue, type VorOrtPages } from './context';
 import type { InspMeta } from './due';
 import { VOR_ORT_PATH } from './Scope';
@@ -31,6 +32,8 @@ function createBackend(
   rows: Record<string, unknown>[],
 ): PruefBackend {
   const U = cfg.labels.unit;
+  const siteMode = isSiteMode(cfg);
+  const dueFk = dueFkOf(cfg);
   const sites: Site[] = [
     { id: uuid(1), name: 'Werkstatt Nord', address: 'Industriestraße 12, 8010 Musterstadt', active: true },
     { id: uuid(2), name: 'Lager Süd', address: 'Hafenweg 3, 8010 Musterstadt', active: true },
@@ -60,14 +63,19 @@ function createBackend(
     unit(8, 1, `${U.one} 008 (alt)`, 'Beispiel A', true),
     unit(9, 2, `${U.one} 101`, 'Beispiel B'),
   ];
-  const meta: InspMeta[] = [
-    { unitId: uuid(101), type: cfg.dueKind, startedAt: daysAgo(40), canceled: false },
-    { unitId: uuid(102), type: cfg.dueKind, startedAt: daysAgo(350), canceled: false },
-    { unitId: uuid(103), type: cfg.dueKind, startedAt: daysAgo(400), canceled: false },
-    { unitId: uuid(104), type: cfg.dueKind, startedAt: daysAgo(10), canceled: false },
-    { unitId: uuid(109), type: cfg.dueKind, startedAt: daysAgo(100), canceled: false },
+  // Orts-Modus: Ort 1 vor 10 Tagen geprüft (mit offener Sperre an Einheit 4), Ort 2 noch nie.
+  const meta: InspMeta[] = siteMode
+    ? [{ unitId: uuid(1), type: cfg.dueKind, startedAt: daysAgo(10), canceled: false }]
+    : [
+        { unitId: uuid(101), type: cfg.dueKind, startedAt: daysAgo(40), canceled: false },
+        { unitId: uuid(102), type: cfg.dueKind, startedAt: daysAgo(350), canceled: false },
+        { unitId: uuid(103), type: cfg.dueKind, startedAt: daysAgo(400), canceled: false },
+        { unitId: uuid(104), type: cfg.dueKind, startedAt: daysAgo(10), canceled: false },
+        { unitId: uuid(109), type: cfg.dueKind, startedAt: daysAgo(100), canceled: false },
+      ];
+  const defects: OpenDefect[] = [
+    { id: uuid(900), siteId: uuid(1), unitId: uuid(104), severity: cfg.severities[cfg.severities.length - 1].id, blocked: true },
   ];
-  const defects: OpenDefect[] = [{ id: uuid(900), unitId: uuid(104), severity: cfg.severities[cfg.severities.length - 1].id, blocked: true }];
   const inspectionIds = new Set<string>();
   const defectIds = new Set<string>();
   const pro = () => new URLSearchParams(window.location.search).get('pro') !== '0';
@@ -106,7 +114,7 @@ function createBackend(
         return { signatureDropped: false };
       }
       inspectionIds.add(row.id);
-      meta.push({ unitId: String(row[cfg.cols.unitFk]), type: row.type, startedAt: row.started_at, canceled: false });
+      meta.push({ unitId: String(row[dueFk]), type: row.type, startedAt: row.started_at, canceled: false });
       const { signature, ...rest } = row;
       log(
         `Prüfung ${JSON.stringify({ ...rest, signature: signature ? `${signature.slice(0, 22)}… (${Math.round(signature.length / 1024)} KB)` : undefined, photo_urls: photoUrls })}`,
@@ -122,7 +130,14 @@ function createBackend(
         return;
       }
       defectIds.add(row.id);
-      defects.push({ id: row.id, unitId: String(row[cfg.cols.unitFk]), severity: row.severity, blocked: row[cfg.cols.blocked] === true });
+      const unitId = row[cfg.cols.unitFk];
+      defects.push({
+        id: row.id,
+        siteId: String(row[siteFkOf(cfg)]),
+        unitId: typeof unitId === 'string' ? unitId : null,
+        severity: row.severity,
+        blocked: row[cfg.cols.blocked] === true,
+      });
       log(`Mangel ${JSON.stringify({ ...row, photo_urls: photoUrls })}`);
     },
     async isPro() {
@@ -148,23 +163,28 @@ function Stub({ title, back }: { title: string; back?: string }) {
   );
 }
 
-const DEMO_PAGES: VorOrtPages = {
-  inspections: (
-    <>
-      <Stub title="Prüfungen" />
-      <p className="small">
-        <Link to="beispiel">Beispiel-Prüfung öffnen</Link>
-      </p>
-    </>
-  ),
-  inspectionDetail: <Stub title="Prüfung" back="../pruefungen" />,
-  defects: <Stub title="Mängel" />,
-  sites: <Stub title="Standorte verwalten" />,
-  siteDetail: <Stub title="Standort" back="../standorte" />,
-  report: <Stub title="Prüfbericht-PDF" />,
-  team: <Stub title="Team" />,
-  abo: <Stub title="Abo" />,
-};
+/** Platzhalter-Seiten mit den Bezeichnungen und Unterpfaden der App (wie die echten Dashboard-Seiten verlinkt). */
+function demoPages(cfg: PruefConfig): VorOrtPages {
+  const W = wordsOf(cfg);
+  const S = cfg.labels.site;
+  return {
+    inspections: (
+      <>
+        <Stub title={W.insp.many} />
+        <p className="small">
+          <Link to="beispiel">Beispiel öffnen ({W.insp.one})</Link>
+        </p>
+      </>
+    ),
+    inspectionDetail: <Stub title={W.insp.one} back={`../${inspectionsPathOf(cfg)}`} />,
+    defects: <Stub title={W.defect.many} />,
+    sites: <Stub title={`${S.many} verwalten`} />,
+    siteDetail: <Stub title={S.one} back={`../${sitesPathOf(cfg)}`} />,
+    report: <Stub title={cfg.labels.report ?? 'Prüfbericht-PDF'} />,
+    team: <Stub title="Team" />,
+    abo: <Stub title="Abo" />,
+  };
+}
 
 const NO_ROWS: Record<string, unknown>[] = [];
 
@@ -184,6 +204,7 @@ export function VorOrtDemoArea({ app, cfg, rows = NO_ROWS }: { app: AppConfig; c
     [cfg, netzRef, rows],
   );
   const base = `/app/${app.id}`;
+  const pages = useMemo(() => demoPages(cfg), [cfg]);
   const value = useMemo<PruefCtxValue>(
     () => ({
       cfg,
@@ -224,7 +245,7 @@ export function VorOrtDemoArea({ app, cfg, rows = NO_ROWS }: { app: AppConfig; c
       </header>
       <PruefCtx.Provider value={value}>
         <Routes>
-          <Route path={`${VOR_ORT_PATH}/*`} element={<VorOrt pages={DEMO_PAGES} />} />
+          <Route path={`${VOR_ORT_PATH}/*`} element={<VorOrt pages={pages} />} />
           <Route
             path="*"
             element={

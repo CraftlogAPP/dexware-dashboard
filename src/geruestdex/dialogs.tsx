@@ -2,6 +2,8 @@ import { useAppAuth } from '../auth/AppAuthContext';
 import { useOrg } from '../components/OrgContext';
 import { FormDialog, orNull, s, type FormValues } from '../components/form';
 import { saveSite } from './api';
+import { siteGate, siteGateText } from '../pruefen/pro';
+import { GERUESTDEX_VOR_ORT } from './vorOrt';
 import type { Site } from './types';
 
 export function SiteDialog({
@@ -18,6 +20,10 @@ export function SiteDialog({
 
   async function onSave(v: FormValues) {
     if (!org) throw new Error('Kein Betrieb geladen');
+    // Gratis-Grenze wie in der App (1 aktive Baustelle): Anlegen und Wieder-Aktivieren zählen — sonst ließe sich die
+    // Grenze per Stilllegen → neu anlegen → wieder aktivieren umgehen. Pro laut Server, im Zweifel erlaubt.
+    const becomesActive = v.active === true && (site === 'new' || !site.active);
+    if (becomesActive && !(await siteGate(client, GERUESTDEX_VOR_ORT)).allowed) throw new Error(siteGateText(GERUESTDEX_VOR_ORT));
     await saveSite(
       client,
       org.org.id,

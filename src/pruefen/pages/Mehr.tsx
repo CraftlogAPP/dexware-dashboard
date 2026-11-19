@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, ChevronRight, CreditCard, FileDown, LogOut, Monitor, Users } from 'lucide-react';
-import { sitesPathOf } from '../config';
+import { sitesPathOf, wordsOf } from '../config';
 import { usePruef } from '../context';
 import { getPrefs, setPrefs } from '../data';
 import { Unterschrift } from '../Unterschrift';
@@ -15,6 +15,7 @@ export function Mehr() {
   const [saved, setSaved] = useState(false);
   const S = cfg.labels.site;
   const U = cfg.labels.unit;
+  const W = wordsOf(cfg);
 
   const stored = getPrefs(cfg.appId, userId);
   const changed = prefs.name.trim() !== stored.name || prefs.qualification.trim() !== stored.qualification;
@@ -79,7 +80,7 @@ export function Mehr() {
 
       <div className="card ez" style={{ marginTop: 18 }}>
         <label className="field">
-          <span>Dein Name für „Geprüft von“</span>
+          <span>Dein Name für „{W.by}“</span>
           <input
             value={prefs.name}
             onChange={(e) => setLocal({ ...prefs, name: e.target.value })}
@@ -110,7 +111,7 @@ export function Mehr() {
           />
         </div>
         <p className="muted small" style={{ margin: '6px 0 0' }}>
-          Name, Qualifikation und Unterschrift werden bei jeder neuen Prüfung vorgeschlagen. Gespeichert nur auf diesem
+          Name, Qualifikation und Unterschrift werden bei jeder neuen {W.insp.one} vorgeschlagen. Gespeichert nur auf diesem
           Gerät, je Konto.
         </p>
       </div>

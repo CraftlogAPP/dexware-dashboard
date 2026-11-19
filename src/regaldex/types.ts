@@ -18,6 +18,12 @@ export const INSPECTION_SHORT: Record<InspectionType, string> = {
   expert: 'Experteninspektion',
 };
 
+/** Erklärung je Prüfart — wortgleich zur App (mobile/src/types.ts), erscheint beim Erfassen „Vor Ort“. */
+export const INSPECTION_HINTS: Record<InspectionType, string> = {
+  visual: 'Regelmäßige Sichtprüfung durch eine beauftragte Person (Sicherheitsbeauftragter Lager) — üblich: wöchentlich, dokumentiert.',
+  expert: 'Inspektion durch eine fachkundige Person nach DIN EN 15635 — mindestens alle 12 Monate. RegalDex dokumentiert Termin und Ergebnis.',
+};
+
 /** Empfohlenes Intervall in Tagen je Inspektionsart (Fälligkeits-Anzeige). */
 export const INSPECTION_INTERVAL_DAYS: Record<InspectionType, number> = {
   visual: 7,
@@ -33,21 +39,23 @@ export type CheckResult = 'ok' | 'defect' | 'na';
 export interface ChecklistItem {
   id: string;
   label: string;
+  /** Prüfhinweis wie in der App (beim Erfassen „Vor Ort“) */
+  hint: string;
 }
 
 export const CHECKLIST: ChecklistItem[] = [
-  { id: 'load_signs', label: 'Belastungsschilder (Fach-/Feldlast)' },
-  { id: 'impact_protection', label: 'Anfahrschutz' },
-  { id: 'uprights', label: 'Stützen / Rahmen' },
-  { id: 'base_anchors', label: 'Fußplatten & Verankerung' },
-  { id: 'plumb', label: 'Lotrechtstellung' },
-  { id: 'bracing', label: 'Diagonalen / Aussteifung' },
-  { id: 'beams', label: 'Traversen (Längsträger)' },
-  { id: 'beam_locks', label: 'Sicherungsstifte' },
-  { id: 'corrosion', label: 'Korrosion / Beschichtung' },
-  { id: 'overload', label: 'Beladung / Überlastung' },
-  { id: 'pallets', label: 'Paletten & Ladehilfsmittel' },
-  { id: 'aisles', label: 'Gassen & Verkehrswege' },
+  { id: 'load_signs', label: 'Belastungsschilder (Fach-/Feldlast)', hint: 'An jeder Regalzeile vorhanden, lesbar und passend zur tatsächlichen Konfiguration?' },
+  { id: 'impact_protection', label: 'Anfahrschutz', hint: 'Eck- und Stützenschutz vorhanden und unbeschädigt? Verformter Anfahrschutz hat gewirkt — austauschen.' },
+  { id: 'uprights', label: 'Stützen / Rahmen', hint: 'Dellen, Risse, Anfahrschäden? Grenzwerte: 5 mm in Gassenrichtung, 3 mm quer — gemessen mit 1-m-Richtlatte.' },
+  { id: 'base_anchors', label: 'Fußplatten & Verankerung', hint: 'Fußplatten vollflächig aufliegend, Anker fest, keine gerissenen Dübel oder unterlegten Provisorien?' },
+  { id: 'plumb', label: 'Lotrechtstellung', hint: 'Rahmen im Lot? Max. Abweichung 1/350 der Höhe (z. B. 17 mm bei 6 m).' },
+  { id: 'bracing', label: 'Diagonalen / Aussteifung', hint: 'Verbände vollständig, unbeschädigt und fest verschraubt?' },
+  { id: 'beams', label: 'Traversen (Längsträger)', hint: 'Bleibende Verformung nach Entlastung, Risse, beschädigte Schweißnähte, aufgebogene Endplatten?' },
+  { id: 'beam_locks', label: 'Sicherungsstifte', hint: 'Aushebesicherungen an JEDER Traverse beidseitig vorhanden und eingerastet?' },
+  { id: 'corrosion', label: 'Korrosion / Beschichtung', hint: 'Rost, großflächig beschädigte Beschichtung, Feuchtigkeits- oder Frostschäden (Kühllager)?' },
+  { id: 'overload', label: 'Beladung / Überlastung', hint: 'Fach- und Feldlasten eingehalten? Lasten mittig aufgelegt, keine gefährlichen Überstände?' },
+  { id: 'pallets', label: 'Paletten & Ladehilfsmittel', hint: 'Paletten unbeschädigt (keine gebrochenen Kufen/Bretter), Ladung gesichert (Folie, Band)?' },
+  { id: 'aisles', label: 'Gassen & Verkehrswege', hint: 'Freimaße eingehalten, nichts abgestellt, Bodenmarkierungen sichtbar, Beleuchtung intakt?' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -125,6 +133,13 @@ export const SEVERITY_LABELS: Record<DamageSeverity, string> = {
   green: 'Grün — beobachten',
   amber: 'Orange — gefährlich',
   red: 'Rot — sehr schwerwiegend',
+};
+
+/** Erklärung je Einstufung — wortgleich zur App, erscheint beim Erfassen „Vor Ort“. */
+export const SEVERITY_HINTS: Record<DamageSeverity, string> = {
+  green: 'Verformung unterhalb der Grenzwerte — kennzeichnen, beobachten, bei der nächsten Inspektion erneut bewerten.',
+  amber: 'Grenzwert überschritten (bis 2×) — Feld entlasten, nach Entnahme nicht neu belegen, Instandsetzung binnen 4 Wochen.',
+  red: 'Mehr als 2× über dem Grenzwert — SOFORT entlasten und sperren, bis die Instandsetzung erfolgt ist!',
 };
 
 export const SEVERITY_SHORT: Record<DamageSeverity, string> = {

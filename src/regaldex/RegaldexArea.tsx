@@ -1,3 +1,4 @@
+import { lazy } from 'react';
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { ClipboardCheck, CreditCard, FileDown, LayoutDashboard, TriangleAlert, Users, Warehouse } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
@@ -13,13 +14,55 @@ import { Inspections } from './pages/Inspections';
 import { InspectionDetail } from './pages/InspectionDetail';
 import { Damages } from './pages/Damages';
 import { Report } from './pages/Report';
+import { VorOrt } from '../pruefen/VorOrt';
+import { VOR_ORT_PATH, VorOrtScope } from '../pruefen/Scope';
+import { VorOrtSwitch } from '../pruefen/ModeSwitch';
+import { useHomeScreenIcon } from '../pruefen/homeScreen';
+import type { VorOrtPages } from '../pruefen/context';
+import { REGALDEX_DEMO_ROWS, REGALDEX_VOR_ORT } from './vorOrt';
+
+// „Vor Ort“ mit Beispieldaten — nur im Dev-Server (/app/regaldex/vor-ort?demo), fehlt im Produktions-Build.
+const VorOrtDemo = import.meta.env.DEV
+  ? lazy(() => import('../pruefen/demo').then((m) => ({ default: m.VorOrtDemoArea })))
+  : null;
+
+function demoWanted(): boolean {
+  try {
+    if (new URLSearchParams(window.location.search).has('demo')) sessionStorage.setItem('rd-vorort-demo', '1');
+    return sessionStorage.getItem('rd-vorort-demo') === '1';
+  } catch {
+    return new URLSearchParams(window.location.search).has('demo');
+  }
+}
+
+// Dieselben Seiten wie im Dashboard, eingebunden in die Handy-Ansicht „Vor Ort“ (eine Quelle).
+const VOR_ORT_PAGES: VorOrtPages = {
+  inspections: <Inspections />,
+  inspectionDetail: <InspectionDetail />,
+  defects: <Damages />,
+  sites: <Warehouses />,
+  siteDetail: <WarehouseDetail />,
+  report: <Report />,
+  team: <TeamPage />,
+  abo: <AboPage />,
+};
 
 export function RegaldexArea({ app }: { app: AppConfig }) {
+  useHomeScreenIcon('RegalDex', '/icons/regaldex-180.png');
+  if (VorOrtDemo && demoWanted()) return <VorOrtDemo app={app} cfg={REGALDEX_VOR_ORT} rows={REGALDEX_DEMO_ROWS} />;
   return (
-    <AppArea app={app}>
+    <AppArea app={app} headerAction={<VorOrtSwitch />}>
       <OrgProvider>
         <OrgGate>
           <Routes>
+            <Route
+              path={`${VOR_ORT_PATH}/*`}
+              element={
+                <VorOrtScope cfg={REGALDEX_VOR_ORT}>
+                  <VorOrt pages={VOR_ORT_PAGES} />
+                </VorOrtScope>
+              }
+            />
             <Route element={<Shell />}>
               <Route index element={<Overview />} />
               <Route path="lager" element={<Warehouses />} />

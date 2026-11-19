@@ -87,7 +87,10 @@ export function newId(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-/** Wartende (noch nicht übertragene) Prüfungen zählen für die Fälligkeit schon mit. */
+/**
+ * Wartende (noch nicht übertragene) Prüfungen zählen für die Fälligkeit schon mit.
+ * @param unitFk Spalte, an der die Fälligkeit hängt — dueFkOf(cfg): die Einheit, im Orts-Modus der Ort.
+ */
 export function withPendingMeta(meta: InspMeta[], pending: Pending[], unitFk: string): InspMeta[] {
   return [
     ...meta,

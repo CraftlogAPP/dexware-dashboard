@@ -24,6 +24,12 @@ export const INSPECTION_SHORT: Record<InspectionType, string> = {
   expert: 'Befähigte Person',
 };
 
+/** Erklärung je Prüfart — wortgleich zur App (mobile/src/types.ts), erscheint beim Erfassen „Vor Ort“. */
+export const INSPECTION_HINTS: Record<InspectionType, string> = {
+  visual: 'Sicht- und Funktionskontrolle durch den Gerüstnutzer vor jeder Verwendung — arbeitstäglich, dokumentiert.',
+  expert: 'Prüfung durch eine zur Prüfung befähigte Person — nach der Montage, nach wesentlichen Änderungen und nach außergewöhnlichen Ereignissen (z. B. Sturm, starker Frost). Bei längerer Standzeit regelmäßig wiederholen.',
+};
+
 /** Empfohlenes Intervall in Tagen je Prüfart (Fälligkeits-Anzeige, wie die App). */
 export const INSPECTION_INTERVAL_DAYS: Record<InspectionType, number> = {
   visual: 1,
@@ -39,21 +45,23 @@ export type CheckResult = 'ok' | 'defect' | 'na';
 export interface ChecklistItem {
   id: string;
   label: string;
+  /** Prüfhinweis wie in der App (beim Erfassen „Vor Ort“) */
+  hint: string;
 }
 
 export const CHECKLIST: ChecklistItem[] = [
-  { id: 'marking', label: 'Kennzeichnung / Freigabe' },
-  { id: 'foundation', label: 'Gründung / Fußspindeln' },
-  { id: 'anchors', label: 'Verankerung' },
-  { id: 'decks', label: 'Beläge' },
-  { id: 'side_protection', label: 'Seitenschutz (3-teilig)' },
-  { id: 'access', label: 'Aufstiege / Zugänge' },
-  { id: 'bracing', label: 'Diagonalen / Aussteifung' },
-  { id: 'wall_distance', label: 'Wandabstand' },
-  { id: 'corners', label: 'Ecken / Überbrückungen' },
-  { id: 'modifications', label: 'Keine eigenmächtigen Änderungen' },
-  { id: 'electrical', label: 'Elektrische Leitungen / Anlagen' },
-  { id: 'environment', label: 'Umgebung / Schutz Dritter' },
+  { id: 'marking', label: 'Kennzeichnung / Freigabe', hint: 'Gerüstkennzeichnung am Zugang vorhanden und lesbar: Last- und Breitenklasse, Ersteller, Datum der Prüfung?' },
+  { id: 'foundation', label: 'Gründung / Fußspindeln', hint: 'Fußplatten und Spindeln vollflächig auf tragfähigem Untergrund (lastverteilende Unterlagen)? Spindeln nicht überdreht, keine Provisorien?' },
+  { id: 'anchors', label: 'Verankerung', hint: 'Alle Anker nach Montageanweisung/Verankerungsraster gesetzt, fest und unbeschädigt? Keine entfernten Anker (z. B. durch andere Gewerke)?' },
+  { id: 'decks', label: 'Beläge', hint: 'Belagflächen vollständig, dicht verlegt, unbeschädigt und gegen Abheben gesichert? Keine Wippen oder klaffenden Spalte?' },
+  { id: 'side_protection', label: 'Seitenschutz (3-teilig)', hint: 'Geländerholm, Zwischenholm und Bordbrett auf ALLEN Belagebenen vollständig und fest?' },
+  { id: 'access', label: 'Aufstiege / Zugänge', hint: 'Innenliegende Leitergänge bzw. Treppentürme vorhanden, unbeschädigt, Durchstiegsklappen geschlossen?' },
+  { id: 'bracing', label: 'Diagonalen / Aussteifung', hint: 'Verbände vollständig nach Aufbau- und Verwendungsanleitung, unbeschädigt und fest verbunden?' },
+  { id: 'wall_distance', label: 'Wandabstand', hint: 'Abstand Belag–Fassade max. 30 cm — sonst innenliegender Seitenschutz erforderlich?' },
+  { id: 'corners', label: 'Ecken / Überbrückungen', hint: 'Eckausbildung durchgehend mit Belag und Seitenschutz? Überbrückungen (Gitterträger) nach Anleitung eingebaut?' },
+  { id: 'modifications', label: 'Keine eigenmächtigen Änderungen', hint: 'Keine entfernten Bauteile, keine nachträglichen Öffnungen, keine unzulässigen Anbauten (Werbebanner = Windlast!)?' },
+  { id: 'electrical', label: 'Elektrische Leitungen / Anlagen', hint: 'Schutzabstände zu Freileitungen eingehalten oder Leitungen abgeschaltet/abgedeckt? Keine beschädigten Baustromleitungen am Gerüst?' },
+  { id: 'environment', label: 'Umgebung / Schutz Dritter', hint: 'Schutz gegen herabfallende Gegenstände (Schutzdach, Netz/Plane), Absperrung, Beleuchtung an Verkehrswegen?' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -161,6 +169,13 @@ export const SEVERITY_LABELS: Record<DamageSeverity, string> = {
   green: 'Grün — beobachten',
   amber: 'Orange — Bereich sperren',
   red: 'Rot — Gerüst sperren',
+};
+
+/** Erklärung je Einstufung — wortgleich zur App, erscheint beim Erfassen „Vor Ort“. */
+export const SEVERITY_HINTS: Record<DamageSeverity, string> = {
+  green: 'Geringfügiger Mangel ohne unmittelbare Absturzgefahr — kennzeichnen, beobachten, bei der nächsten Prüfung erneut bewerten.',
+  amber: 'Sicherheitsrelevanter Mangel — betroffenen Gerüstbereich (Ebene/Feld) absperren und nicht benutzen, bis der Mangel beseitigt ist.',
+  red: 'Schwerwiegender Mangel (z. B. fehlende Verankerung, mangelhafte Gründung) — Gerüst SOFORT komplett sperren („Zutritt verboten"), Ersteller informieren, erst nach erneuter Prüfung freigeben!',
 };
 
 export const SEVERITY_SHORT: Record<DamageSeverity, string> = {

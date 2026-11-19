@@ -2,6 +2,8 @@
 // addInspection/addDefect): gleiche Spalten, gleiche Bedeutung. Bewusst ohne Abhängigkeiten (nur Typen), damit der
 // Schema-Test (tests/pruefen-vor-ort.test.mjs) genau diese Funktionen gegen das echte Schema prüft.
 // Abstand zum Standort, Server-Eingang und Prüfcode ergänzt der Server selbst (Trigger inspection_zz_seal).
+// Zwei Familien (cfg.mode): 'unit' — die Prüfung trägt die Einheit (ladder_id …); 'site' — die Prüfung trägt nur den
+// Ort (site_id / warehouse_id / playground_id), der Mangel/Schaden zusätzlich die betroffene Einheit oder NULL.
 
 import type { CheckResult, PruefConfig } from './config.ts';
 
@@ -14,11 +16,13 @@ export interface GpsFix {
 
 export const STORAGE_PREFIX = 'storage:';
 
-/** Prüfung ohne Fotos — so, wie sie in die Tabelle inspection geht (die Einheit steht unter cfg.cols.unitFk). */
+/**
+ * Prüfung ohne Fotos — so, wie sie in die Tabelle inspection geht. Der Ort steht unter cfg.cols.siteFk (Standard
+ * site_id), die Einheit — nur im Einheiten-Modus — unter cfg.cols.unitFk.
+ */
 export interface InspectionRow {
   id: string;
   org_id: string;
-  site_id: string;
   type: string;
   started_at: string;
   lat: number | null;
@@ -38,14 +42,13 @@ export interface InspectionRow {
   created_at: string;
   /** PNG-Daten-URI; fehlt ganz, wenn nicht unterschrieben wurde (wie die App). */
   signature?: string;
-  [unitFk: string]: unknown;
+  [siteOrUnitFk: string]: unknown;
 }
 
-/** Mangel ohne Fotos — so, wie er in die Tabelle defect geht. */
+/** Mangel/Schaden ohne Fotos — so, wie er in die Tabelle defect bzw. damage geht (Ort, Einheit und Sperre unter den Spalten der App). */
 export interface DefectRow {
   id: string;
   org_id: string;
-  site_id: string;
   inspection_id: string;
   title: string;
   description: string | null;
@@ -53,7 +56,7 @@ export interface DefectRow {
   reported_by: string;
   reporter_name: string | null;
   created_at: string;
-  [unitFkOrBlocked: string]: unknown;
+  [siteFkUnitFkOrBlocked: string]: unknown;
 }
 
 export interface InspectionInput {
@@ -61,7 +64,8 @@ export interface InspectionInput {
   orgId: string;
   userId: string;
   siteId: string;
-  unitId: string;
+  /** Einheiten-Modus: die geprüfte Einheit. Im Orts-Modus ohne Bedeutung (weglassen). */
+  unitId?: string;
   type: string;
   /** Zeitpunkt des ERSTEN Speicher-Versuchs — Teil des Nachweises, bleibt bei Wiederholungen gleich. */
   at: string;
@@ -81,7 +85,8 @@ export interface DefectInput {
   orgId: string;
   userId: string;
   siteId: string;
-  unitId: string;
+  /** Betroffene Einheit. Im Orts-Modus darf sie fehlen (null = „Lager/Baustelle/Fläche allgemein“). */
+  unitId: string | null;
   inspectionId: string;
   at: string;
   title: string;
@@ -99,14 +104,17 @@ export function inspectorWithQualification(name: string, qualification: string):
   return q ? `${n} (${q})` : n;
 }
 
-type Cols = Pick<PruefConfig, 'cols'>;
+type Cols = Pick<PruefConfig, 'cols'> & Partial<Pick<PruefConfig, 'mode'>>;
+
+const siteFk = (cfg: Cols) => cfg.cols.siteFk ?? 'site_id';
 
 export function buildInspectionRow(cfg: Cols, i: InspectionInput): InspectionRow {
   const row: InspectionRow = {
     id: i.id,
     org_id: i.orgId,
-    site_id: i.siteId,
-    [cfg.cols.unitFk]: i.unitId,
+    [siteFk(cfg)]: i.siteId,
+    // Orts-Modus: die Tabelle inspection hat keine Einheiten-Spalte
+    ...(cfg.mode === 'site' ? {} : { [cfg.cols.unitFk]: i.unitId }),
     type: i.type,
     started_at: i.at,
     lat: i.start?.lat ?? null,
@@ -133,9 +141,9 @@ export function buildDefectRow(cfg: Cols, d: DefectInput): DefectRow {
   return {
     id: d.id,
     org_id: d.orgId,
-    site_id: d.siteId,
+    [siteFk(cfg)]: d.siteId,
     inspection_id: d.inspectionId,
-    [cfg.cols.unitFk]: d.unitId,
+    [cfg.cols.unitFk]: d.unitId ?? null,
     title: d.title.trim(),
     description: d.description.trim() || null,
     severity: d.severity,

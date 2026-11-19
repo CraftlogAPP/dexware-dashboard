@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
+import { Modal } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
+import { siteGate, siteGateText } from '../../pruefen/pro';
+import { GERUESTDEX_VOR_ORT } from '../vorOrt';
 import {
   fetchDamages,
   fetchInspectionMeta,
@@ -24,6 +27,20 @@ interface Data {
 export function Sites() {
   const { client } = useAppAuth();
   const [editing, setEditing] = useState<Site | 'new' | null>(null);
+  // Gratis-Grenze wie in der App (1 aktive Baustelle, nicht aktive zählen nicht); Pro laut Server, im Zweifel erlaubt.
+  const [gate, setGate] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  async function onAdd() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      if ((await siteGate(client, GERUESTDEX_VOR_ORT)).allowed) setEditing('new');
+      else setGate(true);
+    } finally {
+      setChecking(false);
+    }
+  }
 
   const state = useAsync<Data>(async () => {
     const [sites, scaffolds, meta, openDamages] = await Promise.all([
@@ -40,7 +57,7 @@ export function Sites() {
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Baustellen</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => setEditing('new')}>
+        <button className="btn" onClick={() => void onAdd()} disabled={checking}>
           ＋ Baustelle anlegen
         </button>
       </div>
@@ -114,6 +131,20 @@ export function Sites() {
           )
         }
       </LoadGuard>
+
+      {gate && (
+        <Modal title="Mehr Baustellen mit Pro" onClose={() => setGate(false)} dirty={false}>
+          <p>{siteGateText(GERUESTDEX_VOR_ORT)}</p>
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+            <Link className="btn ghost" to="../abo">
+              Abo ansehen
+            </Link>
+            <button type="button" className="btn" onClick={() => setGate(false)}>
+              Verstanden
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {editing && (
         <SiteDialog

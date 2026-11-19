@@ -72,7 +72,7 @@ export function Standort() {
           const last = lastDueByUnit(withPendingMeta(meta, pending, cfg.cols.unitFk), cfg.dueKind);
           const blocked = new Set(openDefects.filter((d) => d.blocked).map((d) => d.unitId));
           const openCount = new Map<string, number>();
-          for (const d of openDefects) openCount.set(d.unitId, (openCount.get(d.unitId) ?? 0) + 1);
+          for (const d of openDefects) if (d.unitId) openCount.set(d.unitId, (openCount.get(d.unitId) ?? 0) + 1);
           const here = units
             .filter((u) => u.siteId === site.id && !u.retired)
             .map((u) => {
