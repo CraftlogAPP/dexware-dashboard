@@ -8,6 +8,7 @@ import {
 } from '../lib/abo';
 import { LoadGuard, useAsync } from './ui';
 import { WebBuy, type WebBuyGroup } from './WebBuy';
+import { WEB_OFFERS } from '../apps/webOffers';
 
 /**
  * Abo-Verwaltung (generisch für alle App-Bereiche): aktueller Tarif
@@ -39,7 +40,10 @@ function AboContent({ info }: { info: AboInfo }) {
   const email = session?.user.email;
   const dexId = useAsync(async () => (email ? dexwareId(email) : null), [email]).data;
   const groups: WebBuyGroup[] = [];
-  if (app.webCheckout?.pro) groups.push({ title: `${app.name} Pro`, lead: app.webCheckoutLead ?? 'Alle Pro-Funktionen dieser App', offer: app.webCheckout.pro });
+  // Angebot aus der registry (WinterDex) oder aus den vorbereiteten Angeboten (webOffers); ohne Kauf-Link ausgegraut.
+  const prepared = WEB_OFFERS[app.id];
+  const proOffer = app.webCheckout?.pro ?? prepared?.pro;
+  if (proOffer) groups.push({ title: `${app.name} Pro`, lead: app.webCheckoutLead ?? prepared?.lead ?? 'Alle Pro-Funktionen dieser App', offer: proOffer });
   if (app.webCheckout?.suite && !app.notInSuite) groups.push({ title: 'Dexware Suite', lead: 'Pro in allen Prüf-Apps mit einem Abo', offer: app.webCheckout.suite });
   const suiteActive = !!info.suite?.active || info.suiteBackendActive;
   const proActive = !!info.pro?.active;

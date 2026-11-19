@@ -2618,6 +2618,25 @@ a.due-row:hover {
   border-color: var(--accent);
   transform: translateY(-1px);
 }
+.buy-plan.off {
+  cursor: default;
+}
+.buy-plan.off:hover {
+  transform: none;
+  border-color: var(--border-strong);
+}
+.buy-plan.off.best:hover {
+  border-color: var(--accent);
+}
+.buy-plan.off .buy-btn,
+.buy-plan.off:not(.best) .buy-btn {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--border-strong);
+  box-shadow: none;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 .buy-plan.best {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent), 0 14px 34px -22px var(--accent);
