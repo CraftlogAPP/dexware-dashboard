@@ -214,7 +214,7 @@ export function LoginScreen() {
               <button
                 type="button"
                 className="btn ghost small"
-                onClick={() => setMode('reset-request')}
+                onClick={() => { setError(null); setInfo(null); setMode('reset-request'); }}
               >
                 Passwort vergessen?
               </button>
@@ -315,7 +315,7 @@ export function LoginScreen() {
               <button
                 type="button"
                 className="btn ghost small"
-                onClick={() => setMode('reset-request')}
+                onClick={() => { setError(null); setInfo(null); setMode('reset-request'); }}
               >
                 Code neu anfordern
               </button>
