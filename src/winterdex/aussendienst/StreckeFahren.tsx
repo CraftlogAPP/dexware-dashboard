@@ -22,6 +22,7 @@ import { useEinsatz } from '../einsatz/context';
 import { getPerformerName, newId, setPerformerName } from '../einsatz/data';
 import type { FormValues } from '../einsatz/store';
 import { Felder } from './Felder';
+import { PRO_HOW } from '../pro';
 import { coverage, flatTrack, fmtDur, simplify, thinTrack, type Coverage } from './geo';
 import { useRecorder } from './recorder';
 import { deleteActiveRun, getActiveRun, saveActiveRun, submitRun, type ActiveRun, type RunMode, type RunResult } from './runStore';
@@ -230,7 +231,7 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
           const [routes, pro] = await Promise.all([be.listRoutes(), be.isPro()]);
           if (!pro && routes.filter((r) => r.active && r.id !== s.id).length >= 1) {
             throw new Error(
-              'Im Gratis-Paket ist 1 aktive Strecke möglich. Die Aufnahme bleibt gesichert — nach dem Upgrade (in der App unter „Abo“) hier unter „Strecken“ fortsetzen und speichern.',
+              `Im Gratis-Paket ist 1 aktive Strecke möglich. Die Aufnahme bleibt gesichert — mit Pro hier unter „Strecken“ fortsetzen und speichern. ${PRO_HOW}`,
             );
           }
         }

@@ -8,6 +8,7 @@ import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
 import { openReportWindow } from '../../lib/print';
 import { buildReportHtml } from '../report';
+import { fetchOrgPro, withWatermark } from '../pro';
 import type { Property } from '../types';
 
 export function Report() {
@@ -38,7 +39,7 @@ export function Report() {
       const toDate = parseLocalDate(to);
       const ops = await fetchOperationsForReport(client, propertyId, fromDate, toDate);
       const periodLabel = `${fmtDate(fromDate.toISOString())} – ${fmtDate(toDate.toISOString())}`;
-      const html = buildReportHtml(orgCtx.org, property, ops, periodLabel);
+      const html = withWatermark(buildReportHtml(orgCtx.org, property, ops, periodLabel), await fetchOrgPro(client));
       if (!openReportWindow(html)) {
         setError(
           'Der Browser hat das Berichtsfenster blockiert. Bitte Pop-ups für diese Seite erlauben und erneut versuchen.',

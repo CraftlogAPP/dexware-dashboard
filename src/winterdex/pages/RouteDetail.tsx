@@ -9,6 +9,7 @@ import { fmtDate, fmtDateTime, parseLocalDate, toInputDate } from '../../lib/for
 import { openReportWindow } from '../../lib/print';
 import { RouteSketch } from '../RouteSketch';
 import { buildRouteLogHtml } from '../routeReport';
+import { fetchOrgPro, withWatermark } from '../pro';
 import { fetchRoute, fetchRun, fetchRuns, fmtDistance, type Route, type Run } from '../routes';
 import { RunTable } from './Routes';
 
@@ -49,13 +50,15 @@ export function RouteDetail() {
   // Live: letzte Fahrt in der Skizze + Fahrtenliste aktuell halten.
   useLiveRefresh([state.refresh, runsState.refresh]);
 
+  // Pro vorab laden: das Druckfenster muss direkt beim Klick aufgehen (sonst blockt der Browser das Pop-up)
+  const proState = useAsync(() => fetchOrgPro(client), [client]);
   function printLog(route: Route) {
     setPrintErr(null);
     if (!org) return setPrintErr('Betrieb nicht geladen.');
     if (!from || !to) return setPrintErr('Bitte Von- und Bis-Datum wählen.');
     const runs = [...(runsState.data ?? [])].reverse(); // chronologisch
     const period = `${fmtDate(parseLocalDate(from).toISOString())} – ${fmtDate(parseLocalDate(to).toISOString())}`;
-    if (!openReportWindow(buildRouteLogHtml(org.org, route, runs, period)))
+    if (!openReportWindow(withWatermark(buildRouteLogHtml(org.org, route, runs, period), proState.data ?? true)))
       setPrintErr('Das Druckfenster wurde blockiert — bitte Pop-ups für dieses Dashboard erlauben.');
   }
 

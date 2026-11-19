@@ -1,7 +1,8 @@
 import { useAppAuth } from '../auth/AppAuthContext';
 import { useOrg } from '../components/OrgContext';
 import { FormDialog, orNull, s, type FormValues } from '../components/form';
-import { saveProperty } from './api';
+import { saveProperty, fetchProperties } from './api';
+import { FREE_PROPERTIES, PRO_HOW, fetchOrgPro } from './pro';
 import type { Property } from './types';
 
 export function PropertyDialog({
@@ -18,6 +19,14 @@ export function PropertyDialog({
 
   async function onSave(v: FormValues) {
     if (!org) throw new Error('Kein Betrieb geladen');
+    // Gratis-Paket: höchstens 2 aktive Objekte (wie in der App) — gilt fürs Anlegen und fürs Wieder-Aktivieren.
+    const wasActive = property !== 'new' && property.active;
+    if (v.active === true && !wasActive) {
+      const others = (await fetchProperties(client)).filter((p) => p.active && (property === 'new' || p.id !== property.id)).length;
+      if (others >= FREE_PROPERTIES && !(await fetchOrgPro(client, true))) {
+        throw new Error(`Im Gratis-Paket sind ${FREE_PROPERTIES} aktive Objekte möglich. ${PRO_HOW}`);
+      }
+    }
     await saveProperty(
       client,
       org.org.id,

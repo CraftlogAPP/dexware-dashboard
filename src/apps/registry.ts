@@ -46,6 +46,8 @@ export interface AppConfig {
    * Nur für Apps, deren Bereich das Anlegen des Betriebs anbietet (WinterDex: Übergang fürs iPhone ohne App).
    */
   webSignup?: boolean;
+  /** Mitarbeiter einladen (Team-Code) nur mit Pro — wie in der App (WinterDex: Gratis = Solo-Paket). */
+  teamNeedsPro?: boolean;
   /** Emoji als Kachel-Icon */
   emoji: string;
   /**
@@ -193,6 +195,7 @@ export const APPS: AppConfig[] = [
     landingUrl: 'https://winterdex.dexware.app',
     revenueCat: 'goog_EFamBqKZmcNVjBZZoYgveMeyoUw',
     webSignup: true,
+    teamNeedsPro: true,
     backend: { url: 'https://winterdex-backend.alex-pfalz03.workers.dev', token: '3a7cb86ec4a4b7947147e6f425626b4827eb243ccadb98f5ca3903daea4bf5dc' },
     supabase: {
       url: 'https://nppmhxpnynziuavvqmvd.supabase.co',

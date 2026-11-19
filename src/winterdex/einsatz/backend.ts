@@ -7,6 +7,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllOf } from '../../lib/completeQueries';
 import { fetchRoute, fetchRoutes, fetchRuns } from '../routes';
+import { fetchOrgPro } from '../pro';
 import type { OperationAction, Property, WeatherSnapshot } from '../types';
 import type { LatLng, Route, RunMeta, Track } from '../routes';
 
@@ -238,14 +239,7 @@ export function supabaseBackend(
       if (error && error.code !== '23505') throw error; // 23505 = ID schon vorhanden (Wiederholung)
     },
 
-    async isPro() {
-      try {
-        const { data, error } = await withTimeout(sb.rpc('org_pro_active'), 10000);
-        if (error || data === null || data === undefined) return true;
-        return data === true;
-      } catch {
-        return true;
-      }
-    },
+    // eine Quelle für alle Grenzen: src/winterdex/pro.ts (frisch gefragt — hier wird über Anlegen/Aktivieren entschieden)
+    isPro: () => fetchOrgPro(sb, true),
   };
 }

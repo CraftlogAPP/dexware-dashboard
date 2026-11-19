@@ -1,3 +1,4 @@
+import { PRO_HOW, fetchOrgPro } from '../winterdex/pro';
 import { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { useAppAuth } from '../auth/AppAuthContext';
@@ -25,12 +26,14 @@ export function TeamPage() {
 
   const state = useAsync<Member[]>(() => fetchMembers(client), [client]);
   // Team-Code (ein Code für alle, 30 Tage) + belegte Plätze — nur Inhaber; null = App kennt das noch nicht.
-  const team = useAsync<{ code: TeamCode | null; seats: { limit: number; members: number } | null }>(
+  const team = useAsync<{ code: TeamCode | null; seats: { limit: number; members: number } | null; needsPro?: boolean }>(
     async () =>
-      isOwner
+      isOwner && app.teamNeedsPro && !(await fetchOrgPro(client, true))
+        ? { code: null, seats: null, needsPro: true }
+        : isOwner
         ? { code: await fetchTeamCode(client), seats: await fetchSeats(client, app.teamSeats?.fallbackLimit) }
         : { code: null, seats: null },
-    [client, isOwner, app.teamSeats?.fallbackLimit],
+    [client, isOwner, app.teamSeats?.fallbackLimit, app.teamNeedsPro],
   );
   // Eigene Team-Stufen der App (Registry) — sonst der bisherige Standard-Text
   const tiers = app.teamSeats;
@@ -132,6 +135,17 @@ export function TeamPage() {
             {orgCtx.org.name}
             {hasLand && <span className="muted"> · {orgCtx.org.land}</span>}
             {orgCtx.org.address && <span className="muted"> · {orgCtx.org.address}</span>}
+          </p>
+        </div>
+      )}
+
+      {isOwner && team.data?.needsPro && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <div className="section-head" style={{ margin: 0 }}>
+            <h2>{workerLabel} einladen</h2>
+          </div>
+          <p className="muted" style={{ marginBottom: 0 }}>
+            Einladen ist Teil von {app.name} Pro — das Gratis-Paket ist das Solo-Paket. {PRO_HOW}
           </p>
         </div>
       )}

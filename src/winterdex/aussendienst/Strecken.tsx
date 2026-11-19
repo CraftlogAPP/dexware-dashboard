@@ -14,11 +14,11 @@ import { useEinsatz, usePendingSync } from '../einsatz/context';
 import { newId } from '../einsatz/data';
 import { emitPendingChanged, onPendingChanged } from '../einsatz/store';
 import { pathLengthM, round6 } from './geo';
+import { FREE_ROUTES, PRO_HOW } from '../pro';
 import { deleteActiveRun, deletePendingRun, getActiveRun, listPendingRuns, type ActiveRun, type PendingRun } from './runStore';
 
-export const FREE_ROUTES = 1;
-export const FREE_ROUTES_TEXT =
-  'Im Gratis-Paket ist 1 aktive Strecke möglich. Mehr Strecken (Gehwege, Straßen, Radwege) gibt es mit Pro — das Abo schließt du in der WinterDex-App unter „Abo“ ab.';
+export { FREE_ROUTES };
+export const FREE_ROUTES_TEXT = `Im Gratis-Paket ist 1 aktive Strecke möglich — mehr Strecken (Gehwege, Straßen, Radwege) gibt es mit Pro. ${PRO_HOW}`;
 
 export function Strecken() {
   const { be, userId, base, owner } = useEinsatz();

@@ -13,6 +13,7 @@ import { openReportWindow } from '../../lib/print';
 import { gritLabel, weatherLabel } from '../labels';
 import { CoverageBadge, RouteSketch } from '../RouteSketch';
 import { buildRunHtml } from '../routeReport';
+import { fetchOrgPro, withWatermark } from '../pro';
 import { cancelRun, fetchRun, fmtDistance, fmtDuration, fmtTimeSpan, type Run } from '../routes';
 
 export function RunDetail() {
@@ -27,10 +28,12 @@ export function RunDetail() {
     await cancelRun(client, id!, s(v.reason));
     state.reload();
   }
+  // Pro vorab laden: das Druckfenster muss direkt beim Klick aufgehen (sonst blockt der Browser das Pop-up)
+  const proState = useAsync(() => fetchOrgPro(client), [client]);
   function print(run: Run) {
     setPrintErr(null);
     if (!org) return setPrintErr('Betrieb nicht geladen.');
-    if (!openReportWindow(buildRunHtml(org.org, run)))
+    if (!openReportWindow(withWatermark(buildRunHtml(org.org, run), proState.data ?? true)))
       setPrintErr('Das Druckfenster wurde blockiert — bitte Pop-ups für dieses Dashboard erlauben.');
   }
 
