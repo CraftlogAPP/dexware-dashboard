@@ -3,7 +3,7 @@
 // nur im Handy-Rahmen des Außendienstes.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, ChevronRight, CreditCard, FileDown, LogOut, Monitor, Users } from 'lucide-react';
+import { Building2, ChevronRight, CreditCard, FileDown, LogOut, MessageSquare, Monitor, Users } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { useEinsatz } from '../einsatz/context';
@@ -62,6 +62,14 @@ export function Mehr() {
           <span>
             <b>Abo &amp; Tarif</b>
             <small>Gratis oder Pro, Laufzeit</small>
+          </span>
+          <ChevronRight className="i go" aria-hidden />
+        </Link>
+        <Link to={`${base}/rueckmeldung`}>
+          <MessageSquare className="i" aria-hidden />
+          <span>
+            <b>Fehler melden · Verbesserung vorschlagen</b>
+            <small>Für hilfreiche Hinweise gibt es 3 Tage Pro</small>
           </span>
           <ChevronRight className="i go" aria-hidden />
         </Link>

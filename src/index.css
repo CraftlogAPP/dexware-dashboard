@@ -3058,3 +3058,73 @@ input {
   flex: 1 1 260px;
   min-width: 0;
 }
+
+/* Rückmeldung senden (Dashboard + Außendienst) */
+.feedback-form textarea {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+}
+.feedback-kinds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 14px 0;
+}
+.feedback-kind {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  text-align: left;
+  padding: 14px;
+  min-height: 112px;
+  border-radius: 14px;
+  border: 2px solid var(--border, rgba(127, 127, 127, 0.3));
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.feedback-kind .i {
+  width: 26px;
+  height: 26px;
+}
+.feedback-kind small {
+  opacity: 0.7;
+  line-height: 1.35;
+}
+.feedback-kind.fehler .i {
+  color: #ef4444;
+}
+.feedback-kind.idee .i {
+  color: #f59e0b;
+}
+.feedback-kind.fehler.active {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+.feedback-kind.idee.active {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+.feedback-count {
+  text-align: right;
+  margin: 4px 0 10px;
+}
+.feedback-done {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+  padding: 28px 16px;
+}
+.feedback-done > .i {
+  width: 40px;
+  height: 40px;
+  color: #22c55e;
+}
+@media (max-width: 380px) {
+  .feedback-kinds {
+    grid-template-columns: 1fr;
+  }
+}

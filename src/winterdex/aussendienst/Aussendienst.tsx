@@ -15,6 +15,7 @@ import { PropertyDetail } from '../pages/PropertyDetail';
 import { Report } from '../pages/Report';
 import { RunDetail } from '../pages/RunDetail';
 import { Mehr } from './Mehr';
+import { FeedbackForm } from '../../components/FeedbackForm';
 
 // Karte mit Leaflet: eigener Chunk, erst beim Öffnen des Reiters geladen.
 const Karte = lazy(() => import('./Karte'));
@@ -31,7 +32,7 @@ export function Aussendienst() {
   const { pathname } = useLocation();
   const rest = pathname.slice(base.length);
   const tab = rest.startsWith('/strecken') ? 'strecken' : rest.startsWith('/einsaetze') ? 'einsaetze' : rest.startsWith('/karte') ? 'karte'
-    : ['mehr', 'bericht', 'team', 'abo', 'objekte'].includes(rest.split('/')[1] ?? '') ? 'mehr' : 'objekte';
+    : ['mehr', 'bericht', 'team', 'abo', 'objekte', 'rueckmeldung'].includes(rest.split('/')[1] ?? '') ? 'mehr' : 'objekte';
   // Nur auf den Erfassungs-Seiten nötig; auf Listen/PDF/Team stört der PC-Hinweis.
   const fieldPage = tab === 'objekte' || tab === 'strecken';
   // Während einer laufenden Fahrt keine Reiter: ein Fehlgriff würde die Aufzeichnung verlassen.
@@ -63,6 +64,7 @@ export function Aussendienst() {
           <Route path="team" element={<TeamPage />} />
           <Route path="abo" element={<AboPage />} />
           <Route path="mehr" element={<Mehr />} />
+          <Route path="rueckmeldung" element={<FeedbackForm />} />
           <Route path="*" element={<Navigate to={base} replace />} />
         </Routes>
       </main>

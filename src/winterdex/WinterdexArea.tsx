@@ -8,6 +8,7 @@ import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
 import { TeamPage } from '../components/TeamPage';
 import { AboPage } from '../components/AboPage';
 import { FeedbackAdminPage, fetchFeedbackAdmin } from '../components/FeedbackAdminPage';
+import { FeedbackForm } from '../components/FeedbackForm';
 import { useAsync } from '../components/ui';
 import { Overview } from './pages/Overview';
 import { Properties } from './pages/Properties';
@@ -64,6 +65,7 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
               <Route path="bericht" element={<Report />} />
               <Route path="abo" element={<AboPage />} />
               <Route path="rueckmeldungen" element={<FeedbackAdminPage />} />
+              <Route path="rueckmeldung" element={<FeedbackForm />} />
             </Route>
           </Routes>
         </OrgGate>
@@ -171,6 +173,7 @@ function Shell() {
         <NavLink to={`${base}/team`}><Users className="i" aria-hidden /> Team</NavLink>
         <NavLink to={`${base}/bericht`}><FileDown className="i" aria-hidden /> Nachweis-PDF</NavLink>
         <NavLink to={`${base}/abo`}><CreditCard className="i" aria-hidden /> Abo</NavLink>
+        <NavLink to={`${base}/rueckmeldung`}><MessageSquare className="i" aria-hidden /> Fehler melden</NavLink>
         {admin.data === true && (
           <NavLink to={`${base}/rueckmeldungen`}><MessageSquare className="i" aria-hidden /> Rückmeldungen</NavLink>
         )}
