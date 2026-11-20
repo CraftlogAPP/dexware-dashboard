@@ -97,7 +97,9 @@ export function Onboarding() {
             ? 'Das Team ist voll. Bitte deinen Chef, in WinterDex unter „Team“ mehr Plätze freizuschalten.'
             : /removed from team/i.test(m)
               ? 'Du wurdest aus diesem Team entfernt. Bitte deinen Chef um einen neuen Team-Code.'
-              : (netText(m) ?? `Beitritt fehlgeschlagen: ${m}`),
+              : /team needs pro/i.test(m)
+                ? 'Dieser Betrieb hat gerade kein aktives WinterDex Pro — Mitarbeiter können erst beitreten, wenn dein Chef Pro (wieder) aktiviert hat.'
+                : (netText(m) ?? `Beitritt fehlgeschlagen: ${m}`),
       );
     } finally {
       running.current = false;
