@@ -9,6 +9,7 @@ import { TeamPage } from '../components/TeamPage';
 import { AboPage } from '../components/AboPage';
 import { FeedbackAdminPage, fetchFeedbackAdmin } from '../components/FeedbackAdminPage';
 import { FeedbackForm } from '../components/FeedbackForm';
+import { FeedbackZentral } from '../components/FeedbackZentral';
 import { useAsync } from '../components/ui';
 import { Overview } from './pages/Overview';
 import { Properties } from './pages/Properties';
@@ -64,7 +65,7 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
               <Route path="team" element={<TeamPage />} />
               <Route path="bericht" element={<Report />} />
               <Route path="abo" element={<AboPage />} />
-              <Route path="rueckmeldungen" element={<FeedbackAdminPage />} />
+              <Route path="rueckmeldungen" element={<><FeedbackAdminPage /><FeedbackZentral /></>} />
               <Route path="rueckmeldung" element={<FeedbackForm />} />
             </Route>
           </Routes>

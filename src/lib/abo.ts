@@ -14,8 +14,8 @@ import type { Session } from '@supabase/supabase-js';
 import type { AppConfig } from '../apps/registry';
 
 /** Suite-Backend (eigenes Supabase-Projekt) — Werte identisch zu den App-Builds. */
-const SUITE_URL = 'https://jsrfxentjqfmpusaubyw.supabase.co/functions/v1';
-const SUITE_ANON =
+export const SUITE_URL = 'https://jsrfxentjqfmpusaubyw.supabase.co/functions/v1';
+export const SUITE_ANON =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzcmZ4ZW50anFmbXB1c2F1Ynl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxMTk4OTAsImV4cCI6MjA5ODY5NTg5MH0.Tj7ezscGHn-naqMpsR7oMf-iYgiDfbK8LNZn3H5tqJI';
 
 /** Entitlement-Kennungen im RevenueCat-Dashboard (Suite-Standard). */
