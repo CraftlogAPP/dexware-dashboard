@@ -28,6 +28,12 @@ interface Mine {
 
 const missing = (e: { code?: string; message: string }) => /PGRST202|42883|could not find the function|does not exist/i.test(`${e.code ?? ''} ${e.message}`);
 
+/** Kennt der Server dieser App die Rückmeldungen schon? Sonst bleibt der Menüpunkt verborgen (nur E-Mail wäre irreführend). */
+export async function fetchFeedbackAvailable(sb: SupabaseClient): Promise<boolean> {
+  const { error } = await sb.rpc('my_feedback');
+  return !error || !missing(error);
+}
+
 async function fetchMine(sb: SupabaseClient): Promise<Mine[] | 'fehlt'> {
   const { data, error } = await sb.rpc('my_feedback');
   if (error) {

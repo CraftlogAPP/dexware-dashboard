@@ -1,6 +1,6 @@
 import { lazy } from 'react';
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
-import { Building2, ClipboardCheck, CreditCard, FileDown, LayoutDashboard, TriangleAlert, Users } from 'lucide-react';
+import { Building2, ClipboardCheck, CreditCard, FileDown, LayoutDashboard, TriangleAlert, Users, MessageSquare } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
@@ -8,6 +8,9 @@ import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
 import { WebOnboarding } from '../components/WebOnboarding';
 import { TeamPage } from '../components/TeamPage';
 import { AboPage } from '../components/AboPage';
+import { useAsync as useFeedbackAsync } from '../components/ui';
+import { FeedbackAdminPage, fetchFeedbackAdmin } from '../components/FeedbackAdminPage';
+import { FeedbackForm, fetchFeedbackAvailable } from '../components/FeedbackForm';
 import { Overview } from './pages/Overview';
 import { Sites } from './pages/Sites';
 import { SiteDetail } from './pages/SiteDetail';
@@ -74,6 +77,8 @@ export function ToredexArea({ app }: { app: AppConfig }) {
               <Route path="team" element={<TeamPage />} />
               <Route path="bericht" element={<Report />} />
               <Route path="abo" element={<AboPage />} />
+              <Route path="rueckmeldung" element={<FeedbackForm />} />
+              <Route path="rueckmeldungen" element={<FeedbackAdminPage />} />
             </Route>
           </Routes>
         </OrgGate>
@@ -83,7 +88,11 @@ export function ToredexArea({ app }: { app: AppConfig }) {
 }
 
 function Shell() {
-  const { app } = useAppAuth();
+  const { app, client } = useAppAuth();
+  // Nur für Dexware selbst (Konten aus app_admin): Rückmeldungen aus der App lesen und bedanken.
+  const feedbackAdmin = useFeedbackAsync<boolean>(() => fetchFeedbackAdmin(client), [client]);
+  // Menüpunkt erst zeigen, wenn der Server dieser App die Rückmeldungen kennt (Nachtrag eingespielt).
+  const feedbackDa = useFeedbackAsync<boolean>(() => fetchFeedbackAvailable(client), [client]);
   const { data } = useOrg();
   // Absolute Pfade: Die Shell rendert in einer pathless Layout-Route unter einer
   // Splat-Route — relative NavLinks würden sich dort an die aktuelle URL anhängen.
@@ -101,6 +110,12 @@ function Shell() {
         <NavLink to={`${base}/team`}><Users className="i" aria-hidden /> Team</NavLink>
         <NavLink to={`${base}/bericht`}><FileDown className="i" aria-hidden /> Prüfprotokoll-PDF</NavLink>
         <NavLink to={`${base}/abo`}><CreditCard className="i" aria-hidden /> Abo</NavLink>
+        {feedbackDa.data === true && (
+          <NavLink to={`${base}/rueckmeldung`}><MessageSquare className="i" aria-hidden /> Fehler melden</NavLink>
+        )}
+        {feedbackAdmin.data === true && (
+          <NavLink to={`${base}/rueckmeldungen`}><MessageSquare className="i" aria-hidden /> Rückmeldungen</NavLink>
+        )}
         <div className="nav-footer">
           {data && (
             <>
