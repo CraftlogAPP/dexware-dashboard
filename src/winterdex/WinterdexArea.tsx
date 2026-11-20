@@ -1,12 +1,14 @@
 import { lazy, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import { Building2, CreditCard, FileDown, LayoutDashboard, Monitor, Route as RouteIcon, Snowflake, Truck, Users } from 'lucide-react';
+import { Building2, CreditCard, FileDown, LayoutDashboard, MessageSquare, Monitor, Route as RouteIcon, Snowflake, Truck, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
 import { TeamPage } from '../components/TeamPage';
 import { AboPage } from '../components/AboPage';
+import { FeedbackAdminPage, fetchFeedbackAdmin } from '../components/FeedbackAdminPage';
+import { useAsync } from '../components/ui';
 import { Overview } from './pages/Overview';
 import { Properties } from './pages/Properties';
 import { PropertyDetail } from './pages/PropertyDetail';
@@ -61,6 +63,7 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
               <Route path="team" element={<TeamPage />} />
               <Route path="bericht" element={<Report />} />
               <Route path="abo" element={<AboPage />} />
+              <Route path="rueckmeldungen" element={<FeedbackAdminPage />} />
             </Route>
           </Routes>
         </OrgGate>
@@ -148,7 +151,9 @@ function useHomeScreenIcon() {
 }
 
 function Shell() {
-  const { app } = useAppAuth();
+  const { app, client } = useAppAuth();
+  // Nur für Dexware selbst (Konten aus app_admin): Rückmeldungen aus der App lesen und bedanken.
+  const admin = useAsync<boolean>(() => fetchFeedbackAdmin(client), [client]);
   const { data } = useOrg();
   // Absolute Pfade: Die Shell rendert in einer pathless Layout-Route unter einer
   // Splat-Route — relative NavLinks würden sich dort an die aktuelle URL anhängen.
@@ -166,6 +171,9 @@ function Shell() {
         <NavLink to={`${base}/team`}><Users className="i" aria-hidden /> Team</NavLink>
         <NavLink to={`${base}/bericht`}><FileDown className="i" aria-hidden /> Nachweis-PDF</NavLink>
         <NavLink to={`${base}/abo`}><CreditCard className="i" aria-hidden /> Abo</NavLink>
+        {admin.data === true && (
+          <NavLink to={`${base}/rueckmeldungen`}><MessageSquare className="i" aria-hidden /> Rückmeldungen</NavLink>
+        )}
         <div className="nav-footer">
           {data && (
             <>

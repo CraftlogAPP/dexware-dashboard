@@ -3026,3 +3026,35 @@ input {
     right: -8px;
   }
 }
+
+/* Rückmeldungen aus der App (nur Dexware-Konten) */
+.feedback-list {
+  display: grid;
+  gap: 12px;
+}
+.feedback-item {
+  display: grid;
+  gap: 8px;
+}
+.feedback-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.feedback-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.feedback-actions input {
+  flex: 1 1 260px;
+  min-width: 0;
+}
