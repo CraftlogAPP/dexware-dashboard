@@ -3128,3 +3128,32 @@ input {
     grid-template-columns: 1fr;
   }
 }
+
+/* Außendienst im Querformat am Handy (wenig Höhe): Kopf und Reiter-Leiste flacher, Inhalt breiter.
+   Gilt nur, wenn die Außendienst-Leiste auf der Seite ist — das Büro-Dashboard bleibt unverändert. */
+@media (orientation: landscape) and (max-height: 520px) {
+  body:has(.ad-tabs) .site-header {
+    height: 44px;
+    padding: 0 max(16px, env(safe-area-inset-left, 0px)) 0 max(16px, env(safe-area-inset-right, 0px));
+  }
+  .ad {
+    min-height: calc(100vh - 44px);
+  }
+  .ad-main {
+    max-width: 920px;
+    padding: 12px max(16px, env(safe-area-inset-left, 0px)) calc(60px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-right, 0px));
+  }
+  .ad-tabs {
+    padding: 3px max(12px, env(safe-area-inset-left, 0px)) calc(3px + env(safe-area-inset-bottom, 0px));
+  }
+  .ad-tabs a {
+    flex-direction: row;
+    gap: 8px;
+    min-height: 40px;
+    font-size: 13px;
+  }
+  .ad-tabs a .i {
+    width: 18px;
+    height: 18px;
+  }
+}
