@@ -257,7 +257,10 @@ function Erfassen({ propertyId }: { propertyId: string }) {
         await Promise.race([weatherPromiseRef.current, new Promise((r) => setTimeout(r, 4000))]);
       }
       const now = new Date().toISOString();
-      const end = lastFixRef.current;
+      // End-Stempel nur aus einer FRISCHEN Position (höchstens 2 Minuten alt): War das Handy während der Arbeit gesperrt,
+      // stand sonst die Position vom Beginn als „Ende“ im Nachweis (20.11.2026). Ohne frische Position: kein End-Stempel.
+      const letzte = lastFixRef.current;
+      const end = letzte && Date.now() - Date.parse(letzte.at) <= 120000 ? letzte : null;
       const rec = formToRecord(form);
       const row: OperationRow = {
         id: opIdRef.current,

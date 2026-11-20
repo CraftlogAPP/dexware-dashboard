@@ -15,6 +15,10 @@ const MIN_STEP_M = 3; // neuer Punkt ab 3 m Bewegung …
 const MAX_IDLE_S = 15; // … oder spätestens alle 15 s (Stillstand dokumentieren)
 const MAX_SPEED_MS = 55; // > 200 km/h = GPS-Sprung
 const MAX_JUMP_M = 150;
+// Kurzer Signal-Abriss wird überbrückt — wie in der App (RouteRunScreen): höchstens 45 s und 400 m, mit Zwischenpunkten
+const JOIN_MAX_S = 45;
+const JOIN_MAX_M = 400;
+const JOIN_STEP_M = 15;
 const GAP_MIN_MS = 10000; // kürzere Unterbrechungen nicht als Pause vermerken
 const STALE_FIX_MS = 15000;
 const REWATCH_MS = 20000; // so lange ohne Position → Ortung neu anmelden
@@ -83,7 +87,14 @@ export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) 
         if (jd / jdt <= MAX_SPEED_MS && jd <= MAX_JUMP_M) {
           const jl = distM(last[0], last[1], j[0], j[1]);
           const ljdt = Math.max(1, j[2] - last[2]);
-          if (seg.length >= 2 && jl / ljdt <= MAX_SPEED_MS && ljdt <= 120) {
+          if (seg.length >= 2 && jl / ljdt <= MAX_SPEED_MS && ljdt <= JOIN_MAX_S && jl <= JOIN_MAX_M) {
+            // Zwischenpunkte einfügen (20.11.2026): die Abdeckung rechnet nur mit Punkten — ohne sie zählte das Stück zur
+            // Länge, stand im Nachweis aber als „nicht befahren“. Höchstens ein Punkt je Sekunde.
+            const n = Math.max(0, Math.min(Math.floor(jl / JOIN_STEP_M) - 1, ljdt - 1));
+            for (let k = 1; k <= n; k++) {
+              const q = k / (n + 1);
+              seg.push([round6(last[0] + (j[0] - last[0]) * q), round6(last[1] + (j[1] - last[1]) * q), last[2] + Math.max(1, Math.round(ljdt * q)), MAX_ACC_M]);
+            }
             seg.push(j, p); // plausibel verbunden (kurzer Empfangsausfall) → Strecke zählt
             d0.lengthM += jl + jd;
           } else {
