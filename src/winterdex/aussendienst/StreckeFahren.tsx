@@ -166,7 +166,12 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
   useEffect(() => {
     if (phase !== 'recording') return;
     snap.current();
-    const t = setInterval(() => snap.current(), SAVE_EVERY_MS);
+    // Im Hintergrund ruht die Aufzeichnung (Pause). Dort NICHT weiter sichern: jede Sicherung stempelt eine frische Zeit,
+    // und nach einem Neuladen würde die Unterbrechung dann zu kurz (oder gar nicht) im Nachweis stehen (20.11.2026).
+    // Die Sicherung beim Verlassen (onHide unten) hält den Stand vom Moment des Verlassens fest.
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') snap.current();
+    }, SAVE_EVERY_MS);
     const onHide = () => {
       if (document.visibilityState === 'hidden') snap.current();
     };
@@ -278,6 +283,12 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
 
   const saveRun = async () => {
     if (!sess || saving) return;
+    // Ohne aufgezeichnete Strecke gibt es nichts zu belegen: über „Abschließen“ in der Streckenliste kam man bisher
+    // auch mit 0 Punkten zum Speichern und bekam einen Prüfcode für eine Fahrt über 0 m (20.11.2026).
+    if (rec.data.track.reduce((n, seg) => n + seg.length, 0) < 2) {
+      setSaveError('Es wurde keine Strecke aufgezeichnet (kein GPS-Signal). Bitte die Aufzeichnung verwerfen und neu starten.');
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {

@@ -90,7 +90,9 @@ export function Einsatz() {
             if (!o.canceled && isToday(o.started_at)) doneAt.set(o.property_id, o.started_at);
           }
           for (const p of pending) {
-            if (isToday(p.row.started_at)) doneAt.set(p.row.property_id, p.row.started_at);
+            // Vom Server abgelehnte Einsätze zählen nicht als „heute erledigt“ — sonst steht ein grüner Haken da, obwohl
+            // am Server nichts liegt (20.11.2026).
+            if (!p.lastError && isToday(p.row.started_at)) doneAt.set(p.row.property_id, p.row.started_at);
           }
           const q = query.trim().toLowerCase();
           const shown = active
