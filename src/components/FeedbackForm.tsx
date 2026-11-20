@@ -24,6 +24,8 @@ interface Mine {
   reward_days: number | null;
   reward_until: string | null;
   reply: string | null;
+  resolved_at?: string | null;
+  resolved_note?: string | null;
 }
 
 const missing = (e: { code?: string; message: string }) => /PGRST202|42883|could not find the function|does not exist/i.test(`${e.code ?? ''} ${e.message}`);
@@ -193,6 +195,14 @@ export function FeedbackForm() {
                   <div className="small">Pro für deinen Betrieb läuft dadurch bis {fmtDate(m.reward_until)}.</div>
                 ) : null}
                 {m.reply && <div className="muted small">Dexware: {m.reply}</div>}
+                {m.resolved_at && (
+                  <div>
+                    <span className="badge green">
+                      <Check className="i" aria-hidden /> {m.kind === 'fehler' ? 'Behoben' : 'Umgesetzt'}
+                      {m.resolved_note ? ` – ${m.resolved_note}` : ''} · danke!
+                    </span>
+                  </div>
+                )}
               </div>
             ))}
           </div>

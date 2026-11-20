@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bug, Check, Gift, Lightbulb, RotateCcw } from 'lucide-react';
+import { Bug, Check, CheckCheck, Gift, Lightbulb, RotateCcw } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { LoadGuard, useAsync } from './ui';
@@ -31,6 +31,9 @@ export interface FeedbackRow {
   reward_days: number | null;
   reward_until: string | null;
   reply: string | null;
+  /** „Umgesetzt“ an den Einsender zurückgemeldet (er sieht es in der App, ggf. mit Mitteilung aufs Handy). */
+  resolved_at?: string | null;
+  resolved_note?: string | null;
 }
 
 /** Darf dieses Konto die Rückmeldungen lesen? Fehlt die Funktion am Server (noch), ist die Antwort nein. */
@@ -45,7 +48,7 @@ async function fetchFeedback(sb: SupabaseClient): Promise<FeedbackRow[]> {
   return (data ?? []) as FeedbackRow[];
 }
 
-type Filter = 'offen' | 'alle';
+type Filter = 'offen' | 'umsetzen' | 'alle';
 
 export function FeedbackAdminPage() {
   const { client } = useAppAuth();
@@ -69,6 +72,8 @@ export function FeedbackAdminPage() {
   };
   const thank = (r: FeedbackRow, days: number) =>
     act(r.id, () => client.rpc('feedback_thank', { p_id: r.id, p_days: days, p_reply: replies[r.id]?.trim() || null }));
+  const resolve = (r: FeedbackRow) =>
+    act(r.id, () => client.rpc('feedback_resolve', { p_id: r.id, p_note: replies[r.id]?.trim() || null }));
   const done = (r: FeedbackRow, value: boolean) => act(r.id, () => client.rpc('feedback_done', { p_id: r.id, p_done: value }));
 
   return (
@@ -79,6 +84,9 @@ export function FeedbackAdminPage() {
           <button className={`btn small ${filter === 'offen' ? '' : 'ghost'}`} onClick={() => setFilter('offen')}>
             Offen
           </button>
+          <button className={`btn small ${filter === 'umsetzen' ? '' : 'ghost'}`} onClick={() => setFilter('umsetzen')} title="Bedankt oder gelesen, aber noch nicht als umgesetzt zurückgemeldet">
+            Noch umzusetzen
+          </button>
           <button className={`btn small ${filter === 'alle' ? '' : 'ghost'}`} onClick={() => setFilter('alle')}>
             Alle
           </button>
@@ -86,15 +94,21 @@ export function FeedbackAdminPage() {
       </div>
       <p className="muted">
         Meldungen aus der App und dem Außendienst. „Danke“ schenkt dem Betrieb {FEEDBACK_REWARD_DAYS} Tage Pro und zeigt dem
-        Nutzer den Dank in der App — je Meldung einmal, nicht rückholbar.
+        Nutzer den Dank in der App — je Meldung einmal, nicht rückholbar. „Umgesetzt“ sagt dem Einsender später, dass sein
+        Hinweis in der App steckt.
       </p>
       {error && <div className="error-box">{error}</div>}
       <LoadGuard state={state}>
         {(rows) => {
           const open = rows.filter((r) => !r.done_at && !r.thanked_at);
-          const shown = filter === 'offen' ? open : rows;
+          const todo = rows.filter((r) => (r.done_at || r.thanked_at) && !r.resolved_at);
+          const shown = filter === 'offen' ? open : filter === 'umsetzen' ? todo : rows;
           if (!shown.length) {
-            return <div className="empty">{filter === 'offen' ? 'Keine offenen Rückmeldungen.' : 'Noch keine Rückmeldungen.'}</div>;
+            return (
+              <div className="empty">
+                {filter === 'offen' ? 'Keine offenen Rückmeldungen.' : filter === 'umsetzen' ? 'Nichts mehr umzusetzen.' : 'Noch keine Rückmeldungen.'}
+              </div>
+            );
           }
           return (
             <div className="feedback-list">
@@ -118,6 +132,11 @@ export function FeedbackAdminPage() {
                       ) : r.done_at ? (
                         <span className="badge">gelesen</span>
                       ) : null}
+                      {r.resolved_at && (
+                        <span className="badge green">
+                          <CheckCheck className="i" aria-hidden /> Umgesetzt gemeldet{r.resolved_note ? ` · ${r.resolved_note}` : ''}
+                        </span>
+                      )}
                     </div>
                     <p className="feedback-body">{r.body}</p>
                     <div className="muted small">
@@ -126,6 +145,19 @@ export function FeedbackAdminPage() {
                       {r.org_bonus_until && !r.thanked_at ? ` · Bonus läuft bis ${fmtDate(r.org_bonus_until)}` : ''}
                     </div>
                     {r.reply && <div className="muted small">Antwort: {r.reply}</div>}
+                    {r.thanked_at && !r.resolved_at && (
+                      <div className="feedback-actions">
+                        <input
+                          placeholder="Hinweis für den Einsender, z. B. „ab Version 0.7.8“ (freiwillig)"
+                          maxLength={120}
+                          value={replies[r.id] ?? ''}
+                          onChange={(e) => setReplies((v) => ({ ...v, [r.id]: e.target.value }))}
+                        />
+                        <button className="btn small" disabled={busy === r.id} onClick={() => resolve(r)}>
+                          <CheckCheck className="i" aria-hidden /> Umgesetzt – Einsender informieren
+                        </button>
+                      </div>
+                    )}
                     {!r.thanked_at && (
                       <div className="feedback-actions">
                         <input
@@ -148,6 +180,11 @@ export function FeedbackAdminPage() {
                         ) : (
                           <button className="btn ghost small" disabled={busy === r.id} onClick={() => done(r, true)}>
                             Gelesen
+                          </button>
+                        )}
+                        {!r.resolved_at && (
+                          <button className="btn ghost small" disabled={busy === r.id} onClick={() => resolve(r)} title="Ohne Dank direkt als umgesetzt zurückmelden">
+                            <CheckCheck className="i" aria-hidden /> Umgesetzt
                           </button>
                         )}
                       </div>
