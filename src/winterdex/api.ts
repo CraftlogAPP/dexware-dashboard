@@ -112,7 +112,7 @@ export async function fetchOperationWithPhotos(
     .eq('id', id)
     .single();
   if (error) fail('Einsatz konnte nicht geladen werden', error);
-  return (await signPhotos(sb, data)) as unknown as OperationWithPhotos;
+  return (await signPhotos(sb, withPhotoTotal(data))) as unknown as OperationWithPhotos;
 }
 
 // ── Schreiben (Format identisch zur Mobile-App, supabaseRepository.ts) ──────
@@ -250,6 +250,12 @@ export async function fetchOperationsForReport(
     [['started_at']],
   );
   if (error) fail('Berichtsdaten konnten nicht geladen werden', error);
-  return (await signPhotos(sb, data ?? [])) as unknown as OperationWithPhotos[];
+  return (await signPhotos(sb, (data ?? []).map(withPhotoTotal))) as unknown as OperationWithPhotos[];
+}
+
+/** Gespeicherte Fotozahl merken, bevor nicht signierbare Pfade beim Signieren wegfallen (Bericht nennt die echte Zahl). */
+function withPhotoTotal<T>(row: T): T {
+  const r = row as Record<string, unknown>;
+  return { ...r, photo_total: Array.isArray(r.photo_urls) ? r.photo_urls.length : 0 } as T;
 }
 

@@ -56,6 +56,8 @@ export interface Run extends RunMeta {
   planned_path: LatLng[] | null;
   missed: LatLng[][] | null;
   photo_urls: string[];
+  /** Zahl der gespeicherten Fotos (vor dem Signieren) */
+  photo_total?: number;
 }
 
 const ROUTE_LIST_COLS = 'id, org_id, name, notes, length_m, source, property_ids, active, created_at';
@@ -153,8 +155,9 @@ export async function fetchRun(sb: SupabaseClient, id: string): Promise<Run> {
   const { data, error } = await sb.from('route_run').select('*').eq('id', id).maybeSingle();
   if (error) fail('Fahrt konnte nicht geladen werden', error);
   if (!data) throw new Error('Diese Fahrt wurde nicht gefunden.');
+  const photo_total = Array.isArray(data.photo_urls) ? data.photo_urls.length : 0;
   const run = (await signPhotos(sb, data)) as Run;
-  return { ...run, track: run.track ?? [], gaps: run.gaps ?? [], photo_urls: run.photo_urls ?? [] };
+  return { ...run, track: run.track ?? [], gaps: run.gaps ?? [], photo_urls: run.photo_urls ?? [], photo_total };
 }
 
 export async function cancelRun(sb: SupabaseClient, id: string, reason: string): Promise<void> {

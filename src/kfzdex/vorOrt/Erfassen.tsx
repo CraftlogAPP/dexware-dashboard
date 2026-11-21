@@ -350,7 +350,7 @@ function KontrolleForm({ driver, back }: { driver: Driver; back: string }) {
 
       <label className="field" style={{ marginTop: 14 }}>
         Kontrolliert von *
-        <input value={checkedBy} maxLength={80} autoComplete="name" placeholder="z. B. Alexander Pfalz" onChange={(e) => setCheckedBy(e.target.value)} />
+        <input value={checkedBy} maxLength={80} autoComplete="name" placeholder="z. B. Max Mustermann" onChange={(e) => setCheckedBy(e.target.value)} />
       </label>
       {saveError && <div className="error-box">Kontrolle nicht gespeichert: {saveError}</div>}
       <button type="button" className="btn ez-save" onClick={() => void confirm()} disabled={saving || !canSave}>

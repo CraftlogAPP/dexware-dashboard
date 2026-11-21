@@ -79,6 +79,10 @@ export function OperationDetail() {
                     {op.end_distance_m != null ? ` · ${Math.round(op.end_distance_m)} m vom Objekt` : ''}
                   </div>
                 )}
+                {/* Seit 20.11.2026 End-Stempel nur aus einer höchstens 2 Minuten alten Position — Fehlen ausdrücklich nennen (wie PDF/App) */}
+                {op.end_lat == null && op.gps_at && (
+                  <div className="small muted">Ende: kein GPS-Stempel (beim Speichern keine aktuelle Position)</div>
+                )}
                 {(op.gps_mocked || op.end_mocked) && (
                   <div className="small" style={{ color: 'var(--danger, #DC2626)', fontWeight: 700 }}>
                     Achtung: Fake-GPS gemeldet (Android)
@@ -176,9 +180,14 @@ export function OperationDetail() {
             )}
 
             <div className="section-head">
-              <h2>Beweisfotos ({op.photo_urls.length})</h2>
+              <h2>Beweisfotos ({Math.max(op.photo_total ?? 0, op.photo_urls.length)})</h2>
             </div>
-            {op.photo_urls.length === 0 ? (
+            {(op.photo_total ?? 0) > op.photo_urls.filter(isSafeImgSrc).length && (
+              <p className="muted small">
+                Nicht alle Fotos ließen sich gerade laden — sie bleiben beim Einsatz gespeichert. Seite neu laden versucht es erneut.
+              </p>
+            )}
+            {Math.max(op.photo_total ?? 0, op.photo_urls.length) === 0 ? (
               <div className="card empty">Keine Fotos zu diesem Einsatz.</div>
             ) : (
               <div className="row" style={{ alignItems: 'flex-start' }}>
