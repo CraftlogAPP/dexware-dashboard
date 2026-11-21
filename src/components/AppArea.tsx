@@ -1,9 +1,10 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutGrid, LogOut } from 'lucide-react';
+import { CircleCheck, Info, LayoutGrid, LogOut, X } from 'lucide-react';
 import { appIcon, type AppConfig } from '../apps/registry';
 import { AppAuthProvider, useAppAuth } from '../auth/AppAuthContext';
 import { LoginScreen, forgetReturnPath, takeReturnPath } from '../auth/LoginScreen';
+import { CONFIRM_TEXT } from '../auth/confirmReturn';
 
 /**
  * Generische Hülle für jeden App-Dashboard-Bereich:
@@ -83,11 +84,39 @@ function Gate({ app, children, headerAction }: { app: AppConfig; children: React
           <span className="spinner" />
         </div>
       ) : session ? (
-        children
+        <>
+          <ConfirmBanner />
+          {children}
+        </>
       ) : (
         <LoginScreen />
       )}
     </>
+  );
+}
+
+/**
+ * Angemeldet zurück vom Bestätigungslink der Registrierung: deutlich sagen, dass es geklappt hat
+ * (vorher landete man kommentarlos im Bereich). Schließbar, verschwindet nach 15 Sekunden von selbst.
+ * Ohne Sitzung zeigt die Anmeldeseite die Meldung (LoginScreen).
+ */
+function ConfirmBanner() {
+  const { confirmReturn, dismissConfirm } = useAppAuth();
+  useEffect(() => {
+    if (!confirmReturn) return;
+    const t = setTimeout(dismissConfirm, 15000);
+    return () => clearTimeout(t);
+  }, [confirmReturn, dismissConfirm]);
+  if (!confirmReturn) return null;
+  const ok = confirmReturn === 'ok';
+  return (
+    <div className={`confirm-banner${ok ? ' ok' : ''}`} role="status">
+      {ok ? <CircleCheck className="i" aria-hidden /> : <Info className="i" aria-hidden />}
+      <p>{ok ? CONFIRM_TEXT.okSignedIn : CONFIRM_TEXT.errorSignedIn}</p>
+      <button type="button" className="confirm-x" onClick={dismissConfirm} aria-label="Meldung schließen">
+        <X className="i" aria-hidden />
+      </button>
+    </div>
   );
 }
 

@@ -11,6 +11,7 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import type { AppConfig } from '../apps/registry';
 import { getClient } from '../lib/supabaseClients';
 import { confirmLogout } from '../lib/logoutGuard';
+import { cleanConfirmUrl, readConfirmReturn, type ConfirmReturn } from './confirmReturn';
 
 interface AppAuthValue {
   app: AppConfig;
@@ -19,6 +20,9 @@ interface AppAuthValue {
   /** true solange die persistierte Session noch geladen wird */
   loading: boolean;
   signOut: () => Promise<void>;
+  /** Rückkehr vom Bestätigungslink der Registrierung: 'ok' / 'error' (abgelaufen, schon benutzt), sonst null */
+  confirmReturn: ConfirmReturn | null;
+  dismissConfirm: () => void;
 }
 
 const Ctx = createContext<AppAuthValue | null>(null);
@@ -33,10 +37,16 @@ export function AppAuthProvider({
   const client = useMemo(() => getClient(app), [app]);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  // Einmal beim Laden lesen (die Adresse wird danach aufgeräumt).
+  const [confirmReturn, setConfirmReturn] = useState<ConfirmReturn | null>(readConfirmReturn);
+  const dismissConfirm = useCallback(() => setConfirmReturn(null), []);
 
   useEffect(() => {
     let mounted = true;
     client.auth.getSession().then(({ data }) => {
+      // getSession() wartet, bis supabase-js die Adresse gelesen (PKCE-Code getauscht) hat — erst jetzt Merker,
+      // Fehler-Hash und Code-Reste entfernen (Link in einem anderen Browser geöffnet: Code bleibt sonst stehen).
+      if (readConfirmReturn()) cleanConfirmUrl();
       if (!mounted) return;
       setSession(data.session);
       setLoading(false);
@@ -61,8 +71,8 @@ export function AppAuthProvider({
   }, [client]);
 
   const value = useMemo<AppAuthValue>(
-    () => ({ app, client, session, loading, signOut }),
-    [app, client, session, loading, signOut],
+    () => ({ app, client, session, loading, signOut, confirmReturn, dismissConfirm }),
+    [app, client, session, loading, signOut, confirmReturn, dismissConfirm],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

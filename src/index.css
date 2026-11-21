@@ -1014,6 +1014,84 @@ select option {
   color: #dbeafe;
 }
 
+/* Rückkehr vom Bestätigungslink der Registrierung (?bestaetigt=1, src/auth/confirmReturn.ts): grün und deutlich */
+.info-box.confirm-ok,
+.confirm-banner.ok {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.1);
+  color: #dcfce7;
+}
+.info-box.confirm-ok {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.info-box.confirm-ok .i,
+.confirm-banner.ok > .i {
+  color: var(--green);
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+.confirm-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 1200px;
+  margin: 14px auto 0;
+  width: calc(100% - 32px);
+  padding: 12px 10px 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.08);
+  color: #dbeafe;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  animation: confirm-in 0.35s ease-out both;
+}
+.confirm-banner > .i {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--blue);
+}
+.confirm-banner p {
+  flex: 1;
+  min-width: 0;
+}
+.confirm-banner .confirm-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.confirm-banner .confirm-x:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+@keyframes confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confirm-banner {
+    animation: none;
+  }
+}
+
 .muted {
   color: var(--muted);
 }
@@ -1579,6 +1657,20 @@ a.due-row:hover {
 }
 [data-theme='light'] .info-box {
   color: #1e3a8a;
+}
+[data-theme='light'] .confirm-banner {
+  color: #1e3a8a;
+}
+[data-theme='light'] .info-box.confirm-ok,
+[data-theme='light'] .confirm-banner.ok {
+  color: #14532d;
+}
+[data-theme='light'] .info-box.confirm-ok .i,
+[data-theme='light'] .confirm-banner.ok > .i {
+  color: #16a34a;
+}
+[data-theme='light'] .confirm-banner .confirm-x:hover {
+  background: rgba(15, 23, 42, 0.06);
 }
 [data-theme='light'] .error-box {
   color: #b91c1c;

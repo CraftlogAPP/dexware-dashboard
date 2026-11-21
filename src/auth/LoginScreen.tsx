@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { LayoutGrid } from 'lucide-react';
+import { CircleCheck, LayoutGrid } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { appIcon } from '../apps/registry';
 import { useAppAuth } from './AppAuthContext';
+import { CONFIRM_TEXT } from './confirmReturn';
 import { LegalLinks } from '../components/LegalLinks';
 import { WEB_ONBOARDING } from '../lib/webOnboarding';
 
@@ -13,7 +14,7 @@ type Mode = 'login' | 'signup' | 'reset-request' | 'reset-code';
  * Passwort-Reset per 6-stelligem OTP-Code — identisch zum Flow in den Mobile-Apps.
  */
 export function LoginScreen() {
-  const { app, client } = useAppAuth();
+  const { app, client, confirmReturn, dismissConfirm } = useAppAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,6 +44,9 @@ export function LoginScreen() {
     setBusy(true);
     setError(null);
     setInfo(null);
+    // Meldung vom Bestätigungslink hat ihren Zweck erfüllt, sobald man etwas tut (sonst stünde sie nach dem
+    // Anmelden zusätzlich als „du bist angemeldet“ oben).
+    dismissConfirm();
     try {
       await fn();
     } catch (e) {
@@ -65,7 +69,9 @@ export function LoginScreen() {
   }
 
   // Bestätigungslink führt zurück in diesen App-Bereich (dieselbe freigegebene Adresse wie die Google-Anmeldung).
-  const confirmUrl = `${window.location.origin}/app/${app.id}`;
+  // ?bestaetigt=1: nach der Rückkehr „E-Mail bestätigt ✓“ zeigen (confirmReturn.ts). Außenprobe 21.11.2026: mit dem
+  // Zusatz bei allen Dashboard-Projekten als Rücksprung erlaubt.
+  const confirmUrl = `${window.location.origin}/app/${app.id}?bestaetigt=1`;
 
   /** Neues Konto anlegen (nur Apps mit webSignup) — wie die Registrierung in der App: E-Mail + Passwort, Bestätigung per Link. */
   function onSignup(e: FormEvent) {
@@ -159,6 +165,13 @@ export function LoginScreen() {
             : <>Melde dich mit deinem bestehenden {app.name}-Konto an — per Google oder mit denselben Zugangsdaten wie in der App.</>}
         </p>
 
+        {confirmReturn === 'ok' && (
+          <div className="info-box confirm-ok" role="status">
+            <CircleCheck className="i" aria-hidden />
+            <span>{CONFIRM_TEXT.okSignIn}</span>
+          </div>
+        )}
+        {confirmReturn === 'error' && <div className="error-box" role="alert">{CONFIRM_TEXT.error}</div>}
         {error && <div className="error-box">{error}</div>}
         {info && <div className="info-box">{info}</div>}
         {unconfirmed && mode === 'login' && (
