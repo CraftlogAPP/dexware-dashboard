@@ -10,6 +10,7 @@ import type { PruefConfig } from './config';
 import { dataUriToBlob } from '../winterdex/einsatz/photo';
 import { photoPath, STORAGE_PREFIX } from './rows';
 import { deletePending, emitPendingChanged, listPending, savePending, type Pending } from './store';
+import { markRejected, retryDue } from '../lib/retryLater';
 
 /** Anmeldung abgelaufen / Server kurz weg: später erneut, kein „abgelehnt“. */
 function isRetryLater(e: unknown): boolean {
@@ -103,7 +104,7 @@ export async function submit(be: PruefBackend, cfg: PruefConfig, p: Pending): Pr
         return { result: 'queued', onDevice, pending: current };
       }
       const rejected = errorText(e);
-      current = { ...current, lastError: rejected };
+      current = markRejected(current, rejected);
       await savePending(current);
       emitPendingChanged();
       return { result: { rejected }, onDevice, pending: current };
@@ -120,9 +121,10 @@ let flushing = false;
 
 /**
  * Wartende Prüfungen nachsenden. Bricht beim ersten Netzfehler ab (Rest beim nächsten Versuch).
- * Liefert die Zahl der vollständig übertragenen Prüfungen.
+ * Vom Server abgelehnte kommen erst nach ihrer Wartezeit wieder dran (5 Min bis 6 Std, nicht jede Minute samt Fotos) —
+ * außer bei `force` („Jetzt senden“). Liefert die Zahl der vollständig übertragenen Prüfungen.
  */
-export async function flushPending(be: PruefBackend, cfg: PruefConfig, userId: string): Promise<number> {
+export async function flushPending(be: PruefBackend, cfg: PruefConfig, userId: string, opts: { force?: boolean } = {}): Promise<number> {
   if (flushing) return 0;
   flushing = true;
   let sent = 0;
@@ -130,6 +132,7 @@ export async function flushPending(be: PruefBackend, cfg: PruefConfig, userId: s
   try {
     for (const p of await listPending(cfg.appId, userId)) {
       if (inFlight.has(p.key)) continue;
+      if (p.lastError && !opts.force && !retryDue(p)) continue;
       try {
         await push(be, cfg, p);
         await deletePending(p.key);
@@ -140,7 +143,7 @@ export async function flushPending(be: PruefBackend, cfg: PruefConfig, userId: s
         if (later(e)) break;
         const lastError = errorText(e);
         const now = (await listPending(cfg.appId, userId)).find((x) => x.key === p.key) ?? p;
-        if (now.lastError !== lastError) await savePending({ ...now, lastError });
+        await savePending(markRejected(now, lastError));
       }
     }
   } finally {

@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import type { EinsatzBackend } from './backend';
 import { flushPending } from './send';
 import { flushPendingRuns } from '../aussendienst/runStore';
-import { listPending, onPendingChanged, type Pending } from './store';
+import { emitPendingChanged, listPending, onPendingChanged, type Pending } from './store';
 
 export interface EinsatzCtxValue {
   be: EinsatzBackend;
@@ -14,7 +14,7 @@ export interface EinsatzCtxValue {
   propertiesUrl: string;
   /** Adresse des Dashboards, z. B. /app/winterdex (Nachweise mit Karte und PDF) */
   dashboardUrl: string;
-  /** Inhaber des Betriebs? Nur er darf Strecken anlegen und ändern (wie in der App). */
+  /** Inhaber des Betriebs? Nur er darf Objekte und Strecken anlegen und ändern (wie in der App, Server-Regel). */
   owner: boolean;
 }
 
@@ -65,12 +65,20 @@ export function usePendingSync(): { pending: Pending[]; loaded: boolean; sending
     };
   }, [be, userId]);
 
+  // „Jetzt senden“: auch vom Server abgelehnte Einsätze und Fahrten sofort erneut versuchen (sonst mit Wartezeit)
   const sendNow = () => {
     setSending(true);
-    void flushPending(be, userId)
+    void Promise.all([
+      flushPending(be, userId, { force: true }).catch(() => 0),
+      flushPendingRuns(be, userId, { force: true }).catch(() => 0),
+    ])
       .then(() => listPending(userId))
       .then(setPending)
-      .finally(() => setSending(false));
+      .catch(() => undefined)
+      .finally(() => {
+        setSending(false);
+        emitPendingChanged();
+      });
   };
 
   return { pending, loaded, sending, sendNow };

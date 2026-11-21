@@ -6,6 +6,7 @@
 
 import { isNetworkError } from '../../pruefen/backend';
 import { createSignal, kvDel, kvGet, kvList, kvPut } from '../../pruefen/kv';
+import { markRejected, retryDue } from '../../lib/retryLater';
 import { dataUriToBlob } from '../../winterdex/einsatz/photo';
 import type { Measurements, Result, VisualChecks } from './dguv';
 import type { PdBackend } from './backend';
@@ -64,6 +65,9 @@ export interface Pending {
   gpsDropped?: boolean;
   /** Server hat abgelehnt (kein Netzproblem) — Meldung für die Anzeige. */
   lastError?: string;
+  /** letzte Ablehnung + Zahl der Ablehnungen — wachsende Wartezeit (src/lib/retryLater.ts) */
+  failedAt?: string;
+  tries?: number;
 }
 
 const pendingPrefix = (userId: string) => `pruefdex:wartend:${userId}:`;
@@ -148,7 +152,7 @@ export async function submit(be: PdBackend, p: Pending): Promise<SubmitOutcome> 
         return { result: 'queued', onDevice, pending: p };
       }
       const rejected = errorText(e);
-      current = { ...p, lastError: rejected };
+      current = markRejected(p, rejected);
       await kvPut(current);
       emitPendingChanged();
       return { result: { rejected }, onDevice, pending: current };
@@ -164,7 +168,8 @@ export async function submit(be: PdBackend, p: Pending): Promise<SubmitOutcome> 
 let flushing = false;
 
 /** Wartende Prüfungen nachsenden (älteste zuerst). Bricht beim ersten Netzfehler ab. Liefert die Zahl der übertragenen. */
-export async function flushPending(be: PdBackend, userId: string): Promise<number> {
+// Abgelehnte erst nach ihrer Wartezeit erneut (nicht jede Minute) — außer bei `force` („Jetzt senden“).
+export async function flushPending(be: PdBackend, userId: string, opts: { force?: boolean } = {}): Promise<number> {
   if (flushing) return 0;
   flushing = true;
   let sent = 0;
@@ -172,6 +177,7 @@ export async function flushPending(be: PdBackend, userId: string): Promise<numbe
   try {
     for (const p of await listPending(userId)) {
       if (inFlight.has(p.key)) continue;
+      if (p.lastError && !opts.force && !retryDue(p)) continue;
       try {
         await push(be, p);
         await deletePending(p.key);
@@ -180,10 +186,8 @@ export async function flushPending(be: PdBackend, userId: string): Promise<numbe
       } catch (e) {
         if (later(e)) break;
         const lastError = errorText(e);
-        if (p.lastError !== lastError) {
-          await kvPut({ ...p, lastError });
-          changed = true;
-        }
+        await kvPut(markRejected(p, lastError));
+        changed = true;
       }
     }
   } finally {

@@ -34,9 +34,9 @@ const hasPos = (p: Property): p is Property & { lat: number; lng: number } => p.
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
 export default function Karte() {
-  const { be, userId, base } = useEinsatz();
+  const { be, userId, orgId, base } = useEinsatz();
   const state = useAsync<MapData>(async () => {
-    const d = await loadEinsatzData(be, userId);
+    const d = await loadEinsatzData(be, userId, orgId);
     const doneAt = new Map<string, string>();
     for (const o of d.todayOps) if (!o.canceled && isToday(o.started_at)) doneAt.set(o.property_id, o.started_at);
     // Strecken sind Zugabe: fehlen sie (alte Datenbank, Funkloch), zeigt die Karte trotzdem die Objekte.
@@ -54,7 +54,7 @@ export default function Karte() {
     }
     const drivenRouteIds = new Set(runs.filter((r) => !r.canceled && r.route_id && isToday(r.started_at)).map((r) => r.route_id!));
     return { properties: d.properties.filter((p) => p.active), doneAt, routes, drivenRouteIds, offline: d.offline };
-  }, [be, userId]);
+  }, [be, userId, orgId]);
 
   return (
     <>
@@ -188,8 +188,8 @@ function MapView({ data, base }: { data: MapData; base: string }) {
       {unplaced > 0 && (
         <p className="muted small">
           {unplaced === 1 ? '1 Objekt hat' : `${unplaced} Objekte haben`} noch keinen Standort und{' '}
-          {unplaced === 1 ? 'fehlt' : 'fehlen'} auf der Karte. Der Standort wird beim ersten Einsatz vor Ort oder unter
-          „Mehr → Objekte verwalten“ gesetzt.
+          {unplaced === 1 ? 'fehlt' : 'fehlen'} auf der Karte. Den Standort setzt der Inhaber vor Ort unter „Mehr →
+          Objekte“ → Objekt öffnen → „Hier stehe ich“ (oder in der App).
         </p>
       )}
     </>

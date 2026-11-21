@@ -14,6 +14,7 @@ import { useEinsatz, usePendingSync } from '../einsatz/context';
 import { newId } from '../einsatz/data';
 import { emitPendingChanged, onPendingChanged } from '../einsatz/store';
 import { pathLengthM, round6 } from './geo';
+import { nextTryLabel as nextLabel } from '../../lib/retryLater';
 import { FREE_ROUTES, PRO_HOW } from '../pro';
 import { deleteActiveRun, deletePendingRun, getActiveRun, listPendingRuns, type ActiveRun, type PendingRun } from './runStore';
 
@@ -35,7 +36,8 @@ export function Strecken() {
     }
   }, [be]);
   useLiveRefresh([state.refresh]);
-  usePendingSync(); // wartende Einsätze und Fahrten im Hintergrund nachsenden
+  // wartende Einsätze und Fahrten im Hintergrund nachsenden; „Jetzt senden“ versucht auch abgelehnte sofort
+  const { sending, sendNow } = usePendingSync();
 
   const [active, setActive] = useState<ActiveRun | null>(null);
   const [pending, setPending] = useState<PendingRun[]>([]);
@@ -115,7 +117,12 @@ export function Strecken() {
               <li key={p.key}>
                 <span>
                   {p.routeName ?? 'Freie Fahrt'} · {fmtDateTime(p.row.started_at)}
-                  {p.lastError && <span className="ez-pending-err">Vom Server nicht angenommen: {p.lastError}</span>}
+                  {p.lastError && (
+                    <span className="ez-pending-err">
+                      Vom Server nicht angenommen: {p.lastError}
+                      {nextLabel(p)}
+                    </span>
+                  )}
                 </span>
                 {p.lastError && (
                   <button type="button" className="btn ghost small" onClick={() => setDiscard(p)}>
@@ -125,6 +132,9 @@ export function Strecken() {
               </li>
             ))}
           </ul>
+          <button type="button" className="btn small" onClick={sendNow} disabled={sending}>
+            {sending ? 'Sendet …' : 'Jetzt senden'}
+          </button>
         </div>
       )}
 

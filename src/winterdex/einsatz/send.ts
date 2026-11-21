@@ -2,10 +2,24 @@
 // Ohne Netz bleibt er auf dem Gerät und wird später nachgesendet — Zeitstempel, GPS und Fotos bleiben die
 // vom Einsatzort. Doppelt gesendet ist unschädlich (gleiche Einsatz-ID, gleiche Foto-Pfade).
 // Vorbild: addOperation/flushOutbox/pushOperation der App (mobile/src/data/supabaseRepository.ts).
+//
+// Vom Server ABGELEHNTE Einsätze (kein Netzproblem) werden mit wachsender Wartezeit erneut versucht (5 Min bis 6 Std,
+// src/lib/retryLater.ts), nicht mehr jede Minute. Schon hochgeladene Fotos werden dabei nicht noch einmal gesendet.
 
 import { isNetworkError, STORAGE_PREFIX, type EinsatzBackend } from './backend';
 import { dataUriToBlob } from './photo';
-import { deletePending, emitPendingChanged, listPending, pendingKey, savePending, type Pending } from './store';
+import { markRejected, retryDue } from '../../lib/retryLater';
+import {
+  deletePending,
+  emitPendingChanged,
+  listPending,
+  photoCountOf,
+  photosOf,
+  savePending,
+  withoutPhotos,
+  type Pending,
+  type WithPhotos,
+} from './store';
 
 /** Wetter nur nachtragen, solange es noch zur Einsatzzeit passt (≤ 1 h) — wie die App. */
 const WEATHER_BACKFILL_MS = 60 * 60 * 1000;
@@ -18,7 +32,7 @@ function weatherBackfillOpen(startedAtIso: string): boolean {
 }
 
 /** Anmeldung abgelaufen / Server kurz weg: später erneut, kein „abgelehnt“. */
-function isRetryLater(e: unknown): boolean {
+export function isRetryLater(e: unknown): boolean {
   const err = e as { code?: string; message?: string; status?: number; statusCode?: string | number } | null;
   const m = String(err?.message ?? '');
   const status = Number(err?.status ?? err?.statusCode ?? 0);
@@ -39,58 +53,114 @@ function errorText(e: unknown): string {
   return m;
 }
 
-async function push(be: EinsatzBackend, p: Pending): Promise<void> {
+/**
+ * Fotos in den Speicher des Servers laden (oder die schon hochgeladenen Pfade nehmen). Ist ein Foto auf dem Gerät nicht
+ * mehr lesbar, steht das ehrlich in der Notiz — wie in der App.
+ */
+export async function uploadPhotosOnce(
+  be: EinsatzBackend,
+  p: WithPhotos,
+  orgId: string,
+  recordId: string,
+  saveUrls: (urls: string[]) => Promise<unknown>,
+): Promise<{ urls: string[]; missing: number }> {
+  const count = photoCountOf(p);
+  if (p.photoUrls && p.photoUrls.length === count) return { urls: p.photoUrls, missing: 0 };
+  const photos = await photosOf(p);
   const urls: string[] = [];
-  for (let i = 0; i < p.photos.length; i++) {
-    const photo = p.photos[i];
-    const path = `${p.row.org_id}/${p.row.id}/${i + 1}.jpg`;
+  for (let i = 0; i < photos.length; i++) {
+    const photo = photos[i];
+    const path = `${orgId}/${recordId}/${i + 1}.jpg`;
     try {
       await be.uploadPhoto(path, dataUriToBlob(photo));
       urls.push(STORAGE_PREFIX + path);
     } catch (e) {
-      // Netz weg / Anmeldung abgelaufen → ganzer Einsatz bleibt auf dem Gerät (Fotos später in den Speicher).
+      // Netz weg / Anmeldung abgelaufen → ganzer Eintrag bleibt auf dem Gerät (Fotos später in den Speicher).
       if (isNetworkError(e) || isRetryLater(e)) throw e;
       // Anderer Fehler → Foto eingebettet speichern, die Dokumentation darf nie an einem Foto scheitern (wie die App).
       urls.push(photo);
     }
   }
-  await be.insertOperation(p.row, urls);
+  const missing = Math.max(0, count - photos.length);
+  // Alle Fotos liegen im Speicher → Pfade merken: ein späterer Versuch (z. B. nach einer Ablehnung) lädt nicht neu hoch.
+  if (!missing && urls.length && urls.every((u) => u.startsWith(STORAGE_PREFIX))) await saveUrls(urls);
+  return { urls, missing };
+}
+
+export function missingPhotoNote(notes: string | null, missing: number): string | null {
+  if (!missing) return notes;
+  const note = `[Hinweis: ${missing === 1 ? '1 Foto war' : `${missing} Fotos waren`} auf dem Gerät nicht mehr lesbar und fehlt im Nachweis.]`;
+  return notes ? `${notes}\n${note}` : note;
+}
+
+async function push(be: EinsatzBackend, p: Pending): Promise<void> {
+  const { urls, missing } = await uploadPhotosOnce(be, p, p.row.org_id, p.row.id, (photoUrls) =>
+    savePending({ ...withoutPhotos(p), photoUrls }),
+  );
+  await be.insertOperation({ ...p.row, notes: missingPhotoNote(p.row.notes, missing) }, urls);
 }
 
 export type SubmitResult = 'synced' | 'queued' | { rejected: string };
 
+// Was gerade gesendet wird — das automatische Nachsenden lässt diesen Einsatz solange in Ruhe.
+const inFlight = new Set<string>();
+
 /** Fertigen Einsatz sichern und senden. Wirft nie wegen des Netzes — der Einsatz geht nicht verloren. */
 export async function submit(be: EinsatzBackend, p: Pending): Promise<{ result: SubmitResult; onDevice: boolean }> {
-  const onDevice = await savePending(p);
-  emitPendingChanged();
+  inFlight.add(p.key);
   try {
-    await push(be, p);
-  } catch (e) {
-    if (isNetworkError(e) || isRetryLater(e)) return { result: 'queued', onDevice };
-    const rejected = errorText(e);
-    await savePending({ ...p, lastError: rejected });
+    const onDevice = await savePending(p);
+    // Fotos stehen jetzt in ihrem eigenen Eintrag (Gerät oder Arbeitsspeicher) → ab hier nur noch der kleine Teil.
+    const light = withoutPhotos(p);
     emitPendingChanged();
-    return { result: { rejected }, onDevice };
+    try {
+      await push(be, { ...light, photos: p.photos });
+    } catch (e) {
+      if (isNetworkError(e) || isRetryLater(e)) return { result: 'queued', onDevice };
+      const rejected = errorText(e);
+      const now = (await listPending(p.userId)).find((x) => x.key === p.key) ?? light;
+      await savePending(markRejected(now, rejected));
+      emitPendingChanged();
+      return { result: { rejected }, onDevice };
+    }
+    await deletePending(p.row.id);
+    emitPendingChanged();
+    return { result: 'synced', onDevice };
+  } finally {
+    inFlight.delete(p.key);
   }
-  await deletePending(p.row.id);
-  emitPendingChanged();
-  return { result: 'synced', onDevice };
 }
 
-let flushing = false;
+let running: Promise<number> | null = null;
 
 /**
  * Wartende Einsätze nachsenden. Bricht beim ersten Netzfehler ab (Rest beim nächsten Versuch).
+ * Abgelehnte kommen nur nach ihrer Wartezeit dran — außer bei `force` („Jetzt senden“).
  * Liefert die Zahl der übertragenen Einsätze.
  */
-export async function flushPending(be: EinsatzBackend, userId: string): Promise<number> {
-  if (flushing) return 0;
-  flushing = true;
+export function flushPending(be: EinsatzBackend, userId: string, opts: { force?: boolean } = {}): Promise<number> {
+  if (running) return opts.force ? running.then(() => flushPending(be, userId, opts)) : Promise.resolve(0);
+  const mine = doFlush(be, userId, !!opts.force).finally(() => {
+    if (running === mine) running = null;
+  });
+  running = mine;
+  return mine;
+}
+
+async function doFlush(be: EinsatzBackend, userId: string, force: boolean): Promise<number> {
   let sent = 0;
   let changed = false;
   try {
     for (let p of await listPending(userId)) {
+      if (inFlight.has(p.key)) continue;
+      if (p.lastError && !force && !retryDue(p)) continue;
       try {
+        // Eintrag von vor dem 21.11.2026 mit eingebetteten Fotos: einmal in den eigenen Foto-Eintrag umziehen
+        // (ein Schritt, alles oder nichts) — danach arbeitet alles mit dem kleinen Teil.
+        if (p.photos) {
+          await savePending(p);
+          p = withoutPhotos(p);
+        }
         // Wetter fehlt (ohne Netz erfasst)? Nachtragen, solange es zur Einsatzzeit passt. Der Server versiegelt
         // den Einsatz beim Eingang — bei NETZFEHLER lieber im nächsten Durchlauf senden; läuft das Fenster ab,
         // geht er ohne Wetter raus (nie verloren, nie endlos zurückgehalten).
@@ -109,15 +179,12 @@ export async function flushPending(be: EinsatzBackend, userId: string): Promise<
         sent++;
       } catch (e) {
         if (isNetworkError(e) || isRetryLater(e)) break;
-        const lastError = errorText(e);
-        if (p.lastError !== lastError) {
-          await savePending({ ...p, key: pendingKey(p.row.id), lastError });
-          changed = true;
-        }
+        const now = (await listPending(userId)).find((x) => x.key === p.key) ?? p;
+        await savePending(markRejected(now, errorText(e)));
+        changed = true;
       }
     }
   } finally {
-    flushing = false;
     if (changed) emitPendingChanged();
   }
   return sent;

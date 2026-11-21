@@ -9,7 +9,10 @@ import { fetchSchutzPro } from '../pro';
 import { supabaseSdBackend } from './backend';
 import { SdCtx, type SdCtxValue } from './context';
 import { listPending } from './queue';
-import { useLogoutCount } from '../../lib/logoutGuard';
+import { registerLogoutCount } from '../../lib/logoutGuard';
+
+// Abmelde-Rückfrage auf allen SchutzDex-Seiten (nicht nur, solange „Vor Ort“ offen ist)
+registerLogoutCount('schutzdex-vor-ort', 'schutzdex', async (userId) => (await listPending(userId)).length);
 
 export function SdVorOrtScope({ children }: { children: ReactNode }) {
   const { app, client, session, signOut } = useAppAuth();
@@ -34,7 +37,6 @@ export function SdVorOrtScope({ children }: { children: ReactNode }) {
       signOut: () => void signOut(),
     };
   }, [client, app, userId, email, org, signOut]);
-  useLogoutCount(userId ? async () => (await listPending(userId)).length : null, [userId]);
   if (!value) return null;
   return <SdCtx.Provider value={value}>{children}</SdCtx.Provider>;
 }

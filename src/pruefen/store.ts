@@ -69,6 +69,9 @@ export interface Pending {
   signatureDropped?: boolean;
   /** Server hat abgelehnt (kein Netzproblem) — Meldung für die Anzeige. */
   lastError?: string;
+  /** letzte Ablehnung + Zahl der Ablehnungen — für die wachsende Wartezeit (src/lib/retryLater.ts) */
+  failedAt?: string;
+  tries?: number;
 }
 
 type Rec = Draft | Pending;
@@ -155,12 +158,19 @@ async function kvDel(key: string): Promise<void> {
   await run('readwrite', (s) => s.delete(key)).catch(() => undefined);
 }
 
-async function kvAll(): Promise<Rec[]> {
-  const fromDb = await run<Rec[]>('readonly', (s) => s.getAll() as IDBRequest<Rec[]>).catch(() => undefined);
-  if (!fromDb) return [...memory.values()];
+// Gezielt lesen (21.11.2026): ein Schlüssel bzw. ein Schlüssel-Bereich statt des ganzen Speichers samt aller Fotos.
+async function kvGet(key: string): Promise<Rec | null> {
+  const mem = memory.get(key);
+  if (mem) return mem;
+  return (await run<Rec | undefined>('readonly', (s) => s.get(key) as IDBRequest<Rec | undefined>).catch(() => undefined)) ?? null;
+}
+
+async function kvList(prefix: string): Promise<Rec[]> {
+  const range = IDBKeyRange.bound(prefix, `${prefix}￿`);
+  const fromDb = await run<Rec[]>('readonly', (s) => s.getAll(range) as IDBRequest<Rec[]>).catch(() => undefined);
   // Arbeitsspeicher gewinnt (dort steht nur, was IndexedDB nicht annehmen konnte)
-  const map = new Map(fromDb.map((r) => [r.key, r]));
-  for (const [k, v] of memory) map.set(k, v);
+  const map = new Map((fromDb ?? []).map((r) => [r.key, r]));
+  for (const [k, v] of memory) if (k.startsWith(prefix)) map.set(k, v);
   return [...map.values()];
 }
 
@@ -170,17 +180,17 @@ export const pendingKey = (app: string, inspectionId: string) => `pending:${app}
 export const saveDraft = (d: Draft) => kvPut(d);
 export const deleteDraft = (app: string, userId: string, unitId: string) => kvDel(draftKey(app, userId, unitId));
 export async function getDraft(app: string, userId: string, unitId: string): Promise<Draft | null> {
-  const key = draftKey(app, userId, unitId);
-  return ((await kvAll()).find((r) => r.key === key && r.kind === 'draft') as Draft | undefined) ?? null;
+  const r = await kvGet(draftKey(app, userId, unitId));
+  return r && r.kind === 'draft' ? (r as Draft) : null;
 }
 export async function listDrafts(app: string, userId: string): Promise<Draft[]> {
-  return (await kvAll()).filter((r): r is Draft => r.kind === 'draft' && r.app === app && r.userId === userId);
+  return (await kvList(draftKey(app, userId, ''))).filter((r): r is Draft => r.kind === 'draft' && r.app === app && r.userId === userId);
 }
 
 export const savePending = (p: Pending) => kvPut(p);
 export const deletePending = (key: string) => kvDel(key);
 export async function listPending(app: string, userId: string): Promise<Pending[]> {
-  return (await kvAll())
+  return (await kvList(`pending:${app}:`))
     .filter((r): r is Pending => r.kind === 'pending' && r.app === app && r.userId === userId)
     .sort((a, b) => a.inspection.started_at.localeCompare(b.inspection.started_at));
 }
