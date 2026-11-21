@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { signPhotos } from '../lib/photos';
 import { fetchAllOf, fetchLatestWindow } from '../lib/completeQueries';
+import { readableDbError } from '../lib/orgApi';
 import type { DutyTimes, Operation, OperationWithPhotos, Property } from './types';
 
 // Spaltenliste für Einsätze OHNE photo_urls (Base64-Fotos, nur im Detail laden!)
@@ -20,8 +21,9 @@ async function opCols(sb: SupabaseClient): Promise<string> {
   return gpsProof ? `${OPERATION_COLS}, ${GPS_PROOF_COLS}` : OPERATION_COLS;
 }
 
-function fail(msg: string, error: { message: string } | null): never {
-  throw new Error(`${msg}${error ? `: ${error.message}` : ''}`);
+// Verständlich auf Deutsch (z. B. „dafür fehlt dir die Berechtigung“ statt „row-level security policy“)
+function fail(msg: string, error: { message: string; code?: string } | null): never {
+  throw new Error(`${msg}${error ? `: ${readableDbError(error)}` : ''}`);
 }
 
 /** Einzelnes Objekt per Primärschlüssel — statt alle zu laden und zu filtern. */
@@ -132,14 +134,16 @@ export async function saveProperty(
   orgId: string,
   input: PropertyInput,
   existing?: Property,
+  /** neuer Standort (z. B. „Hier stehe ich“) — sonst bleibt der bisherige */
+  location?: { lat: number; lng: number },
 ): Promise<void> {
   const { error } = await sb.from('property').upsert({
     id: existing?.id ?? crypto.randomUUID(),
     org_id: orgId,
     name: input.name,
     address: input.address,
-    lat: existing?.lat ?? null,
-    lng: existing?.lng ?? null,
+    lat: location?.lat ?? existing?.lat ?? null,
+    lng: location?.lng ?? existing?.lng ?? null,
     customer_name: input.customer_name,
     customer_contact: input.customer_contact,
     areas: input.areas,
@@ -149,6 +153,26 @@ export async function saveProperty(
     created_at: existing?.created_at ?? new Date().toISOString(),
   });
   if (error) fail('Objekt konnte nicht gespeichert werden', error);
+}
+
+/** Wie die App „Hier stehe ich“: Standort eines Objekts setzen (nur Inhaber — Server-Regel). */
+export async function savePropertyLocation(sb: SupabaseClient, p: Property, lat: number, lng: number): Promise<void> {
+  await saveProperty(
+    sb,
+    p.org_id,
+    {
+      name: p.name,
+      address: p.address,
+      customer_name: p.customer_name,
+      customer_contact: p.customer_contact,
+      areas: p.areas,
+      duty_times: p.duty_times ?? {},
+      notes: p.notes,
+      active: p.active,
+    },
+    p,
+    { lat, lng },
+  );
 }
 
 export interface OperationInput {

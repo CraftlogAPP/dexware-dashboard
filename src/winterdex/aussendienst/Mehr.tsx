@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { Building2, ChevronRight, CreditCard, FileDown, LogOut, MessageSquare, Monitor, Users } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
+import { roleLabel } from '../../lib/orgApi';
 import { useEinsatz } from '../einsatz/context';
 import { getPerformerName, setPerformerName } from '../einsatz/data';
 
@@ -27,7 +28,7 @@ export function Mehr() {
       <h1>Mehr</h1>
       {data && (
         <p className="muted" style={{ marginTop: 4 }}>
-          {data.org.name} · {owner ? 'Inhaber' : 'Mitarbeiter'}
+          {data.org.name} · {roleLabel(data.role)}
           {session?.user.email ? ` · ${session.user.email}` : ''}
         </p>
       )}
@@ -37,15 +38,15 @@ export function Mehr() {
           <FileDown className="i" aria-hidden />
           <span>
             <b>Nachweis-PDF</b>
-            <small>Monat, Vormonat oder ganze Saison – je Objekt oder für alle</small>
+            <small>Je Objekt: dieser Monat, Vormonat, ganze Saison oder frei wählbar</small>
           </span>
           <ChevronRight className="i go" aria-hidden />
         </Link>
         <Link to={`${base}/objekte`}>
           <Building2 className="i" aria-hidden />
           <span>
-            <b>Objekte verwalten</b>
-            <small>Anlegen, bearbeiten, pausieren</small>
+            <b>{owner ? 'Objekte verwalten' : 'Objekte'}</b>
+            <small>{owner ? 'Anlegen, bearbeiten, pausieren, Standort setzen' : 'Adressen, Pflichtzeiten, Einsatz-Historie'}</small>
           </span>
           <ChevronRight className="i go" aria-hidden />
         </Link>
@@ -53,7 +54,7 @@ export function Mehr() {
           <Users className="i" aria-hidden />
           <span>
             <b>Team</b>
-            <small>Mitarbeiter einladen, Team-Code</small>
+            <small>{owner || data?.role === 'admin' ? 'Mitarbeiter einladen, Team-Code' : 'Wer gehört zum Betrieb'}</small>
           </span>
           <ChevronRight className="i go" aria-hidden />
         </Link>

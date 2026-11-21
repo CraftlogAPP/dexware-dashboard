@@ -66,6 +66,9 @@ export function FeedbackAdminPage() {
       const { error: e } = await fn();
       if (e) setError(e.message);
       else state.refresh();
+    } catch (e) {
+      // ohne Netz passierte beim Klick sonst einfach nichts
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
     }
