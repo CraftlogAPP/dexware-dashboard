@@ -66,8 +66,15 @@ export function StreckeDetail() {
   const toggleActive = async (route: Route) => {
     if (!route.active) {
       // Wieder aktivieren zählt gegen die Gratis-Grenze (wie in der App)
-      const [routes, pro] = await Promise.all([be.listRoutes(), be.isPro()]);
-      if (!pro && routes.filter((r) => r.active).length >= FREE_ROUTES) return setAsk('gate');
+      try {
+        const [routes, pro] = await Promise.all([be.listRoutes(), be.isPro()]);
+        if (!pro && routes.filter((r) => r.active).length >= FREE_ROUTES) return setAsk('gate');
+      } catch (e) {
+        // ohne diese Meldung passierte beim Tippen ohne Netz einfach nichts
+        return setError(
+          isNetworkError(e) ? 'Zum Ändern einer Strecke braucht es kurz Internet. Bitte bei Empfang erneut versuchen.' : `Nicht gespeichert: ${String((e as Error)?.message ?? e)}`,
+        );
+      }
     }
     await save(route, { active: !route.active });
   };

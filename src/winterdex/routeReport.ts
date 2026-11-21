@@ -3,6 +3,7 @@
 
 import { fmtDate, fmtDateTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
+import { isSafeImgSrc } from '../lib/imgSrc';
 import { gritLabel, weatherLabel } from './labels';
 import { ACTION_LABELS, LEGAL_BASIS } from './types';
 import { buildSketch, fmtDistance, fmtDuration, fmtPct, fmtTimeSpan, pathLengthM, ROUTE_COLORS, sketchSvg, type Route, type Run, type RunMeta } from './routes';
@@ -14,8 +15,9 @@ function esc(s: string): string {
 const PROOF_NOTE = `<div class="proof"><b>Prüffester Strecken-Nachweis.</b> Die Fahrt wird per GPS aufgezeichnet (ungenaue Punkte über ±35 m
   und GPS-Sprünge werden ausgelassen). Gefahrene Länge, Abdeckung der Strecken-Vorlage und den Server-Eingang berechnet der Server
   selbst — unabhängig von Handy-Uhr und App. Abdeckung: Die Vorlage wird alle 10 m geprüft; ein Abschnitt gilt als befahren, wenn die
-  aufgezeichnete Fahrt höchstens 25 m entfernt verlief. Pausen in der Aufzeichnung (unterbrochen, z. B. App beendet) werden vermerkt und nicht als
-  gefahren gewertet. Jede Fahrt erhält beim Eingang einen Prüfcode (SHA-256 über alle Nachweisfelder); eine spätere Änderung ist
+  aufgezeichnete Fahrt höchstens 25 m entfernt verlief. Kurze Signal-Abrisse (höchstens 45 Sekunden und 400 m, z. B. Unterführung)
+  werden geradlinig überbrückt und zählen als befahren. Unterbrechungen der Aufzeichnung (Pause, App bzw. Seite verlassen oder länger
+  als 45 Sekunden keine brauchbare Position) werden mit Uhrzeit vermerkt und nicht als gefahren gewertet. Jede Fahrt erhält beim Eingang einen Prüfcode (SHA-256 über alle Nachweisfelder); eine spätere Änderung ist
   technisch gesperrt.</div>`;
 
 function legend(plan: boolean, track: boolean, missed: boolean): string {
@@ -73,6 +75,14 @@ function page(title: string, body: string): string {
 </html>`;
 }
 
+/** Nicht alle gespeicherten Fotos im Bericht (nicht ladbar, unsichere Quelle): ehrlich zählen — wie die App. */
+function photoNote(run: Run): string {
+  const drin = run.photo_urls.filter(isSafeImgSrc).length;
+  const gesamt = Math.max(drin, run.photo_total ?? 0);
+  if (gesamt <= drin) return '';
+  return `<div class="warn small">${gesamt} Foto${gesamt === 1 ? '' : 's'} zu dieser Fahrt gespeichert, davon ${drin} in diesem Bericht — die übrigen sind weiterhin bei der Fahrt gespeichert (App/Dashboard).</div>`;
+}
+
 /** Einzel-Nachweis einer Fahrt. */
 export function buildRunHtml(org: Org, run: Run): string {
   const plan = run.planned_path && run.planned_path.length >= 2 ? run.planned_path : null;
@@ -97,12 +107,13 @@ export function buildRunHtml(org: Org, run: Run): string {
     <div><b>Dokumentiert von:</b> ${esc(run.performer_name ?? '—')}</div>
     ${run.notes ? `<div><b>Notiz:</b> ${esc(run.notes)}</div>` : ''}
     ${missed.length ? `<div class="warn">Nicht befahren: ${missed.length} ${missed.length === 1 ? 'Abschnitt' : 'Abschnitte'}, zusammen ${fmtDistance(run.missed_m ?? 0)} (rot in der Skizze)</div>` : ''}
-    ${run.gaps.length ? `<div class="warn">Pausen in der Aufzeichnung: ${run.gaps.map(([a, b]) => fmtTimeSpan(a, b)).join(', ')}</div>` : ''}
+    ${run.gaps.length ? `<div class="warn">Unterbrechungen der Aufzeichnung (Pause oder kein GPS): ${run.gaps.map(([a, b]) => fmtTimeSpan(a, b)).join(', ')}</div>` : ''}
     ${run.gps_mocked ? '<div class="warn">Achtung: Das Gerät hat Fake-GPS gemeldet (Android).</div>' : ''}
     ${run.canceled ? `<div class="storno">STORNIERT am ${fmtDateTime(run.canceled_at)}: ${esc(run.cancel_reason ?? '')}</div>` : ''}
   </div>
   <div class="legal">${esc(LEGAL_BASIS[org.land])}</div>
-  ${run.photo_urls.length ? `<h2>Beweisfotos</h2><div class="photos">${run.photo_urls.map((src, i) => `<img src="${esc(src)}" alt="Beweisfoto ${i + 1}">`).join('')}</div>` : ''}
+  ${run.photo_urls.some(isSafeImgSrc) ? `<h2>Beweisfotos</h2><div class="photos">${run.photo_urls.filter(isSafeImgSrc).map((src, i) => `<img src="${esc(src)}" alt="Beweisfoto ${i + 1}">`).join('')}</div>` : ''}
+  ${photoNote(run)}
   ${PROOF_NOTE}
   ${run.entry_hash ? `<p class="small"><b>Prüfcode:</b> <span class="mono">${esc(run.entry_hash)}</span><br><b>Server-Eingang:</b> ${fmtDateTime(run.received_at ?? run.created_at)}</p>` : ''}`;
   return page(`Strecken-Nachweis — ${name}`, body);
@@ -120,7 +131,7 @@ export function buildRouteLogHtml(org: Org, route: Route, runs: RunMeta[], perio
         <td>${fmtPct(r.coverage_pct)}${r.missed_m ? `<br><span class="small warn">${fmtDistance(r.missed_m)} nicht befahren</span>` : ''}</td>
         <td>${esc(ACTION_LABELS[r.action])}<br><span class="small">${esc(gritLabel(r.grit_material, r.grit_amount))}</span></td>
         <td class="small">${esc(weatherLabel(r.weather))}</td>
-        <td>${esc(r.performer_name ?? '—')}${r.gaps?.length ? `<br><span class="small warn">${r.gaps.length}× Pause</span>` : ''}${r.gps_mocked ? '<br><span class="small warn">Fake-GPS gemeldet</span>' : ''}</td>
+        <td>${esc(r.performer_name ?? '—')}${r.gaps?.length ? `<br><span class="small warn">${r.gaps.length}× Unterbrechung</span>` : ''}${r.gps_mocked ? '<br><span class="small warn">Fake-GPS gemeldet</span>' : ''}</td>
         <td class="mono">${r.entry_hash ? esc(r.entry_hash.slice(0, 12)) : '—'}${r.canceled ? `<br><span class="storno">Storno: ${esc(r.cancel_reason ?? '')}</span>` : ''}</td>
       </tr>`;
     })

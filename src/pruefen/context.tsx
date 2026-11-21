@@ -89,7 +89,7 @@ export function usePendingSync(): { pending: Pending[]; loaded: boolean; sending
 
   const sendNow = () => {
     setSending(true);
-    void flushPending(be, cfg, userId)
+    void flushPending(be, cfg, userId, { force: true })
       .then(() => listPending(cfg.appId, userId))
       .then(setPending)
       .finally(() => setSending(false));

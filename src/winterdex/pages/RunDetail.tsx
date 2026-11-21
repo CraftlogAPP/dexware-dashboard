@@ -8,6 +8,7 @@ import { useOrg } from '../../components/OrgContext';
 import { FormDialog, s, type FormValues } from '../../components/form';
 import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
 import { VerifyProof } from '../../components/VerifyProof';
+import { isSafeImgSrc } from '../../lib/imgSrc';
 import { fmtDateTime } from '../../lib/format';
 import { openReportWindow } from '../../lib/print';
 import { gritLabel, weatherLabel } from '../labels';
@@ -103,8 +104,8 @@ export function RunDetail() {
               <div className="card" style={{ marginBottom: 16 }}>
                 {run.gaps.length > 0 && (
                   <div className="gps-warn" style={{ color: '#B91C1C', fontWeight: 700 }}>
-                    Pausen in der Aufzeichnung: {run.gaps.map(([a, b]) => fmtTimeSpan(a, b)).join(', ')} (Aufzeichnung unterbrochen —
-                    nicht als gefahren gewertet)
+                    Unterbrechungen der Aufzeichnung (Pause oder kein GPS): {run.gaps.map(([a, b]) => fmtTimeSpan(a, b)).join(', ')}
+                    {' '}— nicht als gefahren gewertet
                   </div>
                 )}
                 {run.gps_mocked && (
@@ -146,13 +147,18 @@ export function RunDetail() {
               </>
             )}
 
-            {run.photo_urls.length > 0 && (
+            {Math.max(run.photo_total ?? 0, run.photo_urls.length) > 0 && (
               <>
                 <div className="section-head">
-                  <h2>Beweisfotos ({run.photo_urls.length})</h2>
+                  <h2>Beweisfotos ({Math.max(run.photo_total ?? 0, run.photo_urls.length)})</h2>
                 </div>
+                {(run.photo_total ?? 0) > run.photo_urls.filter(isSafeImgSrc).length && (
+                  <p className="muted small">
+                    Nicht alle Fotos ließen sich gerade laden — sie bleiben bei der Fahrt gespeichert. Seite neu laden versucht es erneut.
+                  </p>
+                )}
                 <div className="row" style={{ alignItems: 'flex-start' }}>
-                  {run.photo_urls.map((src, i) => (
+                  {run.photo_urls.filter(isSafeImgSrc).map((src, i) => (
                     <a key={i} href={src} target="_blank" rel="noreferrer">
                       <img src={src} alt={`Beweisfoto ${i + 1}`} style={{ width: 220, maxWidth: '100%', borderRadius: 10, border: '1px solid var(--border)' }} />
                     </a>

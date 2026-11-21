@@ -5,7 +5,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindow } from '../../lib/print';
+import { openReportWindowAfter } from '../../lib/print';
 import {
   fetchDefectsForReport,
   fetchGates,
@@ -39,23 +39,27 @@ export function Report() {
     setBusy(true);
     setError(null);
     try {
-      const fromDate = parseLocalDate(from);
-      const toDate = parseLocalDate(to);
-      const [inspections, defects, gates] = await Promise.all([
-        fetchInspectionsForReport(client, siteId, fromDate, toDate),
-        fetchDefectsForReport(client, siteId, fromDate, toDate),
-        fetchGates(client, siteId),
-      ]);
-      const periodLabel = `${fmtDate(fromDate.toISOString())} – ${fmtDate(toDate.toISOString())}`;
-      const html = buildReportHtml(
-        orgCtx.org,
-        site,
-        inspections,
-        defects,
-        gates,
-        periodLabel,
-      );
-      if (!openReportWindow(html)) {
+      // Fenster sofort öffnen (im Klick), Daten danach laden — sonst blockt der Browser das Pop-up (iPhone, viele Fotos)
+      const opened = await openReportWindowAfter(async () => {
+        const fromDate = parseLocalDate(from);
+        const toDate = parseLocalDate(to);
+        const [inspections, defects, gates] = await Promise.all([
+          fetchInspectionsForReport(client, siteId, fromDate, toDate),
+          fetchDefectsForReport(client, siteId, fromDate, toDate),
+          fetchGates(client, siteId),
+        ]);
+        const periodLabel = `${fmtDate(fromDate.toISOString())} – ${fmtDate(toDate.toISOString())}`;
+        const html = buildReportHtml(
+          orgCtx.org,
+          site,
+          inspections,
+          defects,
+          gates,
+          periodLabel,
+        );
+        return html;
+      });
+      if (!opened) {
         setError(
           'Der Browser hat das Berichtsfenster blockiert. Bitte Pop-ups für diese Seite erlauben und erneut versuchen.',
         );

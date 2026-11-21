@@ -11,6 +11,7 @@ import { fmtDateTime } from '../../lib/format';
 import { lastOpByProperty } from '../labels';
 import { PropertyDialog } from '../dialogs';
 import { Modal } from '../../components/form';
+import { useOrg } from '../../components/OrgContext';
 import { FREE_PROPERTIES, PRO_HOW, PRO_MAILTO, fetchOrgPro } from '../pro';
 import type { DutyTimes, Property } from '../types';
 
@@ -21,6 +22,8 @@ interface Data {
 
 export function Properties() {
   const { client } = useAppAuth();
+  // Objekte anlegen/ändern darf am Server nur der Inhaber (property_insert/update) — sonst kämen nur Fehlermeldungen.
+  const owner = useOrg().data?.role === 'owner';
   const [editing, setEditing] = useState<Property | 'new' | null>(null);
   const [gate, setGate] = useState(false);
 
@@ -37,22 +40,25 @@ export function Properties() {
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Objekte</h1>
         <div className="spacer" />
-        <button
-          className="btn"
-          onClick={() => {
-            void (async () => {
-              // Gratis: 2 aktive Objekte (wie in der App); Pro laut Server, im Zweifel erlaubt.
-              const count = (state.data?.properties ?? []).filter((p) => p.active).length;
-              if (count >= FREE_PROPERTIES && !(await fetchOrgPro(client, true))) return setGate(true);
-              setEditing('new');
-            })();
-          }}
-        >
-          ＋ Objekt anlegen
-        </button>
+        {owner && (
+          <button
+            className="btn"
+            onClick={() => {
+              void (async () => {
+                // Gratis: 2 aktive Objekte (wie in der App); Pro laut Server, im Zweifel erlaubt.
+                const count = (state.data?.properties ?? []).filter((p) => p.active).length;
+                if (count >= FREE_PROPERTIES && !(await fetchOrgPro(client, true))) return setGate(true);
+                setEditing('new');
+              })();
+            }}
+          >
+            ＋ Objekt anlegen
+          </button>
+        )}
       </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Alle Liegenschaften mit Pflichtzeiten und letztem Einsatz.
+        {!owner && ' Objekte anlegen und ändern kann nur der Inhaber des Betriebs.'}
       </p>
 
       <LoadGuard state={state}>
@@ -89,12 +95,11 @@ export function Properties() {
                           <StatusBadge active={p.active} />
                         </td>
                         <td>
-                          <button
-                            className="btn ghost small"
-                            onClick={() => setEditing(p)}
-                          >
-                            Bearbeiten
-                          </button>
+                          {owner && (
+                            <button className="btn ghost small" onClick={() => setEditing(p)}>
+                              Bearbeiten
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

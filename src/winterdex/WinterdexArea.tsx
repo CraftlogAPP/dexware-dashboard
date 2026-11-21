@@ -24,9 +24,22 @@ import { Aussendienst, EinsatzRedirect } from './aussendienst/Aussendienst';
 import { Onboarding } from './Onboarding';
 import { supabaseBackend } from './einsatz/backend';
 import { EinsatzCtx } from './einsatz/context';
-import { listDrafts, listPending } from './einsatz/store';
-import { getActiveRun, listPendingRuns } from './aussendienst/runStore';
-import { useLogoutCount } from '../lib/logoutGuard';
+import { listDraftPropertyIds, listPending } from './einsatz/store';
+import { hasActiveRun, listPendingRuns } from './aussendienst/runStore';
+import { registerLogoutCount } from '../lib/logoutGuard';
+import { roleLabel } from '../lib/orgApi';
+
+// Abmelde-Rückfrage auf ALLEN WinterDex-Seiten (auch im Dashboard), nicht nur im Außendienst: wartende Einsätze und
+// Fahrten, angefangene Einsätze und eine unterbrochene Aufzeichnung liegen nur auf diesem Gerät.
+registerLogoutCount(
+  'winterdex-aussendienst',
+  'winterdex',
+  async (userId) =>
+    (await listPending(userId)).length +
+    (await listDraftPropertyIds(userId)).length +
+    (await listPendingRuns(userId)).length +
+    ((await hasActiveRun(userId)) ? 1 : 0),
+);
 
 // Außendienst mit Beispieldaten — nur im Dev-Server (/app/winterdex/aussendienst?demo), fehlt im Produktions-Build.
 const EinsatzDemo = import.meta.env.DEV
@@ -65,7 +78,7 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
               <Route path="team" element={<TeamPage />} />
               <Route path="bericht" element={<Report />} />
               <Route path="abo" element={<AboPage />} />
-              <Route path="rueckmeldungen" element={<><FeedbackAdminPage /><FeedbackZentral /></>} />
+              <Route path="rueckmeldungen" element={<NurDexware><FeedbackAdminPage /><FeedbackZentral /></NurDexware>} />
               <Route path="rueckmeldung" element={<FeedbackForm />} />
             </Route>
           </Routes>
@@ -94,6 +107,24 @@ function ModeSwitch() {
   );
 }
 
+/**
+ * Rückmeldungen lesen nur Dexware-Konten (app_admin). Die Adresse ist erreichbar, deshalb hier vorab fragen: Sonst
+ * schickte jeder Besuch die Anmeldung des Nutzers an den Suite-Server (Block „Übrige Apps“), nur um ein Nein zu hören.
+ */
+function NurDexware({ children }: { children: ReactNode }) {
+  const { client } = useAppAuth();
+  const admin = useAsync<boolean>(() => fetchFeedbackAdmin(client), [client]);
+  if (admin.loading) {
+    return (
+      <div className="empty">
+        <span className="spinner" />
+      </div>
+    );
+  }
+  if (admin.data !== true) return <div className="info-box">Diese Seite ist nur für das Dexware-Team.</div>;
+  return <>{children}</>;
+}
+
 /** Stellt dem Außendienst Server-Zugriff, Konto und Betrieb bereit. */
 function EinsatzScope({ children }: { children: ReactNode }) {
   const { app, client, session } = useAppAuth();
@@ -114,16 +145,6 @@ function EinsatzScope({ children }: { children: ReactNode }) {
           }
         : null,
     [client, app, userId, orgId, data?.role],
-  );
-  useLogoutCount(
-    userId
-      ? async () =>
-          (await listPending(userId)).length +
-          (await listDrafts(userId)).length +
-          (await listPendingRuns(userId)).length +
-          ((await getActiveRun(userId)) ? 1 : 0)
-      : null,
-    [userId],
   );
   if (!value) return null;
   return <EinsatzCtx.Provider value={value}>{children}</EinsatzCtx.Provider>;
@@ -183,7 +204,7 @@ function Shell() {
             <>
               <b>{data.org.name}</b>
               <br />
-              Rolle: {data.role === 'owner' ? 'Inhaber' : 'Mitarbeiter'}
+              Rolle: {roleLabel(data.role)}
             </>
           )}
         </div>

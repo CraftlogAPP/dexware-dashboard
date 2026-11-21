@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileDown } from 'lucide-react';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { openReportWindow } from '../../lib/print';
+import { openReportWindowAfter } from '../../lib/print';
 import { useOd } from '../context';
 import { buildReportHtml } from '../report';
 import { addMonths, dayOf, daysBetween, firstOfMonth, formatDay, lastOfMonth, parseGermanDay, todayBerlin } from '../turnus';
@@ -39,21 +39,25 @@ export function Report() {
     setBusy(true);
     setError(null);
     try {
-      const [ops, sollIst, services, defects] = await Promise.all([
-        data.listOperations({ from: per.from, to: per.to, propertyId }),
-        data.sollIst(propertyId, per.from, per.to),
-        data.listServices(),
-        data.listDefects(),
-      ]);
-      const ds = defects.filter(
-        (d) => d.property_id === propertyId && (d.status === 'open' || (dayOf(d.created_at) >= per.from && dayOf(d.created_at) <= per.to)),
-      );
-      const [opPhotos, defectPhotos] = await Promise.all([
-        data.photos('operation', ops.filter((o) => o.photo_count > 0 && !o.canceled).map((o) => o.id)),
-        data.photos('defect', ds.filter((d) => d.photo_count > 0).map((d) => d.id)),
-      ]);
-      const html = buildReportHtml({ orgName, property, periodLabel: per.label, sollIst, services, ops, defects: ds, opPhotos, defectPhotos });
-      if (!openReportWindow(html)) setError('Der Browser hat das Berichtsfenster blockiert. Bitte Pop-ups für diese Seite erlauben und erneut versuchen.');
+      // Fenster sofort öffnen (im Klick), Daten danach laden — sonst blockt der Browser das Pop-up (iPhone, viele Fotos)
+      const opened = await openReportWindowAfter(async () => {
+        const [ops, sollIst, services, defects] = await Promise.all([
+          data.listOperations({ from: per.from, to: per.to, propertyId }),
+          data.sollIst(propertyId, per.from, per.to),
+          data.listServices(),
+          data.listDefects(),
+        ]);
+        const ds = defects.filter(
+          (d) => d.property_id === propertyId && (d.status === 'open' || (dayOf(d.created_at) >= per.from && dayOf(d.created_at) <= per.to)),
+        );
+        const [opPhotos, defectPhotos] = await Promise.all([
+          data.photos('operation', ops.filter((o) => o.photo_count > 0 && !o.canceled).map((o) => o.id)),
+          data.photos('defect', ds.filter((d) => d.photo_count > 0).map((d) => d.id)),
+        ]);
+        const html = buildReportHtml({ orgName, property, periodLabel: per.label, sollIst, services, ops, defects: ds, opPhotos, defectPhotos });
+        return html;
+      });
+      if (!opened) setError('Der Browser hat das Berichtsfenster blockiert. Bitte Pop-ups für diese Seite erlauben und erneut versuchen.');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

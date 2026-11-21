@@ -47,6 +47,10 @@ export function Operations() {
     if (!org || !session) throw new Error('Kein Betrieb geladen');
     const started = isoFromLocal(v.started_at);
     if (!started) throw new Error('Bitte einen gültigen Zeitpunkt angeben');
+    // Einsätze sind danach unveränderlich — offensichtliche Tippfehler vorher abfangen
+    if (Date.parse(started) > Date.now() + 5 * 60 * 1000) throw new Error('Der Beginn liegt in der Zukunft. Nachgetragen werden nur erledigte Einsätze.');
+    const ended = isoFromLocal(v.ended_at);
+    if (ended && Date.parse(ended) < Date.parse(started)) throw new Error('Das Ende liegt vor dem Beginn — bitte die Zeiten prüfen.');
     await addOperation(client, org.org.id, session.user.id, {
       property_id: s(v.property_id),
       started_at: started,

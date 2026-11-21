@@ -7,7 +7,10 @@ import { VOR_ORT_PATH } from '../../pruefen/Scope';
 import { supabasePdBackend } from './backend';
 import { PdCtx, type PdCtxValue } from './context';
 import { listDrafts, listPending } from './queue';
-import { useLogoutCount } from '../../lib/logoutGuard';
+import { registerLogoutCount } from '../../lib/logoutGuard';
+
+// Abmelde-Rückfrage auf allen PrüfDex-Seiten (nicht nur, solange „Vor Ort“ offen ist)
+registerLogoutCount('pruefdex-vor-ort', 'pruefdex', async (userId) => (await listPending(userId)).length + (await listDrafts(userId)).length);
 
 export function PdVorOrtScope({ children }: { children: ReactNode }) {
   const { app, client, session, signOut } = useAppAuth();
@@ -31,7 +34,6 @@ export function PdVorOrtScope({ children }: { children: ReactNode }) {
       signOut: () => void signOut(),
     };
   }, [client, app.id, userId, email, org, role, signOut]);
-  useLogoutCount(userId ? async () => (await listPending(userId)).length + (await listDrafts(userId)).length : null, [userId]);
   if (!value) return null;
   return <PdCtx.Provider value={value}>{children}</PdCtx.Provider>;
 }

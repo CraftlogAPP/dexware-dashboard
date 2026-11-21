@@ -10,6 +10,22 @@ import { LoadGuard, useAsync } from './ui';
 import { WebBuy, type WebBuyGroup } from './WebBuy';
 import { WEB_OFFERS } from '../apps/webOffers';
 import { useOrgOptional } from './OrgContext';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+/**
+ * Pro des BETRIEBS laut Server (org_pro_active: Abo des Inhabers, Team-Stufen, Suite, Kommunal-Lizenz, Freischaltung auf
+ * Rechnung, Empfehlungs-/Dank-Bonus). Streng: nur ein klares Ja zählt; fehlt die Funktion (App ohne Betriebs-Pro) oder ist
+ * die Antwort unklar → null (dann zeigt die Seite wie bisher nur das eigene Store-Abo).
+ */
+async function fetchOrgProStrict(sb: SupabaseClient): Promise<boolean | null> {
+  try {
+    const { data, error } = await sb.rpc('org_pro_active');
+    if (error) return null;
+    return data === true ? true : data === false ? false : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Abo-Verwaltung (generisch für alle App-Bereiche): aktueller Tarif
@@ -41,8 +57,14 @@ function AboContent({ info }: { info: AboInfo }) {
   const email = session?.user.email;
   // Pro gilt für den Betrieb und hängt am Konto des INHABERS (Server: org_pro_active). Ein Kauf mit dem Konto eines
   // Mitarbeiters/Verwalters würde den Betrieb nicht freischalten → dort keine Kauf-Kacheln, stattdessen ein Hinweis.
-  const role = useOrgOptional()?.data?.role;
+  const orgCtx = useOrgOptional()?.data;
+  const role = orgCtx?.role;
   const notOwner = !!role && role !== 'owner';
+  const { client } = useAppAuth();
+  // Ein Betrieb mit Pro auf Rechnung/Kommunal-Lizenz/Bonus sah hier bisher „Free“ und Kauf-Kacheln (21.11.2026).
+  const orgPro = useAsync(async () => (orgCtx ? fetchOrgProStrict(client) : null), [client, orgCtx?.org.id]).data === true;
+  const bonusUntil = (orgCtx?.org as { pro_bonus_until?: string | null } | undefined)?.pro_bonus_until ?? null;
+  const bonusActive = !!bonusUntil && Date.parse(bonusUntil) > Date.now();
   const dexId = useAsync(async () => (email ? dexwareId(email) : null), [email]).data;
   const groups: WebBuyGroup[] = [];
   // Angebot aus der registry (WinterDex) oder aus den vorbereiteten Angeboten (webOffers); ohne Kauf-Link ausgegraut.
@@ -55,14 +77,15 @@ function AboContent({ info }: { info: AboInfo }) {
 
   // Suite deckt Pro mit ab — angezeigt werden die Details des höchsten Tarifs.
   const current = suiteActive ? (info.suite?.active ? info.suite : null) : proActive ? info.pro : null;
-  const planName = suiteActive ? 'Dexware Suite' : proActive ? `${app.name} Pro` : 'Free';
+  const viaOrg = !suiteActive && !proActive && orgPro;
+  const planName = suiteActive ? 'Dexware Suite' : proActive ? `${app.name} Pro` : viaOrg ? `${app.name} Pro (für deinen Betrieb)` : 'Free';
 
   return (
     <div className="abo-stack">
       <div className="card">
         <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
           <h3 style={{ margin: 0 }}>{planName}</h3>
-          {suiteActive || proActive ? (
+          {suiteActive || proActive || viaOrg ? (
             <span className="badge green">aktiv</span>
           ) : (
             <span className="badge">kostenlose Version</span>
@@ -72,6 +95,8 @@ function AboContent({ info }: { info: AboInfo }) {
         <p className="muted" style={{ marginBottom: 0 }}>
           {suiteActive
             ? 'Das Suite-Bundle schaltet die Pro-Funktionen in allen Dex-Apps frei — auch in dieser.'
+            : viaOrg
+              ? `Pro gilt für deinen Betrieb — freigeschaltet über das Abo des Inhabers, auf Rechnung, eine Kommunal-Lizenz oder einen Bonus${bonusActive ? ` (Freischaltung/Bonus bis ${fmtDate(bonusUntil!)})` : ''}. Ein eigenes Abo ist nicht nötig.`
             : proActive
               ? `Dein Pro-Abo für ${app.name} ist aktiv.`
               : app.notInSuite
@@ -80,7 +105,7 @@ function AboContent({ info }: { info: AboInfo }) {
         </p>
       </div>
 
-      {notOwner && groups.length > 0 && (
+      {notOwner && groups.length > 0 && !viaOrg && (
         <div className="info-box">
           Der Tarif gehört zum Betrieb und läuft über das Konto des <b>Inhabers</b>. Als Teammitglied arbeitest du unter
           seinem Tarif mit — ein eigenes Abo brauchst du nicht (es würde den Betrieb auch nicht freischalten). Diese Seite
@@ -88,7 +113,7 @@ function AboContent({ info }: { info: AboInfo }) {
         </div>
       )}
 
-      {!notOwner && !suiteActive && !proActive && dexId && email && <WebBuy groups={groups} dexId={dexId} email={email} />}
+      {!notOwner && !suiteActive && !proActive && !viaOrg && dexId && email && <WebBuy groups={groups} dexId={dexId} email={email} />}
 
       {current && <EntitlementDetails info={current} />}
 

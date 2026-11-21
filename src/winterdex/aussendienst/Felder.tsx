@@ -1,6 +1,6 @@
 // Abschluss-Felder einer Fahrt — bewusst GLEICH wie beim Objekt-Einsatz, damit niemand etwas Neues lernen muss:
 // Maßnahme, Streumittel, Menge + Einheit, Beweisfotos, „Dokumentiert von“, Notiz (wie EinsatzFields in der App).
-import { useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Camera, X } from 'lucide-react';
 import { ACTION_LABELS } from '../types';
 import {
@@ -44,8 +44,6 @@ export function Felder({
     if (!files.length) return;
     setError(null);
     setBusy((n) => n + files.length);
-    onBusy?.(true);
-    let left = files.length;
     for (const f of files) {
       try {
         const uri = await fileToPhoto(f);
@@ -53,12 +51,14 @@ export function Felder({
       } catch {
         setError('Ein Foto konnte nicht verarbeitet werden. Bitte noch einmal aufnehmen.');
       } finally {
-        left--;
         setBusy((n) => n - 1);
       }
     }
-    if (left === 0) onBusy?.(false);
   };
+  // Speichern gesperrt, solange IRGENDEIN Foto verarbeitet wird (auch bei zwei Auswahlen kurz nacheinander)
+  const onBusyRef = useRef(onBusy);
+  onBusyRef.current = onBusy;
+  useEffect(() => onBusyRef.current?.(busy > 0), [busy]);
 
   return (
     <>

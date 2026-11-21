@@ -189,11 +189,11 @@ async function pruefe(ids, nachtraege = []) {
   check('Unbekanntes Ergebnis wird abgelehnt (nur bestanden/maengel/nicht_bestanden)', r?.code === '23514', r);
 
   // ---------------------------------------------------------------- 4) Führerscheinkontrolle
-  const lic = buildLicenseRow({ id: K1, orgId: ORG, driverId: F1, date: HEUTE, checkedBy: 'Alexander Pfalz' });
+  const lic = buildLicenseRow({ id: K1, orgId: ORG, driverId: F1, date: HEUTE, checkedBy: 'Max Mustermann' });
   r = await t.versuch(W, 'public.license_check', lic);
   check('Führerscheinkontrolle wird angenommen (Mitarbeiter)', r === null, r);
   row = (await t.db.query(`select * from public.license_check where id = '${K1}'`)).rows[0];
-  check('… mit Prüfcode und Server-Eingang, ohne Foto', istHash(row?.entry_hash) && !!row.received_at && row.photo_uri === null && row.checked_by === 'Alexander Pfalz' && tag(row.date) === HEUTE, row);
+  check('… mit Prüfcode und Server-Eingang, ohne Foto', istHash(row?.entry_hash) && !!row.received_at && row.photo_uri === null && row.checked_by === 'Max Mustermann' && tag(row.date) === HEUTE, row);
   r = (await t.als(W, () => t.db.query(`select * from public.verify_license_check('${K1}')`))).rows[0];
   check('Prüfcode lässt sich bestätigen (verify_license_check)', r?.ok === true, r);
   n = await t.bump(W, dueBump('license', lic));

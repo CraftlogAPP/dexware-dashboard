@@ -7,7 +7,10 @@ import { VOR_ORT_PATH } from '../../pruefen/Scope';
 import { supabaseKfzBackend } from './backend';
 import { KfzCtx, type KfzCtxValue } from './context';
 import { listProofs } from './queue';
-import { useLogoutCount } from '../../lib/logoutGuard';
+import { registerLogoutCount } from '../../lib/logoutGuard';
+
+// Abmelde-Rückfrage auf allen KfzDex-Seiten (nicht nur, solange „Vor Ort“ offen ist)
+registerLogoutCount('kfzdex-vor-ort', 'kfzdex', (userId) => listProofs(userId).length);
 
 export function KfzVorOrtScope({ children }: { children: ReactNode }) {
   const { app, client, session, signOut } = useAppAuth();
@@ -30,7 +33,6 @@ export function KfzVorOrtScope({ children }: { children: ReactNode }) {
       signOut: () => void signOut(),
     };
   }, [client, app.id, userId, email, org, role, signOut]);
-  useLogoutCount(userId ? () => listProofs(userId).length : null, [userId]);
   if (!value) return null;
   return <KfzCtx.Provider value={value}>{children}</KfzCtx.Provider>;
 }

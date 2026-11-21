@@ -63,12 +63,14 @@ export function AppAuthProvider({
   // Stabil halten: Das Sitzungsobjekt wechselt bei jeder Rückkehr in den Tab und bei jeder Token-Erneuerung. Hinge
   // signOut daran, bauten die Vor-Ort-Bereiche ihren Server-Zugriff jedes Mal neu und lüden mitten im Formular neu.
   const signOut = useCallback(async () => {
-    // Liegt in der Handy-Ansicht noch etwas nur auf diesem Gerät (wartend/angefangen): vorher nachfragen.
-    if (!(await confirmLogout())) return;
+    // Liegt in einer Handy-Ansicht dieser App noch etwas nur auf diesem Gerät (wartend/angefangen): vorher nachfragen —
+    // auch wenn gerade das Dashboard offen ist.
+    const { data } = await client.auth.getSession().catch(() => ({ data: { session: null } }));
+    if (!(await confirmLogout(app.id, data.session?.user.id))) return;
     // Nur dieses Gerät/diesen Browser abmelden. Ohne scope meldet Supabase ÜBERALL ab — dann flöge auch die
     // Handy-App des Nutzers raus (spätestens bei der nächsten Token-Erneuerung).
     await client.auth.signOut({ scope: 'local' });
-  }, [client]);
+  }, [client, app.id]);
 
   const value = useMemo<AppAuthValue>(
     () => ({ app, client, session, loading, signOut, confirmReturn, dismissConfirm }),

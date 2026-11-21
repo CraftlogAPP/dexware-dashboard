@@ -9,21 +9,23 @@ import { fmtDateTime, fmtTime } from '../../lib/format';
 import { useEinsatz, usePendingSync } from '../einsatz/context';
 import { loadEinsatzData } from '../einsatz/data';
 import { isToday } from '../einsatz/amount';
-import { deletePending, emitPendingChanged, listDrafts, type Draft, type Pending } from '../einsatz/store';
+import { deletePending, emitPendingChanged, listDraftPropertyIds, type Pending } from '../einsatz/store';
+import { nextTryLabel as nextLabel } from '../../lib/retryLater';
 
 export function Einsatz() {
-  const { be, userId, base } = useEinsatz();
-  const state = useAsync(() => loadEinsatzData(be, userId), [be, userId]);
+  const { be, userId, orgId, base, owner } = useEinsatz();
+  const state = useAsync(() => loadEinsatzData(be, userId, orgId), [be, userId, orgId]);
   useLiveRefresh([state.refresh]);
   const { pending, sending, sendNow } = usePendingSync();
-  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [draftPropIds, setDraftPropIds] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [discard, setDiscard] = useState<Pending | null>(null);
 
   useEffect(() => {
     let alive = true;
-    void listDrafts(userId).then((d) => {
-      if (alive) setDrafts(d);
+    // nur die Schlüssel lesen (keine Fotos) — reicht für die Markierung „Angefangen“
+    void listDraftPropertyIds(userId).then((ids) => {
+      if (alive) setDraftPropIds(ids);
     });
     return () => {
       alive = false;
@@ -40,7 +42,7 @@ export function Einsatz() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingCount]);
 
-  const draftIds = useMemo(() => new Set(drafts.map((d) => d.propertyId)), [drafts]);
+  const draftIds = useMemo(() => new Set(draftPropIds), [draftPropIds]);
 
   return (
     <div className="ez">
@@ -66,7 +68,12 @@ export function Einsatz() {
               <li key={p.key}>
                 <span>
                   {p.propertyName} · {fmtDateTime(p.row.started_at)}
-                  {p.lastError && <span className="ez-pending-err">Vom Server nicht angenommen: {p.lastError}</span>}
+                  {p.lastError && (
+                    <span className="ez-pending-err">
+                      Vom Server nicht angenommen: {p.lastError}
+                      {nextLabel(p)}
+                    </span>
+                  )}
                 </span>
                 {p.lastError && (
                   <button type="button" className="btn ghost small" onClick={() => setDiscard(p)}>
@@ -106,8 +113,14 @@ export function Einsatz() {
           if (active.length === 0) {
             return (
               <div className="card empty">
-                Noch keine aktiven Objekte. Lege zuerst unter <Link to={`${base}/objekte`}>Objekte</Link> ein Objekt an —
-                danach kannst du hier Einsätze erfassen.
+                {owner ? (
+                  <>
+                    Noch keine aktiven Objekte. Lege zuerst unter <Link to={`${base}/objekte`}>Objekte</Link> ein Objekt
+                    an — danach kannst du hier Einsätze erfassen.
+                  </>
+                ) : (
+                  'Noch keine aktiven Objekte. Objekte legt der Inhaber deines Betriebs an — danach erscheinen sie hier.'
+                )}
               </div>
             );
           }
@@ -222,3 +235,4 @@ export function Einsatz() {
     </div>
   );
 }
+

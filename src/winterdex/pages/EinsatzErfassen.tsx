@@ -82,7 +82,7 @@ function Erfassen({ propertyId }: { propertyId: string }) {
     let alive = true;
     setLoadError(null);
     setPhase('loading');
-    Promise.all([loadEinsatzData(be, userId), getDraft(userId, propertyId)]).then(
+    Promise.all([loadEinsatzData(be, userId, orgId), getDraft(userId, propertyId)]).then(
       ([data, draft]) => {
         if (!alive) return;
         const p = data.properties.find((x) => x.id === propertyId) ?? null;
@@ -106,7 +106,7 @@ function Erfassen({ propertyId }: { propertyId: string }) {
     return () => {
       alive = false;
     };
-  }, [be, userId, propertyId]);
+  }, [be, userId, orgId, propertyId]);
   useEffect(() => load(), [load]);
 
   const resume = (d: Draft) => {
@@ -641,7 +641,7 @@ function Done({
   onDevice: boolean;
   hadGps: boolean;
 }) {
-  const { be, userId, base } = useEinsatz();
+  const { be, userId, orgId, base } = useEinsatz();
   const { pending, loaded } = usePendingSync();
   const [next, setNext] = useState<{ open: Property[]; known: boolean } | null>(null);
   const rejected = typeof result === 'object' ? result.rejected : null;
@@ -649,7 +649,7 @@ function Done({
 
   useEffect(() => {
     let alive = true;
-    loadEinsatzData(be, userId).then(
+    loadEinsatzData(be, userId, orgId).then(
       ({ properties, todayOps, offline }) => {
         if (!alive) return;
         // ohne Netz ist unbekannt, was heute schon erledigt wurde → kein Vorschlag
@@ -668,7 +668,7 @@ function Done({
     return () => {
       alive = false;
     };
-  }, [be, userId, propertyId]);
+  }, [be, userId, orgId, propertyId]);
 
   // Inzwischen doch gesendet (Netz kam zurück, solange diese Seite offen ist)?
   const stillWaiting = queued && (!loaded || pending.some((p) => p.row.property_id === propertyId));
@@ -688,8 +688,9 @@ function Done({
         <div className="error-box" style={{ textAlign: 'left' }}>
           <TriangleAlert className="i" aria-hidden /> Vom Server nicht angenommen: {rejected}
           <br />
-          Der Einsatz ist mit Fotos auf diesem Gerät gespeichert und wird automatisch erneut gesendet. Bleibt es
-          dabei, bitte support@dexware.app melden.
+          Der Einsatz ist mit Fotos auf diesem Gerät gespeichert und wird später automatisch erneut gesendet (mit
+          wachsenden Abständen; „Jetzt senden“ unter „Objekte“ versucht es sofort). Bleibt es dabei, bitte
+          support@dexware.app melden.
         </div>
       ) : queued && !sentLater ? (
         <div className="info-box" style={{ textAlign: 'left' }}>

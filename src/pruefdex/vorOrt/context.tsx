@@ -70,7 +70,7 @@ export function usePendingSync(): { pending: Pending[]; loaded: boolean; sending
 
   const sendNow = () => {
     setSending(true);
-    void flushPending(be, userId)
+    void flushPending(be, userId, { force: true })
       .then(() => listPending(userId))
       .then(setPending)
       .finally(() => setSending(false));

@@ -11,7 +11,13 @@ export interface Org {
   created_at: string;
 }
 
-export type Role = 'owner' | 'worker' | 'inspector';
+/** admin = Verwalter (bisher nur WinterDex): Mitarbeiter + Team-Code und Mitarbeiter entfernen, sonst wie worker. */
+export type Role = 'owner' | 'admin' | 'worker' | 'inspector';
+
+/** Rollen-Name für die Anzeige. `workerLabel` z. B. „Prüfer“ bei PrüfDex. */
+export function roleLabel(role: string | null | undefined, workerLabel = 'Mitarbeiter'): string {
+  return role === 'owner' ? 'Inhaber' : role === 'admin' ? 'Verwalter' : workerLabel;
+}
 
 export interface OrgContextData {
   org: Org;

@@ -376,15 +376,7 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
             <button type="button" className="btn ez-big" onClick={() => adopt(old, true)}>
               Die alte fortsetzen
             </button>
-            <button
-              type="button"
-              className="btn ghost ez-big"
-              onClick={() => {
-                void deleteActiveRun(userId);
-                setOld(null);
-                setPhase('ready');
-              }}
-            >
+            <button type="button" className="btn ghost ez-big" onClick={() => setAsk('discard')}>
               Alte verwerfen, neu starten
             </button>
             <Link to={list} className="btn ghost ez-big">
@@ -392,6 +384,18 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
             </Link>
           </div>
         </div>
+        {/* Ein Fehlgriff hätte eine ganze, noch nicht gesendete Fahrt gelöscht → erst nachfragen */}
+        {ask === 'discard' && (
+          <DiscardDialog
+            onClose={() => setAsk(null)}
+            onDiscard={() => {
+              setAsk(null);
+              void deleteActiveRun(userId);
+              setOld(null);
+              setPhase('ready');
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -412,8 +416,9 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
           <div className="error-box" style={{ textAlign: 'left' }}>
             <TriangleAlert className="i" aria-hidden /> Vom Server nicht angenommen: {rejected}
             <br />
-            Die Fahrt ist auf diesem Gerät gespeichert und wird automatisch erneut gesendet. Bleibt es dabei, bitte
-            support@dexware.app melden.
+            Die Fahrt ist auf diesem Gerät gespeichert und wird später automatisch erneut gesendet (mit wachsenden
+            Abständen; „Jetzt senden“ unter „Strecken“ versucht es sofort). Bleibt es dabei, bitte support@dexware.app
+            melden.
           </div>
         ) : queued ? (
           <div className="info-box" style={{ textAlign: 'left' }}>

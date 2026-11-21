@@ -12,6 +12,7 @@ import {
   updateOrg,
   type Member,
   type Org,
+  roleLabel,
   type TeamCode,
 } from '../lib/orgApi';
 import { LoadGuard, useAsync } from './ui';
@@ -23,17 +24,20 @@ export function TeamPage() {
   const { app, client, session } = useAppAuth();
   const { data: orgCtx, reload: reloadOrg } = useOrg();
   const isOwner = orgCtx?.role === 'owner';
+  // Verwalter (Rolle „admin“, bisher nur WinterDex) dürfen am Server den Team-Code sehen/erneuern und Mitarbeiter entfernen.
+  const isAdmin = orgCtx?.role === 'admin';
+  const canTeam = isOwner || isAdmin;
 
   const state = useAsync<Member[]>(() => fetchMembers(client), [client]);
   // Team-Code (ein Code für alle, 30 Tage) + belegte Plätze — nur Inhaber; null = App kennt das noch nicht.
   const team = useAsync<{ code: TeamCode | null; seats: { limit: number; members: number } | null; needsPro?: boolean }>(
     async () =>
-      isOwner && app.teamNeedsPro && !(await fetchOrgPro(client, true))
+      canTeam && app.teamNeedsPro && !(await fetchOrgPro(client, true))
         ? { code: null, seats: null, needsPro: true }
-        : isOwner
+        : canTeam
         ? { code: await fetchTeamCode(client), seats: await fetchSeats(client, app.teamSeats?.fallbackLimit) }
         : { code: null, seats: null },
-    [client, isOwner, app.teamSeats?.fallbackLimit, app.teamNeedsPro],
+    [client, canTeam, app.teamSeats?.fallbackLimit, app.teamNeedsPro],
   );
   // Eigene Team-Stufen der App (Registry) — sonst der bisherige Standard-Text
   const tiers = app.teamSeats;
@@ -139,7 +143,7 @@ export function TeamPage() {
         </div>
       )}
 
-      {isOwner && team.data?.needsPro && (
+      {canTeam && team.data?.needsPro && (
         <div className="card" style={{ marginBottom: 18 }}>
           <div className="section-head" style={{ margin: 0 }}>
             <h2>{workerLabel} einladen</h2>
@@ -150,7 +154,7 @@ export function TeamPage() {
         </div>
       )}
 
-      {isOwner && team.data?.code && (
+      {canTeam && team.data?.code && (
         <div className="card" style={{ marginBottom: 18 }}>
           <div className="section-head" style={{ margin: 0 }}>
             <h2>{workerLabel} einladen</h2>
@@ -268,7 +272,7 @@ export function TeamPage() {
                   <th>E-Mail</th>
                   <th>Rolle</th>
                   <th>Dabei seit</th>
-                  {isOwner && <th></th>}
+                  {canTeam && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -279,14 +283,14 @@ export function TeamPage() {
                       {m.role === 'owner' ? (
                         <span className="badge live">Inhaber</span>
                       ) : (
-                        <span className="badge">{workerLabel}</span>
+                        <span className={m.role === 'admin' ? 'badge amber' : 'badge'}>{roleLabel(m.role, workerLabel)}</span>
                       )}
                     </td>
                     <td className="muted">{fmtDate(m.joined_at)}</td>
-                    {isOwner && (
+                    {canTeam && (
                       <td>
-                        {/* Sich selbst (Owner) entfernen wäre ein Aussperren — nicht anbieten. */}
-                        {m.user_id !== session?.user.id && m.role !== 'owner' && (
+                        {/* Sich selbst entfernen wäre ein Aussperren — nicht anbieten. Verwalter entfernen nur Mitarbeiter (Server-Regel). */}
+                        {m.user_id !== session?.user.id && m.role !== 'owner' && (isOwner || m.role === 'worker') && (
                           <button
                             className="btn ghost small"
                             onClick={() => void onRemove(m)}

@@ -153,7 +153,7 @@ const PRUEFDEX: OnbSpec = {
 const KFZDEX: OnbSpec = {
   modes: ['Neu anlegen', 'Mit Code beitreten'],
   intro: 'Lege deinen Betrieb an — oder tritt einem bestehenden bei.',
-  fields: [{ key: 'name', label: 'Name des Betriebs *', placeholder: 'z. B. Pfalz Installationen GmbH', required: true, maxLength: 120, autoComplete: 'organization' }],
+  fields: [{ key: 'name', label: 'Name des Betriebs *', placeholder: 'z. B. Muster Installationen GmbH', required: true, maxLength: 120, autoComplete: 'organization' }],
   createButton: 'Betrieb anlegen',
   create: (sb, v) => rpc(sb, 'create_org_with_membership', { p_name: text(v, 'name') }),
   join: {
@@ -259,7 +259,7 @@ export const WEB_ONBOARDING: Record<string, OnbSpec> = {
   spieldex: standard({
     prefix: 'SD',
     docs: 'Kontrollen',
-    namePlaceholder: 'z. B. Hausmeisterservice Pfalz',
+    namePlaceholder: 'z. B. Hausmeisterservice Huber',
     landHint: 'Die DIN EN 1176 gilt in der gesamten DACH-Region als anerkannte Regel der Technik.',
   }),
   pruefdex: PRUEFDEX,

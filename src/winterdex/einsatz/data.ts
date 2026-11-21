@@ -4,7 +4,9 @@
 import { isNetworkError, type EinsatzBackend, type TodayOp } from './backend';
 import type { Property } from '../types';
 
-const key = (userId: string) => `dexware-winterdex-objekte:${userId}`;
+// Je Konto UND Betrieb: Nach einem Betriebswechsel stünden ohne Netz sonst die Objekte des alten Betriebs da — ein dort
+// erfasster Einsatz würde vom Server abgelehnt.
+const key = (userId: string, orgId: string) => `dexware-winterdex-objekte:${userId}:${orgId}`;
 
 export interface EinsatzData {
   properties: Property[];
@@ -13,11 +15,13 @@ export interface EinsatzData {
   offline: boolean;
 }
 
-export async function loadEinsatzData(be: EinsatzBackend, userId: string): Promise<EinsatzData> {
+export async function loadEinsatzData(be: EinsatzBackend, userId: string, orgId: string): Promise<EinsatzData> {
   try {
-    const [properties, todayOps] = await Promise.all([be.listProperties(), be.listTodayOps()]);
+    const [all, todayOps] = await Promise.all([be.listProperties(), be.listTodayOps()]);
+    // Nur Objekte des eigenen Betriebs (der Server liefert ohnehin nur diese — doppelt hält besser)
+    const properties = all.filter((p) => !p.org_id || p.org_id === orgId);
     try {
-      localStorage.setItem(key(userId), JSON.stringify(properties));
+      localStorage.setItem(key(userId, orgId), JSON.stringify(properties));
     } catch {
       /* nur Komfort */
     }
@@ -26,7 +30,7 @@ export async function loadEinsatzData(be: EinsatzBackend, userId: string): Promi
     if (!isNetworkError(e)) throw e;
     let cached: Property[] | null = null;
     try {
-      cached = JSON.parse(localStorage.getItem(key(userId)) ?? 'null') as Property[] | null;
+      cached = JSON.parse(localStorage.getItem(key(userId, orgId)) ?? 'null') as Property[] | null;
     } catch {
       cached = null;
     }

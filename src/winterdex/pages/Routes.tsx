@@ -218,7 +218,7 @@ export function RunTable({ runs, linkPrefix, showRoute = true, limit }: { runs: 
                   <Link to={`${linkPrefix}${r.id}`}>{fmtDateTime(r.started_at)}</Link>
                   {(r.gaps?.length > 0 || r.gps_mocked) && (
                     <div className="small gps-warn" style={{ color: '#B91C1C', fontWeight: 700 }}>
-                      {r.gps_mocked ? 'Fake-GPS gemeldet' : `${r.gaps.length}× Pause`}
+                      {r.gps_mocked ? 'Fake-GPS gemeldet' : `${r.gaps.length}× Unterbrechung`}
                     </div>
                   )}
                 </td>

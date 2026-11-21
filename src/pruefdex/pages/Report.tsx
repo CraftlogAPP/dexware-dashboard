@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { openReportWindow } from '../../lib/print';
+import { openReportWindowAfter } from '../../lib/print';
 import { fetchCustomers, fetchDevices, fetchInspectionMeta } from '../api';
 import { lastInspectionByDevice } from '../labels';
 import { buildReportHtml, type DeviceRow } from '../report';
@@ -27,21 +27,25 @@ export function Report() {
     setBusy(true);
     setError(null);
     try {
-      const [devices, meta] = await Promise.all([
-        fetchDevices(client, { customerId: customerId || undefined }),
-        fetchInspectionMeta(client),
-      ]);
-      const lastByDevice = lastInspectionByDevice(meta);
-      const rows: DeviceRow[] = devices.map((device) => {
-        const last = lastByDevice.get(device.id);
-        return {
-          device,
-          lastInspectedAt: last?.inspected_at ?? null,
-          lastResult: last?.result ?? null,
-        };
+      // Fenster sofort öffnen (im Klick), Daten danach laden — sonst blockt der Browser das Pop-up (iPhone, viele Fotos)
+      const opened = await openReportWindowAfter(async () => {
+        const [devices, meta] = await Promise.all([
+          fetchDevices(client, { customerId: customerId || undefined }),
+          fetchInspectionMeta(client),
+        ]);
+        const lastByDevice = lastInspectionByDevice(meta);
+        const rows: DeviceRow[] = devices.map((device) => {
+          const last = lastByDevice.get(device.id);
+          return {
+            device,
+            lastInspectedAt: last?.inspected_at ?? null,
+            lastResult: last?.result ?? null,
+          };
+        });
+        const html = buildReportHtml(orgCtx.org, customer, rows);
+        return html;
       });
-      const html = buildReportHtml(orgCtx.org, customer, rows);
-      if (!openReportWindow(html)) {
+      if (!opened) {
         setError(
           'Der Browser hat das Berichtsfenster blockiert. Bitte Pop-ups für diese Seite erlauben und erneut versuchen.',
         );

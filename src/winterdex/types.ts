@@ -83,6 +83,8 @@ export interface Operation {
 
 export interface OperationWithPhotos extends Operation {
   photo_urls: string[];
+  /** Zahl der gespeicherten Fotos (vor dem Signieren) — im Bericht wird die WIRKLICHE Zahl genannt, auch wenn ein Foto fehlt */
+  photo_total?: number;
 }
 
 export const ACTION_LABELS: Record<OperationAction, string> = {
