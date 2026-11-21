@@ -4,6 +4,7 @@ import { fetchOperationWithPhotos, fetchProperty } from '../api';
 import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
 import { fmtDateTime, fmtNum, fmtTime, gpsLabel } from '../../lib/format';
 import { VerifyProof } from '../../components/VerifyProof';
+import { isSafeImgSrc } from '../../lib/imgSrc';
 import { gritLabel } from '../labels';
 import type { OperationWithPhotos, Property } from '../types';
 
@@ -181,7 +182,7 @@ export function OperationDetail() {
               <div className="card empty">Keine Fotos zu diesem Einsatz.</div>
             ) : (
               <div className="row" style={{ alignItems: 'flex-start' }}>
-                {op.photo_urls.map((src, i) => (
+                {op.photo_urls.filter(isSafeImgSrc).map((src, i) => (
                   <a key={i} href={src} target="_blank" rel="noreferrer">
                     <img
                       src={src}

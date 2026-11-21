@@ -3,7 +3,7 @@ import { FileDown } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindow } from '../../lib/print';
+import { openReportWindowAfter } from '../../lib/print';
 import { fetchTripsBefore, fetchTripsForReport, fetchVehicles } from '../api';
 import { buildFahrtenbuchHtml } from '../report';
 import type { Vehicle } from '../types';
@@ -30,25 +30,29 @@ export function Report() {
     setBusy(true);
     setError(null);
     try {
-      const fromDate = parseLocalDate(from);
-      // Bis-Datum inklusiv: Fahrten bis Mitternacht des Folgetags
-      const toExclusive = parseLocalDate(to);
-      toExclusive.setDate(toExclusive.getDate() + 1);
-      const [trips, priorTrips] = await Promise.all([
-        fetchTripsForReport(client, vehicleId, fromDate, toExclusive),
-        fetchTripsBefore(client, vehicleId, fromDate),
-      ]);
-      const periodLabel = `${fmtDate(fromDate.toISOString())} – ${fmtDate(
-        parseLocalDate(to).toISOString(),
-      )}`;
-      const html = buildFahrtenbuchHtml(
-        session?.user.email ?? '—',
-        vehicle,
-        trips,
-        periodLabel,
-        priorTrips,
-      );
-      if (!openReportWindow(html)) {
+      // Fenster sofort öffnen (im Klick), Daten danach laden — sonst blockt der Browser das Pop-up (iPhone, viele Fotos)
+      const opened = await openReportWindowAfter(async () => {
+        const fromDate = parseLocalDate(from);
+        // Bis-Datum inklusiv: Fahrten bis Mitternacht des Folgetags
+        const toExclusive = parseLocalDate(to);
+        toExclusive.setDate(toExclusive.getDate() + 1);
+        const [trips, priorTrips] = await Promise.all([
+          fetchTripsForReport(client, vehicleId, fromDate, toExclusive),
+          fetchTripsBefore(client, vehicleId, fromDate),
+        ]);
+        const periodLabel = `${fmtDate(fromDate.toISOString())} – ${fmtDate(
+          parseLocalDate(to).toISOString(),
+        )}`;
+        const html = buildFahrtenbuchHtml(
+          session?.user.email ?? '—',
+          vehicle,
+          trips,
+          periodLabel,
+          priorTrips,
+        );
+        return html;
+      });
+      if (!opened) {
         setError(
           'Der Browser hat das Berichtsfenster blockiert. Bitte Pop-ups für diese Seite erlauben und erneut versuchen.',
         );

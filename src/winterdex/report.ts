@@ -3,6 +3,7 @@
 
 import { fmtDate, fmtDateTime, fmtTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
+import { isSafeImgSrc } from '../lib/imgSrc';
 import { gritLabel, weatherLabel } from './labels';
 import {
   ACTION_LABELS,
@@ -80,14 +81,14 @@ export function buildReportHtml(
     .join('');
 
   const photoBlocks = ops
-    .filter((op) => op.photo_urls.length > 0)
+    .filter((op) => op.photo_urls.some(isSafeImgSrc))
     .map(
       (op) => `<div class="photo-group">
         <h3>${fmtDateTime(op.started_at)} — ${esc(ACTION_LABELS[op.action])}${
           op.canceled ? ' (STORNIERT)' : ''
         }</h3>
         <div class="photos">
-          ${op.photo_urls.map((src, i) => `<img src="${esc(src)}" alt="Beweisfoto ${i + 1}">`).join('')}
+          ${op.photo_urls.filter(isSafeImgSrc).map((src, i) => `<img src="${esc(src)}" alt="Beweisfoto ${i + 1}">`).join('')}
         </div>
       </div>`,
     )

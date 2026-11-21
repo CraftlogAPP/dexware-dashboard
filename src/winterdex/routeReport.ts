@@ -3,6 +3,7 @@
 
 import { fmtDate, fmtDateTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
+import { isSafeImgSrc } from '../lib/imgSrc';
 import { gritLabel, weatherLabel } from './labels';
 import { ACTION_LABELS, LEGAL_BASIS } from './types';
 import { buildSketch, fmtDistance, fmtDuration, fmtPct, fmtTimeSpan, pathLengthM, ROUTE_COLORS, sketchSvg, type Route, type Run, type RunMeta } from './routes';
@@ -102,7 +103,7 @@ export function buildRunHtml(org: Org, run: Run): string {
     ${run.canceled ? `<div class="storno">STORNIERT am ${fmtDateTime(run.canceled_at)}: ${esc(run.cancel_reason ?? '')}</div>` : ''}
   </div>
   <div class="legal">${esc(LEGAL_BASIS[org.land])}</div>
-  ${run.photo_urls.length ? `<h2>Beweisfotos</h2><div class="photos">${run.photo_urls.map((src, i) => `<img src="${esc(src)}" alt="Beweisfoto ${i + 1}">`).join('')}</div>` : ''}
+  ${run.photo_urls.some(isSafeImgSrc) ? `<h2>Beweisfotos</h2><div class="photos">${run.photo_urls.filter(isSafeImgSrc).map((src, i) => `<img src="${esc(src)}" alt="Beweisfoto ${i + 1}">`).join('')}</div>` : ''}
   ${PROOF_NOTE}
   ${run.entry_hash ? `<p class="small"><b>Prüfcode:</b> <span class="mono">${esc(run.entry_hash)}</span><br><b>Server-Eingang:</b> ${fmtDateTime(run.received_at ?? run.created_at)}</p>` : ''}`;
   return page(`Strecken-Nachweis — ${name}`, body);

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BadgeEuro, Mail, Maximize2, Phone, Printer, ScanText, Siren, Wrench, X } from 'lucide-react';
 import { fmtDateTime } from '../lib/format';
-import { openReportWindow } from '../lib/print';
+import { openReportWindowAfter } from '../lib/print';
 import { RequestKindBadge, RequestStatusBadge } from './badges';
 import {
   appointmentOf,
@@ -190,8 +190,8 @@ export function PrintButton({ label, build }: { label: string; build: () => Prom
     setBusy(true);
     setError(null);
     try {
-      const html = await build();
-      if (!openReportWindow(html)) {
+      // Fenster sofort im Klick öffnen, HTML danach bauen — sonst blockt der Browser das Pop-up (iPhone, langsames Netz)
+      if (!(await openReportWindowAfter(build))) {
         setError('Der Browser hat das Druckfenster blockiert. Bitte Pop-ups für diese Seite erlauben und erneut versuchen.');
       }
     } catch (e) {
