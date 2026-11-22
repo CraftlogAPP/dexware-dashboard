@@ -65,3 +65,25 @@ export interface Completion {
   device_info: string | null;
   created_at: string;
 }
+
+/**
+ * Nachweis, wie ihn die Excel-Liste lädt — bewusst OHNE die Unterschrift (signature_path = PNG-Daten in der Zeile).
+ * Die drei letzten Felder fehlen, wenn der jeweilige Nachtrag in der Datenbank noch nicht eingespielt ist.
+ */
+export interface CompletionExportRow {
+  id: string;
+  member_id: string | null;
+  briefing_id: string | null;
+  briefing_version: number | null;
+  abgeschlossen_am: string;
+  check_score: number | null;
+  check_passed: boolean;
+  signed_name: string | null;
+  device_info: string | null;
+  /** Thema zum Zeitpunkt der Unterschrift (NACHTRAG-RUNDUMCHECK-2026-11-10) */
+  briefing_titel?: string | null;
+  /** Person, die unterwiesen hat (NACHTRAG-RUNDUMCHECK-2026-11-10) */
+  unterwiesen_von?: string | null;
+  /** Prüfcode vom Server (0004_pruefcode) */
+  entry_hash?: string | null;
+}

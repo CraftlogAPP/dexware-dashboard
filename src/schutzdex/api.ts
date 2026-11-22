@@ -6,6 +6,7 @@ import type {
   AssignmentStatus,
   Briefing,
   Completion,
+  CompletionExportRow,
   Member,
 } from './types';
 
@@ -154,6 +155,30 @@ export async function fetchCompletions(
     : await fetchAllOf(build, [['abgeschlossen_am', false], ['id', false]]);
   if (error) fail('Nachweise konnten nicht geladen werden', error);
   return (data ?? []) as Completion[];
+}
+
+// Excel-Liste: Nachweise vollständig, aber OHNE Unterschrift (signature_path ist eine PNG-Daten-URI in der Zeile).
+const COMPLETION_EXPORT_COLS =
+  'id, member_id, briefing_id, briefing_version, abgeschlossen_am, check_score, check_passed, signed_name, device_info';
+// Spalten aus Nachträgen — fehlt eine in der Datenbank, wird mit weniger Spalten erneut gelesen.
+const COMPLETION_EXPORT_EXTRAS = ['briefing_titel, unterwiesen_von, entry_hash', 'entry_hash', ''];
+
+const missingColumn = (e: { code?: string; message?: string }) =>
+  e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|could not find the .* column/i.test(e.message ?? '');
+
+export async function fetchCompletionsForExport(sb: SupabaseClient): Promise<CompletionExportRow[]> {
+  let lastError: { message: string; code?: string } | null = null;
+  for (const extra of COMPLETION_EXPORT_EXTRAS) {
+    const cols = extra ? `${COMPLETION_EXPORT_COLS}, ${extra}` : COMPLETION_EXPORT_COLS;
+    const { data, error } = await fetchAllOf<CompletionExportRow>(
+      () => sb.from('completion').select(cols),
+      [['abgeschlossen_am', false], ['id', false]],
+    );
+    if (!error) return data;
+    lastError = error;
+    if (!missingColumn(error)) break;
+  }
+  fail('Nachweise konnten nicht geladen werden', lastError);
 }
 
 /** Exakte Anzahl der Nachweise seit `since` (count statt Zeilen zählen). */

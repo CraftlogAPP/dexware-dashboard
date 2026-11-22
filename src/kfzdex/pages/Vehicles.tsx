@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
+import { ExcelButton } from '../../components/ExcelButton';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDate } from '../../lib/format';
@@ -8,6 +10,7 @@ import { fetchVehicles } from '../api';
 import { DueBadge, dueLabel } from '../badges';
 import { UvvDialog, VehicleDialog } from '../dialogs';
 import { uvvDue } from '../due';
+import { exportFleet } from '../exportActions';
 import type { Vehicle, VehicleType } from '../types';
 import { VEHICLE_TYPE_LABEL } from '../types';
 import { GATE_TEXT, fleetGate } from '../vorOrt/backend';
@@ -15,6 +18,7 @@ import { FREE_LIMITS } from '../vorOrt/rows';
 
 export function Vehicles() {
   const { client } = useAppAuth();
+  const { data: org } = useOrg();
   const [type, setType] = useState<'' | VehicleType>('');
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Vehicle | 'new' | null>(null);
@@ -41,9 +45,16 @@ export function Vehicles() {
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Fahrzeuge</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => void onAdd()} disabled={checking}>
-          ＋ Fahrzeug anlegen
-        </button>
+        {/* Knöpfe zusammen rechts (sonst verteilt section-head sie über die Breite) */}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <ExcelButton
+            onExport={() => exportFleet(client, org?.org)}
+            title="Ganzer Fuhrpark als Excel-Datei: Fahrzeuge und Fahrer mit Fristen, UVV- und Kontroll-Historie"
+          />
+          <button className="btn" onClick={() => void onAdd()} disabled={checking}>
+            ＋ Fahrzeug anlegen
+          </button>
+        </div>
       </div>
 
       <div className="filter-bar">

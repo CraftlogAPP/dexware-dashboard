@@ -61,6 +61,12 @@ export interface LicenseCheck {
   created_at: string;
 }
 
+/** UVV-Prüfung, wie sie die Excel-Liste lädt (ohne org_id). */
+export type UvvExportRow = Pick<UvvInspection, 'id' | 'vehicle_id' | 'date' | 'inspector' | 'result' | 'defects' | 'checklist' | 'created_at'>;
+
+/** Führerscheinkontrolle, wie sie die Excel-Liste lädt — bewusst OHNE photo_uri (Foto bleibt auf dem Gerät). */
+export type LicenseExportRow = Pick<LicenseCheck, 'id' | 'driver_id' | 'date' | 'checked_by' | 'created_at'>;
+
 export interface OrgMember {
   id: string;
   org_id: string;
@@ -99,3 +105,16 @@ export const CHECK_ITEMS: { id: string; label: string }[] = [
   { id: 'aufbau', label: 'Aufbau, Ladungssicherung & Anhängerkupplung' },
   { id: 'ausruestung', label: 'Verbandkasten, Warndreieck & Warnweste' },
 ];
+
+/** Checklisten-Kurzfassung: "10/10 i. O." bzw. Liste der beanstandeten Punkte (UVV-Historie + Excel-Liste). */
+export function checklistSummary(checklist: Record<string, boolean> | null | undefined): string {
+  const entries = Object.entries(checklist ?? {});
+  if (entries.length === 0) return '—';
+  const failed = entries.filter(([, ok]) => !ok).map(([id]) => id);
+  const okCount = entries.length - failed.length;
+  if (failed.length === 0) return `${okCount}/${entries.length} i. O.`;
+  const labels = failed.map(
+    (id) => CHECK_ITEMS.find((c) => c.id === id)?.label ?? id,
+  );
+  return `${okCount}/${entries.length} i. O. — beanstandet: ${labels.join(', ')}`;
+}

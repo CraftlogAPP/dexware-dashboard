@@ -12,6 +12,14 @@ export const SOON_DAYS = 30;
 
 export type DueStatus = 'ok' | 'soon' | 'overdue' | 'missing';
 
+/** Wortlaut je Status — Ampel im Dashboard (badges.tsx) und Excel-Liste (exportLists.ts) aus einer Quelle. */
+export const DUE_STATUS_LABEL: Record<DueStatus, string> = {
+  ok: 'ok',
+  soon: 'bald fällig',
+  overdue: 'überfällig',
+  missing: 'nie geprüft',
+};
+
 /** Monate addieren, Monatsende gekappt: 31.08. + 6 Monate = 28./29.02. (nicht 03.03.) — wie die App (src/lib/due.ts). */
 function addMonths(iso: string, months: number): Date {
   return parseLocalDate(addMonthsLocalISO(iso, months));

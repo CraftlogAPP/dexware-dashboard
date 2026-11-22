@@ -1,17 +1,16 @@
-import type { DueInfo, DueStatus } from './due';
+import { DUE_STATUS_LABEL, type DueInfo, type DueStatus } from './due';
 import { UVV_RESULT_LABEL, type UvvResult } from './types';
 import { fmtDate } from '../lib/format';
 
-const DUE_BADGE: Record<DueStatus, { className: string; label: string }> = {
-  ok: { className: 'badge green', label: 'ok' },
-  soon: { className: 'badge amber', label: 'bald fällig' },
-  overdue: { className: 'badge red', label: 'überfällig' },
-  missing: { className: 'badge', label: 'nie geprüft' },
+const DUE_BADGE_CLASS: Record<DueStatus, string> = {
+  ok: 'badge green',
+  soon: 'badge amber',
+  overdue: 'badge red',
+  missing: 'badge',
 };
 
 export function DueBadge({ status }: { status: DueStatus }) {
-  const b = DUE_BADGE[status];
-  return <span className={b.className}>{b.label}</span>;
+  return <span className={DUE_BADGE_CLASS[status]}>{DUE_STATUS_LABEL[status]}</span>;
 }
 
 /** Fälligkeitsdatum mit Tages-Hinweis, z. B. "05.08.2026 (in 12 Tagen)". */
