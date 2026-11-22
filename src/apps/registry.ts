@@ -237,7 +237,7 @@ export const APPS: AppConfig[] = [
         ],
       },
     },
-    backend: { url: 'https://winterdex-backend.alex-pfalz03.workers.dev', token: '3a7cb86ec4a4b7947147e6f425626b4827eb243ccadb98f5ca3903daea4bf5dc' },
+    backend: { url: 'https://winterdex-api.2easy4trash.workers.dev', token: '3a7cb86ec4a4b7947147e6f425626b4827eb243ccadb98f5ca3903daea4bf5dc' },
     supabase: {
       url: 'https://nppmhxpnynziuavvqmvd.supabase.co',
       anonKey:
