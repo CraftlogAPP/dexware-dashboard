@@ -260,6 +260,31 @@ export async function fetchInspections(
   return (data ?? []) as unknown as Inspection[];
 }
 
+/**
+ * Alle Prüfungen im Zeitraum, vollständig (seitenweise, ohne 500er-Grenze) und chronologisch — für die Excel-Liste.
+ * Mit Prüfcode (entry_hash), sofern die Datenbank ihn kennt; nie Fotos oder Unterschrift.
+ */
+export async function fetchInspectionsAll(
+  sb: SupabaseClient,
+  filter: { from: string; to: string; deviceId?: string; result?: InspectionResult },
+): Promise<(Inspection & { entry_hash?: string | null })[]> {
+  const run = (cols: string) =>
+    fetchAllOf<Inspection & { entry_hash?: string | null }>(() => {
+      // inspected_at ist ein date — die Filterwerte (yyyy-mm-dd) passen direkt.
+      let q = sb.from('inspection').select(cols).gte('inspected_at', filter.from).lte('inspected_at', filter.to);
+      if (filter.deviceId) q = q.eq('device_id', filter.deviceId);
+      if (filter.result) q = q.eq('result', filter.result);
+      return q;
+    }, [['inspected_at'], ['created_at'], ['id']]);
+  // Erst mit Prüfcode; fehlt die Spalte (Nachweis-Update nicht eingespielt), ohne ihn. Die Storno-Spalten regelt
+  // danach withColumnFallback wie überall — NICHT schon beim ersten Versuch, sonst hielte ein fehlender Prüfcode
+  // die Storno-Spalten für fehlend und Stornos zählten als gültig.
+  let r = hasAppendOnly ? await run(`${inspCols()}, entry_hash`) : null;
+  if (!r || isUnknownColumn(r.error)) r = await withColumnFallback(() => run(inspCols()));
+  if (r.error) fail('Prüfungen konnten nicht geladen werden', r.error);
+  return r.data;
+}
+
 /** Minimale Prüf-Metadaten für KPIs/„letzte Prüfung"-Logik. */
 export interface InspMeta {
   id: string;

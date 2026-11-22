@@ -3,12 +3,15 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { fmtDate } from '../../lib/format';
-import { fetchCustomers, fetchDevices, setDeviceRetired } from '../api';
+import { fmtDate, todayLocalISO } from '../../lib/format';
+import { fetchCustomers, fetchDevices, fetchInspectionMeta, setDeviceRetired } from '../api';
+import { ExcelButton } from '../../components/ExcelButton';
+import { saveSheets } from '../exportActions';
+import { deviceSheets, filterByDue } from '../exportLists';
 import { DeviceDialog } from '../dialogs';
 import { GATE_TEXT, deviceGate } from '../gate';
 import { DueBadge } from '../badges';
-import { dueStatus, nameMap, skLabel, type DueStatus } from '../labels';
+import { dueStatus, lastInspectionByDevice, nameMap, skLabel, type DueStatus } from '../labels';
 import type { Device } from '../types';
 
 export function Devices() {
@@ -26,6 +29,30 @@ export function Devices() {
     () => fetchDevices(client, { customerId: customerId || undefined, includeRetired: true }),
     [client, customerId],
   );
+
+  /** Geräteliste (Prüfbuch) als Excel — frisch geladen, mit denselben Filtern wie die Tabelle. */
+  async function exportExcel() {
+    if (!org) throw new Error('Betrieb nicht geladen.');
+    const [devices, customers, meta] = await Promise.all([
+      fetchDevices(client, { customerId: customerId || undefined, includeRetired: true }),
+      fetchCustomers(client),
+      // jüngste gültige Prüfung je Gerät — dieselbe Quelle wie Übersicht und Prüflisten-PDF
+      fetchInspectionMeta(client),
+    ]);
+    const one = customerId ? customers.find((c) => c.id === customerId)?.name : undefined;
+    await saveSheets(
+      `PruefDex_Geraete_${one ? `${one}_` : ''}${todayLocalISO()}`,
+      'PrüfDex Geräteliste',
+      deviceSheets({
+        org: org.org,
+        customers,
+        devices,
+        lastByDevice: lastInspectionByDevice(meta),
+        customerId: customerId || null,
+        due,
+      }),
+    );
+  }
 
   async function onDelete(d: Device) {
     const retire = !d.retired;
@@ -52,9 +79,17 @@ export function Devices() {
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Geräte</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => setEditing('new')}>
-          ＋ Gerät anlegen
-        </button>
+        {/* Knöpfe zusammen rechts (sonst verteilt section-head sie über die Breite) */}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <ExcelButton
+            label="Geräteliste"
+            onExport={exportExcel}
+            title="Geräte mit den gewählten Filtern als Excel-Datei: letzte Prüfung, nächste Fälligkeit und Status"
+          />
+          <button className="btn" onClick={() => setEditing('new')}>
+            ＋ Gerät anlegen
+          </button>
+        </div>
       </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Ortsveränderliche elektrische Betriebsmittel mit Prüffristen-Ampel —
@@ -90,9 +125,7 @@ export function Devices() {
       <LoadGuard state={devState}>
         {(allDevices) => {
           const custNames = nameMap(custState.data ?? []);
-          const devices = due
-            ? allDevices.filter((d) => dueStatus(d.next_due_date) === due)
-            : allDevices;
+          const devices = filterByDue(allDevices, due);
           return devices.length === 0 ? (
             <div className="card empty">Keine Geräte mit den gewählten Filtern.</div>
           ) : (
