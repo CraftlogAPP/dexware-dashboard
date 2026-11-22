@@ -326,7 +326,7 @@ export function inspectionSheets(input: InspectionExportInput): XlsxSheet[] {
         { header: 'Schutzklasse' },
         { header: 'Ergebnis' },
         { header: 'Sichtprüfung nicht erfüllt' },
-        ...MEASUREMENTS.map((m) => ({ header: `${m.label} (${m.unit})`, kind: 'dec2' as const })),
+        ...MEASUREMENTS.map((m) => ({ header: `${m.label} (${m.unit})`, kind: 'num' as const })),
         { header: 'Nächste Prüfung', kind: 'date' },
         { header: 'Geprüft von' },
         { header: 'Notiz' },
@@ -399,7 +399,7 @@ export function inspectionSheets(input: InspectionExportInput): XlsxSheet[] {
       ],
       [
         'Messwerte',
-        'Als Zahl in der Einheit der Spaltenüberschrift (Anzeige mit 2 Nachkommastellen, in der Zelle steht der volle Wert). Einträge wie „> 300“ bleiben Text.',
+        'Als Zahl in der Einheit der Spaltenüberschrift, genau wie erfasst. Einträge wie „> 300“ bleiben Text.',
       ],
       ['Kunde/Standort', 'Aktuelle Zuordnung des Geräts. „Je Kunde“ zählt nur Kunden mit Prüfungen im Zeitraum.'],
     ]),
