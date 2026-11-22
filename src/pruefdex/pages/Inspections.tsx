@@ -4,7 +4,10 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, toInputDate } from '../../lib/format';
-import { cancelInspection, fetchDevices, fetchInspections } from '../api';
+import { cancelInspection, fetchCustomers, fetchDevices, fetchInspections, fetchInspectionsAll } from '../api';
+import { ExcelButton } from '../../components/ExcelButton';
+import { checkPeriod, saveSheets } from '../exportActions';
+import { inspectionSheets, periodLabel } from '../exportLists';
 import { InspectionDialog } from '../dialogs';
 import { ResultBadge } from '../badges';
 import { nameMap } from '../labels';
@@ -37,6 +40,24 @@ export function Inspections() {
       }),
     [client, deviceId, result, from, to],
   );
+
+  /** Excel-Liste: alle Prüfungen im Zeitraum mit den Filtern der Seite (auch über 500), Summen je Kunde, Stornos getrennt. */
+  async function exportExcel() {
+    if (!org) throw new Error('Betrieb nicht geladen.');
+    const period = checkPeriod(from, to);
+    const [inspections, devices, customers] = await Promise.all([
+      fetchInspectionsAll(client, { ...period, deviceId: deviceId || undefined, result: result || undefined }),
+      // inkl. ausgesonderter Geräte — ihre Prüfungen stehen auch in der Liste
+      fetchDevices(client, { includeRetired: true }),
+      fetchCustomers(client),
+    ]);
+    const one = deviceId ? devices.find((d) => d.id === deviceId)?.name : undefined;
+    await saveSheets(
+      `PruefDex_Pruefungen_${one ? `${one}_` : ''}${period.from}_bis_${period.to}`,
+      `PrüfDex Prüfungen ${periodLabel(period)}`,
+      inspectionSheets({ org: org.org, customers, devices, inspections, period, deviceId: deviceId || null, result }),
+    );
+  }
 
   async function onDelete(i: Inspection) {
     const reason = window.prompt('Prüfungen werden nicht gelöscht: Sie bleibt in der Historie, gekennzeichnet als storniert. Die Prüffrist richtet sich danach nach der jüngsten gültigen Prüfung.\n\nGrund der Stornierung:');
@@ -80,7 +101,7 @@ export function Inspections() {
       )}
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="row">
+        <div className="row" style={{ alignItems: 'flex-end' }}>
           <label className="field" style={{ flex: 2, minWidth: 200, marginBottom: 0 }}>
             Gerät
             <select value={deviceId} onChange={(e) => setDeviceId(e.target.value)}>
@@ -111,6 +132,10 @@ export function Inspections() {
             Bis
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </label>
+          <ExcelButton
+            onExport={exportExcel}
+            title="Alle Prüfungen im gewählten Zeitraum als Excel-Datei: mit Messwerten und Summen je Kunde zum Abrechnen"
+          />
         </div>
       </div>
 
