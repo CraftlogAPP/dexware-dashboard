@@ -1,6 +1,7 @@
 import { useAppAuth } from '../auth/AppAuthContext';
 import { useOrg } from '../components/OrgContext';
 import { FormDialog, orNull, s, type FormValues } from '../components/form';
+import { geocodeAddress } from '../pinndex/geocode';
 import { saveProperty, fetchProperties } from './api';
 import { FREE_PROPERTIES, PRO_HOW, fetchOrgPro } from './pro';
 import type { Property } from './types';
@@ -16,6 +17,7 @@ export function PropertyDialog({
 }) {
   const { client } = useAppAuth();
   const { data: org } = useOrg();
+  const noLocation = property === 'new' || property.lat == null || property.lng == null;
 
   async function onSave(v: FormValues) {
     if (!org) throw new Error('Kein Betrieb geladen');
@@ -27,12 +29,16 @@ export function PropertyDialog({
         throw new Error(`Im Gratis-Paket sind ${FREE_PROPERTIES} aktive Objekte möglich. ${PRO_HOW}`);
       }
     }
+    // Wie die App: ohne Standort die Adresse in Koordinaten umrechnen (Wetter-Rückgriff, Glätte-Frühwarnung,
+    // GPS-Abstand im Nachweis). Best effort — klappt es nicht, wird trotzdem gespeichert.
+    const address = s(v.address);
+    const location = noLocation ? ((await geocodeAddress(address)) ?? undefined) : undefined;
     await saveProperty(
       client,
       org.org.id,
       {
         name: s(v.name),
-        address: s(v.address),
+        address,
         customer_name: orNull(v.customer_name),
         customer_contact: orNull(v.customer_contact),
         areas: orNull(v.areas),
@@ -41,6 +47,7 @@ export function PropertyDialog({
         active: v.active === true,
       },
       property === 'new' ? undefined : property,
+      location,
     );
     onSaved();
   }
@@ -52,7 +59,14 @@ export function PropertyDialog({
       onSave={onSave}
       fields={[
         { key: 'name', label: 'Name', required: true },
-        { key: 'address', label: 'Adresse', required: true },
+        {
+          key: 'address',
+          label: 'Adresse',
+          required: true,
+          hint: noLocation
+            ? 'Beim Speichern wird daraus der Standort bestimmt (über OpenStreetMap) — für Glätte-Frühwarnung und GPS-Abstand.'
+            : undefined,
+        },
         { key: 'customer_name', label: 'Auftraggeber' },
         { key: 'customer_contact', label: 'Auftraggeber-Kontakt' },
         { key: 'areas', label: 'Flächen', hint: 'z. B. Gehweg, Parkplatz, Zufahrt' },
