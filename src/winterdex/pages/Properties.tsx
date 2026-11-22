@@ -41,25 +41,26 @@ export function Properties() {
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Objekte</h1>
         <div className="spacer" />
+        {/* beide Knöpfe zusammen rechts (sonst verteilt section-head sie über die Breite) */}
         {owner && (
-          <Link className="btn ghost" to="import" title="Objekte aus einer Excel- oder CSV-Liste übernehmen">
-            <FileUp className="i" aria-hidden /> Objekte importieren
-          </Link>
-        )}
-        {owner && (
-          <button
-            className="btn"
-            onClick={() => {
-              void (async () => {
-                // Gratis: 2 aktive Objekte (wie in der App); Pro laut Server, im Zweifel erlaubt.
-                const count = (state.data?.properties ?? []).filter((p) => p.active).length;
-                if (count >= FREE_PROPERTIES && !(await fetchOrgPro(client, true))) return setGate(true);
-                setEditing('new');
-              })();
-            }}
-          >
-            ＋ Objekt anlegen
-          </button>
+          <div className="row">
+            <Link className="btn ghost" to="import" title="Objekte aus einer Excel- oder CSV-Liste übernehmen">
+              <FileUp className="i" aria-hidden /> Objekte importieren
+            </Link>
+            <button
+              className="btn"
+              onClick={() => {
+                void (async () => {
+                  // Gratis: 2 aktive Objekte (wie in der App); Pro laut Server, im Zweifel erlaubt.
+                  const count = (state.data?.properties ?? []).filter((p) => p.active).length;
+                  if (count >= FREE_PROPERTIES && !(await fetchOrgPro(client, true))) return setGate(true);
+                  setEditing('new');
+                })();
+              }}
+            >
+              ＋ Objekt anlegen
+            </button>
+          </div>
         )}
       </div>
       <p className="muted" style={{ marginTop: -6 }}>
