@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FileUp } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import {
   fetchOperationMeta,
@@ -41,6 +42,11 @@ export function Properties() {
         <h1 style={{ margin: 0 }}>Objekte</h1>
         <div className="spacer" />
         {owner && (
+          <Link className="btn ghost" to="import" title="Objekte aus einer Excel- oder CSV-Liste übernehmen">
+            <FileUp className="i" aria-hidden /> Objekte importieren
+          </Link>
+        )}
+        {owner && (
           <button
             className="btn"
             onClick={() => {
@@ -64,7 +70,15 @@ export function Properties() {
       <LoadGuard state={state}>
         {({ properties, lastByProp }) =>
           properties.length === 0 ? (
-            <div className="card empty">Noch keine Objekte angelegt.</div>
+            <div className="card empty">
+              Noch keine Objekte angelegt.
+              {owner && (
+                <>
+                  {' '}
+                  Du hast eine Liste in Excel? <Link to="import">Objekte importieren</Link>
+                </>
+              )}
+            </div>
           ) : (
             <div className="table-wrap">
               <table>

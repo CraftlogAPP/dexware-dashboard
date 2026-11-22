@@ -128,16 +128,14 @@ export interface PropertyInput {
   active: boolean;
 }
 
-/** Objekt anlegen/ändern — Upsert wie app-seitiges saveProperty. */
-export async function saveProperty(
-  sb: SupabaseClient,
+/** Zeile der Tabelle property — EINE Stelle für Formular und Import (Format wie app-seitiges saveProperty). */
+export function propertyRow(
   orgId: string,
   input: PropertyInput,
   existing?: Property,
-  /** neuer Standort (z. B. „Hier stehe ich“) — sonst bleibt der bisherige */
-  location?: { lat: number; lng: number },
-): Promise<void> {
-  const { error } = await sb.from('property').upsert({
+  location?: { lat: number; lng: number } | null,
+): Property {
+  return {
     id: existing?.id ?? crypto.randomUUID(),
     org_id: orgId,
     name: input.name,
@@ -151,8 +149,29 @@ export async function saveProperty(
     notes: input.notes,
     active: input.active,
     created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  };
+}
+
+/** Objekt anlegen/ändern — Upsert wie app-seitiges saveProperty. */
+export async function saveProperty(
+  sb: SupabaseClient,
+  orgId: string,
+  input: PropertyInput,
+  existing?: Property,
+  /** neuer Standort (z. B. „Hier stehe ich“) — sonst bleibt der bisherige */
+  location?: { lat: number; lng: number },
+): Promise<void> {
+  const { error } = await sb.from('property').upsert(propertyRow(orgId, input, existing, location));
   if (error) fail('Objekt konnte nicht gespeichert werden', error);
+}
+
+/**
+ * Mehrere neue Objekte auf einmal anlegen (Import). Nur insert — vorhandene Objekte werden nie überschrieben.
+ * Eine schon vorhandene id (Paket war angekommen, nur die Antwort ging verloren) zählt als angelegt.
+ */
+export async function insertProperties(sb: SupabaseClient, rows: Property[]): Promise<void> {
+  const { error } = await sb.from('property').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Objekte konnten nicht angelegt werden', error);
 }
 
 /** Wie die App „Hier stehe ich“: Standort eines Objekts setzen (nur Inhaber — Server-Regel). */

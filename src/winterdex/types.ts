@@ -9,6 +9,22 @@ export interface DutyTimes {
   so?: string;
 }
 
+export type Land = Org['land'];
+
+/** Vorbelegung der Pflichtzeiten je Land — wie DUTY_DEFAULTS in der App (nur ein Startwert je Objekt). */
+export const DUTY_DEFAULTS: Record<Land, Required<DutyTimes>> = {
+  DE: { mo_fr: '07:00-20:00', sa: '07:00-20:00', so: '08:00-20:00' },
+  AT: { mo_fr: '06:00-22:00', sa: '06:00-22:00', so: '06:00-22:00' },
+  CH: { mo_fr: '07:00-21:00', sa: '07:00-21:00', so: '08:00-20:00' },
+};
+
+/** Hinweis zur Vorbelegung — wie DUTY_HINTS in der App. */
+export const DUTY_HINTS: Record<Land, string> = {
+  DE: 'Richtwert — die genauen Zeiten stehen in der Ortssatzung der Gemeinde.',
+  AT: 'Gesetzlicher Rahmen: § 93 StVO (Anrainerpflicht, 6–22 Uhr).',
+  CH: 'Kantonal bzw. kommunal geregelt — Zeiten mit der Gemeinde abgleichen.',
+};
+
 export interface Property {
   id: string;
   org_id: string;

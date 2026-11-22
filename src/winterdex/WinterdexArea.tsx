@@ -1,4 +1,4 @@
-import { lazy, useEffect, useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { Building2, CreditCard, FileDown, LayoutDashboard, MessageSquare, Monitor, Route as RouteIcon, Snowflake, Truck, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
@@ -46,6 +46,9 @@ const EinsatzDemo = import.meta.env.DEV
   ? lazy(() => import('./einsatz/demo').then((m) => ({ default: m.EinsatzDemoArea })))
   : null;
 
+// Objekte importieren (Excel/CSV) erst beim Öffnen laden — der Leser braucht Teile des InstallateurDex-Imports.
+const PropertyImport = lazy(() => import('./pages/PropertyImport').then((m) => ({ default: m.PropertyImport })));
+
 function demoWanted(): boolean {
   try {
     if (new URLSearchParams(window.location.search).has('demo')) sessionStorage.setItem('wd-einsatz-demo', '1');
@@ -69,6 +72,20 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
             <Route element={<Shell />}>
               <Route index element={<Overview />} />
               <Route path="objekte" element={<Properties />} />
+              <Route
+                path="objekte/import"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="empty">
+                        <span className="spinner" />
+                      </div>
+                    }
+                  >
+                    <PropertyImport />
+                  </Suspense>
+                }
+              />
               <Route path="objekte/:id" element={<PropertyDetail />} />
               <Route path="einsaetze" element={<Operations />} />
               <Route path="einsaetze/:id" element={<OperationDetail />} />
