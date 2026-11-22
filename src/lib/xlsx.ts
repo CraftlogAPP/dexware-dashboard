@@ -8,7 +8,8 @@
 // Zeitpunkte (ISO mit Uhrzeit) werden in der Zeitzone des Betriebs (Standard Europe/Berlin = auch Wien/Zürich)
 // als Wanduhrzeit geschrieben; reine Kalendertage ('yyyy-mm-dd') ohne Zeitzone.
 
-export type XlsxKind = 'text' | 'int' | 'dec1' | 'dec2' | 'date' | 'time' | 'datetime';
+/** num = Zahl ohne feste Nachkommastellen (Excel „Standard“, z. B. Messwerte 0,035) */
+export type XlsxKind = 'text' | 'int' | 'num' | 'dec1' | 'dec2' | 'date' | 'time' | 'datetime';
 export type XlsxValue = string | number | null | undefined;
 
 /** Zelle mit eigenem Format (z. B. Ende an einem anderen Tag → Datum + Uhrzeit) oder fett. */
@@ -125,7 +126,7 @@ export function excelSerial(v: string, timeZone: string, dayOnly = false): numbe
 }
 
 // Formate (Index = Position in cellXfs der styles.xml)
-const S = { text: 0, head: 1, int: 2, dec1: 3, dec2: 4, date: 5, time: 6, datetime: 7, bold: 8 } as const;
+const S = { text: 0, num: 0, head: 1, int: 2, dec1: 3, dec2: 4, date: 5, time: 6, datetime: 7, bold: 8 } as const;
 
 function cellXml(ref: string, raw: XlsxValue | XlsxCell, colKind: XlsxKind, timeZone: string): string {
   const c: XlsxCell = raw !== null && typeof raw === 'object' ? raw : { v: raw };
@@ -148,7 +149,7 @@ function cellXml(ref: string, raw: XlsxValue | XlsxCell, colKind: XlsxKind, time
 /** Breite nach Inhalt (Zeichen), Datum/Zeit fest. */
 function autoWidth(col: XlsxColumn, i: number, rows: (XlsxValue | XlsxCell)[][]): number {
   if (col.width) return col.width;
-  const fixed: Partial<Record<XlsxKind, number>> = { date: 11, time: 7, datetime: 16, int: 8, dec1: 9, dec2: 10 };
+  const fixed: Partial<Record<XlsxKind, number>> = { date: 11, time: 7, datetime: 16, int: 8, num: 9, dec1: 9, dec2: 10 };
   let w = Math.max(fixed[col.kind ?? 'text'] ?? 8, ...col.header.split(/\s+/).map((p) => p.length + 1), Math.min(col.header.length, 18) + 2);
   for (const r of rows.slice(0, 500)) {
     const raw = r[i];
