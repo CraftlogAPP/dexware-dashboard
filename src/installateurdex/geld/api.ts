@@ -175,13 +175,20 @@ export function emptyProfile(land: Land, name = ''): StoredProfile {
   return { legalName: name, street: '', zip: '', city: '', land, vatRate: defaultVatRate(land), paymentDays: 14, laborStepMinutes: 15, prefix: 'RE', quotePrefix: 'AN', materialPrices: {} };
 }
 
-/** Schnappschuss fürs Ausstellen: ohne Preisliste/Preisregel/Buchhaltungskonten (wie App issueInvoice). */
+/**
+ * Schnappschuss fürs Ausstellen: ohne Preisliste/Preisregel/Buchhaltungskonten (wie App issueInvoice). Seit 22.11.2026
+ * auch ohne die AngebotDex-Felder, die die App ins Firmenprofil schreibt und nie auf einen Beleg gehören: Gewerk,
+ * Standardtexte, KI-Regeln, KI-Gewohnheiten (sonst wüchse der Schnappschuss — invoice_issue lehnt ihn über 20.000 Byte ab).
+ */
+const NOT_ON_DOC = ['trade', 'quoteIntro', 'quoteOutro', 'aiRules', 'aiHabits'] as const;
 export function profileSnapshot(p: StoredProfile): StoredProfile {
   const { materialPrices: _m, articlePricing: _p, accounting: _a, ...snapshot } = p;
   void _m;
   void _p;
   void _a;
-  return snapshot;
+  const out = { ...snapshot } as StoredProfile & Record<string, unknown>;
+  for (const k of NOT_ON_DOC) delete out[k];
+  return out;
 }
 
 /** wie App learnPrices: Materialpreise aus einem Beleg für das nächste Mal merken (null = nichts Neues). */
