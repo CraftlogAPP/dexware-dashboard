@@ -2,7 +2,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
+import { ExcelButton } from '../../components/ExcelButton';
+import { ExportNotice } from '../../lib/xlsx';
 import { ActionBadge, LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
+import { checkPeriod, requirePro, saveSheets } from '../exportActions';
+import { periodLabel, runSheets } from '../exportLists';
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
 import { CoverageBadge } from '../RouteSketch';
 import { fetchRecentRuns, fetchRoutes, fetchRuns, fmtDistance, RUNS_LIST_LIMIT, fmtPct, localDay, ROUTES_MISSING, type Route, type RunMeta } from '../routes';
@@ -40,6 +45,29 @@ export function Routes() {
 
   // Live: neue Fahrten erscheinen ohne Neuladen (alle 30 s + beim Zurückwechseln in den Tab).
   useLiveRefresh([base.refresh, runsState.refresh]);
+
+  const { data: org } = useOrg();
+  /** Excel-Liste der Fahrten im Filter — vollständig (auch über 500), Summen je Strecke, Stornos getrennt. */
+  async function exportExcel(routes: Route[]) {
+    if (!org) throw new Error('Betrieb nicht geladen.');
+    const period = checkPeriod(from, to);
+    await requirePro(client);
+    const runs = await fetchRuns(client, {
+      all: true,
+      routeId: routeId && routeId !== FREE ? routeId : undefined,
+      free: routeId === FREE,
+      from: parseLocalDate(from),
+      to: parseLocalDate(to),
+    });
+    if (runs.length === 0) throw new ExportNotice('Im gewählten Zeitraum gibt es keine Fahrten.');
+    const one = routeId && routeId !== FREE ? routes.find((r) => r.id === routeId)?.name : undefined;
+    const filterLabel = routeId === FREE ? 'Nur freie Fahrten (ohne Vorlage)' : (one ?? 'Alle Fahrten');
+    await saveSheets(
+      `WinterDex_Fahrten_${one ? `${one}_` : routeId === FREE ? 'frei_' : ''}${period.from}_bis_${period.to}`,
+      `WinterDex Fahrtenliste ${periodLabel(period)}`,
+      runSheets({ org: org.org, runs, period, filterLabel }),
+    );
+  }
 
   if (base.error === ROUTES_MISSING || runsState.error === ROUTES_MISSING) {
     return (
@@ -157,7 +185,7 @@ export function Routes() {
                 <h2>Fahrten</h2>
               </div>
               <div className="card" style={{ marginBottom: 16 }}>
-                <div className="row">
+                <div className="row" style={{ alignItems: 'flex-end' }}>
                   <label className="field" style={{ flex: 2, minWidth: 200, marginBottom: 0 }}>
                     Strecke
                     <select value={routeId} onChange={(e) => setRouteId(e.target.value)}>
@@ -178,6 +206,10 @@ export function Routes() {
                     Bis
                     <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
                   </label>
+                  <ExcelButton
+                    onExport={() => exportExcel(routes)}
+                    title="Alle Fahrten der Auswahl als Excel-Datei: Kilometer, Stunden und Abdeckung, mit Summen je Strecke (Pro)"
+                  />
                 </div>
               </div>
               <LoadGuard state={runsState}>{(runs) => <RunTable runs={runs} linkPrefix="fahrten/" limit={RUNS_LIST_LIMIT} />}</LoadGuard>

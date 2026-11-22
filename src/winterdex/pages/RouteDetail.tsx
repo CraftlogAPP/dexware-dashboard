@@ -5,6 +5,10 @@ import { FileDown } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
+import { ExcelButton } from '../../components/ExcelButton';
+import { ExportNotice } from '../../lib/xlsx';
+import { checkPeriod, requirePro, saveSheets } from '../exportActions';
+import { periodLabel, runSheets } from '../exportLists';
 import { fmtDate, fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
 import { openReportWindow } from '../../lib/print';
 import { RouteSketch } from '../RouteSketch';
@@ -62,6 +66,20 @@ export function RouteDetail() {
       setPrintErr('Das Druckfenster wurde blockiert — bitte Pop-ups für dieses Dashboard erlauben.');
   }
 
+  /** Fahrten dieser Strecke im Zeitraum als Excel (frisch geladen, vollständig). */
+  async function exportExcel(route: Route) {
+    if (!org) throw new Error('Betrieb nicht geladen.');
+    const period = checkPeriod(from, to);
+    await requirePro(client);
+    const runs = await fetchRuns(client, { all: true, routeId: route.id, from: parseLocalDate(from), to: parseLocalDate(to) });
+    if (runs.length === 0) throw new ExportNotice('Im gewählten Zeitraum gibt es keine Fahrten auf dieser Strecke.');
+    await saveSheets(
+      `WinterDex_Fahrten_${route.name}_${period.from}_bis_${period.to}`,
+      `WinterDex Fahrtenliste ${route.name} ${periodLabel(period)}`,
+      runSheets({ org: org.org, runs, period, filterLabel: route.name }),
+    );
+  }
+
   return (
     <LoadGuard state={state}>
       {({ route, last }) => (
@@ -110,6 +128,10 @@ export function RouteDetail() {
               <button className="btn" onClick={() => printLog(route)} disabled={runsState.loading || !!runsState.error}>
                 <FileDown className="i" aria-hidden /> Fahrtenbuch als PDF
               </button>
+              <ExcelButton
+                onExport={() => exportExcel(route)}
+                title="Fahrten dieser Strecke im Zeitraum als Excel-Datei: Kilometer, Stunden, Abdeckung (Pro)"
+              />
             </div>
             {printErr && <div className="error-box" style={{ marginTop: 10 }}>{printErr}</div>}
           </div>

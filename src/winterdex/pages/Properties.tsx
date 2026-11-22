@@ -8,7 +8,11 @@ import {
   type OpMeta,
 } from '../api';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
-import { fmtDateTime } from '../../lib/format';
+import { fmtDateTime, todayLocalISO } from '../../lib/format';
+import { ExcelButton } from '../../components/ExcelButton';
+import { ExportNotice } from '../../lib/xlsx';
+import { saveSheets } from '../exportActions';
+import { propertySheets } from '../exportLists';
 import { lastOpByProperty } from '../labels';
 import { PropertyDialog } from '../dialogs';
 import { Modal } from '../../components/form';
@@ -36,32 +40,49 @@ export function Properties() {
     return { properties, lastByProp: lastOpByProperty(meta) };
   }, [client]);
 
+  const { data: org } = useOrg();
+  /** Objektliste als Excel — frisch geladen, damit gerade Angelegtes dabei ist. */
+  async function exportExcel() {
+    if (!org) throw new Error('Betrieb nicht geladen.');
+    const properties = await fetchProperties(client);
+    if (properties.length === 0) throw new ExportNotice('Noch keine Objekte angelegt.');
+    await saveSheets(`WinterDex_Objekte_${todayLocalISO()}`, 'WinterDex Objektliste', propertySheets(org.org, properties));
+  }
+
   return (
     <>
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Objekte</h1>
         <div className="spacer" />
-        {/* beide Knöpfe zusammen rechts (sonst verteilt section-head sie über die Breite) */}
-        {owner && (
-          <div className="row">
-            <Link className="btn ghost" to="import" title="Objekte aus einer Excel- oder CSV-Liste übernehmen">
-              <FileUp className="i" aria-hidden /> Objekte importieren
-            </Link>
-            <button
-              className="btn"
-              onClick={() => {
-                void (async () => {
-                  // Gratis: 2 aktive Objekte (wie in der App); Pro laut Server, im Zweifel erlaubt.
-                  const count = (state.data?.properties ?? []).filter((p) => p.active).length;
-                  if (count >= FREE_PROPERTIES && !(await fetchOrgPro(client, true))) return setGate(true);
-                  setEditing('new');
-                })();
-              }}
-            >
-              ＋ Objekt anlegen
-            </button>
-          </div>
-        )}
+        {/* Knöpfe zusammen rechts (sonst verteilt section-head sie über die Breite) */}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          {/* Objektliste für alle Rollen und gratis: die eigenen Daten gehören dem Betrieb */}
+          <ExcelButton
+            label="Objektliste"
+            onExport={exportExcel}
+            title="Alle Objekte als Excel-Datei — lässt sich unter „Objekte importieren“ wieder einlesen"
+          />
+          {owner && (
+            <>
+              <Link className="btn ghost" to="import" title="Objekte aus einer Excel- oder CSV-Liste übernehmen">
+                <FileUp className="i" aria-hidden /> Objekte importieren
+              </Link>
+              <button
+                className="btn"
+                onClick={() => {
+                  void (async () => {
+                    // Gratis: 2 aktive Objekte (wie in der App); Pro laut Server, im Zweifel erlaubt.
+                    const count = (state.data?.properties ?? []).filter((p) => p.active).length;
+                    if (count >= FREE_PROPERTIES && !(await fetchOrgPro(client, true))) return setGate(true);
+                    setEditing('new');
+                  })();
+                }}
+              >
+                ＋ Objekt anlegen
+              </button>
+            </>
+          )}
+        </div>
       </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Alle Liegenschaften mit Pflichtzeiten und letztem Einsatz.

@@ -76,6 +76,23 @@ export async function fetchOperations(
   return (data ?? []) as unknown as Operation[];
 }
 
+/** Alle Einsätze im Zeitraum, vollständig (seitenweise, ohne 500er-Grenze) und chronologisch — für die Excel-Liste. */
+export async function fetchOperationsAll(
+  sb: SupabaseClient,
+  filter: { propertyId?: string; from: Date; to: Date },
+): Promise<Operation[]> {
+  const cols = await opCols(sb);
+  const end = new Date(filter.to);
+  end.setHours(23, 59, 59, 999);
+  const { data, error } = await fetchAllOf<Operation>(() => {
+    let q = sb.from('operation').select(cols).gte('started_at', filter.from.toISOString()).lte('started_at', end.toISOString());
+    if (filter.propertyId) q = q.eq('property_id', filter.propertyId);
+    return q;
+  }, [['started_at'], ['id']]);
+  if (error) fail('Einsätze konnten nicht geladen werden', error);
+  return data;
+}
+
 /** Minimale Einsatz-Metadaten für KPIs/„letzter Einsatz"-Logik (schmale Spalten, hohes Limit). */
 export interface OpMeta {
   id: string;

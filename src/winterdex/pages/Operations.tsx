@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
-import { addOperation, cancelOperation, fetchOperations, fetchProperties } from '../api';
+import { addOperation, cancelOperation, fetchOperations, fetchOperationsAll, fetchProperties } from '../api';
+import { ExcelButton } from '../../components/ExcelButton';
+import { ExportNotice } from '../../lib/xlsx';
+import { checkPeriod, requirePro, saveSheets } from '../exportActions';
+import { operationSheets, periodLabel } from '../exportLists';
 import { ActionBadge, LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import {
   FormDialog,
@@ -64,6 +68,24 @@ export function Operations() {
     opsState.reload();
   }
 
+  /** Excel-Liste zum Abrechnen: alle Einsätze im gewählten Zeitraum (auch über 500), Summen je Objekt, Stornos getrennt. */
+  async function exportExcel() {
+    if (!org) throw new Error('Betrieb nicht geladen.');
+    const period = checkPeriod(from, to);
+    await requirePro(client);
+    const [ops, properties] = await Promise.all([
+      fetchOperationsAll(client, { propertyId: propertyId || undefined, from: parseLocalDate(from), to: parseLocalDate(to) }),
+      propsState.data ?? fetchProperties(client),
+    ]);
+    if (ops.length === 0) throw new ExportNotice('Im gewählten Zeitraum gibt es keine Einsätze.');
+    const one = propertyId ? properties.find((p) => p.id === propertyId)?.name : undefined;
+    await saveSheets(
+      `WinterDex_Einsaetze_${one ? `${one}_` : ''}${period.from}_bis_${period.to}`,
+      `WinterDex Einsatzliste ${periodLabel(period)}`,
+      operationSheets({ org: org.org, properties, ops, period, propertyId: propertyId || null }),
+    );
+  }
+
   async function onCancel(v: FormValues) {
     if (!canceling) throw new Error('Kein Einsatz gewählt');
     await cancelOperation(client, canceling.id, s(v.reason));
@@ -120,7 +142,7 @@ export function Operations() {
       )}
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="row">
+        <div className="row" style={{ alignItems: 'flex-end' }}>
           <label className="field" style={{ flex: 2, minWidth: 200, marginBottom: 0 }}>
             Objekt
             <select value={propertyId} onChange={(e) => setPropertyId(e.target.value)}>
@@ -140,6 +162,10 @@ export function Operations() {
             Bis
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </label>
+          <ExcelButton
+            onExport={exportExcel}
+            title="Alle Einsätze im gewählten Zeitraum als Excel-Datei: zum Abrechnen, mit Summen je Objekt (Pro)"
+          />
         </div>
       </div>
 

@@ -1014,6 +1014,12 @@ select option {
   color: #dbeafe;
 }
 
+/* Meldung des Excel-Knopfs (components/ExcelButton.tsx): in Filter-/Knopfzeilen eigene Zeile darunter */
+.excel-msg {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+}
+
 /* Rückkehr vom Bestätigungslink der Registrierung (?bestaetigt=1, src/auth/confirmReturn.ts): grün und deutlich */
 .info-box.confirm-ok,
 .confirm-banner.ok {
