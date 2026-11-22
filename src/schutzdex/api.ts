@@ -143,7 +143,11 @@ export async function fetchCompletions(
   filter: CompletionFilter = {},
 ): Promise<Completion[]> {
   const build = () => {
-    const q = sb.from('completion').select('*');
+    // Feste Spalten (alle aus 0001_init) statt '*': signature_path enthält die Unterschrift als PNG-Daten-URI
+    // (wie in der App) — die Listen brauchen sie nicht, sie würde jede Seite mit allen Unterschriften laden.
+    const q = sb
+      .from('completion')
+      .select('id, org_id, assignment_id, member_id, briefing_id, briefing_version, abgeschlossen_am, check_score, check_passed, signed_name, device_info, created_at');
     return filter.memberId ? q.eq('member_id', filter.memberId) : q;
   };
   // Ohne limit vollständig (Nachweisliste, letzter Nachweis je Mitarbeiter) — auch über 1.000 Nachweise.
