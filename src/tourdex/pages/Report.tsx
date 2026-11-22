@@ -1,15 +1,24 @@
 import { useState } from 'react';
-import { FileDown } from 'lucide-react';
+import { Crown, FileDown } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
 import { openReportWindowAfter } from '../../lib/print';
 import { fetchTripsBefore, fetchTripsForReport, fetchVehicles } from '../api';
 import { buildFahrtenbuchHtml } from '../report';
+import { tourdexPdfAllowed } from '../pro';
 import type { Vehicle } from '../types';
 
 export function Report() {
-  const { client, session } = useAppAuth();
+  const { client, session, app } = useAppAuth();
+  const { pathname } = useLocation();
+  // Wie in der App: Fahrtenbuch-PDF nur mit Pro (Abo, Suite oder Kauf in der Dexware-App). Unklar → nicht sperren.
+  const proState = useAsync<boolean>(
+    () => (session ? tourdexPdfAllowed(app, session) : Promise.resolve(true)),
+    [app, session],
+  );
+  const pdfErlaubt = proState.data;
 
   const vehiclesState = useAsync<Vehicle[]>(() => fetchVehicles(client), [client]);
 
@@ -74,7 +83,18 @@ export function Report() {
       </p>
 
       <LoadGuard state={vehiclesState}>
-        {(vehicles) => (
+        {(vehicles) => pdfErlaubt === false ? (
+          <div className="card" style={{ maxWidth: 560 }}>
+            <p style={{ marginTop: 0 }}>
+              <Crown className="i" aria-hidden /> <strong>Das Fahrtenbuch-PDF gehört zu TourDex Pro</strong> — genau wie in der App.
+            </p>
+            <p className="muted">
+              Pro schließt du in der TourDex-App unter „Mehr“ ab, oder du nutzt die Dexware Suite. Danach steht der Bericht
+              hier sofort bereit. Deine Fahrten siehst und bearbeitest du weiterhin kostenlos.
+            </p>
+            <Link className="btn" to={pathname.replace(/\/bericht\/?$/, '/abo')}>Zum Abo</Link>
+          </div>
+        ) : (
           <div className="card" style={{ maxWidth: 560 }}>
             <label className="field">
               Fahrzeug
@@ -105,7 +125,7 @@ export function Report() {
             {error && <div className="error-box">{error}</div>}
             <button
               className="btn"
-              disabled={busy || !vehicleId}
+              disabled={busy || !vehicleId || pdfErlaubt === null}
               onClick={() => void onGenerate()}
             >
               {busy ? 'Lade Fahrten …' : <><FileDown className="i" aria-hidden /> Fahrtenbuch erstellen</>}
