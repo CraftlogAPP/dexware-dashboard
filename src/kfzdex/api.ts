@@ -4,7 +4,9 @@ import { fetchAllOf } from '../lib/completeQueries';
 import type {
   Driver,
   LicenseCheck,
+  LicenseExportRow,
   OrgMember,
+  UvvExportRow,
   UvvInspection,
   Vehicle,
 } from './types';
@@ -104,6 +106,27 @@ export async function fetchUvvInspections(
   const { data, error } = await q;
   if (error) fail('UVV-Prüfungen konnten nicht geladen werden', error);
   return (data ?? []) as UvvInspection[];
+}
+
+// ── Excel-Liste: komplette Historie (seitenweise, ohne 500er-Grenze), neueste zuerst wie in den Historien ─────
+
+export async function fetchUvvInspectionsAll(sb: SupabaseClient): Promise<UvvExportRow[]> {
+  const { data, error } = await fetchAllOf<UvvExportRow>(
+    () => sb.from('uvv_inspection').select('id, vehicle_id, date, inspector, result, defects, checklist, created_at'),
+    [['date', false], ['created_at', false], ['id', false]],
+  );
+  if (error) fail('UVV-Prüfungen konnten nicht geladen werden', error);
+  return data;
+}
+
+/** Ohne photo_uri — das Foto liegt nur auf dem kontrollierenden Gerät. */
+export async function fetchLicenseChecksAll(sb: SupabaseClient): Promise<LicenseExportRow[]> {
+  const { data, error } = await fetchAllOf<LicenseExportRow>(
+    () => sb.from('license_check').select('id, driver_id, date, checked_by, created_at'),
+    [['date', false], ['created_at', false], ['id', false]],
+  );
+  if (error) fail('Führerscheinkontrollen konnten nicht geladen werden', error);
+  return data;
 }
 
 // ── Schreiben (Format identisch zur Mobile-App, src/lib/queries.ts) ─────────

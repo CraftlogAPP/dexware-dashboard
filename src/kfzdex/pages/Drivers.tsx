@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
+import { ExcelButton } from '../../components/ExcelButton';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDate } from '../../lib/format';
@@ -8,12 +10,14 @@ import { fetchDrivers } from '../api';
 import { DueBadge, dueLabel } from '../badges';
 import { DriverDialog, LicenseCheckDialog } from '../dialogs';
 import { licenseDue } from '../due';
+import { exportFleet } from '../exportActions';
 import type { Driver } from '../types';
 import { GATE_TEXT, fleetGate } from '../vorOrt/backend';
 import { FREE_LIMITS } from '../vorOrt/rows';
 
 export function Drivers() {
   const { client } = useAppAuth();
+  const { data: org } = useOrg();
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Driver | 'new' | null>(null);
   const [checking, setChecking] = useState<Driver | null>(null);
@@ -39,9 +43,17 @@ export function Drivers() {
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Fahrer</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => void onAdd()} disabled={gateBusy}>
-          ＋ Fahrer anlegen
-        </button>
+        {/* Knöpfe zusammen rechts (sonst verteilt section-head sie über die Breite) */}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          {/* dieselbe Datei wie auf der Fahrzeuge-Seite (ein Fuhrpark, ein Knopf) */}
+          <ExcelButton
+            onExport={() => exportFleet(client, org?.org)}
+            title="Ganzer Fuhrpark als Excel-Datei: Fahrzeuge und Fahrer mit Fristen, UVV- und Kontroll-Historie"
+          />
+          <button className="btn" onClick={() => void onAdd()} disabled={gateBusy}>
+            ＋ Fahrer anlegen
+          </button>
+        </div>
       </div>
 
       <div className="filter-bar">

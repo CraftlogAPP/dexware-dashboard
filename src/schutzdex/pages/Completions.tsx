@@ -1,14 +1,18 @@
 import { useState } from 'react';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { useOrg } from '../../components/OrgContext';
+import { ExcelButton } from '../../components/ExcelButton';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDateTime } from '../../lib/format';
 import { fetchBriefings, fetchCompletions, fetchMembers } from '../api';
 import { CheckBadge } from '../badges';
+import { exportBriefings } from '../exportActions';
 import { briefingTitleMap, nameMap } from '../labels';
 import type { Completion } from '../types';
 
 export function Completions() {
   const { client } = useAppAuth();
+  const { data: org } = useOrg();
   const [memberId, setMemberId] = useState('');
 
   // Stammdaten für Namens-Auflösung — einmal laden, nicht pro Filterwechsel.
@@ -27,7 +31,17 @@ export function Completions() {
 
   return (
     <>
-      <h1>Nachweise</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Nachweise</h1>
+        <div className="spacer" />
+        {/* ganzer Betrieb (der Mitarbeiter-Filter unten gilt nicht) — deshalb im Kopf, nicht in der Filterzeile */}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <ExcelButton
+            onExport={() => exportBriefings(client, org?.org)}
+            title="Alle Unterweisungen als Excel-Datei: Übersicht Mitarbeiter × Unterweisung, wer bis wann unterwiesen werden muss, alle Nachweise"
+          />
+        </div>
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Prüffeste Unterweisungs-Nachweise (append-only) — mit Verständnis-Check,
         Klarname und Geräteinfo. Die Unterschrift liegt sicher im Speicher der App.

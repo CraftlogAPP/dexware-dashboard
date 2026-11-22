@@ -8,20 +8,7 @@ import { DueBadge, dueLabel, ResultBadge } from '../badges';
 import { UvvDialog, VehicleDialog } from '../dialogs';
 import { uvvDue } from '../due';
 import type { UvvInspection, Vehicle } from '../types';
-import { CHECK_ITEMS, VEHICLE_TYPE_LABEL } from '../types';
-
-/** Checklisten-Kurzfassung: "10/10 i. O." bzw. Liste der beanstandeten Punkte. */
-function checklistSummary(checklist: Record<string, boolean>): string {
-  const entries = Object.entries(checklist);
-  if (entries.length === 0) return '—';
-  const failed = entries.filter(([, ok]) => !ok).map(([id]) => id);
-  const okCount = entries.length - failed.length;
-  if (failed.length === 0) return `${okCount}/${entries.length} i. O.`;
-  const labels = failed.map(
-    (id) => CHECK_ITEMS.find((c) => c.id === id)?.label ?? id,
-  );
-  return `${okCount}/${entries.length} i. O. — beanstandet: ${labels.join(', ')}`;
-}
+import { checklistSummary, VEHICLE_TYPE_LABEL } from '../types';
 
 export function VehicleDetail() {
   const { id } = useParams<{ id: string }>();
