@@ -19,8 +19,12 @@ export const MAX_BYTES = 5 * 1024 * 1024;
 export const MAX_ROWS = 2000;
 /** Spalten rechts davon werden nicht gelesen (verirrte Zellen weit rechts sprengen sonst die Vorschau) */
 const MAX_COLS = 60;
-/** entpackte XML-Datei höchstens so groß (Schutz vor „ZIP-Bomben“) */
-const MAX_XML_BYTES = 80 * 1024 * 1024;
+/**
+ * Alle entpackten XML-Teile zusammen höchstens so groß (Schutz vor „ZIP-Bomben“, der Browser-Tab soll nicht abstürzen).
+ * Eine Liste mit 2.000 Zeilen hat meist 1–3 MB XML.
+ */
+const MAX_XML_BYTES = 40 * 1024 * 1024;
+const TOO_BIG_XLSX = 'Die Excel-Datei ist zu groß — bitte die Liste aufteilen.';
 
 // ---------------------------------------------------------------------------
 // Liste lesen
@@ -62,41 +66,53 @@ export async function tableFromBytes(buf: Uint8Array<ArrayBuffer>, fileName: str
   if (['xls', 'xlsb', 'ods', 'numbers', 'pdf', 'doc', 'docx'].includes(ext)) throw new Error(ext === 'xls' ? OLD_XLS : UNREADABLE);
   const { text, encoding } = decodeCsv(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
   if (text.includes('\u0000')) throw new Error(UNREADABLE);
+  let src = text.replace(/^﻿/, '');
   // „Excel 2003 XML“ oder als .xls gespeicherte Web-Seiten sind keine CSV
-  if (/^\s*</.test(text.replace(/^﻿/, ''))) throw new Error(UNREADABLE);
-  const { rows } = parseCsv(text);
-  const clean = rows.map(cleanRow);
-  return checkTable({ rows: clean, lines: clean.map((_, i) => i + 1), kind: 'csv', ansi: encoding === 'windows-1252' });
+  if (/^\s*</.test(src)) throw new Error(UNREADABLE);
+  // „sep=;“ in der ersten Zeile (Excel-Hinweis aufs Trennzeichen) — Excel zeigt die Zeile nicht an
+  const sep = /^sep=(.)[ \t]*(?:\r\n|\n|\r|$)/i.exec(src);
+  if (sep) src = src.slice(sep[0].length);
+  // Trennzeichen wie der CSV-Import erkennen; Zeilen selbst zählen, damit „Zeile 4“ auch in Excel Zeile 4 ist
+  // (der CSV-Import lässt leere Zeilen weg und zählt dann falsch)
+  const delimiter = sep ? sep[1] : parseCsv(src).delimiter;
+  const records = parseDelimited(src, delimiter).map((r) => r.map(unprotect));
+  return checkTable({ ...numbered(records), kind: 'csv', ansi: encoding === 'windows-1252' });
+}
+
+/** Ein von Excel bzw. dem Export vorangestelltes ' vor = + - @ entfernen (wie der CSV-Import). */
+const unprotect = (c: string) => (/^\s*'[=+\-@]/.test(c) ? c.trim().slice(1) : c);
+
+/** Zellen säubern, leere Zeilen weglassen, Zeilennummer = Datensatz im Text (wie die Zeile in Excel). */
+function numbered(records: string[][]): { rows: string[][]; lines: number[] } {
+  const rows: string[][] = [];
+  const lines: number[] = [];
+  records.forEach((r, i) => {
+    const c = cleanRow(r);
+    if (c.some((x) => x !== '')) {
+      rows.push(c);
+      lines.push(i + 1);
+    }
+  });
+  return { rows, lines };
 }
 
 /**
  * Aus Excel kopierte Zellen (Strg+C → Strg+V): Excel trennt mit Tabulator, Zellen mit Zeilenumbruch stehen in
- * Anführungszeichen. Ohne Tabulator wird der Text wie eine CSV-Datei gelesen.
+ * Anführungszeichen. Ohne Tabulator: mit „;“ in der ersten Zeile wie eine CSV-Datei, sonst ist jede Zeile EINE Zelle
+ * (eine kopierte Spalte „Hauptplatz 1, 8200 Gleisdorf“ darf nicht am Komma zerfallen).
  * Eigener Leser statt der Trennzeichen-Erkennung des CSV-Imports: die zählt nur in der ersten Zeile und hielte
  * „Hauptplatz 1, 8200 Gleisdorf<Tab>…“ für eine Komma-Liste.
  */
 export function tableFromPaste(text: string): Table {
+  if (text.length > MAX_BYTES) throw new Error('Der eingefügte Text ist zu lang — bitte die Liste aufteilen.');
   const src = text.replace(/^﻿/, '');
-  let rows: string[][];
-  let lines: number[];
-  if (src.includes('\t')) {
-    const all = parseTabbed(src).map(cleanRow);
-    lines = [];
-    rows = [];
-    all.forEach((r, i) => {
-      if (r.some((c) => c !== '')) {
-        rows.push(r);
-        lines.push(i + 1);
-      }
-    });
-  } else {
-    rows = parseCsv(src).rows.map(cleanRow);
-    lines = rows.map((_, i) => i + 1);
-  }
-  return checkTable({ rows, lines, kind: 'paste' });
+  const firstLine = /^[^\r\n]*/.exec(src)?.[0] ?? '';
+  const delimiter = !src.includes('\t') && firstLine.includes(';') ? ';' : '\t';
+  return checkTable({ ...numbered(parseDelimited(src, delimiter)), kind: 'paste' });
 }
 
-function parseTabbed(src: string): string[][] {
+/** Text mit Trennzeichen nach RFC 4180 (Anführungszeichen, "" im Feld, Zeilenumbruch im Feld) — alle Zeilen, auch leere. */
+function parseDelimited(src: string, delimiter: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = '';
@@ -111,7 +127,7 @@ function parseTabbed(src: string): string[][] {
         } else quoted = false;
       } else cell += ch;
     } else if (ch === '"' && cell === '') quoted = true;
-    else if (ch === '\t') {
+    else if (ch === delimiter) {
       row.push(cell);
       cell = '';
     } else if (ch === '\n' || ch === '\r') {
@@ -183,13 +199,22 @@ export function readZipDirectory(b: Uint8Array): Map<string, ZipEntry> {
   return out;
 }
 
-async function unzip(b: Uint8Array<ArrayBuffer>, e: ZipEntry): Promise<Uint8Array> {
+/** Wie viel noch entpackt werden darf (gilt für alle Teile einer Datei zusammen). */
+interface Budget {
+  left: number;
+}
+
+async function unzip(b: Uint8Array<ArrayBuffer>, e: ZipEntry, budget: Budget): Promise<Uint8Array> {
   const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
   if (e.flags & 1) throw new Error('Die Datei ist mit einem Passwort geschützt. Bitte ohne Passwort speichern — oder die Tabelle kopieren und unten einfügen.');
   if (e.offset + 30 > b.length || dv.getUint32(e.offset, true) !== 0x04034b50) throw new Error(UNREADABLE);
   const start = e.offset + 30 + dv.getUint16(e.offset + 26, true) + dv.getUint16(e.offset + 28, true);
   const data = b.subarray(start, start + e.compSize);
-  if (e.method === 0) return data;
+  if (e.method === 0) {
+    budget.left -= data.byteLength;
+    if (budget.left < 0) throw new Error(TOO_BIG_XLSX);
+    return data;
+  }
   if (e.method !== 8) throw new Error(UNREADABLE);
   if (typeof DecompressionStream === 'undefined') {
     throw new Error('Dieser Browser kann Excel-Dateien nicht öffnen. Bitte die Liste als CSV speichern — oder die Tabelle kopieren und unten einfügen.');
@@ -202,14 +227,15 @@ async function unzip(b: Uint8Array<ArrayBuffer>, e: ZipEntry): Promise<Uint8Arra
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > MAX_XML_BYTES) {
+      budget.left -= value.byteLength;
+      if (budget.left < 0) {
         void reader.cancel();
-        throw new Error('Die Excel-Datei ist zu groß — bitte die Liste aufteilen.');
+        throw new Error(TOO_BIG_XLSX);
       }
       parts.push(value);
     }
   } catch (err) {
-    if (err instanceof Error && /zu groß/.test(err.message)) throw err;
+    if (err instanceof Error && err.message === TOO_BIG_XLSX) throw err;
     throw new Error(UNREADABLE);
   }
   const out = new Uint8Array(total);
@@ -269,9 +295,10 @@ const dirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastInd
 /** Erstes sichtbares Tabellenblatt einer .xlsx-Datei als Zeilen. */
 export async function readXlsx(buf: Uint8Array<ArrayBuffer>): Promise<Table> {
   const zip = readZipDirectory(buf);
+  const budget: Budget = { left: MAX_XML_BYTES };
   const load = async (path: string): Promise<Document | null> => {
     const e = zip.get(path.toLowerCase());
-    return e ? parseXml(await unzip(buf, e)) : null;
+    return e ? parseXml(await unzip(buf, e, budget)) : null;
   };
   const rootRels = readRels(await load('_rels/.rels'), '');
   const wbPath = [...rootRels.values()].find((r) => /\/officeDocument$/.test(r.type))?.target ?? 'xl/workbook.xml';
@@ -470,6 +497,10 @@ export interface FieldDef {
   exact: string[];
   /** Überschriften, die so beginnen (z. B. „Fläche (m²)“) */
   prefix?: string[];
+  /** unsichere Überschriften: nur, wenn es keine Straßen-Spalte gibt (sonst ist „Standort“ eher „Nordseite“) */
+  weak?: string[];
+  /** Überschriften mit diesen Wortteilen nie über prefix/weak (z. B. „Adresse Hausverwaltung“) */
+  notIf?: RegExp;
 }
 
 export const FIELDS: FieldDef[] = [
@@ -484,8 +515,10 @@ export const FIELDS: FieldDef[] = [
     key: 'address',
     label: 'Adresse (komplett)',
     hint: 'z. B. „Hauptplatz 1, 8200 Gleisdorf“',
-    exact: ['adresse', 'anschrift', 'objektadresse', 'liegenschaftsadresse', 'standort', 'postanschrift', 'vollstaendigeadresse'],
+    exact: ['adresse', 'anschrift', 'objektadresse', 'objektanschrift', 'liegenschaftsadresse', 'vollstaendigeadresse'],
     prefix: ['adresse', 'anschrift'],
+    weak: ['standort', 'postanschrift'],
+    notIf: /kunde|verwalt|eigentuemer|besitzer|vermieter|auftraggeber|rechnung|kontakt|ansprech|mail|firma/,
   },
   {
     key: 'street',
@@ -573,9 +606,18 @@ export function guessMapping(header: string[]): Mapping {
     const d = used.has(i) ? null : dutyField(k);
     if (d && m[d] === undefined) take(d, i);
   });
-  for (const f of FIELDS) {
+  // Präfixe: Straße/Hausnummer schlagen eine nur so ähnlich benannte Adress-Spalte („Adresse Hausverwaltung“ ist
+  // die Anschrift des Auftraggebers, nicht die des Objekts) — die Adresse gewinnt sonst beim Zusammensetzen.
+  const loose = (f: FieldDef, k: string) => !(f.notIf?.test(k) ?? false) && !(f.key === 'address' && m.street !== undefined);
+  const addressLast = [...FIELDS.filter((f) => f.key !== 'address'), ...FIELDS.filter((f) => f.key === 'address')];
+  for (const f of addressLast) {
     if (m[f.key] !== undefined || !f.prefix) continue;
-    const i = keys.findIndex((k, j) => !used.has(j) && f.prefix!.some((p) => k.startsWith(p)));
+    const i = keys.findIndex((k, j) => !used.has(j) && loose(f, k) && f.prefix!.some((p) => k.startsWith(p)));
+    if (i >= 0) take(f.key, i);
+  }
+  for (const f of addressLast) {
+    if (m[f.key] !== undefined || !f.weak) continue;
+    const i = keys.findIndex((k, j) => !used.has(j) && loose(f, k) && f.weak!.includes(k));
     if (i >= 0) take(f.key, i);
   }
   // „Nr.“ ist nur rechts neben der Straße eine Hausnummer — ganz vorne ist es meist eine laufende Nummer
@@ -590,6 +632,59 @@ export function guessMapping(header: string[]): Mapping {
 export function looksLikeHeader(first: string[]): boolean {
   const n = Object.keys(guessMapping(first)).length;
   return n >= 2 || (n === 1 && !first.some((c) => /\d/.test(c)));
+}
+
+/** So weit unten wird die Überschriften-Zeile noch gesucht (darüber stehen oft Titel wie „Objektliste 2025/26“). */
+const HEADER_SCAN = 10;
+
+/**
+ * Zeile mit den Überschriften: unter den ersten Zeilen die mit den meisten erkannten Spalten (mindestens zwei);
+ * sonst die erste Zeile, wenn sie wie eine Überschrift aussieht. -1 = keine Überschriften.
+ */
+export function findHeaderRow(rows: string[][]): number {
+  let best = -1;
+  let bestN = 1;
+  rows.slice(0, HEADER_SCAN).forEach((r, i) => {
+    const n = Object.keys(guessMapping(r)).length;
+    if (n > bestN) {
+      best = i;
+      bestN = n;
+    }
+  });
+  if (best >= 0) return best;
+  return rows.length && looksLikeHeader(rows[0]) ? 0 : -1;
+}
+
+export interface Layout {
+  /** Tabelle ab der Überschriften-Zeile (Titelzeilen darüber weggelassen) */
+  table: Table;
+  hasHeader: boolean;
+  mapping: Mapping;
+  /** weggelassene Zeilen über den Überschriften */
+  skipped: number;
+}
+
+/** Überschriften finden, Titelzeilen darüber weglassen, Spalten zuordnen. */
+export function detectLayout(t: Table): Layout {
+  const h = findHeaderRow(t.rows);
+  const skipped = Math.max(0, h);
+  const table = skipped ? { ...t, rows: t.rows.slice(skipped), lines: t.lines.slice(skipped) } : t;
+  const hasHeader = h >= 0;
+  return { table, hasHeader, mapping: mappingFor(table, hasHeader), skipped };
+}
+
+/** Zuordnung für die Tabelle (Schalter „Erste Zeile enthält Überschriften“). */
+export function mappingFor(table: Pick<Table, 'rows' | 'lines'>, hasHeader: boolean): Mapping {
+  const m = hasHeader ? guessMapping(table.rows[0] ?? []) : guessMappingFromData(table.rows);
+  // „Räumung an Sonn- und Feiertagen“ mit ja/nein ist keine Uhrzeit — nur Spalten mit Zeiten als Pflichtzeiten
+  const data = dataRows(table, hasHeader).slice(0, 50);
+  for (const f of ['dutyAll', 'dutyMoFr', 'dutySa', 'dutySo'] as const) {
+    const c = m[f];
+    if (c === undefined) continue;
+    const vals = data.map((r) => (r.cells[c] ?? '').trim()).filter(Boolean);
+    if (vals.length && vals.filter((v) => /\d/.test(v)).length / vals.length < 0.5) delete m[f];
+  }
+  return m;
 }
 
 /** Ohne Überschriften: Spalten am Inhalt erkennen (PLZ, Straße mit Nummer, komplette Adresse, Ort). */
@@ -611,11 +706,25 @@ export function guessMappingFromData(rows: string[][]): Mapping {
       }
     }
   };
+  const HOUSE_NO = /^\d{1,3}\s*[a-z]?(?:\s*[-/]\s*\d+\s*[a-z]?)*$/i;
+  const TEXT = /^\D{3,}$/u;
   pick('address', /\d+\s*[a-z]?\s*,\s*(?:[A-Z]{1,2}-)?\d{4,5}\s+\p{L}/iu);
   pick('zip', /^(?:[A-Z]{1,2}-)?\d{4,5}$/i);
   if (m.address === undefined) pick('street', /^\D{3,}\s\d+\s*[a-z]?(?:\s*[-/]\s*\d+\s*[a-z]?)*$/iu);
-  if (m.address === undefined && m.street === undefined) pick('street', /^\D{3,}$/u);
-  if (m.street !== undefined) pick('houseNo', /^\d{1,3}\s*[a-z]?(?:\s*[-/]\s*\d+\s*[a-z]?)*$/i, m.street + 1);
+  if (m.street !== undefined) pick('houseNo', HOUSE_NO, m.street + 1);
+  else if (m.address === undefined) {
+    // Straße und Hausnummer getrennt: die Straße ist die Text-Spalte direkt links der Nummern-Spalte
+    // (nicht einfach die erste Text-Spalte — das wäre meist der Name; eine laufende Nummer ganz vorne zählt nicht)
+    for (let i = 1; i < cols; i++) {
+      if (!used.has(i) && !used.has(i - 1) && share(i, HOUSE_NO) >= 0.6 && share(i - 1, TEXT) >= 0.6) {
+        m.street = i - 1;
+        m.houseNo = i;
+        used.add(i - 1);
+        used.add(i);
+        break;
+      }
+    }
+  }
   if (m.zip !== undefined) pick('city', /^\p{L}[\p{L} .'-]+$/u, m.zip + 1);
   // erste übrige Text-Spalte links der Adresse = Name
   const addrCol = m.address ?? m.street;
@@ -715,9 +824,16 @@ export interface PlanInput {
   existing: Pick<Property, 'name' | 'address'>[];
 }
 
-/** Gleiches Objekt? Gleicher Name und gleiche Adresse — eine darf länger sein („Hauptplatz 1“ = „Hauptplatz 1, 8200 Gleisdorf“). */
+/**
+ * Gleiches Objekt? Gleicher Name und gleiche Adresse (Vergleichsform aus cmpKey). Bei einer darf PLZ/Ort fehlen
+ * („Hauptplatz 1“ = „Hauptplatz 1, 8200 Gleisdorf“) — eine andere Hausnummer („5/2“, „5-7“) ist aber ein anderes Objekt.
+ */
 function sameAddress(a: string, b: string): boolean {
-  return a === b || a.startsWith(b + ' ') || b.startsWith(a + ' ');
+  if (a === b) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (!long.startsWith(short + ' ')) return false;
+  const rest = long.slice(short.length + 1);
+  return /^(?:(?:a|d|ch) )?\d{4,5}(?: |$)/.test(rest) || /^[a-z]{3,}(?: [a-z]+)*$/.test(rest);
 }
 
 export function dataRows(table: Pick<Table, 'rows' | 'lines'>, hasHeader: boolean): { cells: string[]; line: number }[] {
@@ -748,7 +864,8 @@ export function buildPlan(input: PlanInput): Plan {
     const zipCity = zip && city.startsWith(zip) ? city : [zip, city].filter(Boolean).join(' ');
     const words = ` ${cmpKey(base)} `;
     const known = (part: string) => !!part && words.includes(` ${cmpKey(part)} `);
-    const extra = zipCity && !known(zip) && !known(city) ? zipCity : '';
+    // PLZ und Ort getrennt prüfen: in „Gnas 52“ steht der Ort schon, die PLZ fehlt aber → „Gnas 52, 8342 Gnas“
+    const extra = zip && !known(zip) ? zipCity : city && !known(city) ? city : '';
     const address = cap([base, extra].filter(Boolean).join(', '), 240);
 
     const ownName = oneLine(get('name'));

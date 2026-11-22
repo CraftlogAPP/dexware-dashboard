@@ -72,6 +72,21 @@ export function setGeocoder(g: Geocoder) {
 }
 
 /**
+ * Eine Anfrage an den Adress-Dienst in die gemeinsame Warteschlange (≥ 1,1 s zwischen zwei Anfragen, auch bei mehreren
+ * gleichzeitigen Aufrufen und über die Bereiche hinweg — z. B. die strengere Objekt-Suche von WinterDex).
+ */
+export function throttledLookup<T>(fn: () => Promise<T>): Promise<T> {
+  const run = queue.then(async () => {
+    const wait = lastCall + MIN_GAP_MS - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastCall = Date.now();
+    return fn();
+  });
+  queue = run.catch(() => null);
+  return run;
+}
+
+/**
  * Adresse → Koordinaten, mit Zwischenspeicher und Warteschlange (≥ 1,1 s zwischen zwei Anfragen, auch bei mehreren
  * gleichzeitigen Aufrufen). Nicht gefundene Adressen werden ebenfalls gemerkt (kein erneutes Nachfragen beim nächsten Speichern).
  */
@@ -81,10 +96,7 @@ export function geocodeAddress(address: string, opts: { retry?: boolean } = {}):
   const cached = readCache()[key];
   if (cached && !opts.retry) return Promise.resolve(cached);
   if (cached === 0 && !opts.retry) return Promise.resolve(null);
-  const run = queue.then(async () => {
-    const wait = lastCall + MIN_GAP_MS - Date.now();
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    lastCall = Date.now();
+  return throttledLookup(async () => {
     try {
       const p = await provider.find(address.trim());
       writeCache(key, p ?? 0);
@@ -93,6 +105,4 @@ export function geocodeAddress(address: string, opts: { retry?: boolean } = {}):
       return null; // offline, Zeitüberschreitung, Dienst nicht erreichbar → ohne Pin, beim nächsten Mal neu versuchen
     }
   });
-  queue = run.catch(() => null);
-  return run;
 }

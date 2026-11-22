@@ -1,8 +1,8 @@
 import { useAppAuth } from '../auth/AppAuthContext';
 import { useOrg } from '../components/OrgContext';
 import { FormDialog, orNull, s, type FormValues } from '../components/form';
-import { geocodeAddress } from '../pinndex/geocode';
 import { saveProperty, fetchProperties } from './api';
+import { locateAddress } from './geo';
 import { FREE_PROPERTIES, PRO_HOW, fetchOrgPro } from './pro';
 import type { Property } from './types';
 
@@ -30,9 +30,10 @@ export function PropertyDialog({
       }
     }
     // Wie die App: ohne Standort die Adresse in Koordinaten umrechnen (Wetter-Rückgriff, Glätte-Frühwarnung,
-    // GPS-Abstand im Nachweis). Best effort — klappt es nicht, wird trotzdem gespeichert.
+    // GPS-Abstand im Nachweis). Nur mit PLZ und Ort (sonst eher ein falscher Ort als keiner — siehe geo.ts).
+    // Best effort — klappt es nicht, wird trotzdem gespeichert.
     const address = s(v.address);
-    const location = noLocation ? ((await geocodeAddress(address)) ?? undefined) : undefined;
+    const location = noLocation ? ((await locateAddress(address)).point ?? undefined) : undefined;
     await saveProperty(
       client,
       org.org.id,
@@ -64,7 +65,7 @@ export function PropertyDialog({
           label: 'Adresse',
           required: true,
           hint: noLocation
-            ? 'Beim Speichern wird daraus der Standort bestimmt (über OpenStreetMap) — für Glätte-Frühwarnung und GPS-Abstand.'
+            ? 'Mit PLZ und Ort (z. B. „Hauptplatz 1, 8200 Gleisdorf“) wird beim Speichern daraus der Standort bestimmt (über OpenStreetMap) — für Glätte-Frühwarnung und GPS-Abstand.'
             : undefined,
         },
         { key: 'customer_name', label: 'Auftraggeber' },

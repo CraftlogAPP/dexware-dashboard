@@ -3292,6 +3292,15 @@ input {
   box-shadow: none;
   cursor: pointer;
 }
+/* Tastatur: sichtbar, welches Kästchen gerade dran ist (die globale Regel nimmt Rahmen und Schatten weg) */
+.wd-check input:focus-visible,
+.wd-imp-table input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.wd-imp-st-inline {
+  display: none;
+}
 .wd-imp-summary {
   margin: 0 0 12px;
   line-height: 1.5;
@@ -3385,6 +3394,14 @@ input {
   }
   .wd-imp-map {
     padding: 12px 14px;
+  }
+  /* Status unter dem Objekt statt in der letzten Spalte (die läge rechts außerhalb des Bildschirms) */
+  .wd-imp-table .wd-imp-st {
+    display: none;
+  }
+  .wd-imp-st-inline {
+    display: block;
+    margin-top: 6px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

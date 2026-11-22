@@ -5,18 +5,18 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync, useUnsavedGuard } from '../../components/ui';
 import { downloadCsv } from '../../installateurdex/csv';
-import { geocodeAddress, type GeoPoint } from '../../pinndex/geocode';
+import type { GeoPoint } from '../../pinndex/geocode';
 import { fetchProperties, insertProperties, propertyRow } from '../api';
+import { addressPlace, locateAddress } from '../geo';
 import {
   FIELDS,
   buildPlan,
   colLetter,
+  detectLayout,
   finalRows,
   guessLand,
-  guessMapping,
-  guessMappingFromData,
   importAllowance,
-  looksLikeHeader,
+  mappingFor,
   readImportFile,
   tableFromPaste,
   templateCsv,
@@ -33,6 +33,13 @@ import { DUTY_DEFAULTS, DUTY_HINTS, LAND_LABELS, type DutyTimes, type Land, type
 
 /** Paketgröße beim Anlegen */
 const CHUNK = 50;
+/**
+ * Mehr Objekte auf einmal werden nicht geortet: OpenStreetMap erlaubt 1 Anfrage pro Sekunde für alle Nutzer zusammen
+ * und rät von Massenabfragen ab (200 ≈ 4 Minuten).
+ */
+const GEO_MAX = 200;
+/** Fehler, bei denen jede weitere Zeile genauso scheitert — dann nicht Zeile für Zeile weiterprobieren */
+const FATAL = /keine Verbindung|fehlt dir die Berechtigung|Anmeldung ist abgelaufen/;
 
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString('de-DE')} ${n === 1 ? one : many}`;
 
@@ -72,6 +79,8 @@ interface Loaded {
   table: Table;
   /** Dateiname oder „Eingefügte Tabelle“ */
   source: string;
+  /** Titelzeilen über den Überschriften (weggelassen) */
+  skipped: number;
 }
 
 type Phase = { step: 'check' } | { step: 'geo' | 'save'; done: number; total: number };
@@ -81,6 +90,8 @@ interface Result {
   failed: { line: number; name: string; reason: string }[];
   /** angelegt, aber ohne Standort */
   noLocation: string[];
+  /** davon ohne PLZ/Ort in der Adresse (gar nicht gesucht) */
+  noPlace: number;
   geo: boolean;
   /** inzwischen schon vorhanden (anderer Tab, zweiter Klick) */
   already: number;
@@ -137,15 +148,19 @@ function ImportFlow({
   const toCreate = allowance === null ? selectedCount : Math.min(selectedCount, allowance);
   const limited = allowance !== null && selectedCount > allowance;
   const usesDefaults = !!plan?.rows.some((r) => r.input && r.dutyDefault);
+  // Standort: nur bis GEO_MAX Objekte, und nur Adressen mit PLZ und Ort (sonst eher ein falscher Ort als keiner)
+  const geoPossible = toCreate <= GEO_MAX;
+  const geoOn = geo && geoPossible;
+  const noPlaceCount = plan ? plan.rows.filter((r) => isSel(r) && !addressPlace(r.address)).length : 0;
 
   function applyTable(t: Table, source: string) {
-    const header = looksLikeHeader(t.rows[0]);
-    const m = header ? guessMapping(t.rows[0]) : guessMappingFromData(t.rows);
-    setLoaded({ table: t, source });
-    setHasHeader(header);
+    const layout = detectLayout(t);
+    const m = layout.mapping;
+    setLoaded({ table: layout.table, source, skipped: layout.skipped });
+    setHasHeader(layout.hasHeader);
     setMapping(m);
     setMapOpen(m.address === undefined && m.street === undefined);
-    setLand(guessLand(t, header, m, orgLand));
+    setLand(guessLand(layout.table, layout.hasHeader, m, orgLand));
     setToggled(new Map());
     setResult(null);
     setRunError(null);
@@ -196,7 +211,7 @@ function ImportFlow({
   function changeHeader(on: boolean) {
     if (!table) return;
     setHasHeader(on);
-    setMapping(on ? guessMapping(table.rows[0]) : guessMappingFromData(table.rows));
+    setMapping(mappingFor(table, on));
     setToggled(new Map());
   }
 
@@ -204,9 +219,21 @@ function ImportFlow({
     setToggled((t) => new Map(t).set(r.i, on));
   }
 
+  /**
+   * Kopf-Häkchen: gilt nur für neue Zeilen. „Schon vorhanden“ und „doppelt“ hakt man nur einzeln an — sonst legte ein
+   * Klick beim zweiten Import alles Vorhandene doppelt an. Abwählen nimmt alle Häkchen weg.
+   */
   function toggleAll(on: boolean) {
     if (!plan) return;
-    setToggled(new Map(plan.rows.filter((r) => r.input).map((r) => [r.i, on])));
+    setToggled((t) => {
+      const next = new Map(t);
+      for (const r of plan.rows) {
+        if (!r.input) continue;
+        if (r.status === 'ok') next.set(r.i, on);
+        else if (!on) next.set(r.i, false);
+      }
+      return next;
+    });
   }
 
   async function run() {
@@ -221,47 +248,49 @@ function ImportFlow({
       const [fresh, proNow] = await Promise.all([fetchProperties(client), fetchOrgPro(client, true)]);
       const { rows, already, overLimit } = finalRows(plan, new Set(plan.rows.filter(isSel).map((r) => r.i)), fresh, proNow);
 
-      // Standort aus der Adresse (OpenStreetMap, ≥ 1,1 s Abstand) — abbrechbar, dann ohne Standort weiter
+      // Standort aus der Adresse (OpenStreetMap, ≥ 1,1 s Abstand; nur mit PLZ und Ort) — abbrechbar, dann ohne Standort weiter
       const loc = new Map<number, GeoPoint>();
-      if (geo) {
-        for (let k = 0; k < rows.length && !cancelGeo.current; k++) {
-          setPhase({ step: 'geo', done: k, total: rows.length });
-          const p = await geocodeAddress(rows[k].address);
-          if (p) loc.set(rows[k].i, p);
-        }
+      const geoNow = geo && rows.length <= GEO_MAX;
+      const findable = geoNow ? rows.filter((r) => addressPlace(r.address)) : [];
+      for (let k = 0; k < findable.length && !cancelGeo.current; k++) {
+        setPhase({ step: 'geo', done: k, total: findable.length });
+        const { point } = await locateAddress(findable[k].address);
+        if (point) loc.set(findable[k].i, point);
       }
 
-      // Anlegen in Paketen; schlägt ein Paket fehl, einzeln wiederholen und die fehlerhaften Zeilen benennen
+      // Anlegen in Paketen; schlägt ein Paket fehl, einzeln wiederholen und die fehlerhaften Zeilen benennen.
+      // Kein Netz, keine Berechtigung, Anmeldung abgelaufen: der Rest scheitert genauso — nicht Zeile für Zeile probieren.
       const items = rows.map((r) => ({ r, row: propertyRow(orgId, r.input!, undefined, loc.get(r.i) ?? null) }));
       const failed: Result['failed'] = [];
       const okIds = new Set<number>();
-      let offline = '';
+      const why = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^Objekte konnten nicht angelegt werden: /, '');
+      let fatal = '';
       for (let k = 0; k < items.length; k += CHUNK) {
         setPhase({ step: 'save', done: k, total: items.length });
         const part = items.slice(k, k + CHUNK);
-        if (offline) {
-          part.forEach((it) => failed.push({ line: it.r.line, name: it.r.name, reason: offline }));
-          continue;
+        if (!fatal) {
+          try {
+            await insertProperties(client, part.map((it) => it.row));
+            part.forEach((it) => okIds.add(it.r.i));
+            created += part.length;
+            continue;
+          } catch (e) {
+            if (FATAL.test(why(e))) fatal = why(e);
+          }
         }
-        try {
-          await insertProperties(client, part.map((it) => it.row));
-          part.forEach((it) => okIds.add(it.r.i));
-          created += part.length;
-        } catch {
-          for (const it of part) {
-            if (offline) {
-              failed.push({ line: it.r.line, name: it.r.name, reason: offline });
-              continue;
-            }
-            try {
-              await insertProperties(client, [it.row]);
-              okIds.add(it.r.i);
-              created++;
-            } catch (e) {
-              const reason = (e instanceof Error ? e.message : String(e)).replace(/^Objekte konnten nicht angelegt werden: /, '');
-              if (/keine Verbindung/.test(reason)) offline = reason;
-              failed.push({ line: it.r.line, name: it.r.name, reason });
-            }
+        for (const it of part) {
+          if (fatal) {
+            failed.push({ line: it.r.line, name: it.r.name, reason: fatal });
+            continue;
+          }
+          try {
+            await insertProperties(client, [it.row]);
+            okIds.add(it.r.i);
+            created++;
+          } catch (e) {
+            const reason = why(e);
+            if (FATAL.test(reason)) fatal = reason;
+            failed.push({ line: it.r.line, name: it.r.name, reason });
           }
         }
       }
@@ -269,7 +298,8 @@ function ImportFlow({
         created,
         failed,
         noLocation: rows.filter((r) => okIds.has(r.i) && !loc.has(r.i)).map((r) => r.name),
-        geo,
+        noPlace: rows.filter((r) => okIds.has(r.i) && !addressPlace(r.address)).length,
+        geo: geoNow,
         already,
         overLimit,
       });
@@ -294,9 +324,11 @@ function ImportFlow({
   const colCount = table ? Math.max(...table.rows.slice(0, 50).map((r) => r.length)) : 0;
   const mapped = FIELDS.filter((f) => mapping[f.key] !== undefined);
   const dataCount = table ? table.rows.length - (hasHeader ? 1 : 0) : 0;
-  const selectable = plan ? plan.rows.filter((r) => r.input) : [];
-  const allOn = selectable.length > 0 && selectable.every(isSel);
+  const newRows = plan ? plan.rows.filter((r) => r.status === 'ok') : [];
+  const allOn = newRows.length > 0 && newRows.every(isSel);
   const hasAddressCol = mapping.address !== undefined || mapping.street !== undefined;
+  /** nach erfolgreichem Anlegen ist nichts mehr zu tun — dann kein grauer „0 Objekte anlegen“-Knopf */
+  const doneNothingLeft = !!result && result.created > 0 && toCreate === 0;
 
   return (
     <div className="wd-imp">
@@ -369,11 +401,13 @@ function ImportFlow({
                 Gelesen wird nur das erste Tabellenblatt. Andere Blätter bitte einzeln speichern oder kopieren.
               </p>
             )}
-            {table.ansi && (
-              <div className="info-box">
-                Die Datei war nicht als UTF-8 gespeichert. Bitte prüfe in der Vorschau, ob Umlaute (ä, ö, ü, ß) richtig aussehen.
-              </div>
+            {loaded.skipped > 0 && (
+              <p className="small muted" style={{ margin: '0 0 6px' }}>
+                {loaded.skipped === 1 ? 'Die Zeile' : `${loaded.skipped} Zeilen`} über den Überschriften{' '}
+                {loaded.skipped === 1 ? 'wird' : 'werden'} nicht übernommen.
+              </p>
             )}
+            {table.ansi && <div className="info-box">Bitte kurz prüfen, ob die Umlaute (ä, ö, ü, ß) unten richtig aussehen.</div>}
             <label className="wd-check">
               <input type="checkbox" checked={hasHeader} onChange={(e) => changeHeader(e.target.checked)} disabled={!!phase} />
               Erste Zeile enthält Überschriften
@@ -382,7 +416,13 @@ function ImportFlow({
         )}
       </div>
 
-      {plan && table && (
+      {plan && table && dataCount === 0 && (
+        <div className="info-box" style={{ marginTop: 12 }}>
+          Unter den Überschriften stehen keine Zeilen. Bitte die ganze Liste markieren und kopieren.
+        </div>
+      )}
+
+      {plan && table && dataCount > 0 && (
         <>
           <div className="section-head">
             <h2>2. Prüfen</h2>
@@ -430,11 +470,13 @@ function ImportFlow({
               <select value={land} onChange={(e) => setLand(e.target.value as Land)} disabled={!!phase}>
                 {(Object.keys(LAND_LABELS) as Land[]).map((l) => (
                   <option key={l} value={l}>
-                    {LAND_LABELS[l]}: {dutyText(DUTY_DEFAULTS[l])}
+                    {LAND_LABELS[l]}
                   </option>
                 ))}
               </select>
-              <span className="muted small field-hint">{DUTY_HINTS[land]}</span>
+              <span className="muted small field-hint">
+                Vorgabe: {dutyText(DUTY_DEFAULTS[land])}. {DUTY_HINTS[land]}
+              </span>
             </label>
           )}
 
@@ -445,9 +487,10 @@ function ImportFlow({
                   <th>
                     <input
                       type="checkbox"
-                      aria-label="Alle anhaken"
+                      aria-label="Alle neuen Objekte anhaken"
+                      title="Alle neuen Objekte anhaken"
                       checked={allOn}
-                      disabled={!selectable.length || !!phase}
+                      disabled={!newRows.length || !!phase}
                       onChange={(e) => toggleAll(e.target.checked)}
                     />
                   </th>
@@ -455,7 +498,7 @@ function ImportFlow({
                   <th>Objekt</th>
                   <th>Auftraggeber</th>
                   <th>Pflichtzeiten</th>
-                  <th>Status</th>
+                  <th className="wd-imp-st">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -477,13 +520,17 @@ function ImportFlow({
                         <b>{r.name || '—'}</b>
                         {r.nameFromAddress && r.name && <span className="muted small"> (Name aus der Adresse)</span>}
                         <span className="wd-imp-sub">{r.address || '—'}</span>
+                        {/* am Handy steht der Status hier, die Status-Spalte läge außerhalb des Bildschirms */}
+                        <span className="wd-imp-st-inline">
+                          <StatusBadge row={r} />
+                        </span>
                       </td>
                       <td className="wrap muted">{r.customer || '—'}</td>
                       <td className="muted small">
                         {r.input ? dutyText(r.input.duty_times) : '—'}
                         {r.input && r.dutyDefault && <span className="wd-imp-sub">Vorgabe {LAND_LABELS[land]}</span>}
                       </td>
-                      <td>
+                      <td className="wd-imp-st">
                         <StatusBadge row={r} />
                       </td>
                     </tr>
@@ -498,11 +545,14 @@ function ImportFlow({
           </div>
           <div className="card">
             <label className="wd-check">
-              <input type="checkbox" checked={geo} onChange={(e) => setGeo(e.target.checked)} disabled={!!phase} />
+              <input type="checkbox" checked={geoOn} onChange={(e) => setGeo(e.target.checked)} disabled={!!phase || !geoPossible} />
               Standort aus der Adresse bestimmen (für Glätte-Frühwarnung und GPS-Abstand)
             </label>
             <p className="small muted" style={{ margin: '4px 0 0 26px' }}>
-              Dazu werden die Adressen an OpenStreetMap (Nominatim) gesendet — etwa 1 Sekunde je Objekt.
+              {geoPossible
+                ? 'Dazu werden die Adressen an OpenStreetMap (Nominatim) gesendet — etwa 1 Sekunde je Objekt.'
+                : `Bei mehr als ${GEO_MAX} Objekten auf einmal geht das nicht. Den Standort dann in der App vor Ort festlegen — oder die Liste aufteilen.`}
+              {geoOn && noPlaceCount > 0 && ` ${plural(noPlaceCount, 'Adresse hat', 'Adressen haben')} keine PLZ und keinen Ort — dafür wird kein Standort gesucht.`}
             </p>
 
             {limited && (
@@ -515,12 +565,14 @@ function ImportFlow({
               </div>
             )}
 
-            <div className="row" style={{ marginTop: 16 }}>
-              <button type="button" className="btn" onClick={() => void run()} disabled={!!phase || toCreate === 0}>
-                <Upload className="i" aria-hidden /> {plural(toCreate, 'Objekt', 'Objekte')} anlegen
-              </button>
-              {!phase && toCreate === 0 && !limited && <span className="small muted">Nichts angehakt.</span>}
-            </div>
+            {!doneNothingLeft && (
+              <div className="row" style={{ marginTop: 16 }}>
+                <button type="button" className="btn" onClick={() => void run()} disabled={!!phase || toCreate === 0}>
+                  <Upload className="i" aria-hidden /> {plural(toCreate, 'Objekt', 'Objekte')} anlegen
+                </button>
+                {!phase && toCreate === 0 && !limited && !result && <span className="small muted">Nichts angehakt.</span>}
+              </div>
+            )}
 
             {phase && (
               <Progress
@@ -603,7 +655,7 @@ function Progress({ phase, onCancel }: { phase: Phase; onCancel: () => void }) {
 function ResultBox({ result }: { result: Result }) {
   const { created, failed, noLocation } = result;
   return (
-    <div className="wd-imp-result">
+    <div className="wd-imp-result" role="status">
       <p className="wd-imp-result-head">
         {created > 0 && <CheckCircle2 className="i" aria-hidden />}
         {plural(created, 'Objekt', 'Objekte')} angelegt
@@ -620,7 +672,10 @@ function ResultBox({ result }: { result: Result }) {
         </ul>
       )}
       {result.already > 0 && (
-        <p className="small muted">{plural(result.already, 'Objekt war', 'Objekte waren')} inzwischen schon vorhanden und wurden nicht noch einmal angelegt.</p>
+        <p className="small muted">
+          {plural(result.already, 'Objekt war', 'Objekte waren')} inzwischen schon vorhanden und {result.already === 1 ? 'wurde' : 'wurden'} nicht
+          noch einmal angelegt.
+        </p>
       )}
       {result.overLimit > 0 && (
         <p className="small muted">{plural(result.overLimit, 'Objekt', 'Objekte')} nicht angelegt — Gratis-Grenze erreicht.</p>
@@ -630,6 +685,7 @@ function ResultBox({ result }: { result: Result }) {
           {result.geo
             ? `Ohne Standort (in der App vor Ort festlegen): ${noLocation.slice(0, 15).join(', ')}${noLocation.length > 15 ? ` und ${noLocation.length - 15} weitere` : ''}.`
             : 'Den Standort legst du in der App vor Ort fest.'}
+          {result.geo && result.noPlace > 0 && ' Tipp: Mit PLZ und Ort in der Adresse wird der Standort automatisch bestimmt.'}
         </p>
       )}
       {failed.length > 0 && (
