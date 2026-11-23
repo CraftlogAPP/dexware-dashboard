@@ -34,6 +34,37 @@ function tripRow(t: TripSummary, odo: { startKm: number; endKm: number; correcte
   </tr>`;
 }
 
+export interface OdometerEntry {
+  startKm: number;
+  endKm: number;
+  /** Tachostand in der App eingetragen (setzt den Stand neu) */
+  corrected: boolean;
+}
+
+/**
+ * Kilometerstand je Fahrt wie in der App (utils/odometer.ts): Anfangsstand + gefahrene km,
+ * ein eingetragener Tachostand setzt den Stand neu. Ohne Anfangsstand beim Fahrzeug: leer.
+ * `priorTrips` = Fahrten des Fahrzeugs vor dem Zeitraum, `trips` = gültige Fahrten im Zeitraum, beide älteste zuerst.
+ * Gemeinsam für Fahrtenbuch-PDF und Excel-Liste.
+ */
+export function odometerById(
+  vehicle: Pick<Vehicle, 'initialOdometerKm'>,
+  priorTrips: TripSummary[],
+  trips: TripSummary[],
+): Map<string, OdometerEntry> {
+  const odo = new Map<string, OdometerEntry>();
+  if (vehicle.initialOdometerKm != null) {
+    let cursor = vehicle.initialOdometerKm;
+    for (const t of [...priorTrips.filter((p) => !p.canceled), ...trips]) {
+      const corrected = t.odometer_end_km != null;
+      const endKm = corrected ? (t.odometer_end_km as number) : cursor + (t.distance_km ?? 0);
+      odo.set(t.id, { startKm: cursor, endKm, corrected });
+      cursor = endKm;
+    }
+  }
+  return odo;
+}
+
 export function buildFahrtenbuchHtml(
   accountEmail: string,
   vehicle: Vehicle,
@@ -45,18 +76,7 @@ export function buildFahrtenbuchHtml(
   // Stornierte Fahrten zählen nicht, bleiben aber separat aufgeführt (geschlossene Form).
   const trips = allTrips.filter((t) => !t.canceled);
   const canceledTrips = allTrips.filter((t) => t.canceled);
-  // Kilometerstand je Fahrt wie in der App (utils/odometer.ts): Anfangsstand + gefahrene km,
-  // ein eingetragener Tachostand setzt den Stand neu.
-  const odo = new Map<string, { startKm: number; endKm: number; corrected: boolean }>();
-  if (vehicle.initialOdometerKm != null) {
-    let cursor = vehicle.initialOdometerKm;
-    for (const t of [...priorTrips.filter((p) => !p.canceled), ...trips]) {
-      const corrected = t.odometer_end_km != null;
-      const endKm = corrected ? (t.odometer_end_km as number) : cursor + (t.distance_km ?? 0);
-      odo.set(t.id, { startKm: cursor, endKm, corrected });
-      cursor = endKm;
-    }
-  }
+  const odo = odometerById(vehicle, priorTrips, trips);
   const rows = trips.map((t) => tripRow(t, odo.get(t.id))).join('');
   const canceledRows = canceledTrips
     .map(

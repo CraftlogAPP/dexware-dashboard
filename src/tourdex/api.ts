@@ -83,6 +83,33 @@ export async function fetchTripsForReport(
   return (data ?? []) as unknown as TripSummary[];
 }
 
+/**
+ * Fahrten für die Excel-Liste: alle bis zum Ende des Zeitraums (ein Fahrzeug oder alle), älteste zuerst, vollständig.
+ * `from` = null lädt auch die Fahrten davor (fortlaufender Kilometerstand wie im PDF). Nur skalare Felder, nie den GPS-Pfad.
+ */
+export async function fetchTripsForExport(
+  sb: SupabaseClient,
+  filter: { vehicleId?: string; from: Date | null; toExclusive: Date },
+): Promise<TripSummary[]> {
+  const { data, error } = await fetchAllOf(
+    () => {
+      let q = sb
+        .from('sync_items')
+        .select(TRIP_COLS)
+        .eq('collection', 'trips')
+        .eq('deleted', false)
+        .lt('data->>startTime', filter.toExclusive.toISOString());
+      if (filter.from) q = q.gte('data->>startTime', filter.from.toISOString());
+      if (filter.vehicleId) q = q.eq('data->>vehicleId', filter.vehicleId);
+      return q;
+    },
+    [['data->>startTime', true]],
+    'item_id',
+  );
+  if (error) fail('Fahrten konnten nicht geladen werden', error);
+  return (data ?? []) as unknown as TripSummary[];
+}
+
 /** Volle Fahrt inkl. GPS-Pfad und KI-Vorschlag — nur im Detail. */
 export async function fetchTrip(
   sb: SupabaseClient,

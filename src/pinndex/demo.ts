@@ -315,6 +315,16 @@ export function createDemoStore(): DemoStore {
     }
   }, 9000);
 
+  /** Erledigt (und auf Wunsch abgesagt) im Zeitraum — wie doneJobs am Server. */
+  const finishedIn = (from: Date, to: Date, withCanceled: boolean) =>
+    s.jobs.filter((j) => {
+      if (!visible(j)) return false;
+      const iso = j.status === 'done' ? j.finished_at : j.status === 'canceled' && withCanceled ? j.updated_at : null;
+      if (!iso) return false;
+      const t = Date.parse(iso);
+      return t >= from.getTime() && t < to.getTime();
+    });
+
   const job = (id: string) => {
     const j = s.jobs.find((x) => x.id === id && !x.deleted_at);
     if (!j) throw new Error('Auftrag nicht gefunden');
@@ -335,16 +345,13 @@ export function createDemoStore(): DemoStore {
         }),
       ),
     doneJobs: (from, to, withCanceled) =>
+      delay(finishedIn(from, to, withCanceled).sort((a, b) => (b.finished_at ?? b.updated_at).localeCompare(a.finished_at ?? a.updated_at))),
+    // Excel-Liste mit Beispieldaten — dieselbe Auswahl wie doneJobs, älteste zuerst (kein Server)
+    exportJobs: (from, to, withCanceled) =>
       delay(
-        s.jobs
-          .filter((j) => {
-            if (!visible(j)) return false;
-            const iso = j.status === 'done' ? j.finished_at : j.status === 'canceled' && withCanceled ? j.updated_at : null;
-            if (!iso) return false;
-            const t = Date.parse(iso);
-            return t >= from.getTime() && t < to.getTime();
-          })
-          .sort((a, b) => (b.finished_at ?? b.updated_at).localeCompare(a.finished_at ?? a.updated_at)),
+        finishedIn(from, to, withCanceled).sort(
+          (a, b) => (a.finished_at ?? a.updated_at).localeCompare(b.finished_at ?? b.updated_at) || a.id.localeCompare(b.id),
+        ),
       ),
     timeJobs: (from, to) =>
       delay(

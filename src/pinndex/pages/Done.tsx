@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Search } from 'lucide-react';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { ExcelButton } from '../../components/ExcelButton';
+import { downloadXlsx } from '../../lib/xlsx';
 import { usePinn } from '../context';
+import { checkPeriod, EXPORT_TZ, jobSheets, periodLabel, type ExportPeriod } from '../exportLists';
 import { useJobSheet } from '../JobSheet';
 import { addDays, dayKey, fmtWork, isMine, matchesSearch, memberName, monthStart, parseDay, stamp, startOfDay, weekStart } from '../logic';
 import { StatusChip } from '../parts';
-import { OUTCOME_LABEL } from '../types';
+import { OUTCOME_LABEL, type ExportJob } from '../types';
 
 type Range = 'today' | 'week' | 'lastweek' | 'month' | 'lastmonth' | '90' | 'custom';
 
@@ -45,7 +48,7 @@ function rangeOf(r: Range, fromInput: string, toInput: string): { from: Date; to
 }
 
 export function Done() {
-  const { data, members, role, me, version } = usePinn();
+  const { data, members, org, role, me, version } = usePinn();
   const sheet = useJobSheet();
   const [range, setRange] = useState<Range>('week');
   const [fromInput, setFromInput] = useState(() => dayKey(addDays(new Date(), -29)));
@@ -66,8 +69,34 @@ export function Done() {
   const byId = useMemo(() => new Map(members.map((m) => [m.user_id, m])), [members]);
   const all = useMemo(() => (state.data ?? []).filter((j) => role !== 'worker' || isMine(j, me.user_id)), [state.data, role, me.user_id]);
   const customerNames = useMemo(() => [...new Set(all.map((j) => j.customer_name).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'de')), [all]);
-  const rows = all.filter((j) => (!worker || (worker === 'none' ? !j.assignee_id : j.assignee_id === worker)) && (!customer || j.customer_name === customer) && matchesSearch(j, q));
+  /** Filter der Liste (Monteur, Kunde, Suche) — gilt genauso für die Excel-Liste. */
+  const shown = (j: ExportJob) =>
+    (!worker || (worker === 'none' ? !j.assignee_id : j.assignee_id === worker)) && (!customer || j.customer_name === customer) && matchesSearch(j, q);
+  const rows = all.filter(shown);
   const total = rows.reduce((s, j) => s + (j.status === 'done' ? j.work_seconds : 0), 0);
+
+  /** Excel „Aufträge zum Abrechnen“: was die Liste mit diesen Filtern zeigt, vollständig frisch geladen (im Beispiel-Modus aus den Beispieldaten). */
+  async function exportExcel() {
+    const period: ExportPeriod = range === 'custom' ? checkPeriod(fromInput, toInput) : { from: dayKey(from), to: dayKey(addDays(to, -1)) };
+    const list = (await data.exportJobs(parseDay(period.from), addDays(parseDay(period.to), 1), withCanceled)).filter(
+      (j) => (role !== 'worker' || isMine(j, me.user_id)) && shown(j),
+    );
+    const fixes = await data.eventsOf(
+      list.filter((j) => j.status === 'done').map((j) => j.id),
+      ['time_fix'],
+    );
+    const selection: [string, string][] = [
+      ['Monteur', role === 'worker' ? `Eigene Aufträge (${memberName(me)})` : !worker ? 'Alle' : worker === 'none' ? 'Nicht zugewiesen' : memberName(byId.get(worker))],
+      ['Kunde', customer || 'Alle'],
+      ...(q.trim() ? [['Suche', `„${q.trim()}“`] as [string, string]] : []),
+    ];
+    const sheets = jobSheets({ orgName: org.name, members, jobs: list, fixedIds: new Set(fixes.map((e) => e.job_id)), period, withCanceled, selection });
+    await downloadXlsx(`Laufzettel_Auftraege_${period.from}_bis_${period.to}`, sheets, {
+      title: `Laufzettel Aufträge ${periodLabel(period)}`,
+      creator: 'Laufzettel',
+      timeZone: EXPORT_TZ,
+    });
+  }
 
   return (
     <>
@@ -132,6 +161,10 @@ export function Done() {
           <input type="checkbox" checked={withCanceled} onChange={(e) => setWithCanceled(e.target.checked)} />
           Abgesagte zeigen
         </label>
+        <ExcelButton
+          onExport={exportExcel}
+          title="Aufträge im gewählten Zeitraum als Excel-Datei: zum Abrechnen je Kunde und mit Stunden je Monteur"
+        />
       </div>
 
       <LoadGuard state={state}>
