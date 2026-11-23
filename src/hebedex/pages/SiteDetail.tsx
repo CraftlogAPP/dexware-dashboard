@@ -9,9 +9,11 @@ import { fmtDateTime, gpsLabel } from '../../lib/format';
 import {
   fetchDefects,
   fetchItems,
+  fetchInspectionMeta,
   fetchInspections,
   fetchSite,
   saveItem,
+  type InspMeta,
 } from '../api';
 import { DefectStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, itemNameMap, itemMetaLabel, lastInspectionByType } from '../labels';
@@ -38,6 +40,8 @@ interface Data {
   site: Site | null;
   items: LiftingItem[];
   inspections: Inspection[];
+  /** jüngste Prüfung je Teil und Prüfart, vollständig — Grundlage der Fälligkeit (die Historie oben ist auf 300 begrenzt) */
+  meta: InspMeta[];
   defects: Defect[];
 }
 
@@ -65,13 +69,16 @@ export function SiteDetail() {
   }
 
   const state = useAsync<Data>(async () => {
-    const [site, items, inspections, defects] = await Promise.all([
+    const [site, items, inspections, meta, defects] = await Promise.all([
       fetchSite(client, id!),
       fetchItems(client, id),
       fetchInspections(client, { siteId: id, limit: 300 }),
+      // Fälligkeit nie aus der begrenzten Historie: bei vielen Sichtkontrollen fiele die letzte wiederkehrende
+      // Prüfung heraus und das Teil stünde fälschlich auf „noch nie geprüft“ (wie Übersicht/Vor Ort: vollständig)
+      fetchInspectionMeta(client),
       fetchDefects(client, { siteId: id, limit: 300 }),
     ]);
-    return { site, items, inspections, defects };
+    return { site, items, inspections, meta, defects };
   }, [client, id]);
 
   async function onSaveItem(v: FormValues) {
@@ -114,12 +121,12 @@ export function SiteDetail() {
 
   return (
     <LoadGuard state={state}>
-      {({ site, items, inspections, defects }) => {
+      {({ site, items, inspections, meta, defects }) => {
         if (!site) {
           return <div className="error-box">Standort nicht gefunden.</div>;
         }
         const itemNames = itemNameMap(items);
-        const lastByType = lastInspectionByType(inspections);
+        const lastByType = lastInspectionByType(meta);
         const land = org?.org.land;
         const openDefects = defects.filter((d) => d.status === 'open');
         return (
