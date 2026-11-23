@@ -33,6 +33,8 @@ export function ImportWizard<P>({ adapter, done, onSaved }: { adapter: ImportAda
   const { noun } = adapter;
   const fileRef = useRef<HTMLInputElement>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  /** gewählte Datei — für ein anderes Tabellenblatt noch einmal gelesen */
+  const [file, setFile] = useState<File | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [pasteText, setPasteText] = useState('');
@@ -64,8 +66,10 @@ export function ImportWizard<P>({ adapter, done, onSaved }: { adapter: ImportAda
   const isSel = (r: ImportPlanRow<P>) => !!r.payload && (toggled.get(r.i) ?? r.status === 'ok');
   const selectedCount = plan ? plan.rows.filter(isSel).length : 0;
   const allowance = adapter.allowance;
-  const toCreate = allowance === null ? selectedCount : Math.min(selectedCount, allowance);
-  const limited = allowance !== null && selectedCount > allowance;
+  const limit = plan && adapter.limitFor ? adapter.limitFor(plan, new Set(plan.rows.filter(isSel).map((r) => r.i))) : null;
+  const toCreate = limit ? limit.count : allowance === null ? selectedCount : Math.min(selectedCount, allowance);
+  const limitMsg = limit?.text ?? (allowance !== null && selectedCount > allowance ? adapter.limitText(allowance) : null);
+  const limited = !!limitMsg;
 
   function applyTable(t: Table, source: string) {
     const layout = detectFieldLayout(adapter.fields, t, adapter.fallbackMapping);
@@ -80,12 +84,13 @@ export function ImportWizard<P>({ adapter, done, onSaved }: { adapter: ImportAda
     setLoadError(null);
   }
 
-  async function onFile(f: File | undefined) {
+  async function onFile(f: File | undefined, sheet = 0) {
     if (!f || phase) return;
     setLoadError(null);
     setReading(true);
     try {
-      applyTable(await readImportFile(f), f.name);
+      setFile(f);
+      applyTable(await readImportFile(f, sheet), f.name);
       setPasteText('');
       setAppliedPaste('');
     } catch (e) {
@@ -99,6 +104,7 @@ export function ImportWizard<P>({ adapter, done, onSaved }: { adapter: ImportAda
   function onPasteText(text: string) {
     if (!text.trim() || phase) return;
     setAppliedPaste(text);
+    setFile(null);
     try {
       applyTable(tableFromPaste(text), 'Eingefügte Tabelle');
     } catch (e) {
@@ -257,10 +263,26 @@ export function ImportWizard<P>({ adapter, done, onSaved }: { adapter: ImportAda
               <b>{loaded.source}</b> · {plural(dataCount, 'Zeile', 'Zeilen')}
               {table.sheet && <span className="muted"> · Tabellenblatt „{table.sheet}“</span>}
             </p>
-            {table.moreSheets && (
-              <p className="small muted" style={{ margin: '0 0 6px' }}>
-                Gelesen wird nur das erste Tabellenblatt. Andere Blätter bitte einzeln speichern oder kopieren.
+            {table.sheets && table.sheets.length > 1 && file ? (
+              <p className="small" style={{ margin: '0 0 6px' }}>
+                <label>
+                  Anderes Tabellenblatt lesen:{' '}
+                  <select value={table.sheetIndex ?? 0} onChange={(e) => void onFile(file, Number(e.target.value))} disabled={!!phase || reading}>
+                    {table.sheets.map((n, i) => (
+                      <option key={i} value={i}>
+                        {n || `Blatt ${i + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>{' '}
+                <span className="muted">Gelesen wird immer ein Blatt.</span>
               </p>
+            ) : (
+              table.moreSheets && (
+                <p className="small muted" style={{ margin: '0 0 6px' }}>
+                  Gelesen wird nur das erste Tabellenblatt. Andere Blätter bitte einzeln speichern oder kopieren.
+                </p>
+              )
             )}
             {loaded.skipped > 0 && (
               <p className="small muted" style={{ margin: '0 0 6px' }}>
@@ -410,7 +432,7 @@ export function ImportWizard<P>({ adapter, done, onSaved }: { adapter: ImportAda
             <h2>3. Anlegen</h2>
           </div>
           <div className="card">
-            {limited && <div className="info-box">{adapter.limitText(allowance!)}</div>}
+            {limitMsg && <div className="info-box">{limitMsg}</div>}
 
             {!doneNothingLeft && (
               <div className="row" style={{ marginTop: limited ? 16 : 0 }}>

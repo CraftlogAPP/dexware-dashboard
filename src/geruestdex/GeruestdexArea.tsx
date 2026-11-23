@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { ClipboardCheck, Construction, CreditCard, FileDown, LayoutDashboard, TriangleAlert, Users, MessageSquare } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
@@ -24,6 +24,9 @@ import { VorOrtSwitch } from '../pruefen/ModeSwitch';
 import { useHomeScreenIcon } from '../pruefen/homeScreen';
 import type { VorOrtPages } from '../pruefen/context';
 import { GERUESTDEX_DEMO_ROWS, GERUESTDEX_VOR_ORT } from './vorOrt';
+
+// Import ist Schreibtischarbeit: eigene Seite, erst beim Öffnen geladen (nicht in „Vor Ort“)
+const SiteImport = lazy(() => import('./pages/SiteImport').then((m) => ({ default: m.SiteImport })));
 
 // „Vor Ort“ mit Beispieldaten — nur im Dev-Server (/app/geruestdex/vor-ort?demo), fehlt im Produktions-Build.
 const VorOrtDemo = import.meta.env.DEV
@@ -70,6 +73,20 @@ export function GeruestdexArea({ app }: { app: AppConfig }) {
             <Route element={<Shell />}>
               <Route index element={<Overview />} />
               <Route path="baustellen" element={<Sites />} />
+              <Route
+                path="baustellen/import"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="empty">
+                        <span className="spinner" />
+                      </div>
+                    }
+                  >
+                    <SiteImport />
+                  </Suspense>
+                }
+              />
               <Route path="baustellen/:id" element={<SiteDetail />} />
               <Route path="pruefungen" element={<Inspections />} />
               <Route path="pruefungen/:id" element={<InspectionDetail />} />

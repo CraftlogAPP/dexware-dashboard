@@ -68,14 +68,9 @@ export interface WarehouseInput {
   active: boolean;
 }
 
-/** Lager anlegen/ändern — Upsert wie app-seitiges saveWarehouse. */
-export async function saveWarehouse(
-  sb: SupabaseClient,
-  orgId: string,
-  input: WarehouseInput,
-  existing?: Warehouse,
-): Promise<void> {
-  const { error } = await sb.from('warehouse').upsert({
+/** Zeile der Tabelle warehouse wie saveWarehouse — eine Quelle für das Formular und den Import. */
+export function warehouseRow(orgId: string, input: WarehouseInput, existing?: Warehouse): Warehouse {
+  return {
     id: existing?.id ?? crypto.randomUUID(),
     org_id: orgId,
     name: input.name,
@@ -87,8 +82,24 @@ export async function saveWarehouse(
     notes: input.notes,
     active: input.active,
     created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  };
+}
+
+/** Lager anlegen/ändern — Upsert wie app-seitiges saveWarehouse. */
+export async function saveWarehouse(
+  sb: SupabaseClient,
+  orgId: string,
+  input: WarehouseInput,
+  existing?: Warehouse,
+): Promise<void> {
+  const { error } = await sb.from('warehouse').upsert(warehouseRow(orgId, input, existing));
   if (error) fail('Lager konnte nicht gespeichert werden', error);
+}
+
+/** Neue Einträge aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertWarehouses(sb: SupabaseClient, rows: Warehouse[]): Promise<void> {
+  const { error } = await sb.from('warehouse').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Lager konnten nicht angelegt werden', error);
 }
 
 export interface RackInput {
@@ -103,6 +114,16 @@ export interface RackInput {
   retired: boolean;
 }
 
+/** Zeile der Tabelle rack wie saveRack — eine Quelle für das Formular und den Import. */
+export function rackRow(orgId: string, input: RackInput, existing?: Rack): Rack {
+  return {
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    ...input,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  };
+}
+
 /** Regalzeile anlegen/ändern — Upsert wie app-seitiges saveRack (photo_url bleibt unangetastet). */
 export async function saveRack(
   sb: SupabaseClient,
@@ -110,13 +131,14 @@ export async function saveRack(
   input: RackInput,
   existing?: Rack,
 ): Promise<void> {
-  const { error } = await sb.from('rack').upsert({
-    id: existing?.id ?? crypto.randomUUID(),
-    org_id: orgId,
-    ...input,
-    created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  const { error } = await sb.from('rack').upsert(rackRow(orgId, input, existing));
   if (error) fail('Regalzeile konnte nicht gespeichert werden', error);
+}
+
+/** Neue Einträge aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertRacks(sb: SupabaseClient, rows: Rack[]): Promise<void> {
+  const { error } = await sb.from('rack').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Regalzeilen konnten nicht angelegt werden', error);
 }
 
 export interface InspectionInput {

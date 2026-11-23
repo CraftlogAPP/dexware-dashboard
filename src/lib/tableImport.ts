@@ -30,6 +30,9 @@ export interface Table {
   /** Excel: Name des gelesenen Tabellenblatts und ob es weitere gibt */
   sheet?: string;
   moreSheets?: boolean;
+  /** Excel: Namen aller sichtbaren Blätter und welches gelesen wurde (Auswahl im Wizard) */
+  sheets?: string[];
+  sheetIndex?: number;
 }
 
 const OLD_XLS =
@@ -39,18 +42,19 @@ const UNREADABLE =
 const NO_DATA = 'In der Liste stehen keine Daten.';
 const TOO_MANY = `Die Liste hat mehr als ${MAX_ROWS.toLocaleString('de-DE')} Zeilen — bitte in mehrere Dateien aufteilen.`;
 
-export async function readImportFile(file: Blob & { name: string }): Promise<Table> {
+/** `sheet`: Excel-Blatt (Index unter den sichtbaren Blättern), Standard das erste */
+export async function readImportFile(file: Blob & { name: string }, sheet = 0): Promise<Table> {
   if (file.size > MAX_BYTES) throw new Error('Die Datei ist größer als 5 MB — bitte die Liste aufteilen.');
-  return tableFromBytes(new Uint8Array(await file.arrayBuffer()), file.name);
+  return tableFromBytes(new Uint8Array(await file.arrayBuffer()), file.name, sheet);
 }
 
-export async function tableFromBytes(buf: Uint8Array<ArrayBuffer>, fileName: string): Promise<Table> {
+export async function tableFromBytes(buf: Uint8Array<ArrayBuffer>, fileName: string, sheet = 0): Promise<Table> {
   if (buf.byteLength > MAX_BYTES) throw new Error('Die Datei ist größer als 5 MB — bitte die Liste aufteilen.');
   const ext = (/\.([a-z0-9]+)$/i.exec(fileName)?.[1] ?? '').toLowerCase();
   const sig = (...b: number[]) => b.every((v, i) => buf[i] === v);
   if (sig(0x50, 0x4b, 0x03, 0x04)) {
     if (ext === 'ods') throw new Error('Das ist eine OpenOffice-/LibreOffice-Tabelle (.ods). ' + UNREADABLE);
-    return checkTable(await readXlsx(buf));
+    return checkTable(await readXlsx(buf, sheet));
   }
   if (sig(0xd0, 0xcf, 0x11, 0xe0)) throw new Error(OLD_XLS);
   if (['xls', 'xlsb', 'ods', 'numbers', 'pdf', 'doc', 'docx'].includes(ext)) throw new Error(ext === 'xls' ? OLD_XLS : UNREADABLE);
@@ -282,8 +286,8 @@ function resolvePath(baseDir: string, target: string): string {
 
 const dirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '');
 
-/** Erstes sichtbares Tabellenblatt einer .xlsx-Datei als Zeilen. */
-export async function readXlsx(buf: Uint8Array<ArrayBuffer>): Promise<Table> {
+/** Ein sichtbares Tabellenblatt einer .xlsx-Datei als Zeilen (Standard: das erste; `sheet` = Index unter den sichtbaren). */
+export async function readXlsx(buf: Uint8Array<ArrayBuffer>, sheet = 0): Promise<Table> {
   const zip = readZipDirectory(buf);
   const budget: Budget = { left: MAX_XML_BYTES };
   const load = async (path: string): Promise<Document | null> => {
@@ -303,7 +307,7 @@ export async function readXlsx(buf: Uint8Array<ArrayBuffer>): Promise<Table> {
     .map((s) => ({ el: s, rel: rels.get(relId(s) ?? '') }))
     .filter((s) => !s.rel || /\/worksheet$/.test(s.rel.type));
   const visible = sheets.filter((s) => !/hidden/i.test(s.el.getAttribute('state') ?? ''));
-  const first = visible[0] ?? sheets[0];
+  const first = visible[sheet] ?? visible[0] ?? sheets[0];
   if (!first) throw new Error('In der Excel-Datei ist kein Tabellenblatt.');
   const sheetDoc = await load(first.rel?.target ?? `${wbDir}worksheets/sheet1.xml`);
   if (!sheetDoc) throw new Error(UNREADABLE);
@@ -323,6 +327,8 @@ export async function readXlsx(buf: Uint8Array<ArrayBuffer>): Promise<Table> {
     kind: 'xlsx',
     sheet: first.el.getAttribute('name') ?? undefined,
     moreSheets: visible.length > 1,
+    sheets: visible.map((s) => s.el.getAttribute('name') ?? ''),
+    sheetIndex: Math.max(0, visible.indexOf(first)),
   };
 }
 
@@ -805,6 +811,11 @@ export interface ImportAdapter<P> {
   allowance: number | null;
   /** Satz, wenn die Grenze greift */
   limitText(allowance: number): string;
+  /**
+   * Optional: wie viele der angehakten Zeilen wirklich angelegt würden und ein Satz dazu, wenn eine Grenze greift —
+   * für Grenzen, die nicht einfach „höchstens n Zeilen“ sind (Prüf-Apps: neue aktive Orte). Ohne: allowance/limitText.
+   */
+  limitFor?(plan: ImportPlan<P>, selected: ReadonlySet<number>): { count: number; text: string | null };
   /** frisch prüfen und anlegen (angehakte Zeilen) */
   write(plan: ImportPlan<P>, selected: ReadonlySet<number>, choice: string, progress: (p: ImportProgress) => void): Promise<ImportResult>;
   /** Vorlage herunterladen */

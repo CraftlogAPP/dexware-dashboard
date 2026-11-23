@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { ClipboardCheck, CreditCard, FerrisWheel, FileDown, LayoutDashboard, TriangleAlert, Users, MessageSquare } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
@@ -24,6 +24,9 @@ import { VorOrtSwitch } from '../pruefen/ModeSwitch';
 import { useHomeScreenIcon } from '../pruefen/homeScreen';
 import type { VorOrtPages } from '../pruefen/context';
 import { SPIELDEX_DEMO_ROWS, SPIELDEX_VOR_ORT } from './vorOrt';
+
+// Import ist Schreibtischarbeit: eigene Seite, erst beim Öffnen geladen (nicht in „Vor Ort“)
+const PlaygroundImport = lazy(() => import('./pages/PlaygroundImport').then((m) => ({ default: m.PlaygroundImport })));
 
 // „Vor Ort“ mit Beispieldaten — nur im Dev-Server (/app/spieldex/vor-ort?demo), fehlt im Produktions-Build.
 const VorOrtDemo = import.meta.env.DEV
@@ -70,6 +73,20 @@ export function SpieldexArea({ app }: { app: AppConfig }) {
             <Route element={<Shell />}>
               <Route index element={<Overview />} />
               <Route path="spielplaetze" element={<Playgrounds />} />
+              <Route
+                path="spielplaetze/import"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="empty">
+                        <span className="spinner" />
+                      </div>
+                    }
+                  >
+                    <PlaygroundImport />
+                  </Suspense>
+                }
+              />
               <Route path="spielplaetze/:id" element={<PlaygroundDetail />} />
               <Route path="kontrollen" element={<Inspections />} />
               <Route path="kontrollen/:id" element={<InspectionDetail />} />

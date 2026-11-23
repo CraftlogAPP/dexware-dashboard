@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { Building2, ClipboardCheck, CreditCard, FileDown, LayoutDashboard, TriangleAlert, Users, MessageSquare } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
@@ -24,6 +24,9 @@ import { VorOrtSwitch } from '../pruefen/ModeSwitch';
 import { useHomeScreenIcon } from '../pruefen/homeScreen';
 import type { VorOrtPages } from '../pruefen/context';
 import { TOREDEX_DEMO_ROWS, TOREDEX_VOR_ORT } from './vorOrt';
+
+// Import ist Schreibtischarbeit: eigene Seite, erst beim Öffnen geladen (nicht in „Vor Ort“)
+const GateImport = lazy(() => import('./pages/GateImport').then((m) => ({ default: m.GateImport })));
 
 // „Vor Ort“ mit Beispieldaten — nur im Dev-Server (/app/toredex/vor-ort?demo), fehlt im Produktions-Build.
 const VorOrtDemo = import.meta.env.DEV
@@ -70,6 +73,20 @@ export function ToredexArea({ app }: { app: AppConfig }) {
             <Route element={<Shell />}>
               <Route index element={<Overview />} />
               <Route path="objekte" element={<Sites />} />
+              <Route
+                path="objekte/import"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="empty">
+                        <span className="spinner" />
+                      </div>
+                    }
+                  >
+                    <GateImport />
+                  </Suspense>
+                }
+              />
               <Route path="objekte/:id" element={<SiteDetail />} />
               <Route path="pruefungen" element={<Inspections />} />
               <Route path="pruefungen/:id" element={<InspectionDetail />} />

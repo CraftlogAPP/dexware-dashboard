@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FileUp } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { ExcelButton } from '../../components/ExcelButton';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
+import { PruefCtx } from '../../pruefen/context';
 import { siteGate, siteGateText } from '../../pruefen/pro';
 import { GERUESTDEX_VOR_ORT } from '../vorOrt';
 import {
@@ -57,6 +59,9 @@ export function Sites() {
   }, [client]);
 
   const { data: org } = useOrg();
+  // Import nur für den Inhaber (Server-Regel: Orte und Bestand legt nur er an) und nicht in „Vor Ort“ (Handy)
+  const inVorOrt = useContext(PruefCtx) !== null;
+  const canImport = org?.role === 'owner' && !inVorOrt;
   /** Prüfbuch-Übersicht als Excel — frisch und vollständig geladen (alle Orte, Bestand, letzte Prüfungen, offene Mängel). */
   async function exportExcel() {
     if (!org) throw new Error('Betrieb nicht geladen.');
@@ -81,6 +86,11 @@ export function Sites() {
             onExport={exportExcel}
             title="Alle Baustellen und Gerüste als Excel-Datei: letzte Prüfung, nächste Prüfung (befähigte Person) fällig am, offene Mängel"
           />
+          {canImport && (
+            <Link className="btn ghost" to="import" title="Baustellen und ihre Gerüste aus einer Excel- oder CSV-Liste übernehmen — auch das Prüfbuch lässt sich wieder einlesen">
+              <FileUp className="i" aria-hidden /> Baustellen importieren
+            </Link>
+          )}
           <button className="btn" onClick={() => void onAdd()} disabled={checking}>
             ＋ Baustelle anlegen
           </button>

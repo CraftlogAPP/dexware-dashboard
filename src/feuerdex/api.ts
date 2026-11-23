@@ -65,14 +65,9 @@ export interface SiteInput {
   active: boolean;
 }
 
-/** Standort anlegen/ändern — Upsert wie app-seitiges saveSite. */
-export async function saveSite(
-  sb: SupabaseClient,
-  orgId: string,
-  input: SiteInput,
-  existing?: Site,
-): Promise<void> {
-  const { error } = await sb.from('site').upsert({
+/** Zeile der Tabelle site wie saveSite — eine Quelle für das Formular und den Import. */
+export function siteRow(orgId: string, input: SiteInput, existing?: Site): Site {
+  return {
     id: existing?.id ?? crypto.randomUUID(),
     org_id: orgId,
     name: input.name,
@@ -84,8 +79,24 @@ export async function saveSite(
     notes: input.notes,
     active: input.active,
     created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  };
+}
+
+/** Standort anlegen/ändern — Upsert wie app-seitiges saveSite. */
+export async function saveSite(
+  sb: SupabaseClient,
+  orgId: string,
+  input: SiteInput,
+  existing?: Site,
+): Promise<void> {
+  const { error } = await sb.from('site').upsert(siteRow(orgId, input, existing));
   if (error) fail('Standort konnte nicht gespeichert werden', error);
+}
+
+/** Neue Einträge aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertSites(sb: SupabaseClient, rows: Site[]): Promise<void> {
+  const { error } = await sb.from('site').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Standorte konnten nicht angelegt werden', error);
 }
 
 export interface ExtinguisherInput {
@@ -101,6 +112,16 @@ export interface ExtinguisherInput {
   retired: boolean;
 }
 
+/** Zeile der Tabelle extinguisher wie saveExtinguisher — eine Quelle für das Formular und den Import. */
+export function extinguisherRow(orgId: string, input: ExtinguisherInput, existing?: Extinguisher): Extinguisher {
+  return {
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    ...input,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  };
+}
+
 /** Feuerlöscher anlegen/ändern — Upsert wie app-seitiges saveExtinguisher (photo_url bleibt unangetastet). */
 export async function saveExtinguisher(
   sb: SupabaseClient,
@@ -108,13 +129,14 @@ export async function saveExtinguisher(
   input: ExtinguisherInput,
   existing?: Extinguisher,
 ): Promise<void> {
-  const { error } = await sb.from('extinguisher').upsert({
-    id: existing?.id ?? crypto.randomUUID(),
-    org_id: orgId,
-    ...input,
-    created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  const { error } = await sb.from('extinguisher').upsert(extinguisherRow(orgId, input, existing));
   if (error) fail('Feuerlöscher konnte nicht gespeichert werden', error);
+}
+
+/** Neue Einträge aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertExtinguishers(sb: SupabaseClient, rows: Extinguisher[]): Promise<void> {
+  const { error } = await sb.from('extinguisher').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Feuerlöscher konnten nicht angelegt werden', error);
 }
 
 export interface InspectionInput {

@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { ClipboardCheck, CreditCard, FileDown, LayoutDashboard, TriangleAlert, Users, Warehouse, MessageSquare } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
@@ -24,6 +24,9 @@ import { VorOrtSwitch } from '../pruefen/ModeSwitch';
 import { useHomeScreenIcon } from '../pruefen/homeScreen';
 import type { VorOrtPages } from '../pruefen/context';
 import { REGALDEX_DEMO_ROWS, REGALDEX_VOR_ORT } from './vorOrt';
+
+// Import ist Schreibtischarbeit: eigene Seite, erst beim Öffnen geladen (nicht in „Vor Ort“)
+const WarehouseImport = lazy(() => import('./pages/WarehouseImport').then((m) => ({ default: m.WarehouseImport })));
 
 // „Vor Ort“ mit Beispieldaten — nur im Dev-Server (/app/regaldex/vor-ort?demo), fehlt im Produktions-Build.
 const VorOrtDemo = import.meta.env.DEV
@@ -70,6 +73,20 @@ export function RegaldexArea({ app }: { app: AppConfig }) {
             <Route element={<Shell />}>
               <Route index element={<Overview />} />
               <Route path="lager" element={<Warehouses />} />
+              <Route
+                path="lager/import"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="empty">
+                        <span className="spinner" />
+                      </div>
+                    }
+                  >
+                    <WarehouseImport />
+                  </Suspense>
+                }
+              />
               <Route path="lager/:id" element={<WarehouseDetail />} />
               <Route path="inspektionen" element={<Inspections />} />
               <Route path="inspektionen/:id" element={<InspectionDetail />} />

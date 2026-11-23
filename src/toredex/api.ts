@@ -65,14 +65,9 @@ export interface SiteInput {
   active: boolean;
 }
 
-/** Objekt anlegen/ändern — Upsert wie app-seitiges saveSite. */
-export async function saveSite(
-  sb: SupabaseClient,
-  orgId: string,
-  input: SiteInput,
-  existing?: Site,
-): Promise<void> {
-  const { error } = await sb.from('site').upsert({
+/** Zeile der Tabelle site wie saveSite — eine Quelle für das Formular und den Import. */
+export function siteRow(orgId: string, input: SiteInput, existing?: Site): Site {
+  return {
     id: existing?.id ?? crypto.randomUUID(),
     org_id: orgId,
     name: input.name,
@@ -84,8 +79,24 @@ export async function saveSite(
     notes: input.notes,
     active: input.active,
     created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  };
+}
+
+/** Objekt anlegen/ändern — Upsert wie app-seitiges saveSite. */
+export async function saveSite(
+  sb: SupabaseClient,
+  orgId: string,
+  input: SiteInput,
+  existing?: Site,
+): Promise<void> {
+  const { error } = await sb.from('site').upsert(siteRow(orgId, input, existing));
   if (error) fail('Objekt konnte nicht gespeichert werden', error);
+}
+
+/** Neue Einträge aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertSites(sb: SupabaseClient, rows: Site[]): Promise<void> {
+  const { error } = await sb.from('site').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Objekte konnten nicht angelegt werden', error);
 }
 
 export interface GateInput {
@@ -101,6 +112,16 @@ export interface GateInput {
   retired: boolean;
 }
 
+/** Zeile der Tabelle gate wie saveGate — eine Quelle für das Formular und den Import. */
+export function gateRow(orgId: string, input: GateInput, existing?: Gate): Gate {
+  return {
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    ...input,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  };
+}
+
 /** Tor anlegen/ändern — Upsert wie app-seitiges saveGate (photo_url bleibt unangetastet). */
 export async function saveGate(
   sb: SupabaseClient,
@@ -108,13 +129,14 @@ export async function saveGate(
   input: GateInput,
   existing?: Gate,
 ): Promise<void> {
-  const { error } = await sb.from('gate').upsert({
-    id: existing?.id ?? crypto.randomUUID(),
-    org_id: orgId,
-    ...input,
-    created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  const { error } = await sb.from('gate').upsert(gateRow(orgId, input, existing));
   if (error) fail('Tor konnte nicht gespeichert werden', error);
+}
+
+/** Neue Einträge aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertGates(sb: SupabaseClient, rows: Gate[]): Promise<void> {
+  const { error } = await sb.from('gate').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Tore konnten nicht angelegt werden', error);
 }
 
 export interface InspectionInput {

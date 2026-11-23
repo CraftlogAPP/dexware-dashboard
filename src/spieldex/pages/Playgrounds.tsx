@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FileUp } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { ExcelButton } from '../../components/ExcelButton';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
+import { PruefCtx } from '../../pruefen/context';
 import { siteGate, siteGateText } from '../../pruefen/pro';
 import { SPIELDEX_VOR_ORT } from '../vorOrt';
 import {
@@ -55,6 +57,9 @@ export function Playgrounds() {
   }, [client]);
 
   const { data: org } = useOrg();
+  // Import nur für den Inhaber (Server-Regel: Orte und Bestand legt nur er an) und nicht in „Vor Ort“ (Handy)
+  const inVorOrt = useContext(PruefCtx) !== null;
+  const canImport = org?.role === 'owner' && !inVorOrt;
   /** Kontrollbuch-Übersicht als Excel — frisch und vollständig geladen (alle Orte, Bestand, letzte Kontrollen, offene Mängel). */
   async function exportExcel() {
     if (!org) throw new Error('Betrieb nicht geladen.');
@@ -79,6 +84,11 @@ export function Playgrounds() {
             onExport={exportExcel}
             title="Alle Spielplätze und Spielgeräte als Excel-Datei: letzte Kontrolle, Hauptinspektion und operative Kontrolle fällig am, offene Mängel"
           />
+          {canImport && (
+            <Link className="btn ghost" to="import" title="Spielplätze und ihre Spielgeräte aus einer Excel- oder CSV-Liste übernehmen — auch das Kontrollbuch lässt sich wieder einlesen">
+              <FileUp className="i" aria-hidden /> Spielplätze importieren
+            </Link>
+          )}
           <button className="btn" onClick={() => void onAdd()} disabled={checking}>
             ＋ Spielplatz anlegen
           </button>

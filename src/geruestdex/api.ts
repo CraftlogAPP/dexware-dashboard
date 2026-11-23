@@ -65,14 +65,9 @@ export interface SiteInput {
   active: boolean;
 }
 
-/** Baustelle anlegen/ändern — Upsert wie app-seitiges saveSite. */
-export async function saveSite(
-  sb: SupabaseClient,
-  orgId: string,
-  input: SiteInput,
-  existing?: Site,
-): Promise<void> {
-  const { error } = await sb.from('site').upsert({
+/** Zeile der Tabelle site wie saveSite — eine Quelle für das Formular und den Import. */
+export function siteRow(orgId: string, input: SiteInput, existing?: Site): Site {
+  return {
     id: existing?.id ?? crypto.randomUUID(),
     org_id: orgId,
     name: input.name,
@@ -84,8 +79,24 @@ export async function saveSite(
     notes: input.notes,
     active: input.active,
     created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  };
+}
+
+/** Baustelle anlegen/ändern — Upsert wie app-seitiges saveSite. */
+export async function saveSite(
+  sb: SupabaseClient,
+  orgId: string,
+  input: SiteInput,
+  existing?: Site,
+): Promise<void> {
+  const { error } = await sb.from('site').upsert(siteRow(orgId, input, existing));
   if (error) fail('Baustelle konnte nicht gespeichert werden', error);
+}
+
+/** Neue Einträge aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertSites(sb: SupabaseClient, rows: Site[]): Promise<void> {
+  const { error } = await sb.from('site').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Baustellen konnten nicht angelegt werden', error);
 }
 
 export interface ScaffoldInput {
@@ -101,6 +112,16 @@ export interface ScaffoldInput {
   retired: boolean;
 }
 
+/** Zeile der Tabelle scaffold wie saveScaffold — eine Quelle für das Formular und den Import. */
+export function scaffoldRow(orgId: string, input: ScaffoldInput, existing?: Scaffold): Scaffold {
+  return {
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    ...input,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  };
+}
+
 /** Gerüst anlegen/ändern — Upsert wie app-seitiges saveScaffold (photo_url bleibt unangetastet). */
 export async function saveScaffold(
   sb: SupabaseClient,
@@ -108,13 +129,14 @@ export async function saveScaffold(
   input: ScaffoldInput,
   existing?: Scaffold,
 ): Promise<void> {
-  const { error } = await sb.from('scaffold').upsert({
-    id: existing?.id ?? crypto.randomUUID(),
-    org_id: orgId,
-    ...input,
-    created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  const { error } = await sb.from('scaffold').upsert(scaffoldRow(orgId, input, existing));
   if (error) fail('Gerüst konnte nicht gespeichert werden', error);
+}
+
+/** Neue Einträge aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertScaffolds(sb: SupabaseClient, rows: Scaffold[]): Promise<void> {
+  const { error } = await sb.from('scaffold').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Gerüste konnten nicht angelegt werden', error);
 }
 
 export interface InspectionInput {

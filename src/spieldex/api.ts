@@ -68,14 +68,9 @@ export interface PlaygroundInput {
   active: boolean;
 }
 
-/** Spielplatz anlegen/ändern — Upsert wie app-seitiges savePlayground. */
-export async function savePlayground(
-  sb: SupabaseClient,
-  orgId: string,
-  input: PlaygroundInput,
-  existing?: Playground,
-): Promise<void> {
-  const { error } = await sb.from('playground').upsert({
+/** Zeile der Tabelle playground wie savePlayground — eine Quelle für das Formular und den Import. */
+export function playgroundRow(orgId: string, input: PlaygroundInput, existing?: Playground): Playground {
+  return {
     id: existing?.id ?? crypto.randomUUID(),
     org_id: orgId,
     name: input.name,
@@ -87,8 +82,24 @@ export async function savePlayground(
     notes: input.notes,
     active: input.active,
     created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  };
+}
+
+/** Spielplatz anlegen/ändern — Upsert wie app-seitiges savePlayground. */
+export async function savePlayground(
+  sb: SupabaseClient,
+  orgId: string,
+  input: PlaygroundInput,
+  existing?: Playground,
+): Promise<void> {
+  const { error } = await sb.from('playground').upsert(playgroundRow(orgId, input, existing));
   if (error) fail('Spielplatz konnte nicht gespeichert werden', error);
+}
+
+/** Neue Einträge aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertPlaygrounds(sb: SupabaseClient, rows: Playground[]): Promise<void> {
+  const { error } = await sb.from('playground').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Spielplätze konnten nicht angelegt werden', error);
 }
 
 export interface EquipmentInput {
@@ -101,6 +112,16 @@ export interface EquipmentInput {
   retired: boolean;
 }
 
+/** Zeile der Tabelle equipment wie saveEquipment — eine Quelle für das Formular und den Import. */
+export function equipmentRow(orgId: string, input: EquipmentInput, existing?: Equipment): Equipment {
+  return {
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    ...input,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  };
+}
+
 /** Spielgerät anlegen/ändern — Upsert wie app-seitiges saveEquipment (photo_url bleibt unangetastet). */
 export async function saveEquipment(
   sb: SupabaseClient,
@@ -108,13 +129,14 @@ export async function saveEquipment(
   input: EquipmentInput,
   existing?: Equipment,
 ): Promise<void> {
-  const { error } = await sb.from('equipment').upsert({
-    id: existing?.id ?? crypto.randomUUID(),
-    org_id: orgId,
-    ...input,
-    created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  const { error } = await sb.from('equipment').upsert(equipmentRow(orgId, input, existing));
   if (error) fail('Spielgerät konnte nicht gespeichert werden', error);
+}
+
+/** Neue Einträge aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertEquipment(sb: SupabaseClient, rows: Equipment[]): Promise<void> {
+  const { error } = await sb.from('equipment').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Spielgeräte konnten nicht angelegt werden', error);
 }
 
 export interface InspectionInput {
