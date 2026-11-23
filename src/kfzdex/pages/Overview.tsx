@@ -2,10 +2,14 @@ import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { ErsteSchritte } from '../../components/ErsteSchritte';
+import type { ErsteSchritteAdapter } from '../../lib/ersteSchritte';
+import { VOR_ORT_PATH } from '../../pruefen/Scope';
 import { fmtDate } from '../../lib/format';
 import {
   fetchDrivers,
   fetchLicenseChecks,
+  fetchOrgMembers,
   fetchUvvInspections,
   fetchVehicles,
 } from '../api';
@@ -20,6 +24,19 @@ interface OverviewData {
   inspections: UvvInspection[];
   checks: LicenseCheck[];
 }
+
+/** „Erste Schritte“ für neue Betriebe: Fuhrpark einlesen, App, Team, erste Prüfung */
+const START: ErsteSchritteAdapter = {
+  stock: { what: 'Fahrzeuge und Fahrer', importTo: 'fahrzeuge/import', listTo: 'fahrzeuge', hint: 'die Fahrer haben unter „Fahrer“ eine eigene Liste' },
+  first: {
+    title: 'Erste Prüfung',
+    text: 'UVV-Prüfung oder Führerscheinkontrolle in der App oder unter „Vor Ort“ im Browser.',
+    fieldTo: VOR_ORT_PATH,
+    fieldLabel: 'Vor Ort',
+  },
+  teamTo: 'team',
+  countMembers: async (sb) => (await fetchOrgMembers(sb)).length,
+};
 
 export function Overview() {
   const { client } = useAppAuth();
@@ -73,6 +90,7 @@ export function Overview() {
 
           return (
             <>
+              <ErsteSchritte adapter={START} stock={vehicles.length + drivers.length} first={inspections.length + checks.length > 0} />
               <div className="kpi-grid">
                 <div className="kpi">
                   <div className="kpi-label">Fahrzeuge</div>

@@ -51,10 +51,18 @@ export function WebOnboarding({
   if (!spec) return null;
   const join = spec.join;
 
-  /** Betrieb steht: am Handy (oder wer über den Vor-Ort-Link kam) in die Handy-Ansicht, sonst ins Dashboard. */
+  /**
+   * Betrieb steht: am Handy (oder wer über den Vor-Ort-Link kam) in die Handy-Ansicht, sonst auf die Übersicht des
+   * Dashboards — dort zeigen die „Ersten Schritte“ den Weg. Wer über „Im Browser kaufen“ (…/abo) kam, bleibt dort.
+   */
   const done = () => {
-    const field = `/app/${app.id}/${VOR_ORT_PATH}`;
-    if (!pathname.startsWith(field) && onPhone()) navigate(field, { replace: true });
+    const base = `/app/${app.id}`;
+    const field = `${base}/${VOR_ORT_PATH}`;
+    const here = pathname.replace(/\/+$/, '');
+    if (!pathname.startsWith(field)) {
+      if (onPhone()) navigate(field, { replace: true });
+      else if (here !== base && here !== `${base}/abo`) navigate(base, { replace: true });
+    }
     org.reload();
   };
 

@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { PruefErsteSchritte } from '../../components/ErsteSchritte';
+import { SPIELDEX_VOR_ORT } from '../vorOrt';
 import { fmtDateTime } from '../../lib/format';
 import {
   fetchDefects,
@@ -73,6 +75,7 @@ export function Overview() {
 
           return (
             <>
+              <PruefErsteSchritte cfg={SPIELDEX_VOR_ORT} stock={playgrounds.length} first={valid.length > 0} />
               <div className="kpi-grid">
                 <div className="kpi">
                   <div className="kpi-label">Aktive Spielplätze</div>

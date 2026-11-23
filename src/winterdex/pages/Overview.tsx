@@ -8,6 +8,8 @@ import {
   type OpMeta,
 } from '../api';
 import { ActionBadge, LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
+import { ErsteSchritte } from '../../components/ErsteSchritte';
+import type { ErsteSchritteAdapter } from '../../lib/ersteSchritte';
 import { fmtDateTime } from '../../lib/format';
 import { lastOpByProperty, propertyNameMap, weatherLabel } from '../labels';
 import type { Operation, Property } from '../types';
@@ -19,6 +21,18 @@ interface OverviewData {
   /** die 10 jüngsten Einsätze in voller Breite für die Tabelle */
   recentOps: Operation[];
 }
+
+/** „Erste Schritte“ für neue Betriebe: Objekte einlesen, App, Team, erster Einsatz */
+const START: ErsteSchritteAdapter = {
+  stock: { what: 'Objekte', importTo: 'objekte/import', listTo: 'objekte' },
+  first: {
+    title: 'Erster Einsatz',
+    text: 'Räumen und Streuen in der App erfassen — oder unter „Außendienst“ im Browser, mit Uhrzeit, GPS und Wetter.',
+    fieldTo: 'aussendienst',
+    fieldLabel: 'Außendienst',
+  },
+  teamTo: 'team',
+};
 
 export function Overview() {
   const { client } = useAppAuth();
@@ -66,6 +80,7 @@ export function Overview() {
 
           return (
             <>
+              <ErsteSchritte adapter={START} stock={properties.length} first={valid.length > 0 || recentOps.some((o) => !o.canceled)} />
               <div className="kpi-grid">
                 <div className="kpi">
                   <div className="kpi-label">Aktive Objekte</div>

@@ -2,6 +2,9 @@ import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { ErsteSchritte } from '../../components/ErsteSchritte';
+import type { ErsteSchritteAdapter } from '../../lib/ersteSchritte';
+import { VOR_ORT_PATH } from '../../pruefen/Scope';
 import { fmtDate } from '../../lib/format';
 import {
   fetchCustomers,
@@ -18,6 +21,18 @@ interface OverviewData {
   customers: Customer[];
   meta: InspMeta[];
 }
+
+/** „Erste Schritte“ für neue Betriebe: Geräte einlesen, App, erste Prüfung (PrüfDex hat im Dashboard keine Team-Seite) */
+const START: ErsteSchritteAdapter = {
+  stock: { what: 'Geräte', importTo: 'geraete/import', listTo: 'geraete', hint: 'Kunden werden mit angelegt' },
+  first: {
+    title: 'Erste Prüfung',
+    text: 'In der App oder unter „Vor Ort“ im Browser — mit Messwerten, Uhrzeit und Prüfcode.',
+    fieldTo: VOR_ORT_PATH,
+    fieldLabel: 'Vor Ort',
+  },
+  teamTo: null,
+};
 
 export function Overview() {
   const { client } = useAppAuth();
@@ -59,6 +74,7 @@ export function Overview() {
 
           return (
             <>
+              <ErsteSchritte adapter={START} stock={devices.length} first={meta.length > 0} />
               <div className="kpi-grid">
                 <div className="kpi">
                   <div className="kpi-label">Geräte</div>
