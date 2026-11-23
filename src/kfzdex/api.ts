@@ -139,13 +139,30 @@ export interface VehicleInput {
   last_uvv: string | null;
 }
 
+/** Zeile der Tabelle vehicle (created_at/updated_at setzt der Server) */
+export type VehicleRow = VehicleInput & { id: string; org_id: string };
+
+/** Kennzeichen wie die App speichert: groß, ohne Rand- und doppelte Leerzeichen — Formular, Import und App gleich. */
+export const normPlate = (plate: string) => plate.trim().toUpperCase().replace(/\s+/g, ' ');
+
+/** Neues Fahrzeug wie das Formular „Fahrzeug anlegen“ — eine Quelle für das Formular und den Import (feste id). */
+export function vehicleRow(orgId: string, input: VehicleInput): VehicleRow {
+  return { id: crypto.randomUUID(), org_id: orgId, ...input, plate: normPlate(input.plate) };
+}
+
 export async function insertVehicle(
   sb: SupabaseClient,
   orgId: string,
   input: VehicleInput,
 ): Promise<void> {
-  const { error } = await sb.from('vehicle').insert({ org_id: orgId, ...input });
+  const { error } = await sb.from('vehicle').insert(vehicleRow(orgId, input));
   if (error) fail('Fahrzeug konnte nicht angelegt werden', error);
+}
+
+/** Neue Fahrzeuge aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertVehicles(sb: SupabaseClient, rows: VehicleRow[]): Promise<void> {
+  const { error } = await sb.from('vehicle').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Fahrzeuge konnten nicht angelegt werden', error);
 }
 
 export async function updateVehicle(
@@ -155,7 +172,8 @@ export async function updateVehicle(
 ): Promise<void> {
   const { error } = await sb
     .from('vehicle')
-    .update({ ...input, updated_at: new Date().toISOString() })
+    // Kennzeichen beim Bearbeiten genauso groß wie beim Anlegen (wie die App)
+    .update({ ...input, plate: normPlate(input.plate), updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) fail('Fahrzeug konnte nicht gespeichert werden', error);
 }
@@ -174,13 +192,27 @@ export interface DriverInput {
   active: boolean;
 }
 
+/** Zeile der Tabelle driver (created_at/updated_at setzt der Server) */
+export type DriverRow = DriverInput & { id: string; org_id: string };
+
+/** Neuer Fahrer wie das Formular „Fahrer anlegen“ — eine Quelle für das Formular und den Import (feste id). */
+export function driverRow(orgId: string, input: DriverInput): DriverRow {
+  return { id: crypto.randomUUID(), org_id: orgId, ...input };
+}
+
 export async function insertDriver(
   sb: SupabaseClient,
   orgId: string,
   input: DriverInput,
 ): Promise<void> {
-  const { error } = await sb.from('driver').insert({ org_id: orgId, ...input });
+  const { error } = await sb.from('driver').insert(driverRow(orgId, input));
   if (error) fail('Fahrer konnte nicht angelegt werden', error);
+}
+
+/** Neue Fahrer aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertDrivers(sb: SupabaseClient, rows: DriverRow[]): Promise<void> {
+  const { error } = await sb.from('driver').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Fahrer konnten nicht angelegt werden', error);
 }
 
 export async function updateDriver(

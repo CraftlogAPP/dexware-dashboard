@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FileUp } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { ExcelButton } from '../../components/ExcelButton';
@@ -14,10 +15,13 @@ import { exportFleet } from '../exportActions';
 import type { Driver } from '../types';
 import { GATE_TEXT, fleetGate } from '../vorOrt/backend';
 import { FREE_LIMITS } from '../vorOrt/rows';
+import { KfzCtx } from '../vorOrt/context';
 
 export function Drivers() {
   const { client } = useAppAuth();
   const { data: org } = useOrg();
+  // Import wie „Fahrer anlegen“ für jedes Mitglied — aber nicht in „Vor Ort“ (Handy): das ist Schreibtischarbeit
+  const inVorOrt = useContext(KfzCtx) !== null;
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Driver | 'new' | null>(null);
   const [checking, setChecking] = useState<Driver | null>(null);
@@ -50,6 +54,11 @@ export function Drivers() {
             onExport={() => exportFleet(client, org?.org)}
             title="Ganzer Fuhrpark als Excel-Datei: Fahrzeuge und Fahrer mit Fristen, UVV- und Kontroll-Historie"
           />
+          {!inVorOrt && (
+            <Link className="btn ghost" to="import" title="Fahrer aus einer Excel- oder CSV-Liste übernehmen">
+              <FileUp className="i" aria-hidden /> Fahrer importieren
+            </Link>
+          )}
           <button className="btn" onClick={() => void onAdd()} disabled={gateBusy}>
             ＋ Fahrer anlegen
           </button>

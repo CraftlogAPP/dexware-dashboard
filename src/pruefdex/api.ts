@@ -89,6 +89,20 @@ export async function deleteCustomer(sb: SupabaseClient, id: string): Promise<vo
   if (error) fail('Kunde konnte nicht gelöscht werden', error);
 }
 
+/** Zeile der Tabelle customer (created_at setzt der Server) */
+export type CustomerRow = Omit<Customer, 'created_at'>;
+
+/** Zeile der Tabelle customer wie app-seitiges saveCustomer — eine Quelle für das Formular und den Import. */
+export function customerRow(orgId: string, input: CustomerInput, existing?: Customer): CustomerRow {
+  return {
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    name: input.name,
+    address: input.address,
+    contact: input.contact,
+  };
+}
+
 /** Kunde anlegen/ändern — Upsert wie app-seitiges saveCustomer. */
 export async function saveCustomer(
   sb: SupabaseClient,
@@ -96,14 +110,19 @@ export async function saveCustomer(
   input: CustomerInput,
   existing?: Customer,
 ): Promise<void> {
-  const { error } = await sb.from('customer').upsert({
-    id: existing?.id ?? crypto.randomUUID(),
-    org_id: orgId,
-    name: input.name,
-    address: input.address,
-    contact: input.contact,
-  });
+  const { error } = await sb.from('customer').upsert(customerRow(orgId, input, existing));
   if (error) fail('Kunde konnte nicht gespeichert werden', error);
+}
+
+type InsertError = { code?: string; message: string; details?: string | null };
+
+/** „gibt es schon“ beim Primärschlüssel (feste id) — nicht bei einem anderen eindeutigen Feld wie dem Etikett */
+const isIdTaken = (e: InsertError) => e.code === '23505' && /_pkey|\(id\)=/i.test(`${e.message} ${e.details ?? ''}`);
+
+/** Neue Kunden aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertCustomers(sb: SupabaseClient, rows: CustomerRow[]): Promise<void> {
+  const { error } = await sb.from('customer').insert(rows);
+  if (error && !(rows.length === 1 && isIdTaken(error))) fail('Kunden konnten nicht angelegt werden', error);
 }
 
 export interface DeviceInput {
@@ -119,6 +138,19 @@ export interface DeviceInput {
   next_due_date: string | null;
 }
 
+/** Zeile der Tabelle device wie das Formular (ohne photo_url und Aussondern) */
+export type DeviceRow = DeviceInput & { id: string; org_id: string; created_at: string };
+
+/** Zeile der Tabelle device wie app-seitiges saveDevice — eine Quelle für das Formular und den Import. */
+export function deviceRow(orgId: string, input: DeviceInput, existing?: Device): DeviceRow {
+  return {
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    ...input,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  };
+}
+
 /** Gerät anlegen/ändern — Upsert wie app-seitiges saveDevice (photo_url bleibt unangetastet). */
 export async function saveDevice(
   sb: SupabaseClient,
@@ -126,13 +158,21 @@ export async function saveDevice(
   input: DeviceInput,
   existing?: Device,
 ): Promise<void> {
-  const { error } = await sb.from('device').upsert({
-    id: existing?.id ?? crypto.randomUUID(),
-    org_id: orgId,
-    ...input,
-    created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  const { error } = await sb.from('device').upsert(deviceRow(orgId, input, existing));
   if (error) fail('Gerät konnte nicht gespeichert werden', error);
+}
+
+/**
+ * Neue Geräte aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort.
+ * Ein doppeltes QR/Etikett (Server-Regel: im Betrieb eindeutig) ist dagegen ein echter Fehler.
+ */
+export async function insertDevices(sb: SupabaseClient, rows: DeviceRow[]): Promise<void> {
+  const { error } = await sb.from('device').insert(rows);
+  if (!error || (rows.length === 1 && isIdTaken(error))) return;
+  if (error.code === '23505' && /qr_code/i.test(`${error.message} ${error.details ?? ''}`)) {
+    throw new Error('Geräte konnten nicht angelegt werden: Dieses QR/Etikett hat in deinem Betrieb schon ein anderes Gerät.');
+  }
+  fail('Geräte konnten nicht angelegt werden', error);
 }
 
 /** Aussondern statt löschen (wie die App) — die Prüfhistorie bleibt erhalten. */
