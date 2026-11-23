@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FileUp } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { ExcelButton } from '../../components/ExcelButton';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { fmtDateTime } from '../../lib/format';
+import { PruefCtx } from '../../pruefen/context';
 import {
   fetchDefects,
   fetchInspectionMeta,
@@ -40,6 +42,9 @@ export function Sites() {
   }, [client]);
 
   const { data: org } = useOrg();
+  // Import nur für den Inhaber (Server-Regel: Standorte und Bestand legt nur er an) und nicht in „Vor Ort“ (Handy)
+  const inVorOrt = useContext(PruefCtx) !== null;
+  const canImport = org?.role === 'owner' && !inVorOrt;
   /** Prüfbuch-Übersicht als Excel — frisch und vollständig geladen (alle Leitern, letzte Prüfungen, offene Mängel). */
   async function exportExcel() {
     if (!org) throw new Error('Betrieb nicht geladen.');
@@ -64,6 +69,11 @@ export function Sites() {
             onExport={exportExcel}
             title="Alle Leitern & Tritte als Excel-Datei: letzte Prüfung, nächste Prüfung fällig am, offene Mängel"
           />
+          {canImport && (
+            <Link className="btn ghost" to="import" title="Leitern & Tritte aus einer Excel- oder CSV-Liste übernehmen — auch das Prüfbuch lässt sich wieder einlesen">
+              <FileUp className="i" aria-hidden /> Leitern importieren
+            </Link>
+          )}
           <button className="btn" onClick={() => setEditing('new')}>
             ＋ Standort anlegen
           </button>

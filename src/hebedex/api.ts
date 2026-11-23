@@ -65,14 +65,9 @@ export interface SiteInput {
   active: boolean;
 }
 
-/** Standort anlegen/ändern — Upsert wie app-seitiges saveSite. */
-export async function saveSite(
-  sb: SupabaseClient,
-  orgId: string,
-  input: SiteInput,
-  existing?: Site,
-): Promise<void> {
-  const { error } = await sb.from('site').upsert({
+/** Zeile der Tabelle site wie app-seitiges saveSite — eine Quelle für das Formular und den Import. */
+export function siteRow(orgId: string, input: SiteInput, existing?: Site): Site {
+  return {
     id: existing?.id ?? crypto.randomUUID(),
     org_id: orgId,
     name: input.name,
@@ -84,8 +79,24 @@ export async function saveSite(
     notes: input.notes,
     active: input.active,
     created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  };
+}
+
+/** Standort anlegen/ändern — Upsert wie app-seitiges saveSite. */
+export async function saveSite(
+  sb: SupabaseClient,
+  orgId: string,
+  input: SiteInput,
+  existing?: Site,
+): Promise<void> {
+  const { error } = await sb.from('site').upsert(siteRow(orgId, input, existing));
   if (error) fail('Standort konnte nicht gespeichert werden', error);
+}
+
+/** Neue Standorte aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertSites(sb: SupabaseClient, rows: Site[]): Promise<void> {
+  const { error } = await sb.from('site').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Standorte konnten nicht angelegt werden', error);
 }
 
 export interface ItemInput {
@@ -116,7 +127,13 @@ export async function saveItem(
   input: ItemInput,
   existing?: LiftingItem,
 ): Promise<void> {
-  const { error } = await sb.from('lifting_item').upsert({
+  const { error } = await sb.from('lifting_item').upsert(itemRow(orgId, input, existing));
+  if (error) fail('Teil konnte nicht gespeichert werden', error);
+}
+
+/** Zeile der Tabelle lifting_item wie app-seitiges saveItem (ohne Fotos) — eine Quelle für Formular und Import. */
+export function itemRow(orgId: string, input: ItemInput, existing?: LiftingItem): LiftingItem {
+  return {
     id: existing?.id ?? crypto.randomUUID(),
     org_id: orgId,
     ...input,
@@ -124,8 +141,13 @@ export async function saveItem(
     retired_at: input.retired ? (existing?.retired_at ?? new Date().toISOString()) : null,
     is_demo: existing?.is_demo ?? false,
     created_at: existing?.created_at ?? new Date().toISOString(),
-  });
-  if (error) fail('Teil konnte nicht gespeichert werden', error);
+  };
+}
+
+/** Neue Teile aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertItems(sb: SupabaseClient, rows: LiftingItem[]): Promise<void> {
+  const { error } = await sb.from('lifting_item').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Teile konnten nicht angelegt werden', error);
 }
 
 export interface InspectionInput {

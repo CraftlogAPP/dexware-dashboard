@@ -65,14 +65,9 @@ export interface SiteInput {
   active: boolean;
 }
 
-/** Standort anlegen/ändern — Upsert wie app-seitiges saveSite. */
-export async function saveSite(
-  sb: SupabaseClient,
-  orgId: string,
-  input: SiteInput,
-  existing?: Site,
-): Promise<void> {
-  const { error } = await sb.from('site').upsert({
+/** Zeile der Tabelle site wie app-seitiges saveSite — eine Quelle für das Formular und den Import. */
+export function siteRow(orgId: string, input: SiteInput, existing?: Site): Site {
+  return {
     id: existing?.id ?? crypto.randomUUID(),
     org_id: orgId,
     name: input.name,
@@ -84,8 +79,24 @@ export async function saveSite(
     notes: input.notes,
     active: input.active,
     created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  };
+}
+
+/** Standort anlegen/ändern — Upsert wie app-seitiges saveSite. */
+export async function saveSite(
+  sb: SupabaseClient,
+  orgId: string,
+  input: SiteInput,
+  existing?: Site,
+): Promise<void> {
+  const { error } = await sb.from('site').upsert(siteRow(orgId, input, existing));
   if (error) fail('Standort konnte nicht gespeichert werden', error);
+}
+
+/** Neue Standorte aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertSites(sb: SupabaseClient, rows: Site[]): Promise<void> {
+  const { error } = await sb.from('site').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Standorte konnten nicht angelegt werden', error);
 }
 
 export interface LadderInput {
@@ -101,6 +112,16 @@ export interface LadderInput {
   retired: boolean;
 }
 
+/** Zeile der Tabelle ladder wie app-seitiges saveLadder (ohne photo_url) — eine Quelle für Formular und Import. */
+export function ladderRow(orgId: string, input: LadderInput, existing?: Ladder): Ladder {
+  return {
+    id: existing?.id ?? crypto.randomUUID(),
+    org_id: orgId,
+    ...input,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+  };
+}
+
 /** Leiter/Tritt anlegen/ändern — Upsert wie app-seitiges saveLadder (photo_url bleibt unangetastet). */
 export async function saveLadder(
   sb: SupabaseClient,
@@ -108,13 +129,14 @@ export async function saveLadder(
   input: LadderInput,
   existing?: Ladder,
 ): Promise<void> {
-  const { error } = await sb.from('ladder').upsert({
-    id: existing?.id ?? crypto.randomUUID(),
-    org_id: orgId,
-    ...input,
-    created_at: existing?.created_at ?? new Date().toISOString(),
-  });
+  const { error } = await sb.from('ladder').upsert(ladderRow(orgId, input, existing));
   if (error) fail('Leiter konnte nicht gespeichert werden', error);
+}
+
+/** Neue Leitern aus dem Import (feste ids): „gibt es schon“ bei EINER Zeile = Wiederholung nach verlorener Antwort. */
+export async function insertLadders(sb: SupabaseClient, rows: Ladder[]): Promise<void> {
+  const { error } = await sb.from('ladder').insert(rows);
+  if (error && !(rows.length === 1 && error.code === '23505')) fail('Leitern konnten nicht angelegt werden', error);
 }
 
 export interface InspectionInput {
