@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { CreditCard, IdCard, LayoutDashboard, Truck, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
@@ -19,6 +19,24 @@ import { VorOrtSwitch } from '../pruefen/ModeSwitch';
 import { useHomeScreenIcon } from '../pruefen/homeScreen';
 import { KfzVorOrtScope } from './vorOrt/Scope';
 import { KfzVorOrt, type KfzVorOrtPages } from './vorOrt/KfzVorOrt';
+
+// Import ist Schreibtischarbeit: eigene Seiten, erst beim Öffnen geladen (nicht in „Vor Ort“)
+const VehicleImport = lazy(() => import('./pages/FleetImport').then((m) => ({ default: m.VehicleImport })));
+const DriverImport = lazy(() => import('./pages/FleetImport').then((m) => ({ default: m.DriverImport })));
+
+function Lazy({ children }: { children: ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="empty">
+          <span className="spinner" />
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
 
 // „Vor Ort“ mit Beispieldaten — nur im Dev-Server (/app/kfzdex/vor-ort?demo), fehlt im Produktions-Build.
 const VorOrtDemo = import.meta.env.DEV
@@ -65,8 +83,10 @@ export function KfzdexArea({ app }: { app: AppConfig }) {
             <Route element={<Shell />}>
               <Route index element={<Overview />} />
               <Route path="fahrzeuge" element={<Vehicles />} />
+              <Route path="fahrzeuge/import" element={<Lazy><VehicleImport /></Lazy>} />
               <Route path="fahrzeuge/:id" element={<VehicleDetail />} />
               <Route path="fahrer" element={<Drivers />} />
+              <Route path="fahrer/import" element={<Lazy><DriverImport /></Lazy>} />
               <Route path="fahrer/:id" element={<DriverDetail />} />
               <Route path="team" element={<Team />} />
               <Route path="abo" element={<AboPage />} />

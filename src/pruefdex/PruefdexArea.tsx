@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { Building2, ClipboardCheck, CreditCard, FileDown, LayoutDashboard, Plug, MessageSquare } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
@@ -22,6 +22,9 @@ import { VorOrtSwitch } from '../pruefen/ModeSwitch';
 import { useHomeScreenIcon } from '../pruefen/homeScreen';
 import { PdVorOrtScope } from './vorOrt/Scope';
 import { PdVorOrt, type PdVorOrtPages } from './vorOrt/PdVorOrt';
+
+// Import ist Schreibtischarbeit: eigene Seite, erst beim Öffnen geladen (nicht in „Vor Ort“)
+const DeviceImport = lazy(() => import('./pages/DeviceImport').then((m) => ({ default: m.DeviceImport })));
 
 // „Vor Ort“ mit Beispieldaten — nur im Dev-Server (/app/pruefdex/vor-ort?demo), fehlt im Produktions-Build.
 const VorOrtDemo = import.meta.env.DEV
@@ -69,6 +72,20 @@ export function PruefdexArea({ app }: { app: AppConfig }) {
               <Route index element={<Overview />} />
               <Route path="kunden" element={<Customers />} />
               <Route path="geraete" element={<Devices />} />
+              <Route
+                path="geraete/import"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="empty">
+                        <span className="spinner" />
+                      </div>
+                    }
+                  >
+                    <DeviceImport />
+                  </Suspense>
+                }
+              />
               <Route path="geraete/:id" element={<DeviceDetail />} />
               <Route path="pruefungen" element={<Inspections />} />
               <Route path="pruefungen/:id" element={<InspectionDetail />} />

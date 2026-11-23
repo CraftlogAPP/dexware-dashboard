@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { FileUp } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
@@ -13,10 +14,13 @@ import { GATE_TEXT, deviceGate } from '../gate';
 import { DueBadge } from '../badges';
 import { dueStatus, lastInspectionByDevice, nameMap, skLabel, type DueStatus } from '../labels';
 import type { Device } from '../types';
+import { PdCtx } from '../vorOrt/context';
 
 export function Devices() {
   const { client } = useAppAuth();
   const { data: org } = useOrg();
+  // Import wie „Gerät anlegen“ für jedes Mitglied — aber nicht in „Vor Ort“ (Handy): das ist Schreibtischarbeit
+  const inVorOrt = useContext(PdCtx) !== null;
   const [params] = useSearchParams();
   const [customerId, setCustomerId] = useState(params.get('kunde') ?? '');
   const [due, setDue] = useState<'' | DueStatus>('');
@@ -86,6 +90,11 @@ export function Devices() {
             onExport={exportExcel}
             title="Geräte mit den gewählten Filtern als Excel-Datei: letzte Prüfung, nächste Fälligkeit und Status"
           />
+          {!inVorOrt && (
+            <Link className="btn ghost" to="import" title="Geräte aus einer Excel- oder CSV-Liste übernehmen — auch die Geräteliste lässt sich wieder einlesen">
+              <FileUp className="i" aria-hidden /> Geräte importieren
+            </Link>
+          )}
           <button className="btn" onClick={() => setEditing('new')}>
             ＋ Gerät anlegen
           </button>
