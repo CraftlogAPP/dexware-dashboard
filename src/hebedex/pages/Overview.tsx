@@ -11,7 +11,7 @@ import {
   fetchSites,
   type InspMeta,
 } from '../api';
-import { dueOverview } from '../../lib/pruefExport';
+import { dueKpiPrefix, dueOverview } from '../../lib/pruefExport';
 import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
 import { HEBEDEX_EXPORT } from '../exportLists';
@@ -56,10 +56,6 @@ export function Overview() {
       <LoadGuard state={state}>
         {({ sites, items, meta, recentInspections, openDefects }) => {
           const activeSites = sites.filter((s) => s.active);
-          const activeSiteIds = new Set(activeSites.map((s) => s.id));
-          const activeItems = items.filter(
-            (e) => !e.retired && activeSiteIds.has(e.site_id),
-          );
           const siteNames = siteNameMap(sites);
           const itemNames = itemNameMap(items);
           const now = Date.now();
@@ -72,12 +68,8 @@ export function Overview() {
 
           // Fristen wie in der App (expertDue/crackDue): DE 12 Monate, AT Kalenderjahr/15 Monate; Ketten + Rissprüfung 3 J.
           // Dieselbe Rechnung wie Excel-Prüfbuch und „Vor Ort“ (lib/pruefExport.ts → dueOverview).
-          const due = dueOverview(HEBEDEX_EXPORT, { org: orgCtx?.org, sites, units: items, inspections: meta });
-          // Gesperrt: offener Mangel, der das Teil der Benutzung entzieht.
-          const blockedIds = new Set(
-            openDefects.filter((d) => d.item_blocked).map((d) => d.item_id),
-          );
-          const blockedItems = activeItems.filter((e) => blockedIds.has(e.id));
+          const due = dueOverview(HEBEDEX_EXPORT, { org: orgCtx?.org, sites, units: items, inspections: meta, openDefects });
+          // Gesperrt (offener Mangel, der das Teil der Benutzung entzieht): due.blocked — zählt nicht als fällig, wie „Vor Ort“
 
           return (
             <>
@@ -105,14 +97,14 @@ export function Overview() {
                   <div className="kpi-label">Prüfung fällig</div>
                   <div className="kpi-value">{due.due}</div>
                   <div className="kpi-sub">
-                    {due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Teilen
+                    {dueKpiPrefix(due)}von {due.total} aktiven Teilen
                   </div>
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Gesperrt</div>
-                  <div className="kpi-value">{blockedItems.length}</div>
+                  <div className="kpi-value">{due.blocked}</div>
                   <div className="kpi-sub">
-                    {blockedItems.length > 0
+                    {due.blocked > 0
                       ? 'nicht benutzen — instand setzen oder aussondern'
                       : 'kein Teil gesperrt'}
                   </div>

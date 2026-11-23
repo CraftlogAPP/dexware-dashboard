@@ -10,7 +10,7 @@ import {
   fetchWarehouses,
   type InspMeta,
 } from '../api';
-import { dueOverview } from '../../lib/pruefExport';
+import { dueKpiPrefix, dueOverview } from '../../lib/pruefExport';
 import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
 import { REGALDEX_EXPORT } from '../exportLists';
@@ -69,7 +69,7 @@ export function Overview() {
           const redCount = openDamages.filter((d) => d.severity === 'red').length;
 
           // Fälligkeit wie App, „Vor Ort“ und Excel-Prüfbuch: Experteninspektion jährlich, Kalendertage
-          const due = dueOverview(REGALDEX_EXPORT, { org: orgCtx?.org, sites: warehouses, units: [], inspections: meta });
+          const due = dueOverview(REGALDEX_EXPORT, { org: orgCtx?.org, sites: warehouses, units: [], inspections: meta, openDefects: openDamages });
 
           return (
             <>
@@ -94,7 +94,7 @@ export function Overview() {
                 <div className="kpi">
                   <div className="kpi-label">Inspektion fällig</div>
                   <div className="kpi-value">{due.due}</div>
-                  <div className="kpi-sub">{due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Lagern</div>
+                  <div className="kpi-sub">{dueKpiPrefix(due)}von {due.total} aktiven Lagern</div>
                 </div>
               </div>
 

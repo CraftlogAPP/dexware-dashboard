@@ -11,7 +11,7 @@ import {
   fetchSites,
   type InspMeta,
 } from '../api';
-import { dueOverview } from '../../lib/pruefExport';
+import { dueKpiPrefix, dueOverview } from '../../lib/pruefExport';
 import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
 import { GURTDEX_EXPORT } from '../exportLists';
@@ -81,7 +81,7 @@ export function Overview() {
           const redCount = openDefects.filter((d) => d.severity === 'red').length;
 
           // Fälligkeit wie App, „Vor Ort“ und Excel-Prüfbuch: Sachkundigen-Prüfung jährlich, Kalendertage
-          const due = dueOverview(GURTDEX_EXPORT, { org: orgCtx?.org, sites, units: items, inspections: meta });
+          const due = dueOverview(GURTDEX_EXPORT, { org: orgCtx?.org, sites, units: items, inspections: meta, openDefects });
           // Ablegereife-Wächter: abgelaufene Artikel (max. Gebrauchsdauer überschritten).
           const expiredItems = activeItems.filter((e) =>
             lifespanWarning(e)?.startsWith('Ablegereif seit'),
@@ -113,7 +113,7 @@ export function Overview() {
                   <div className="kpi-label">Prüfung fällig</div>
                   <div className="kpi-value">{due.due}</div>
                   <div className="kpi-sub">
-                    {due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Artikeln
+                    {dueKpiPrefix(due)}von {due.total} aktiven Artikeln
                   </div>
                 </div>
                 <div className="kpi">

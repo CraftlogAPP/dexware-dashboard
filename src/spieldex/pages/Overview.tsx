@@ -10,7 +10,7 @@ import {
   fetchPlaygrounds,
   type InspMeta,
 } from '../api';
-import { dueOverview } from '../../lib/pruefExport';
+import { dueKpiPrefix, dueOverview } from '../../lib/pruefExport';
 import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
 import { SPIELDEX_EXPORT } from '../exportLists';
@@ -69,7 +69,7 @@ export function Overview() {
           const dangerCount = openDefects.filter((d) => d.severity === 'danger').length;
 
           // Fälligkeit wie App, „Vor Ort“ und Excel-Prüfbuch: Hauptinspektion jährlich und operative Kontrolle alle 90 Tage (wie „Vor Ort“), Kalendertage
-          const due = dueOverview(SPIELDEX_EXPORT, { org: orgCtx?.org, sites: playgrounds, units: [], inspections: meta });
+          const due = dueOverview(SPIELDEX_EXPORT, { org: orgCtx?.org, sites: playgrounds, units: [], inspections: meta, openDefects });
 
           return (
             <>
@@ -94,7 +94,7 @@ export function Overview() {
                 <div className="kpi">
                   <div className="kpi-label">Kontrolle fällig</div>
                   <div className="kpi-value">{due.due}</div>
-                  <div className="kpi-sub">{due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Spielplätzen</div>
+                  <div className="kpi-sub">{dueKpiPrefix(due)}von {due.total} aktiven Spielplätzen</div>
                 </div>
               </div>
 

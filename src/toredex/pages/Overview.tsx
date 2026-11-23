@@ -11,7 +11,7 @@ import {
   fetchSites,
   type InspMeta,
 } from '../api';
-import { dueOverview } from '../../lib/pruefExport';
+import { dueKpiPrefix, dueOverview } from '../../lib/pruefExport';
 import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
 import { TOREDEX_EXPORT } from '../exportLists';
@@ -76,7 +76,7 @@ export function Overview() {
           const redCount = openDefects.filter((d) => d.severity === 'red').length;
 
           // Fälligkeit wie App, „Vor Ort“ und Excel-Prüfbuch: Sachkundigen-Prüfung jährlich, Kalendertage
-          const due = dueOverview(TOREDEX_EXPORT, { org: orgCtx?.org, sites, units: gates, inspections: meta });
+          const due = dueOverview(TOREDEX_EXPORT, { org: orgCtx?.org, sites, units: gates, inspections: meta, openDefects });
 
           return (
             <>
@@ -104,7 +104,7 @@ export function Overview() {
                   <div className="kpi-label">Prüfung fällig</div>
                   <div className="kpi-value">{due.due}</div>
                   <div className="kpi-sub">
-                    {due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Toren
+                    {dueKpiPrefix(due)}von {due.total} aktiven Toren
                   </div>
                 </div>
               </div>

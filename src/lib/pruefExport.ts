@@ -21,7 +21,17 @@ import { downloadXlsx, ExportNotice, type XlsxCell, type XlsxColumn, type XlsxSh
 import { fmtDateTime, toInputDate, todayLocalISO } from './format';
 import type { Org } from './orgApi';
 import { isSiteMode, siteFkOf, sitesPathOf, wordsOf, type PruefConfig } from '../pruefen/config';
-import { DUE_SOON_DAYS, STATE_ORDER, dueInfo, lastDueByUnit, type DueInfo, type DueState, type InspMeta } from '../pruefen/due';
+import {
+  DUE_SOON_DAYS,
+  STATE_ORDER,
+  dueInfo,
+  lastDueByUnit,
+  unitState,
+  type DueInfo,
+  type DueState,
+  type InspMeta,
+  type UnitState,
+} from '../pruefen/due';
 
 export const EXPORT_TZ = 'Europe/Berlin';
 
@@ -137,6 +147,11 @@ export interface PruefExportSpec<U extends RawUnit, I extends RawInspection> {
   dueRuleText?: (org: Org) => string;
   /** Optional: Frist kurz für den Spaltenkopf der Übersicht, z. B. „jedes Kalenderjahr, max. 15 Monate“ (Standard: „alle 12 Monate“ …) */
   dueRuleShort?: (org: Record<string, unknown>) => string;
+  /**
+   * Optional: Wort für die Warnung aus den Stammdaten (cfg.unitAlert, GurtDex: „ablegereif“). Solche Einheiten zählen wie
+   * „Vor Ort“ (Standorte.tsx) als gesperrt — in der Übersicht und in der Info-Zeile „Gesperrt“ des Prüfbuchs.
+   */
+  alertNote?: string;
   /** Optional: weitere Zeilen zu Fristen im Info-Blatt (HebeDex: Rissprüfung) */
   extraRules?: [string, string][];
 }
@@ -331,6 +346,8 @@ const tally = (): Tally => ({ overdue: 0, today: 0, never: 0, soon: 0, ok: 0 });
 const count = (t: Tally, info: Pick<DueInfo, 'state' | 'daysLeft'>) => {
   t[info.state === 'overdue' && info.daysLeft === 0 ? 'today' : info.state]++;
 };
+/** Vermerk in „Fälligkeit heute“: gesperrte zählen wie in der Übersicht nicht als fällig, sondern in der Zeile „Gesperrt“. */
+const BLOCKED_NOTE = 'gesperrte gesondert (Zeile „Gesperrt“)';
 function tallyLine(t: Tally, W: ReturnType<typeof wordsOf>, of: string): string {
   const today = t.today ? ` · ${t.today} heute fällig` : '';
   return `${t.overdue} überfällig${today} · ${t.never} ${dueStatusText({ state: 'never', daysLeft: null }, W.insp.one)} · ${t.soon} bald fällig · ${t.ok} in Ordnung (${of})`;
@@ -401,6 +418,29 @@ function unitCounts(cfg: PruefConfig, u: object, sites: Map<string, RawSite>): b
   return field(u, cfg.cols.retired) !== true && sites.get(idOf(u, siteFkOf(cfg)) ?? '')?.active === true;
 }
 
+/**
+ * Gesperrt wie „Vor Ort“: offener Mangel mit Sperr-Vermerk (cfg.cols.blocked) an der Einheit — im Orts-Modus irgendwo
+ * am Ort, mit oder ohne Einheit (Orte.tsx → ortsStand). Ausgesonderte Einheiten zählen ohnehin nicht mit.
+ */
+function blockedKeys(cfg: PruefConfig, defects: readonly RawDefect[] | undefined): Set<string> {
+  const keyCol = isSiteMode(cfg) ? siteFkOf(cfg) : cfg.cols.unitFk;
+  const out = new Set<string>();
+  for (const d of defects ?? []) {
+    const key = idOf(d, keyCol);
+    if (key && field(d, cfg.cols.blocked) === true) out.add(key);
+  }
+  return out;
+}
+
+/**
+ * Warnung aus den Stammdaten der Einheit wie „Vor Ort“ (cfg.unitAlert; GurtDex: ablegereif über lifespanExpired) — die
+ * Einheit zählt dann wie gesperrt (Standorte.tsx). Nur Einheiten-Modus; null = keine Warnung.
+ */
+function alertOf(cfg: PruefConfig, u: object): string | null {
+  if (isSiteMode(cfg) || !cfg.unitAlert) return null;
+  return cfg.unitAlert(u as Record<string, unknown>)?.badge ?? null;
+}
+
 export interface DueListRow<U> {
   /** Einheit bzw. Ort */
   id: string;
@@ -410,15 +450,22 @@ export interface DueListRow<U> {
   /** zweite Spalte: Standort der Einheit bzw. Adresse des Orts */
   place: string | null;
   unit?: U;
+  /** Fälligkeit nach Datum */
   stand: DueStand;
+  /** Zustand wie „Vor Ort“ (unitState): „gesperrt“ (Sperr-Vermerk oder Warnung) geht vor der Fälligkeit */
+  state: UnitState;
+  /** Warnung statt Sperr-Vermerk, z. B. „Ablegereif“ (GurtDex) — Abzeichen in der Tabelle; null = keine */
+  alert: string | null;
 }
 
 /** Kennzahl „Prüfung fällig“ und Liste „Fällige Prüfungen“ der Übersichtsseite. */
 export interface DueOverview<U> {
-  /** fällig = überfällig (auch heute fällig) oder noch nie geprüft — wie „Fälligkeit heute“ im Excel-Prüfbuch */
+  /** fällig = überfällig (auch heute fällig) oder noch nie geprüft, ohne gesperrte — wie „Fälligkeit heute“ im Excel-Prüfbuch */
   due: number;
-  /** bald fällig (noch nicht fällig) */
+  /** bald fällig (noch nicht fällig), ohne gesperrte */
   soon: number;
+  /** gesperrt: offener Mangel mit Sperr-Vermerk oder Warnung (GurtDex: ablegereif) — zählt weder als fällig noch als bald fällig */
+  blocked: number;
   /** gezählt: Einheiten in Betrieb an aktiven Standorten bzw. aktive Orte */
   total: number;
   /** alles außer „in Ordnung“, das Dringendste zuerst */
@@ -441,30 +488,48 @@ export interface DueOverview<U> {
  * Fälligkeit für die Übersichtsseite — dieselbe Rechnung wie das Excel-Prüfbuch (buildPruefbuch) und „Vor Ort“:
  * jüngste gültige Prüfung der Fälligkeits-Art + Frist des Betriebs in Kalendertagen (pruefen/due.ts), Sichtkontrollen
  * zählen nur, wenn sie die Fälligkeits-Art sind; zweite Frist wie „Vor Ort“ (HebeDex Rissprüfung, SpielDex operative Kontrolle).
+ * Gesperrte (offener Sperr-Vermerk, siehe blockedKeys) und Einheiten mit Warnung (alertOf, GurtDex: ablegereif) zählen
+ * wie „Vor Ort“ (Standorte.tsx → unitState) gesondert in `blocked`.
  */
 export function dueOverview<U extends RawUnit, I extends RawInspection>(
   spec: PruefExportSpec<U, I>,
-  input: { org: Org | null | undefined; sites: RawSite[]; units: U[]; inspections: DueInspection[] },
+  input: {
+    org: Org | null | undefined;
+    sites: RawSite[];
+    units: U[];
+    inspections: DueInspection[];
+    /** offene Mängel/Schäden (die Übersicht lädt sie ohnehin) — für „gesperrt“; ohne Angabe ist nichts gesperrt */
+    openDefects?: readonly RawDefect[];
+  },
 ): DueOverview<U> {
   const { cfg } = spec;
   const S = cfg.labels.site;
   const siteMode = isSiteMode(cfg);
   const sites = new Map(input.sites.map((s) => [s.id, s]));
   const ev = dueEvaluator(spec, input.org, input.inspections);
+  const locked = blockedKeys(cfg, input.openDefects);
+  const row = (r: Omit<DueListRow<U>, 'state' | 'alert'>): DueListRow<U> => {
+    const lock = locked.has(r.id);
+    // wie „Vor Ort“ (Standort.tsx): die Warnung erscheint nur, wenn nicht ohnehin ein Sperr-Vermerk besteht
+    const alert = !lock && r.unit ? alertOf(cfg, r.unit) : null;
+    return { ...r, alert, state: unitState({ ...r.stand.main, state: r.stand.state }, lock || !!alert) };
+  };
   const rows: DueListRow<U>[] = siteMode
-    ? input.sites.filter((s) => s.active).map((s) => ({ id: s.id, name: s.name, siteId: s.id, place: s.address || null, stand: ev.site(s.id) }))
+    ? input.sites
+        .filter((s) => s.active)
+        .map((s) => row({ id: s.id, name: s.name, siteId: s.id, place: s.address || null, stand: ev.site(s.id) }))
     : input.units
         .filter((u) => unitCounts(cfg, u, sites))
         .map((u) => {
           const siteId = idOf(u, siteFkOf(cfg)) ?? '';
-          return { id: u.id, name: u.name, siteId, place: sites.get(siteId)?.name ?? null, unit: u, stand: ev.unit(u) };
+          return row({ id: u.id, name: u.name, siteId, place: sites.get(siteId)?.name ?? null, unit: u, stand: ev.unit(u) });
         });
-  const isDue = (r: DueListRow<U>) => r.stand.state === 'overdue' || r.stand.state === 'never';
+  const isDue = (r: DueListRow<U>) => r.state === 'overdue' || r.state === 'never';
   const list = rows
-    .filter((r) => r.stand.state !== 'ok')
+    .filter((r) => r.state !== 'ok')
     .sort(
       (a, b) =>
-        STATE_ORDER[a.stand.state] - STATE_ORDER[b.stand.state] ||
+        STATE_ORDER[a.state] - STATE_ORDER[b.state] ||
         (a.stand.daysLeft ?? 0) - (b.stand.daysLeft ?? 0) ||
         cmpText(a.name, b.name) ||
         cmpId(a.id, b.id),
@@ -477,7 +542,8 @@ export function dueOverview<U extends RawUnit, I extends RawInspection>(
     : spec.secondDue && { title: `${spec.secondDue.label} (${spec.secondDue.rule})`, short: spec.secondDue.label };
   return {
     due: rows.filter(isDue).length,
-    soon: rows.filter((r) => r.stand.state === 'soon').length,
+    soon: rows.filter((r) => r.state === 'soon').length,
+    blocked: rows.filter((r) => r.state === 'blocked').length,
     total: rows.length,
     list,
     nameHeader: siteMode ? S.one : cfg.labels.unit.one,
@@ -489,6 +555,12 @@ export function dueOverview<U extends RawUnit, I extends RawInspection>(
     sitesLabel: S.many,
     bookLabel: `${spec.bookName} (Excel)`,
   };
+}
+
+/** Unterzeile der Kennzahl: „+ 2 bald fällig · 1 gesperrt · “ (jeweils nur, wenn > 0) — dahinter steht „von X aktiven …“. */
+export function dueKpiPrefix(o: { soon: number; blocked: number }): string {
+  const parts = [o.soon > 0 ? `+ ${o.soon} bald fällig` : '', o.blocked > 0 ? `${o.blocked} gesperrt` : ''].filter(Boolean);
+  return parts.length ? `${parts.join(' · ')} · ` : '';
 }
 
 // ---------------------------------------------------------------------------- Prüfbuch-Übersicht
@@ -537,11 +609,13 @@ function unitBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
     const stand = ev.unit(u);
     const info = stand.main;
     const st = open.get(u.id);
+    // Wie die Übersicht (dueOverview) und „Vor Ort“: gesperrte — Sperr-Vermerk oder Warnung (GurtDex: ablegereif) —
+    // zählen gesondert, nicht als fällig/bald fällig. Die Zeile selbst bleibt Register (Spalte „Gesperrt“ = Sperr-Vermerk).
     if (counts) {
       relevant++;
-      count(t, stand);
+      if (st?.blocked || alertOf(cfg, u)) blockedCount++;
+      else count(t, stand);
     }
-    if (st?.blocked && !retired) blockedCount++;
     const off = retired
       ? `entfällt (${spec.retiredHeader.toLowerCase()})`
       : `entfällt (${S.one} ${site ? 'pausiert' : 'nicht mehr vorhanden'})`;
@@ -606,9 +680,16 @@ function unitBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
       [U.many, `${input.units.length} (davon ${input.units.length - retiredCount} in Betrieb, ${retiredCount} ${spec.retiredHeader.toLowerCase()})`],
       [
         'Fälligkeit heute',
-        tallyLine(t, W, `gezählt: ${relevant} ${relevant === 1 ? U.one : U.many} in Betrieb, ohne pausierte ${S.many}${second ? `; zweite Frist „${second.label}“ mitgezählt` : ''}`),
+        tallyLine(
+          t,
+          W,
+          `gezählt: ${relevant} ${relevant === 1 ? U.one : U.many} in Betrieb, ohne pausierte ${S.many}${second ? `; zweite Frist „${second.label}“ mitgezählt` : ''}; ${BLOCKED_NOTE}`,
+        ),
       ],
-      ['Gesperrt (offener Sperr-Vermerk)', int(blockedCount)],
+      [
+        cfg.unitAlert ? `Gesperrt (offener Sperr-Vermerk, inkl. ${spec.alertNote ?? 'Warnung'})` : 'Gesperrt (offener Sperr-Vermerk)',
+        int(blockedCount),
+      ],
       [`Offene ${W.defect.many}`, openLine(input.openDefects, c)],
       ['', null],
       ...c.ruleLines,
@@ -651,8 +732,11 @@ function siteBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
     const extra = due.second;
     const st = siteOpen.get(s.id);
     const counts = s.active;
-    if (counts) count(t, due);
-    if (counts && st?.blocked) blockedSites++;
+    // Wie die Übersicht (dueOverview) und „Vor Ort“ (ortsStand): gesperrte Orte zählen gesondert
+    if (counts) {
+      if (st?.blocked) blockedSites++;
+      else count(t, due);
+    }
     const text = counts ? dueStatusText(info, W.insp.one) : 'entfällt (pausiert)';
     stand.set(s.id, { info, text, counts });
     return [
@@ -754,7 +838,7 @@ function siteBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
       ['Erstellt', created()],
       [S.many, `${input.sites.length} (davon ${active} aktiv)`],
       [U.many, `${input.units.length} (davon ${input.units.length - retiredCount} in Betrieb, ${retiredCount} ${spec.retiredHeader.toLowerCase()})`],
-      ['Fälligkeit heute', tallyLine(t, W, `gezählt: ${active} ${activeWord(cfg, active)}${x ? `; zweite Frist „${x.label}“ mitgezählt` : ''}`)],
+      ['Fälligkeit heute', tallyLine(t, W, `gezählt: ${active} ${activeWord(cfg, active)}${x ? `; zweite Frist „${x.label}“ mitgezählt` : ''}; ${BLOCKED_NOTE}`)],
       ['Gesperrt (offener Sperr-Vermerk)', int(blockedSites)],
       [`Offene ${W.defect.many}`, openLine(input.openDefects, c)],
       ['', null],

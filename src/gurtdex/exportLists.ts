@@ -64,6 +64,9 @@ export const GURTDEX_EXPORT: PruefExportSpec<PsaItem, Inspection> = {
       return [end ? toInputDate(end) : null, lifespanWarning(p) ?? null];
     },
   },
+  // Ablegereif (vorOrt.ts → lifetimeAlert = lifespanExpired) zählt wie „Vor Ort“ als gesperrt: in der Übersicht und in der
+  // Info-Zeile „Gesperrt“. Die Spalte „Gesperrt“ der Zeilen bleibt der Sperr-Vermerk aus den Mängeln.
+  alertNote: 'ablegereif',
 };
 
 type BookInput = PruefbuchInput<PsaItem, Inspection, Defect>;

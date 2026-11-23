@@ -11,7 +11,7 @@ import {
   fetchSites,
   type InspMeta,
 } from '../api';
-import { dueOverview } from '../../lib/pruefExport';
+import { dueKpiPrefix, dueOverview } from '../../lib/pruefExport';
 import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
 import { GERUESTDEX_EXPORT } from '../exportLists';
@@ -75,7 +75,7 @@ export function Overview() {
           const redCount = openDamages.filter((d) => d.severity === 'red').length;
 
           // Fälligkeit wie App, „Vor Ort“ und Excel-Prüfbuch: Prüfung durch die befähigte Person alle 30 Tage, „bald fällig“ ab 14 Tagen, Kalendertage
-          const due = dueOverview(GERUESTDEX_EXPORT, { org: orgCtx?.org, sites, units: scaffolds, inspections: meta });
+          const due = dueOverview(GERUESTDEX_EXPORT, { org: orgCtx?.org, sites, units: scaffolds, inspections: meta, openDefects: openDamages });
 
           return (
             <>
@@ -103,7 +103,7 @@ export function Overview() {
                   <div className="kpi-label">Prüfung fällig</div>
                   <div className="kpi-value">{due.due}</div>
                   <div className="kpi-sub">
-                    {due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Baustellen ·{' '}
+                    {dueKpiPrefix(due)}von {due.total} aktiven Baustellen ·{' '}
                     {activeScaffolds.length} Gerüste
                   </div>
                 </div>

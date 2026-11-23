@@ -11,7 +11,7 @@ import {
   fetchSites,
   type InspMeta,
 } from '../api';
-import { dueOverview } from '../../lib/pruefExport';
+import { dueKpiPrefix, dueOverview } from '../../lib/pruefExport';
 import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
 import { LEITERDEX_EXPORT } from '../exportLists';
@@ -66,7 +66,7 @@ export function Overview() {
           const redCount = openDefects.filter((d) => d.severity === 'red').length;
 
           // Fälligkeit wie App, „Vor Ort“ und Excel-Prüfbuch: regelmäßige Prüfung, Frist des Betriebs, Kalendertage
-          const due = dueOverview(LEITERDEX_EXPORT, { org: orgCtx?.org, sites, units: ladders, inspections: meta });
+          const due = dueOverview(LEITERDEX_EXPORT, { org: orgCtx?.org, sites, units: ladders, inspections: meta, openDefects });
 
           return (
             <>
@@ -94,7 +94,7 @@ export function Overview() {
                   <div className="kpi-label">Prüfung fällig</div>
                   <div className="kpi-value">{due.due}</div>
                   <div className="kpi-sub">
-                    {due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Leitern
+                    {dueKpiPrefix(due)}von {due.total} aktiven Leitern
                   </div>
                 </div>
               </div>
