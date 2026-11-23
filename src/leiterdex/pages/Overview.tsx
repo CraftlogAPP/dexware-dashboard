@@ -11,22 +11,12 @@ import {
   fetchSites,
   type InspMeta,
 } from '../api';
+import { dueOverview } from '../../lib/pruefExport';
+import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
-import {
-  checklistSummary,
-  ladderNameMap,
-  lastInspectionByType,
-  siteNameMap,
-} from '../labels';
-import {
-  INSPECTION_INTERVAL_DAYS,
-  INSPECTION_SHORT,
-  type Defect,
-  type Inspection,
-  type InspectionType,
-  type Ladder,
-  type Site,
-} from '../types';
+import { LEITERDEX_EXPORT } from '../exportLists';
+import { checklistSummary, ladderNameMap, siteNameMap } from '../labels';
+import type { Defect, Inspection, Ladder, Site } from '../types';
 
 interface OverviewData {
   sites: Site[];
@@ -37,8 +27,6 @@ interface OverviewData {
   recentInspections: Inspection[];
   openDefects: Defect[];
 }
-
-const DUE_TYPES: InspectionType[] = ['visual', 'expert'];
 
 export function Overview() {
   const { client } = useAppAuth();
@@ -67,10 +55,6 @@ export function Overview() {
       <LoadGuard state={state}>
         {({ sites, ladders, meta, recentInspections, openDefects }) => {
           const activeSites = sites.filter((s) => s.active);
-          const activeSiteIds = new Set(activeSites.map((s) => s.id));
-          const activeLadders = ladders.filter(
-            (l) => !l.retired && activeSiteIds.has(l.site_id),
-          );
           const siteNames = siteNameMap(sites);
           const ladderNames = ladderNameMap(ladders);
           const now = Date.now();
@@ -81,18 +65,8 @@ export function Overview() {
           );
           const redCount = openDefects.filter((d) => d.severity === 'red').length;
 
-          const lastByType = lastInspectionByType(meta);
-          const isOverdue = (ladder: Ladder, type: InspectionType): boolean => {
-            const last = lastByType.get(`${ladder.id}:${type}`);
-            return (
-              !last ||
-              now - new Date(last.started_at).getTime() >
-                INSPECTION_INTERVAL_DAYS[type] * dayMs
-            );
-          };
-          const dueLadders = activeLadders.filter((l) =>
-            DUE_TYPES.some((t) => isOverdue(l, t)),
-          );
+          // Fälligkeit wie App, „Vor Ort“ und Excel-Prüfbuch: regelmäßige Prüfung, Frist des Betriebs, Kalendertage
+          const due = dueOverview(LEITERDEX_EXPORT, { org: orgCtx?.org, sites, units: ladders, inspections: meta });
 
           return (
             <>
@@ -118,12 +92,14 @@ export function Overview() {
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Prüfung fällig</div>
-                  <div className="kpi-value">{dueLadders.length}</div>
-                  <div className="kpi-sub">von {activeLadders.length} aktiven Leitern</div>
+                  <div className="kpi-value">{due.due}</div>
+                  <div className="kpi-sub">
+                    {due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Leitern
+                  </div>
                 </div>
               </div>
 
-              {dueLadders.length > 0 && (
+              {due.list.length > 0 && (
                 <>
                   <div className="section-head">
                     <h2>Fällige Prüfungen</h2>
@@ -131,48 +107,7 @@ export function Overview() {
                       Alle Standorte →
                     </Link>
                   </div>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Leiter</th>
-                          <th>Standort</th>
-                          {DUE_TYPES.map((t) => (
-                            <th key={t}>
-                              {INSPECTION_SHORT[t]} (alle {INSPECTION_INTERVAL_DAYS[t]} T)
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dueLadders.slice(0, 8).map((l) => (
-                          <tr key={l.id}>
-                            <td>
-                              <Link to={`standorte/${l.site_id}`}>{l.name}</Link>
-                            </td>
-                            <td className="wrap muted">
-                              {siteNames.get(l.site_id) ?? '—'}
-                            </td>
-                            {DUE_TYPES.map((t) => {
-                              const last = lastByType.get(`${l.id}:${t}`);
-                              return (
-                                <td key={t}>
-                                  {last ? (
-                                    fmtDateTime(last.started_at)
-                                  ) : (
-                                    <span className="muted">noch nie</span>
-                                  )}{' '}
-                                  {isOverdue(l, t) && (
-                                    <span className="badge red">überfällig</span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <FaelligTabelle due={due} />
                 </>
               )}
 

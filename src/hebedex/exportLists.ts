@@ -7,14 +7,12 @@
 import {
   buildInspectionList,
   buildPruefbuch,
-  dueStatusText,
   exportInspectionList,
   exportPruefbuch,
   type InspectionListInput,
   type PruefbuchInput,
   type PruefExportSpec,
 } from '../lib/pruefExport';
-import { toInputDate } from '../lib/format';
 import type { XlsxSheet } from '../lib/xlsx';
 import { checklistSummary } from './labels';
 import { HEBEDEX_VOR_ORT } from './vorOrt';
@@ -31,6 +29,9 @@ import {
   type Inspection,
   type LiftingItem,
 } from './types';
+
+/** Land des Betriebs aus der org-Zeile (DE/AT/CH) — für die Frist der wiederkehrenden Prüfung. */
+const landOf = (org: Record<string, unknown>) => (typeof org.land === 'string' ? org.land : null);
 
 export const HEBEDEX_EXPORT: PruefExportSpec<LiftingItem, Inspection> = {
   cfg: HEBEDEX_VOR_ORT,
@@ -71,14 +72,13 @@ export const HEBEDEX_EXPORT: PruefExportSpec<LiftingItem, Inspection> = {
     const list = i.checklist ?? {};
     return { summary: checklistSummary(list, item?.kind), defects: Object.values(list).filter((v) => v === 'defect').length };
   },
-  unitDue: (_item, { org, lastOf }) => expertDue(lastOf('expert'), org.land),
-  unitExtra: {
-    columns: [{ header: 'Rissprüfung fällig am', kind: 'date' }, { header: 'Rissprüfung' }],
-    // nur Typen mit Rissprüfung (Rundstahlkette); ohne Rissprüfung zählt Herstelljahr bzw. Anlagedatum (crackDue)
-    cells: (e, { retired, lastOf }) => {
-      const info = retired ? undefined : crackDue(e, lastOf('crack'));
-      return info ? [info.dueAt ? toInputDate(info.dueAt) : null, dueStatusText(info)] : [null, null];
-    },
+  unitDue: (_item, { org, lastOf }) => expertDue(lastOf('expert'), landOf(org)),
+  dueRuleShort: (org) => (landOf(org) === 'AT' ? 'jedes Kalenderjahr, max. 15 Monate' : 'alle 12 Monate'),
+  // nur Typen mit Rissprüfung (Rundstahlkette); ohne Rissprüfung zählt Herstelljahr bzw. Anlagedatum (crackDue)
+  secondDue: {
+    label: 'Rissprüfung',
+    rule: `Ketten, alle ${CRACK_INTERVAL_YEARS} Jahre`,
+    due: (e, { lastOf }) => crackDue(e, lastOf('crack')),
   },
   inspectionExtra: {
     columns: [{ header: 'Messwerte (Ablegereife-Rechner)' }],

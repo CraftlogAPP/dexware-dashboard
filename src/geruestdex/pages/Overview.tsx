@@ -11,14 +11,14 @@ import {
   fetchSites,
   type InspMeta,
 } from '../api';
+import { dueOverview } from '../../lib/pruefExport';
+import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
-import { checklistSummary, lastInspectionByType, siteNameMap } from '../labels';
+import { GERUESTDEX_EXPORT } from '../exportLists';
+import { checklistSummary, siteNameMap } from '../labels';
 import {
-  INSPECTION_INTERVAL_DAYS,
-  INSPECTION_SHORT,
   type Damage,
   type Inspection,
-  type InspectionType,
   type Scaffold,
   type Site,
 } from '../types';
@@ -32,8 +32,6 @@ interface OverviewData {
   recentInspections: Inspection[];
   openDamages: Damage[];
 }
-
-const DUE_TYPES: InspectionType[] = ['visual', 'expert'];
 
 export function Overview() {
   const { client } = useAppAuth();
@@ -76,21 +74,8 @@ export function Overview() {
           );
           const redCount = openDamages.filter((d) => d.severity === 'red').length;
 
-          // Fälligkeit hängt an der BAUSTELLE (Prüfung ist je Baustelle
-          // dokumentiert): Inaugenscheinnahme arbeitstäglich (1 T),
-          // Prüfung durch befähigte Person alle 30 T.
-          const lastByType = lastInspectionByType(meta);
-          const isOverdue = (site: Site, type: InspectionType): boolean => {
-            const last = lastByType.get(`${site.id}:${type}`);
-            return (
-              !last ||
-              now - new Date(last.started_at).getTime() >
-                INSPECTION_INTERVAL_DAYS[type] * dayMs
-            );
-          };
-          const dueSites = activeSites.filter((s) =>
-            DUE_TYPES.some((t) => isOverdue(s, t)),
-          );
+          // Fälligkeit wie App, „Vor Ort“ und Excel-Prüfbuch: Prüfung durch die befähigte Person alle 30 Tage, „bald fällig“ ab 14 Tagen, Kalendertage
+          const due = dueOverview(GERUESTDEX_EXPORT, { org: orgCtx?.org, sites, units: scaffolds, inspections: meta });
 
           return (
             <>
@@ -116,15 +101,15 @@ export function Overview() {
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Prüfung fällig</div>
-                  <div className="kpi-value">{dueSites.length}</div>
+                  <div className="kpi-value">{due.due}</div>
                   <div className="kpi-sub">
-                    von {activeSites.length} aktiven Baustellen ·{' '}
+                    {due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Baustellen ·{' '}
                     {activeScaffolds.length} Gerüste
                   </div>
                 </div>
               </div>
 
-              {dueSites.length > 0 && (
+              {due.list.length > 0 && (
                 <>
                   <div className="section-head">
                     <h2>Fällige Prüfungen</h2>
@@ -132,47 +117,7 @@ export function Overview() {
                       Alle Baustellen →
                     </Link>
                   </div>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Baustelle</th>
-                          <th>Adresse</th>
-                          {DUE_TYPES.map((t) => (
-                            <th key={t}>
-                              {INSPECTION_SHORT[t]} (alle{' '}
-                              {INSPECTION_INTERVAL_DAYS[t]} T)
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dueSites.slice(0, 8).map((s) => (
-                          <tr key={s.id}>
-                            <td>
-                              <Link to={`baustellen/${s.id}`}>{s.name}</Link>
-                            </td>
-                            <td className="wrap muted">{s.address}</td>
-                            {DUE_TYPES.map((t) => {
-                              const last = lastByType.get(`${s.id}:${t}`);
-                              return (
-                                <td key={t}>
-                                  {last ? (
-                                    fmtDateTime(last.started_at)
-                                  ) : (
-                                    <span className="muted">noch nie</span>
-                                  )}{' '}
-                                  {isOverdue(s, t) && (
-                                    <span className="badge red">überfällig</span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <FaelligTabelle due={due} />
                 </>
               )}
 

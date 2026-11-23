@@ -11,21 +11,19 @@ import {
   fetchSites,
   type InspMeta,
 } from '../api';
+import { dueOverview } from '../../lib/pruefExport';
+import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
+import { FEUERDEX_EXPORT } from '../exportLists';
 import {
   checklistSummary,
   extinguisherNameMap,
-  lastInspectionByType,
   siteNameMap,
 } from '../labels';
 import {
-  expertIntervalDays,
-  INSPECTION_INTERVAL_DAYS,
-  INSPECTION_SHORT,
   type Defect,
   type Extinguisher,
   type Inspection,
-  type InspectionType,
   type Site,
 } from '../types';
 
@@ -38,8 +36,6 @@ interface OverviewData {
   recentInspections: Inspection[];
   openDefects: Defect[];
 }
-
-const DUE_TYPES: InspectionType[] = ['visual', 'expert'];
 
 export function Overview() {
   const { client } = useAppAuth();
@@ -69,10 +65,6 @@ export function Overview() {
       <LoadGuard state={state}>
         {({ sites, extinguishers, meta, recentInspections, openDefects }) => {
           const activeSites = sites.filter((s) => s.active);
-          const activeSiteIds = new Set(activeSites.map((s) => s.id));
-          const activeExtinguishers = extinguishers.filter(
-            (e) => !e.retired && activeSiteIds.has(e.site_id),
-          );
           const siteNames = siteNameMap(sites);
           const extinguisherNames = extinguisherNameMap(extinguishers);
           const now = Date.now();
@@ -83,22 +75,8 @@ export function Overview() {
           );
           const redCount = openDefects.filter((d) => d.severity === 'red').length;
 
-          const lastByType = lastInspectionByType(meta);
-          // Sachkundigen-Intervall land-abhängig (DE/AT 730 T, CH 1095 T) — wie in der App.
-          const intervals: Record<InspectionType, number> = {
-            ...INSPECTION_INTERVAL_DAYS,
-            expert: expertIntervalDays(orgCtx?.org.land),
-          };
-          const isOverdue = (ext: Extinguisher, type: InspectionType): boolean => {
-            const last = lastByType.get(`${ext.id}:${type}`);
-            return (
-              !last ||
-              now - new Date(last.started_at).getTime() > intervals[type] * dayMs
-            );
-          };
-          const dueExtinguishers = activeExtinguishers.filter((e) =>
-            DUE_TYPES.some((t) => isOverdue(e, t)),
-          );
+          // Fälligkeit wie App, „Vor Ort“ und Excel-Prüfbuch: Sachkundigen-Prüfung, Frist je Land (DE/AT 2 Jahre, CH 3 Jahre), Kalendertage
+          const due = dueOverview(FEUERDEX_EXPORT, { org: orgCtx?.org, sites, units: extinguishers, inspections: meta });
 
           return (
             <>
@@ -124,14 +102,14 @@ export function Overview() {
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Prüfung fällig</div>
-                  <div className="kpi-value">{dueExtinguishers.length}</div>
+                  <div className="kpi-value">{due.due}</div>
                   <div className="kpi-sub">
-                    von {activeExtinguishers.length} aktiven Löschern
+                    {due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Löschern
                   </div>
                 </div>
               </div>
 
-              {dueExtinguishers.length > 0 && (
+              {due.list.length > 0 && (
                 <>
                   <div className="section-head">
                     <h2>Fällige Prüfungen</h2>
@@ -139,48 +117,7 @@ export function Overview() {
                       Alle Standorte →
                     </Link>
                   </div>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Feuerlöscher</th>
-                          <th>Standort</th>
-                          {DUE_TYPES.map((t) => (
-                            <th key={t}>
-                              {INSPECTION_SHORT[t]} (alle {intervals[t]} T)
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dueExtinguishers.slice(0, 8).map((e) => (
-                          <tr key={e.id}>
-                            <td>
-                              <Link to={`standorte/${e.site_id}`}>{e.name}</Link>
-                            </td>
-                            <td className="wrap muted">
-                              {siteNames.get(e.site_id) ?? '—'}
-                            </td>
-                            {DUE_TYPES.map((t) => {
-                              const last = lastByType.get(`${e.id}:${t}`);
-                              return (
-                                <td key={t}>
-                                  {last ? (
-                                    fmtDateTime(last.started_at)
-                                  ) : (
-                                    <span className="muted">noch nie</span>
-                                  )}{' '}
-                                  {isOverdue(e, t) && (
-                                    <span className="badge red">überfällig</span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <FaelligTabelle due={due} />
                 </>
               )}
 

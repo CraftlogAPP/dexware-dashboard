@@ -11,40 +11,12 @@ import {
   fetchSites,
   type InspMeta,
 } from '../api';
+import { dueOverview } from '../../lib/pruefExport';
+import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
-import {
-  checklistSummary,
-  itemNameMap,
-  lastInspectionByType,
-  siteNameMap,
-} from '../labels';
-import {
-  crackDue,
-  dueLabel,
-  expertDue,
-  type Defect,
-  type DueInfo,
-  type LiftingItem,
-  type Inspection,
-  type Site,
-} from '../types';
-
-const DUE_BADGE: Record<DueInfo['state'], { cls: string; text: string } | null> = {
-  never: { cls: 'badge red', text: 'fällig' },
-  overdue: { cls: 'badge red', text: 'überfällig' },
-  soon: { cls: 'badge amber', text: 'bald fällig' },
-  ok: null,
-};
-
-function DueCell({ info }: { info: DueInfo | undefined }) {
-  if (!info) return <span className="muted">—</span>;
-  const b = DUE_BADGE[info.state];
-  return (
-    <>
-      {dueLabel(info)} {b && <span className={b.cls}>{b.text}</span>}
-    </>
-  );
-}
+import { HEBEDEX_EXPORT } from '../exportLists';
+import { checklistSummary, itemNameMap, siteNameMap } from '../labels';
+import type { Defect, LiftingItem, Inspection, Site } from '../types';
 
 interface OverviewData {
   sites: Site[];
@@ -98,19 +70,9 @@ export function Overview() {
           );
           const redCount = openDefects.filter((d) => d.severity === 'red').length;
 
-          const lastByType = lastInspectionByType(meta);
-          // Fristen wie in der App: DE 12 Monate, AT Kalenderjahr/15 Monate; Ketten + Rissprüfung 3 J.
-          const land = orgCtx?.org.land;
-          const dueOf = (e: LiftingItem) => ({
-            expert: expertDue(lastByType.get(`${e.id}:expert`)?.started_at, land),
-            crack: crackDue(e, lastByType.get(`${e.id}:crack`)?.started_at),
-          });
-          const urgent = (d: DueInfo | undefined) => !!d && d.state !== 'ok';
-          const isDue = (d: DueInfo | undefined) => !!d && (d.state === 'overdue' || d.state === 'never');
-          const dueItems = activeItems
-            .map((e) => ({ e, d: dueOf(e) }))
-            .filter(({ d }) => urgent(d.expert) || urgent(d.crack));
-          const dueNow = dueItems.filter(({ d }) => isDue(d.expert) || isDue(d.crack)).length;
+          // Fristen wie in der App (expertDue/crackDue): DE 12 Monate, AT Kalenderjahr/15 Monate; Ketten + Rissprüfung 3 J.
+          // Dieselbe Rechnung wie Excel-Prüfbuch und „Vor Ort“ (lib/pruefExport.ts → dueOverview).
+          const due = dueOverview(HEBEDEX_EXPORT, { org: orgCtx?.org, sites, units: items, inspections: meta });
           // Gesperrt: offener Mangel, der das Teil der Benutzung entzieht.
           const blockedIds = new Set(
             openDefects.filter((d) => d.item_blocked).map((d) => d.item_id),
@@ -141,12 +103,9 @@ export function Overview() {
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Prüfung fällig</div>
-                  <div className="kpi-value">{dueNow}</div>
+                  <div className="kpi-value">{due.due}</div>
                   <div className="kpi-sub">
-                    {dueItems.length - dueNow > 0
-                      ? `+ ${dueItems.length - dueNow} in 30 Tagen · `
-                      : ''}
-                    von {activeItems.length} aktiven Teilen
+                    {due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Teilen
                   </div>
                 </div>
                 <div className="kpi">
@@ -160,7 +119,7 @@ export function Overview() {
                 </div>
               </div>
 
-              {dueItems.length > 0 && (
+              {due.list.length > 0 && (
                 <>
                   <div className="section-head">
                     <h2>Fällige Prüfungen</h2>
@@ -168,36 +127,7 @@ export function Overview() {
                       Alle Standorte →
                     </Link>
                   </div>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Teil</th>
-                          <th>Standort</th>
-                          <th>Wiederkehrende Prüfung ({land === 'AT' ? 'jedes Kalenderjahr, max. 15 Monate' : 'alle 12 Monate'})</th>
-                          <th>Rissprüfung (Ketten, alle 3 Jahre)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dueItems.slice(0, 8).map(({ e, d }) => (
-                          <tr key={e.id}>
-                            <td>
-                              <Link to={`standorte/${e.site_id}`}>{e.name}</Link>
-                            </td>
-                            <td className="wrap muted">
-                              {siteNames.get(e.site_id) ?? '—'}
-                            </td>
-                            <td className="wrap">
-                              <DueCell info={d.expert} />
-                            </td>
-                            <td className="wrap">
-                              <DueCell info={d.crack} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <FaelligTabelle due={due} />
                 </>
               )}
 

@@ -20,8 +20,8 @@
 import { downloadXlsx, ExportNotice, type XlsxCell, type XlsxColumn, type XlsxSheet, type XlsxValue } from './xlsx';
 import { fmtDateTime, toInputDate, todayLocalISO } from './format';
 import type { Org } from './orgApi';
-import { isSiteMode, siteFkOf, wordsOf, type PruefConfig } from '../pruefen/config';
-import { DUE_SOON_DAYS, dueInfo, lastDueByUnit, type DueInfo, type InspMeta } from '../pruefen/due';
+import { isSiteMode, siteFkOf, sitesPathOf, wordsOf, type PruefConfig } from '../pruefen/config';
+import { DUE_SOON_DAYS, STATE_ORDER, dueInfo, lastDueByUnit, type DueInfo, type DueState, type InspMeta } from '../pruefen/due';
 
 export const EXPORT_TZ = 'Europe/Berlin';
 
@@ -73,11 +73,14 @@ export interface RawUnit {
   name: string;
   notes: string | null;
 }
-export interface RawInspection {
+/** Für die Fälligkeit reicht die schmale Prüf-Zeile (api.ts → fetchInspectionMeta) samt Fremdschlüssel. */
+export interface DueInspection {
   id: string;
   type: string;
   started_at: string;
   canceled: boolean;
+}
+export interface RawInspection extends DueInspection {
   canceled_at: string | null;
   cancel_reason: string | null;
   notes: string | null;
@@ -121,12 +124,27 @@ export interface PruefExportSpec<U extends RawUnit, I extends RawInspection> {
   /**
    * Optional, nur Einheiten-Modus: Fälligkeit mit dem eigenen Helfer der App statt der Vor-Ort-Regel
    * (HebeDex: expertDue aus types.ts — dieselbe Rechnung wie Übersicht und Standort-Seite der App im Dashboard).
+   * `org` = Zeile des Betriebs (leer, solange er nicht geladen ist).
    */
-  unitDue?: (u: U, ctx: { org: Org; lastOf: (kind: string) => string | undefined }) => DueInfo;
+  unitDue?: (u: U, ctx: DueCtx) => DueInfo;
+  /**
+   * Optional, nur Einheiten-Modus: zweite Frist je Einheit (HebeDex: Rissprüfung der Rundstahlketten, crackDue).
+   * undefined = für diese Einheit nicht nötig. Verschärft die Fälligkeit wie „Vor Ort“ (Standorte.tsx). Im Orts-Modus
+   * kommt die zweite Frist aus cfg.extraDue (SpielDex: operative Kontrolle).
+   */
+  secondDue?: { label: string; rule: string; due: (u: U, ctx: DueCtx) => DueInfo | undefined };
   /** Optional: Beschreibung der Frist im Info-Blatt, wenn sie sich nicht in Tagen ausdrückt (HebeDex Österreich) */
   dueRuleText?: (org: Org) => string;
+  /** Optional: Frist kurz für den Spaltenkopf der Übersicht, z. B. „jedes Kalenderjahr, max. 15 Monate“ (Standard: „alle 12 Monate“ …) */
+  dueRuleShort?: (org: Record<string, unknown>) => string;
   /** Optional: weitere Zeilen zu Fristen im Info-Blatt (HebeDex: Rissprüfung) */
   extraRules?: [string, string][];
+}
+
+export interface DueCtx {
+  org: Record<string, unknown>;
+  /** jüngste gültige Prüfung dieser Art an der Einheit (ISO) */
+  lastOf: (kind: string) => string | undefined;
 }
 
 export interface PruefbuchInput<U, I, D> {
@@ -201,15 +219,21 @@ function infoSheet(title: string, lines: [string, Cell][]): XlsxSheet {
   };
 }
 
-/** Gemeinsames je App: Wörter, Spaltennamen, Frist des Betriebs, Ampel-Rang. */
-function setup<U extends RawUnit, I extends RawInspection>(spec: PruefExportSpec<U, I>, org: Org) {
-  const { cfg } = spec;
-  const W = wordsOf(cfg);
-  const orgRow = org as unknown as Record<string, unknown>;
+/** Frist des Betriebs wie „Vor Ort“ (Scope.tsx): Tage aus der Konfiguration, eigene Regel (HebeDex), „bald fällig“. */
+function dueSetup(cfg: PruefConfig, org: Org | null | undefined) {
+  const orgRow = (org ?? {}) as unknown as Record<string, unknown>;
   const intervalDays = cfg.dueIntervalDays(orgRow);
   const custom = cfg.dueDate;
   const dueDate = custom ? (last: Date) => custom(last, orgRow) : undefined;
   const soonDays = cfg.dueSoonDays ?? DUE_SOON_DAYS;
+  return { orgRow, intervalDays, soonDays, due: (lastAt: string | undefined) => dueInfo(lastAt, intervalDays, soonDays, dueDate) };
+}
+
+/** Gemeinsames je App: Wörter, Spaltennamen, Frist des Betriebs, Ampel-Rang. */
+function setup<U extends RawUnit, I extends RawInspection>(spec: PruefExportSpec<U, I>, org: Org) {
+  const { cfg } = spec;
+  const W = wordsOf(cfg);
+  const { intervalDays, soonDays, due } = dueSetup(cfg, org);
   const rank = (severity: string) => cfg.severities.findIndex((s) => s.id === severity);
   const sevShort = (severity: string) => cfg.severities.find((s) => s.id === severity)?.short ?? severity;
   const sevLabel = (severity: string) => cfg.severities.find((s) => s.id === severity)?.label ?? severity;
@@ -236,7 +260,7 @@ function setup<U extends RawUnit, I extends RawInspection>(spec: PruefExportSpec
     siteMode: isSiteMode(cfg),
     siteFk: siteFkOf(cfg),
     unitFk: cfg.cols.unitFk,
-    due: (lastAt: string | undefined) => dueInfo(lastAt, intervalDays, soonDays, dueDate),
+    due,
     rank,
     sevShort,
     sevLabel,
@@ -248,7 +272,7 @@ function setup<U extends RawUnit, I extends RawInspection>(spec: PruefExportSpec
 }
 
 /** Schmale Prüf-Daten wie „Vor Ort“ (InspMeta) — Schlüssel = Einheit bzw. im Orts-Modus der Ort. */
-function metaOf(list: RawInspection[], keyCol: string): InspMeta[] {
+function metaOf(list: DueInspection[], keyCol: string): InspMeta[] {
   const out: InspMeta[] = [];
   for (const i of list) {
     const unitId = idOf(i, keyCol);
@@ -304,12 +328,167 @@ function cmpSites(a: RawSite | undefined, b: RawSite | undefined): number {
 type Tally = { overdue: number; today: number; never: number; soon: number; ok: number };
 const tally = (): Tally => ({ overdue: 0, today: 0, never: 0, soon: 0, ok: 0 });
 /** Zählen wie die Spalte „Fälligkeit“: „heute fällig“ getrennt von „überfällig“. */
-const count = (t: Tally, info: DueInfo) => {
+const count = (t: Tally, info: Pick<DueInfo, 'state' | 'daysLeft'>) => {
   t[info.state === 'overdue' && info.daysLeft === 0 ? 'today' : info.state]++;
 };
 function tallyLine(t: Tally, W: ReturnType<typeof wordsOf>, of: string): string {
   const today = t.today ? ` · ${t.today} heute fällig` : '';
   return `${t.overdue} überfällig${today} · ${t.never} ${dueStatusText({ state: 'never', daysLeft: null }, W.insp.one)} · ${t.soon} bald fällig · ${t.ok} in Ordnung (${of})`;
+}
+
+// ---------------------------------------------------------------------------- Fälligkeit (Prüfbuch und Übersicht)
+
+/** Fälligkeit einer Einheit bzw. eines Orts — EINE Rechnung für das Excel-Prüfbuch und die Übersichtsseiten. */
+export interface DueStand {
+  /** Fälligkeits-Art (cfg.dueKind) */
+  main: DueInfo;
+  /** jüngste gültige Prüfung der Fälligkeits-Art (ISO) */
+  lastMain: string | undefined;
+  /** zweite Frist: HebeDex Rissprüfung (je Teil), SpielDex operative Kontrolle (je Spielplatz); undefined = keine */
+  second?: DueInfo;
+  /** Gesamtstand wie „Vor Ort“: die Fälligkeits-Art, verschärft durch die zweite Frist */
+  state: DueState;
+  /** Resttage der Frist, die den Gesamtstand bestimmt (0 = heute fällig) */
+  daysLeft: number | null;
+}
+
+/** Wie „Vor Ort“ (Standorte.tsx): zweite Frist überfällig → überfällig, bald fällig → bald fällig; „noch nie“ bleibt. */
+function combine(main: DueInfo, second: DueInfo | undefined): Pick<DueStand, 'state' | 'daysLeft'> {
+  if (second?.state === 'overdue' && (main.state === 'ok' || main.state === 'soon')) return { state: 'overdue', daysLeft: second.daysLeft };
+  if (second?.state === 'soon' && main.state === 'ok') return { state: 'soon', daysLeft: second.daysLeft };
+  return { state: main.state, daysLeft: main.daysLeft };
+}
+
+/** Fälligkeit je Einheit (Einheiten-Modus) bzw. je Ort (Orts-Modus) aus den Prüf-Daten — Stornos zählen nie. */
+function dueEvaluator<U extends RawUnit, I extends RawInspection>(
+  spec: PruefExportSpec<U, I>,
+  org: Org | null | undefined,
+  inspections: DueInspection[],
+) {
+  const { cfg } = spec;
+  const d = dueSetup(cfg, org);
+  const siteMode = isSiteMode(cfg);
+  const meta = metaOf(inspections, siteMode ? siteFkOf(cfg) : cfg.cols.unitFk);
+  const lastDue = lastDueByUnit(meta, cfg.dueKind);
+  const byKind = new Map<string, Map<string, string>>();
+  const lastOf = (key: string) => (kind: string) => {
+    let m = byKind.get(kind);
+    if (!m) byKind.set(kind, (m = lastDueByUnit(meta, kind)));
+    return m.get(key);
+  };
+  const x = siteMode ? cfg.extraDue : undefined;
+  const lastExtra = x ? lastDueByUnit(meta, x.kinds) : null;
+  return {
+    lastOf,
+    unit(u: U): DueStand {
+      const ctx: DueCtx = { org: d.orgRow, lastOf: lastOf(u.id) };
+      const lastMain = lastDue.get(u.id);
+      const main = spec.unitDue ? spec.unitDue(u, ctx) : d.due(lastMain);
+      const second = spec.secondDue?.due(u, ctx);
+      return { main, lastMain, second, ...combine(main, second) };
+    },
+    site(siteId: string): DueStand {
+      const lastMain = lastDue.get(siteId);
+      const main = d.due(lastMain);
+      const second = x && lastExtra ? dueInfo(lastExtra.get(siteId), x.intervalDays, x.soonDays) : undefined;
+      return { main, lastMain, second, ...combine(main, second) };
+    },
+  };
+}
+
+/** Wie „Vor Ort“ und die Übersicht: gezählt werden Einheiten in Betrieb an aktiven Standorten (bzw. aktive Orte). */
+function unitCounts(cfg: PruefConfig, u: object, sites: Map<string, RawSite>): boolean {
+  return field(u, cfg.cols.retired) !== true && sites.get(idOf(u, siteFkOf(cfg)) ?? '')?.active === true;
+}
+
+export interface DueListRow<U> {
+  /** Einheit bzw. Ort */
+  id: string;
+  name: string;
+  /** Ort der Einheit bzw. der Ort selbst — für den Link auf die Standort-Seite */
+  siteId: string;
+  /** zweite Spalte: Standort der Einheit bzw. Adresse des Orts */
+  place: string | null;
+  unit?: U;
+  stand: DueStand;
+}
+
+/** Kennzahl „Prüfung fällig“ und Liste „Fällige Prüfungen“ der Übersichtsseite. */
+export interface DueOverview<U> {
+  /** fällig = überfällig (auch heute fällig) oder noch nie geprüft — wie „Fälligkeit heute“ im Excel-Prüfbuch */
+  due: number;
+  /** bald fällig (noch nicht fällig) */
+  soon: number;
+  /** gezählt: Einheiten in Betrieb an aktiven Standorten bzw. aktive Orte */
+  total: number;
+  /** alles außer „in Ordnung“, das Dringendste zuerst */
+  list: DueListRow<U>[];
+  /** Spaltenköpfe und Kurznamen der Fristen für die Tabelle */
+  nameHeader: string;
+  placeHeader: string;
+  mainTitle: string;
+  mainShort: string;
+  secondTitle?: string;
+  secondShort?: string;
+  /** Unterpfad der Standort-Seiten (standorte / objekte / baustellen / lager / spielplaetze) und ihr Name */
+  sitesPath: string;
+  sitesLabel: string;
+  /** Beschriftung des Excel-Knopfs dort, z. B. „Prüfbuch (Excel)“ */
+  bookLabel: string;
+}
+
+/**
+ * Fälligkeit für die Übersichtsseite — dieselbe Rechnung wie das Excel-Prüfbuch (buildPruefbuch) und „Vor Ort“:
+ * jüngste gültige Prüfung der Fälligkeits-Art + Frist des Betriebs in Kalendertagen (pruefen/due.ts), Sichtkontrollen
+ * zählen nur, wenn sie die Fälligkeits-Art sind; zweite Frist wie „Vor Ort“ (HebeDex Rissprüfung, SpielDex operative Kontrolle).
+ */
+export function dueOverview<U extends RawUnit, I extends RawInspection>(
+  spec: PruefExportSpec<U, I>,
+  input: { org: Org | null | undefined; sites: RawSite[]; units: U[]; inspections: DueInspection[] },
+): DueOverview<U> {
+  const { cfg } = spec;
+  const S = cfg.labels.site;
+  const siteMode = isSiteMode(cfg);
+  const sites = new Map(input.sites.map((s) => [s.id, s]));
+  const ev = dueEvaluator(spec, input.org, input.inspections);
+  const rows: DueListRow<U>[] = siteMode
+    ? input.sites.filter((s) => s.active).map((s) => ({ id: s.id, name: s.name, siteId: s.id, place: s.address || null, stand: ev.site(s.id) }))
+    : input.units
+        .filter((u) => unitCounts(cfg, u, sites))
+        .map((u) => {
+          const siteId = idOf(u, siteFkOf(cfg)) ?? '';
+          return { id: u.id, name: u.name, siteId, place: sites.get(siteId)?.name ?? null, unit: u, stand: ev.unit(u) };
+        });
+  const isDue = (r: DueListRow<U>) => r.stand.state === 'overdue' || r.stand.state === 'never';
+  const list = rows
+    .filter((r) => r.stand.state !== 'ok')
+    .sort(
+      (a, b) =>
+        STATE_ORDER[a.stand.state] - STATE_ORDER[b.stand.state] ||
+        (a.stand.daysLeft ?? 0) - (b.stand.daysLeft ?? 0) ||
+        cmpText(a.name, b.name) ||
+        cmpId(a.id, b.id),
+    );
+  const d = dueSetup(cfg, input.org);
+  const kindShort = cfg.kinds.find((k) => k.id === cfg.dueKind)?.short ?? spec.dueName;
+  const x = siteMode ? cfg.extraDue : undefined;
+  const second = siteMode
+    ? x && { title: `${x.label} (alle ${x.intervalDays} Tage)`, short: x.label }
+    : spec.secondDue && { title: `${spec.secondDue.label} (${spec.secondDue.rule})`, short: spec.secondDue.label };
+  return {
+    due: rows.filter(isDue).length,
+    soon: rows.filter((r) => r.stand.state === 'soon').length,
+    total: rows.length,
+    list,
+    nameHeader: siteMode ? S.one : cfg.labels.unit.one,
+    placeHeader: siteMode ? 'Adresse' : S.one,
+    mainTitle: `${spec.dueName} (${spec.dueRuleShort ? spec.dueRuleShort(d.orgRow) : every(d.intervalDays)})`,
+    mainShort: kindShort,
+    ...(second ? { secondTitle: second.title, secondShort: second.short } : {}),
+    sitesPath: sitesPathOf(cfg),
+    sitesLabel: S.many,
+    bookLabel: `${spec.bookName} (Excel)`,
+  };
 }
 
 // ---------------------------------------------------------------------------- Prüfbuch-Übersicht
@@ -335,18 +514,12 @@ function unitBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
 ): XlsxSheet[] {
   const { cfg, W, S, U } = c;
   const sites = new Map(input.sites.map((s) => [s.id, s]));
-  const meta = metaOf(input.inspections, c.unitFk);
-  const lastDue = lastDueByUnit(meta, cfg.dueKind);
+  const ev = dueEvaluator(spec, input.org, input.inspections);
   const lastAny = latestValid(input.inspections, c.unitFk);
-  const byKind = new Map<string, Map<string, string>>();
-  const lastOf = (unitId: string) => (kind: string) => {
-    let m = byKind.get(kind);
-    if (!m) byKind.set(kind, (m = lastDueByUnit(meta, kind)));
-    return m.get(unitId);
-  };
   const open = openStats(input.openDefects, c.unitFk, cfg.cols.blocked, c.rank);
   const retiredOf = (u: U) => field(u, cfg.cols.retired) === true;
   const siteOf = (u: U) => sites.get(idOf(u, c.siteFk) ?? '');
+  const second = spec.secondDue;
 
   const units = [...input.units].sort(
     (a, b) => cmpSites(siteOf(a), siteOf(b)) || Number(retiredOf(a)) - Number(retiredOf(b)) || cmpText(a.name, b.name) || cmpId(a.id, b.id),
@@ -358,21 +531,21 @@ function unitBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
     const site = siteOf(u);
     const retired = retiredOf(u);
     // Wie die Übersicht und „Vor Ort“: Fälligkeit nur für Einheiten in Betrieb an aktiven Standorten
-    const counts = !retired && site?.active !== false;
+    const counts = unitCounts(cfg, u, sites);
     const last = lastAny.get(u.id);
     const res = last ? spec.result(last, u) : null;
-    const info = spec.unitDue ? spec.unitDue(u, { org: input.org, lastOf: lastOf(u.id) }) : c.due(lastDue.get(u.id));
+    const stand = ev.unit(u);
+    const info = stand.main;
     const st = open.get(u.id);
     if (counts) {
       relevant++;
-      count(t, info);
+      count(t, stand);
     }
     if (st?.blocked && !retired) blockedCount++;
-    const status = retired
+    const off = retired
       ? `entfällt (${spec.retiredHeader.toLowerCase()})`
-      : counts
-        ? dueStatusText(info, W.insp.one)
-        : `entfällt (${S.one} pausiert)`;
+      : `entfällt (${S.one} ${site ? 'pausiert' : 'nicht mehr vorhanden'})`;
+    const sec = second && !retired ? stand.second : undefined;
     return [
       site?.name ?? c.goneSite,
       u.name,
@@ -383,11 +556,12 @@ function unitBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
       res?.summary ?? null,
       res?.defects ?? null,
       last?.inspector_name ?? null,
-      lastDue.get(u.id) ?? null,
+      stand.lastMain ?? null,
       counts && info.dueAt ? toInputDate(info.dueAt) : null,
-      status,
+      counts ? dueStatusText(info, W.insp.one) : off,
       counts ? info.daysLeft : null,
-      ...(spec.unitExtra ? spec.unitExtra.cells(u, { retired, lastOf: lastOf(u.id) }) : []),
+      ...(second ? [sec?.dueAt ? toInputDate(sec.dueAt) : null, sec ? dueStatusText(sec, W.insp.one) : null] : []),
+      ...(spec.unitExtra ? spec.unitExtra.cells(u, { retired, lastOf: ev.lastOf(u.id) }) : []),
       st?.count ?? 0,
       st?.top ? c.sevShort(st.top) : null,
       yesNo(!!st?.blocked),
@@ -415,6 +589,7 @@ function unitBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
         { header: `${spec.dueName} fällig am`, kind: 'date' },
         { header: 'Fälligkeit' },
         { header: 'Tage bis fällig', kind: 'int' },
+        ...(second ? [{ header: `${second.label} fällig am`, kind: 'date' as const }, { header: second.label }] : []),
         ...(spec.unitExtra?.columns ?? []),
         { header: `Offene ${W.defect.many}`, kind: 'int' },
         { header: 'Höchste Einstufung' },
@@ -429,7 +604,10 @@ function unitBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
       ['Erstellt', created()],
       [S.many, `${input.sites.length} (davon ${active} aktiv)`],
       [U.many, `${input.units.length} (davon ${input.units.length - retiredCount} in Betrieb, ${retiredCount} ${spec.retiredHeader.toLowerCase()})`],
-      ['Fälligkeit heute', tallyLine(t, W, `gezählt: ${relevant} ${relevant === 1 ? U.one : U.many} in Betrieb, ohne pausierte ${S.many}`)],
+      [
+        'Fälligkeit heute',
+        tallyLine(t, W, `gezählt: ${relevant} ${relevant === 1 ? U.one : U.many} in Betrieb, ohne pausierte ${S.many}${second ? `; zweite Frist „${second.label}“ mitgezählt` : ''}`),
+      ],
       ['Gesperrt (offener Sperr-Vermerk)', int(blockedCount)],
       [`Offene ${W.defect.many}`, openLine(input.openDefects, c)],
       ['', null],
@@ -448,11 +626,9 @@ function siteBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
 ): XlsxSheet[] {
   const { cfg, W, S, U } = c;
   const sites = new Map(input.sites.map((s) => [s.id, s]));
-  const meta = metaOf(input.inspections, c.siteFk);
-  const lastDue = lastDueByUnit(meta, cfg.dueKind);
+  const ev = dueEvaluator(spec, input.org, input.inspections);
   const lastAny = latestValid(input.inspections, c.siteFk);
   const x = cfg.extraDue;
-  const lastExtra = x ? lastDueByUnit(meta, x.kinds) : null;
   // Ein Ort mit offenem Sperr-Mangel (mit oder ohne Einheit) gilt als gesperrt — wie „Vor Ort“ (Orte.tsx → ortsStand)
   const siteOpen = openStats(input.openDefects, c.siteFk, cfg.cols.blocked, c.rank);
   const unitOpen = openStats(input.openDefects, c.unitFk, cfg.cols.blocked, c.rank);
@@ -470,11 +646,12 @@ function siteBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
   const siteRows = list.map((s) => {
     const last = lastAny.get(s.id);
     const res = last ? spec.result(last, undefined) : null;
-    const info = c.due(lastDue.get(s.id));
-    const extra = x && lastExtra ? dueInfo(lastExtra.get(s.id), x.intervalDays, x.soonDays) : null;
+    const due = ev.site(s.id);
+    const info = due.main;
+    const extra = due.second;
     const st = siteOpen.get(s.id);
     const counts = s.active;
-    if (counts) count(t, info);
+    if (counts) count(t, due);
     if (counts && st?.blocked) blockedSites++;
     const text = counts ? dueStatusText(info, W.insp.one) : 'entfällt (pausiert)';
     stand.set(s.id, { info, text, counts });
@@ -489,7 +666,7 @@ function siteBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
       res?.summary ?? null,
       res?.defects ?? null,
       last?.inspector_name ?? null,
-      lastDue.get(s.id) ?? null,
+      due.lastMain ?? null,
       counts && info.dueAt ? toInputDate(info.dueAt) : null,
       text,
       counts ? info.daysLeft : null,
@@ -577,7 +754,7 @@ function siteBook<U extends RawUnit, I extends RawInspection, D extends RawDefec
       ['Erstellt', created()],
       [S.many, `${input.sites.length} (davon ${active} aktiv)`],
       [U.many, `${input.units.length} (davon ${input.units.length - retiredCount} in Betrieb, ${retiredCount} ${spec.retiredHeader.toLowerCase()})`],
-      ['Fälligkeit heute', tallyLine(t, W, `gezählt: ${active} ${activeWord(cfg, active)}`)],
+      ['Fälligkeit heute', tallyLine(t, W, `gezählt: ${active} ${activeWord(cfg, active)}${x ? `; zweite Frist „${x.label}“ mitgezählt` : ''}`)],
       ['Gesperrt (offener Sperr-Vermerk)', int(blockedSites)],
       [`Offene ${W.defect.many}`, openLine(input.openDefects, c)],
       ['', null],

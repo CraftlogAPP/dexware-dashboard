@@ -11,22 +11,20 @@ import {
   fetchSites,
   type InspMeta,
 } from '../api';
+import { dueOverview } from '../../lib/pruefExport';
+import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
+import { GURTDEX_EXPORT } from '../exportLists';
 import {
   checklistSummary,
   itemNameMap,
-  lastInspectionByType,
   siteNameMap,
 } from '../labels';
 import {
-  expertIntervalDays,
-  INSPECTION_INTERVAL_DAYS,
-  INSPECTION_SHORT,
   lifespanWarning,
   type Defect,
   type PsaItem,
   type Inspection,
-  type InspectionType,
   type Site,
 } from '../types';
 
@@ -39,8 +37,6 @@ interface OverviewData {
   recentInspections: Inspection[];
   openDefects: Defect[];
 }
-
-const DUE_TYPES: InspectionType[] = ['visual', 'expert'];
 
 export function Overview() {
   const { client } = useAppAuth();
@@ -84,22 +80,8 @@ export function Overview() {
           );
           const redCount = openDefects.filter((d) => d.severity === 'red').length;
 
-          const lastByType = lastInspectionByType(meta);
-          // Sachkundigen-Intervall: DACH-weit jährlich (365 T) — wie in der App.
-          const intervals: Record<InspectionType, number> = {
-            ...INSPECTION_INTERVAL_DAYS,
-            expert: expertIntervalDays(orgCtx?.org.land),
-          };
-          const isOverdue = (ext: PsaItem, type: InspectionType): boolean => {
-            const last = lastByType.get(`${ext.id}:${type}`);
-            return (
-              !last ||
-              now - new Date(last.started_at).getTime() > intervals[type] * dayMs
-            );
-          };
-          const dueItems = activeItems.filter((e) =>
-            DUE_TYPES.some((t) => isOverdue(e, t)),
-          );
+          // Fälligkeit wie App, „Vor Ort“ und Excel-Prüfbuch: Sachkundigen-Prüfung jährlich, Kalendertage
+          const due = dueOverview(GURTDEX_EXPORT, { org: orgCtx?.org, sites, units: items, inspections: meta });
           // Ablegereife-Wächter: abgelaufene Artikel (max. Gebrauchsdauer überschritten).
           const expiredItems = activeItems.filter((e) =>
             lifespanWarning(e)?.startsWith('Ablegereif seit'),
@@ -129,9 +111,9 @@ export function Overview() {
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Prüfung fällig</div>
-                  <div className="kpi-value">{dueItems.length}</div>
+                  <div className="kpi-value">{due.due}</div>
                   <div className="kpi-sub">
-                    von {activeItems.length} aktiven Artikeln
+                    {due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Artikeln
                   </div>
                 </div>
                 <div className="kpi">
@@ -145,7 +127,7 @@ export function Overview() {
                 </div>
               </div>
 
-              {dueItems.length > 0 && (
+              {due.list.length > 0 && (
                 <>
                   <div className="section-head">
                     <h2>Fällige Prüfungen</h2>
@@ -153,48 +135,7 @@ export function Overview() {
                       Alle Standorte →
                     </Link>
                   </div>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Artikel</th>
-                          <th>Standort</th>
-                          {DUE_TYPES.map((t) => (
-                            <th key={t}>
-                              {INSPECTION_SHORT[t]} (alle {intervals[t]} T)
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dueItems.slice(0, 8).map((e) => (
-                          <tr key={e.id}>
-                            <td>
-                              <Link to={`standorte/${e.site_id}`}>{e.name}</Link>
-                            </td>
-                            <td className="wrap muted">
-                              {siteNames.get(e.site_id) ?? '—'}
-                            </td>
-                            {DUE_TYPES.map((t) => {
-                              const last = lastByType.get(`${e.id}:${t}`);
-                              return (
-                                <td key={t}>
-                                  {last ? (
-                                    fmtDateTime(last.started_at)
-                                  ) : (
-                                    <span className="muted">noch nie</span>
-                                  )}{' '}
-                                  {isOverdue(e, t) && (
-                                    <span className="badge red">überfällig</span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <FaelligTabelle due={due} />
                 </>
               )}
 

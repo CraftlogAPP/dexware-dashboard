@@ -10,18 +10,17 @@ import {
   fetchWarehouses,
   type InspMeta,
 } from '../api';
+import { dueOverview } from '../../lib/pruefExport';
+import { FaelligTabelle } from '../../pruefen/FaelligTabelle';
 import { InspectionBadge } from '../badges';
+import { REGALDEX_EXPORT } from '../exportLists';
 import {
   checklistSummary,
-  lastInspectionByType,
   warehouseNameMap,
 } from '../labels';
 import {
-  INSPECTION_INTERVAL_DAYS,
-  INSPECTION_SHORT,
   type Damage,
   type Inspection,
-  type InspectionType,
   type Warehouse,
 } from '../types';
 
@@ -33,8 +32,6 @@ interface OverviewData {
   recentInspections: Inspection[];
   openDamages: Damage[];
 }
-
-const DUE_TYPES: InspectionType[] = ['visual', 'expert'];
 
 export function Overview() {
   const { client } = useAppAuth();
@@ -71,16 +68,8 @@ export function Overview() {
           );
           const redCount = openDamages.filter((d) => d.severity === 'red').length;
 
-          const lastByType = lastInspectionByType(meta);
-          const isOverdue = (wh: Warehouse, type: InspectionType): boolean => {
-            const last = lastByType.get(`${wh.id}:${type}`);
-            return (
-              !last ||
-              now - new Date(last.started_at).getTime() >
-                INSPECTION_INTERVAL_DAYS[type] * dayMs
-            );
-          };
-          const dueWhs = activeWhs.filter((w) => DUE_TYPES.some((t) => isOverdue(w, t)));
+          // Fälligkeit wie App, „Vor Ort“ und Excel-Prüfbuch: Experteninspektion jährlich, Kalendertage
+          const due = dueOverview(REGALDEX_EXPORT, { org: orgCtx?.org, sites: warehouses, units: [], inspections: meta });
 
           return (
             <>
@@ -104,12 +93,12 @@ export function Overview() {
                 </div>
                 <div className="kpi">
                   <div className="kpi-label">Inspektion fällig</div>
-                  <div className="kpi-value">{dueWhs.length}</div>
-                  <div className="kpi-sub">von {activeWhs.length} aktiven Lagern</div>
+                  <div className="kpi-value">{due.due}</div>
+                  <div className="kpi-sub">{due.soon > 0 ? `+ ${due.soon} bald fällig · ` : ''}von {due.total} aktiven Lagern</div>
                 </div>
               </div>
 
-              {dueWhs.length > 0 && (
+              {due.list.length > 0 && (
                 <>
                   <div className="section-head">
                     <h2>Fällige Inspektionen</h2>
@@ -117,44 +106,7 @@ export function Overview() {
                       Alle Lager →
                     </Link>
                   </div>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Lager</th>
-                          {DUE_TYPES.map((t) => (
-                            <th key={t}>
-                              {INSPECTION_SHORT[t]} (alle {INSPECTION_INTERVAL_DAYS[t]} T)
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dueWhs.slice(0, 8).map((w) => (
-                          <tr key={w.id}>
-                            <td>
-                              <Link to={`lager/${w.id}`}>{w.name}</Link>
-                            </td>
-                            {DUE_TYPES.map((t) => {
-                              const last = lastByType.get(`${w.id}:${t}`);
-                              return (
-                                <td key={t}>
-                                  {last ? (
-                                    fmtDateTime(last.started_at)
-                                  ) : (
-                                    <span className="muted">noch nie</span>
-                                  )}{' '}
-                                  {isOverdue(w, t) && (
-                                    <span className="badge red">überfällig</span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <FaelligTabelle due={due} />
                 </>
               )}
 
