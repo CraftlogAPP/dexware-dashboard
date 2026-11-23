@@ -92,6 +92,27 @@ export interface Job {
   deleted_at: string | null;
 }
 
+/** Schmale Karte für die Excel-Liste „Aufträge zum Abrechnen“ — ohne Fotos, Koordinaten und Telefon. */
+export type ExportJob = Pick<
+  Job,
+  | 'id'
+  | 'title'
+  | 'customer_id'
+  | 'customer_name'
+  | 'address'
+  | 'note'
+  | 'assignee_id'
+  | 'helper_ids'
+  | 'status'
+  | 'started_at'
+  | 'finished_at'
+  | 'work_seconds'
+  | 'running_since'
+  | 'done_note'
+  | 'outcome'
+  | 'updated_at'
+>;
+
 export interface JobEvent {
   id: string;
   org_id: string;

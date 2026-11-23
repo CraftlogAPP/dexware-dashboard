@@ -5,6 +5,7 @@
 // - Listen seitenweise laden (PostgREST liefert höchstens 1.000 Zeilen je Abfrage, siehe lib/fetchAll.ts).
 
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllOf } from '../lib/completeQueries';
 import { fetchAllRows } from '../lib/fetchAll';
 import { fail } from '../lib/orgApi';
 import { geocodeAddress, type GeoPoint } from './geocode';
@@ -12,6 +13,7 @@ import { newId, officeRuleMessage } from './logic';
 import type {
   Customer,
   CustomerInput,
+  ExportJob,
   Job,
   JobEvent,
   JobInput,
@@ -55,6 +57,9 @@ async function selectMembers<T>(run: (cols: string) => PromiseLike<{ data: T | n
   }
   return run(MEMBER_COLS);
 }
+// Excel-Liste: nur, was in der Liste steht — nie Fotos (photos/result_photos) oder Koordinaten
+const EXPORT_JOB_COLS =
+  'id, title, customer_id, customer_name, address, note, assignee_id, helper_ids, status, started_at, finished_at, work_seconds, running_since, done_note, outcome, updated_at';
 const CUSTOMER_COLS = 'id, org_id, name, phone, address, note, lat, lng, deleted_at, updated_at';
 const EVENT_COLS = 'id, org_id, job_id, actor_id, kind, at, data, seq';
 
@@ -78,6 +83,8 @@ export interface PinnData {
   doneJobs(from: Date, to: Date, withCanceled: boolean): Promise<Job[]>;
   /** Für Zeiten: erledigt im Zeitraum + gerade laufende/pausierte. */
   timeJobs(from: Date, to: Date): Promise<Job[]>;
+  /** Excel-Liste: wie doneJobs, aber vollständig, älteste zuerst und schmal (ohne Fotos/Koordinaten). */
+  exportJobs(from: Date, to: Date, withCanceled: boolean): Promise<ExportJob[]>;
   job(id: string): Promise<Job | null>;
   events(jobId: string): Promise<JobEvent[]>;
   /** Ereignisse mehrerer Karten bestimmter Arten (z. B. letzte Starts, Korrekturen). */
@@ -201,6 +208,20 @@ export function supabaseData(sb: SupabaseClient, orgId: string): PinnData {
         ),
       ]);
       return [...done, ...running];
+    },
+
+    async exportJobs(from, to, withCanceled) {
+      const base = () => sb.from('job').select(EXPORT_JOB_COLS).eq('org_id', orgId).is('deleted_at', null);
+      const none = Promise.resolve({ data: [] as ExportJob[], error: null });
+      const [done, canceled] = await Promise.all([
+        fetchAllOf<ExportJob>(() => base().eq('status', 'done').gte('finished_at', from.toISOString()).lt('finished_at', to.toISOString()), [['finished_at']]),
+        withCanceled
+          ? fetchAllOf<ExportJob>(() => base().eq('status', 'canceled').gte('updated_at', from.toISOString()).lt('updated_at', to.toISOString()), [['updated_at']])
+          : none,
+      ]);
+      if (done.error) fail('Erledigte Aufträge konnten nicht geladen werden', done.error);
+      if (canceled.error) fail('Abgesagte Aufträge konnten nicht geladen werden', canceled.error);
+      return [...done.data, ...canceled.data];
     },
 
     async job(id) {

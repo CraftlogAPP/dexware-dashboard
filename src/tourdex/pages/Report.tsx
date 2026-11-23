@@ -3,9 +3,12 @@ import { Crown, FileDown } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
+import { ExcelButton } from '../../components/ExcelButton';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
 import { openReportWindowAfter } from '../../lib/print';
-import { fetchTripsBefore, fetchTripsForReport, fetchVehicles } from '../api';
+import { downloadXlsx, ExportNotice } from '../../lib/xlsx';
+import { fetchTripsBefore, fetchTripsForExport, fetchTripsForReport, fetchVehicles } from '../api';
+import { checkPeriod, EXPORT_TZ, needsHistory, periodLabel, tripSheets } from '../exportLists';
 import { buildFahrtenbuchHtml } from '../report';
 import { tourdexPdfAllowed } from '../pro';
 import type { Vehicle } from '../types';
@@ -73,6 +76,45 @@ export function Report() {
     }
   }
 
+  /**
+   * Excel-Liste für Reisekosten/Steuerberatung: gewähltes Fahrzeug oder (ohne Auswahl) alle, vollständig geladen.
+   * Gehört zu Pro wie das PDF — die Karte ist ohne Pro ohnehin ausgeblendet, hier nur zur Sicherheit.
+   */
+  async function exportExcel() {
+    const period = checkPeriod(from, to);
+    if (pdfErlaubt === false) {
+      throw new ExportNotice(
+        'Die Excel-Liste gehört zu TourDex Pro — genau wie das Fahrtenbuch-PDF. Pro schließt du in der TourDex-App unter „Mehr“ ab, oder du nutzt die Dexware Suite.',
+        { href: pathname.replace(/\/bericht\/?$/, '/abo'), label: 'Zum Abo' },
+      );
+    }
+    const vehicles = vehiclesState.data ?? (await fetchVehicles(client));
+    const fromDate = parseLocalDate(period.from);
+    // Bis-Datum inklusiv: Fahrten bis Mitternacht des Folgetags (wie das PDF)
+    const toExclusive = parseLocalDate(period.to);
+    toExclusive.setDate(toExclusive.getDate() + 1);
+    const trips = await fetchTripsForExport(client, {
+      vehicleId: vehicleId || undefined,
+      // Fahrten vor dem Zeitraum nur laden, wenn ein Fahrzeug einen Anfangs-km-Stand hat (fortlaufender km-Stand)
+      from: needsHistory(vehicles, vehicleId || null) ? null : fromDate,
+      toExclusive,
+    });
+    const sheets = tripSheets({
+      accountEmail: session?.user.email ?? '—',
+      vehicles,
+      trips,
+      period,
+      range: { fromIso: fromDate.toISOString(), toIso: toExclusive.toISOString() },
+      vehicleId: vehicleId || null,
+    });
+    const one = vehicleId ? vehicles.find((v) => v.id === vehicleId)?.name : undefined;
+    await downloadXlsx(`TourDex_Fahrten_${one ? `${one}_` : ''}${period.from}_bis_${period.to}`, sheets, {
+      title: `TourDex Fahrtenliste ${periodLabel(period)}`,
+      creator: 'Dexware TourDex',
+      timeZone: EXPORT_TZ,
+    });
+  }
+
   return (
     <>
       <h1>Fahrtenbuch-PDF</h1>
@@ -89,8 +131,8 @@ export function Report() {
               <Crown className="i" aria-hidden /> <strong>Das Fahrtenbuch-PDF gehört zu TourDex Pro</strong> — genau wie in der App.
             </p>
             <p className="muted">
-              Pro schließt du in der TourDex-App unter „Mehr“ ab, oder du nutzt die Dexware Suite. Danach steht der Bericht
-              hier sofort bereit. Deine Fahrten siehst und bearbeitest du weiterhin kostenlos.
+              Pro schließt du in der TourDex-App unter „Mehr“ ab, oder du nutzt die Dexware Suite. Danach stehen der Bericht
+              und die Excel-Liste hier sofort bereit. Deine Fahrten siehst und bearbeitest du weiterhin kostenlos.
             </p>
             <Link className="btn" to={pathname.replace(/\/bericht\/?$/, '/abo')}>Zum Abo</Link>
           </div>
@@ -123,16 +165,24 @@ export function Report() {
               </label>
             </div>
             {error && <div className="error-box">{error}</div>}
-            <button
-              className="btn"
-              disabled={busy || !vehicleId || pdfErlaubt === null}
-              onClick={() => void onGenerate()}
-            >
-              {busy ? 'Lade Fahrten …' : <><FileDown className="i" aria-hidden /> Fahrtenbuch erstellen</>}
-            </button>
+            <div className="row" style={{ gap: 8 }}>
+              <button
+                className="btn"
+                disabled={busy || !vehicleId || pdfErlaubt === null}
+                onClick={() => void onGenerate()}
+              >
+                {busy ? 'Lade Fahrten …' : <><FileDown className="i" aria-hidden /> Fahrtenbuch erstellen</>}
+              </button>
+              <ExcelButton
+                onExport={exportExcel}
+                disabled={pdfErlaubt === null}
+                title="Fahrten im Zeitraum als Excel-Datei für Reisekosten/Steuerberatung, mit km je Fahrzeug und Monat (Pro)"
+              />
+            </div>
             <p className="muted small" style={{ marginTop: 10 }}>
               Unbestätigte Fahrten sind im Bericht gelb markiert — für ein sauberes
-              Fahrtenbuch vorher in der App bestätigen.
+              Fahrtenbuch vorher in der App bestätigen. Die Excel-Liste (für Reisekosten
+              und Steuerberatung, kein Fahrtenbuch-Ersatz) nimmt ohne Fahrzeug-Auswahl alle Fahrzeuge.
             </p>
           </div>
         )}

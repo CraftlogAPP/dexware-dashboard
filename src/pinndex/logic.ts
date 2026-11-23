@@ -65,11 +65,14 @@ export const jobDay = (j: Job): string | null => (j.scheduled_at ? dayKey(new Da
 
 export const isOpen = (s: JobStatus) => OPEN_STATUSES.includes(s);
 
+/** Felder, die die Zeiten-Rechnung braucht — volle Karte oder die schmale Zeile der Excel-Liste (ohne Fotos). */
+export type TimeJob = Pick<Job, 'id' | 'title' | 'assignee_id' | 'status' | 'work_seconds' | 'running_since' | 'started_at' | 'finished_at'>;
+
 /**
  * Arbeitszeit jetzt: abgeschlossene Strecken (work_seconds, vom Server aus den Ereignissen gerechnet)
  * + die laufende Strecke seit dem letzten Start/Weiter.
  */
-export function workSecondsNow(j: Job, runningSince: string | null | undefined, now: number): number {
+export function workSecondsNow(j: TimeJob, runningSince: string | null | undefined, now: number): number {
   const base = Math.max(0, j.work_seconds || 0);
   if (j.status !== 'running') return base;
   const since = j.running_since ?? runningSince ?? (base === 0 ? j.started_at : null);
@@ -92,9 +95,12 @@ export function fmtClock(sec: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
 }
 
+/** Dezimalstunden als Zahl, 2 Stellen — dieselbe Rundung wie decimalHours (Excel-Liste). */
+export const roundHours = (sec: number) => Math.round((sec / 3600) * 100) / 100;
+
 /** Dezimalstunden mit Komma (für CSV/Lohn). */
 export const decimalHours = (sec: number) =>
-  (Math.round((sec / 3600) * 100) / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
+  roundHours(sec).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
 export function fmtDuration(min: number | null): string {
   if (!min) return '';
@@ -139,7 +145,7 @@ export const initials = (name: string) =>
     .join('') || '?';
 
 /** Gehört die Karte (für den Monteur) zu „meinen“? Hauptmonteur oder Helfer. */
-export const isMine = (j: Job, uid: string) => j.assignee_id === uid || (j.helper_ids ?? []).includes(uid);
+export const isMine = (j: Pick<Job, 'assignee_id' | 'helper_ids'>, uid: string) => j.assignee_id === uid || (j.helper_ids ?? []).includes(uid);
 
 /**
  * Wer darf Aufträge bekommen (Zugewiesener/Helfer)? Nur aktive Monteure und der Chef — nie das Büro (Entscheidung
@@ -188,16 +194,19 @@ export function periodRange(kind: Period, anchor: Date): { from: Date; to: Date;
   return { from, to, label: `${MONTHS[from.getMonth()]} ${from.getFullYear()}` };
 }
 
+/** Zeitpunkt, dessen Tag für die Zeiten zählt: Fertig, sonst Start (laufende/pausierte Karten). */
+export const workDayIso = (j: Pick<Job, 'finished_at' | 'started_at'>): string | null => j.finished_at ?? j.started_at;
+
 /** Welcher Tag zählt für die Zeiten: Fertig-Zeitpunkt, sonst Start (laufende/pausierte Karten). */
-export const workDay = (j: Job): string | null => {
-  const iso = j.finished_at ?? j.started_at;
+export const workDay = (j: Pick<Job, 'finished_at' | 'started_at'>): string | null => {
+  const iso = workDayIso(j);
   return iso ? dayKey(new Date(iso)) : null;
 };
 
-export interface WorkerTimes {
+export interface WorkerTimes<J extends TimeJob = Job> {
   userId: string | null;
   name: string;
-  jobs: Job[];
+  jobs: J[];
   seconds: number;
   done: number;
   fixed: number;
@@ -207,14 +216,14 @@ export interface WorkerTimes {
  * Zeiten je Monteur im Zeitraum. Gezählt wird beim Hauptmonteur (assignee_id) — work_seconds ist je Karte,
  * nicht je Person. Korrigierte Karten (job_event time_fix) zählen extra.
  */
-export function timesByWorker(
-  jobs: Job[],
+export function timesByWorker<J extends TimeJob>(
+  jobs: J[],
   members: PinnMember[],
   fixedIds: Set<string>,
   runningSince: Record<string, string>,
   now: number,
-): WorkerTimes[] {
-  const map = new Map<string, WorkerTimes>();
+): WorkerTimes<J>[] {
+  const map = new Map<string, WorkerTimes<J>>();
   const byId = new Map(members.map((m) => [m.user_id, m]));
   for (const j of jobs) {
     const key = j.assignee_id ?? 'none';
@@ -233,7 +242,7 @@ export function timesByWorker(
 }
 
 /** Freitextsuche über Titel, Kunde, Adresse, Notizen. */
-export function matchesSearch(j: Job, q: string): boolean {
+export function matchesSearch(j: Pick<Job, 'title' | 'customer_name' | 'address' | 'note' | 'done_note'>, q: string): boolean {
   const s = q.trim().toLowerCase();
   if (!s) return true;
   return [j.title, j.customer_name, j.address, j.note, j.done_note].some((v) => (v ?? '').toLowerCase().includes(s));
