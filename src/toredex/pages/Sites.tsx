@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { ExcelButton } from '../../components/ExcelButton';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { fmtDateTime } from '../../lib/format';
 import {
   fetchDefects,
   fetchGates,
   fetchInspectionMeta,
+  fetchLatestInspections,
   fetchSites,
   type InspMeta,
 } from '../api';
+import { savePruefbuch } from '../exportLists';
 import { lastInspectionBySite } from '../labels';
 import { SiteDialog } from '../dialogs';
 import type { Defect, Gate, Site } from '../types';
@@ -35,14 +39,35 @@ export function Sites() {
     return { sites, gates, lastBySite: lastInspectionBySite(meta), openDefects };
   }, [client]);
 
+  const { data: org } = useOrg();
+  /** Prüfbuch-Übersicht als Excel — frisch und vollständig geladen (ganzer Bestand, letzte Prüfungen, offene Mängel). */
+  async function exportExcel() {
+    if (!org) throw new Error('Betrieb nicht geladen.');
+    const [sites, units, inspections, openDefects] = await Promise.all([
+      fetchSites(client),
+      fetchGates(client),
+      fetchLatestInspections(client),
+      fetchDefects(client, { status: 'open' }),
+    ]);
+    await savePruefbuch({ org: org.org, sites, units, inspections, openDefects });
+  }
+
   return (
     <>
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Objekte</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => setEditing('new')}>
-          ＋ Objekt anlegen
-        </button>
+        {/* Knöpfe zusammen rechts (sonst verteilt section-head sie über die Breite) */}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <ExcelButton
+            label="Prüfbuch (Excel)"
+            onExport={exportExcel}
+            title="Alle Tore als Excel-Datei: letzte Prüfung, nächste Sachkundigen-Prüfung fällig am, offene Mängel"
+          />
+          <button className="btn" onClick={() => setEditing('new')}>
+            ＋ Objekt anlegen
+          </button>
+        </div>
       </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Alle Objekte mit Tor-Bestand, letzter Prüfung und offenen Mängeln.

@@ -280,6 +280,43 @@ export async function fetchInspectionMeta(sb: SupabaseClient): Promise<InspMeta[
   return data;
 }
 
+/**
+ * Alle Prüfungen im Zeitraum (inkl. Stornos) für die Excel-Liste: vollständig (seitenweise, ohne 500er-Grenze),
+ * chronologisch, ohne Fotos — mit Prüfcode, wo die Datenbank ihn kennt.
+ */
+export async function fetchInspectionsAll(
+  sb: SupabaseClient,
+  filter: { siteId?: string; type?: InspectionType; from: Date; to: Date },
+): Promise<Inspection[]> {
+  const end = new Date(filter.to);
+  end.setHours(23, 59, 59, 999);
+  const { data, error } = await fetchAllOf<Inspection>(() => {
+    let q = sb.from('inspection').select(INSPECTION_COLS).gte('started_at', filter.from.toISOString()).lte('started_at', end.toISOString());
+    if (filter.siteId) q = q.eq('site_id', filter.siteId);
+    if (filter.type) q = q.eq('type', filter.type);
+    return q;
+  }, [['started_at'], ['id']]);
+  if (error) fail('Prüfungen konnten nicht geladen werden', error);
+  return withGpsProof(sb, 'inspection', data);
+}
+
+/** Jüngste Prüfung je Leiter und Prüfart in voller Breite (ohne Fotos) — vollständig, für das Prüfbuch (Excel). */
+export async function fetchLatestInspections(sb: SupabaseClient): Promise<Inspection[]> {
+  const { data, error } = await fetchLatestWindow<Inspection>({
+    sb,
+    table: 'inspection',
+    cols: INSPECTION_COLS,
+    dateCol: 'started_at',
+    unitCol: 'ladder_id',
+    units: { table: 'ladder' },
+    windowDays: 396,
+    types: Object.keys(INSPECTION_LABELS),
+    canceled: true,
+  });
+  if (error) fail('Prüf-Daten konnten nicht geladen werden', error);
+  return data;
+}
+
 /** Einzelne Prüfung inkl. Beweisfotos (Base64-Daten-URIs). */
 export async function fetchInspectionWithPhotos(
   sb: SupabaseClient,

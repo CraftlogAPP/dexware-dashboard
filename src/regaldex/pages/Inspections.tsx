@@ -12,7 +12,10 @@ import {
   type FormValues,
 } from '../../components/form';
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
-import { addInspection, cancelInspection, fetchInspections, fetchWarehouses } from '../api';
+import { ExcelButton } from '../../components/ExcelButton';
+import { checkPeriod } from '../../lib/pruefExport';
+import { addInspection, cancelInspection, fetchInspections, fetchInspectionsAll, fetchWarehouses } from '../api';
+import { saveInspections } from '../exportLists';
 import { InspectionBadge } from '../badges';
 import { checklistSummary, warehouseNameMap } from '../labels';
 import {
@@ -72,6 +75,23 @@ export function Inspections() {
       inspector_name: orNull(v.inspector_name),
     });
     inspState.reload();
+  }
+
+  /** Excel-Liste: alle Inspektionen im gewählten Zeitraum und Filter (auch über 500), Summen je Lager, Stornos getrennt. */
+  async function exportExcel() {
+    if (!org) throw new Error('Betrieb nicht geladen.');
+    const period = checkPeriod(from, to);
+    const [inspections, sites] = await Promise.all([
+      fetchInspectionsAll(client, {
+        siteId: warehouseId || undefined,
+        type: (type || undefined) as InspectionType | undefined,
+        from: parseLocalDate(period.from),
+        to: parseLocalDate(period.to),
+      }),
+      whsState.data ?? fetchWarehouses(client),
+    ]);
+    // Orts-Modus: Inspektionen hängen am Lager, nicht am einzelnen Gerät — keine Geräteliste nötig
+    await saveInspections({ org: org.org, sites, units: [], inspections, period, siteId: warehouseId || null, type: type || null });
   }
 
   async function onCancel(v: FormValues) {
@@ -138,7 +158,7 @@ export function Inspections() {
       )}
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="row">
+        <div className="row" style={{ alignItems: 'flex-end' }}>
           <label className="field" style={{ flex: 2, minWidth: 200, marginBottom: 0 }}>
             Lager
             <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
@@ -169,6 +189,10 @@ export function Inspections() {
             Bis
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </label>
+          <ExcelButton
+            onExport={exportExcel}
+            title="Alle Inspektionen im gewählten Zeitraum als Excel-Datei — mit Summen je Lager, Stornos getrennt"
+          />
         </div>
       </div>
 
