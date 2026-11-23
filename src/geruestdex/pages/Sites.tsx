@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { ExcelButton } from '../../components/ExcelButton';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
@@ -9,10 +11,12 @@ import { GERUESTDEX_VOR_ORT } from '../vorOrt';
 import {
   fetchDamages,
   fetchInspectionMeta,
+  fetchLatestInspections,
   fetchScaffolds,
   fetchSites,
   type InspMeta,
 } from '../api';
+import { savePruefbuch } from '../exportLists';
 import { lastInspectionBySite } from '../labels';
 import { SiteDialog } from '../dialogs';
 import type { Damage, Scaffold, Site } from '../types';
@@ -52,14 +56,35 @@ export function Sites() {
     return { sites, scaffolds, lastBySite: lastInspectionBySite(meta), openDamages };
   }, [client]);
 
+  const { data: org } = useOrg();
+  /** Prüfbuch-Übersicht als Excel — frisch und vollständig geladen (alle Orte, Bestand, letzte Prüfungen, offene Mängel). */
+  async function exportExcel() {
+    if (!org) throw new Error('Betrieb nicht geladen.');
+    const [sites, units, inspections, openDefects] = await Promise.all([
+      fetchSites(client),
+      fetchScaffolds(client),
+      fetchLatestInspections(client),
+      fetchDamages(client, { status: 'open' }),
+    ]);
+    await savePruefbuch({ org: org.org, sites, units, inspections, openDefects });
+  }
+
   return (
     <>
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Baustellen</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => void onAdd()} disabled={checking}>
-          ＋ Baustelle anlegen
-        </button>
+        {/* Knöpfe zusammen rechts (sonst verteilt section-head sie über die Breite) */}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <ExcelButton
+            label="Prüfbuch (Excel)"
+            onExport={exportExcel}
+            title="Alle Baustellen und Gerüste als Excel-Datei: letzte Prüfung, nächste Prüfung (befähigte Person) fällig am, offene Mängel"
+          />
+          <button className="btn" onClick={() => void onAdd()} disabled={checking}>
+            ＋ Baustelle anlegen
+          </button>
+        </div>
       </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Alle Baustellen mit Gerüst-Bestand, letzter Prüfung und offenen Mängeln.

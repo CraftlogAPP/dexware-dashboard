@@ -12,7 +12,10 @@ import {
   type FormValues,
 } from '../../components/form';
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
-import { addInspection, cancelInspection, fetchInspections, fetchSites } from '../api';
+import { ExcelButton } from '../../components/ExcelButton';
+import { checkPeriod } from '../../lib/pruefExport';
+import { addInspection, cancelInspection, fetchInspections, fetchInspectionsAll, fetchSites } from '../api';
+import { saveInspections } from '../exportLists';
 import { InspectionBadge } from '../badges';
 import { checklistSummary, siteNameMap } from '../labels';
 import {
@@ -75,6 +78,23 @@ export function Inspections() {
       inspector_name: orNull(v.inspector_name),
     });
     inspState.reload();
+  }
+
+  /** Excel-Liste: alle Prüfungen im gewählten Zeitraum und Filter (auch über 500), Summen je Baustelle, Stornos getrennt. */
+  async function exportExcel() {
+    if (!org) throw new Error('Betrieb nicht geladen.');
+    const period = checkPeriod(from, to);
+    const [inspections, sites] = await Promise.all([
+      fetchInspectionsAll(client, {
+        siteId: siteId || undefined,
+        type: (type || undefined) as InspectionType | undefined,
+        from: parseLocalDate(period.from),
+        to: parseLocalDate(period.to),
+      }),
+      baseState.data ?? fetchSites(client),
+    ]);
+    // Orts-Modus: Prüfungen hängen am Baustelle, nicht am einzelnen Gerät — keine Geräteliste nötig
+    await saveInspections({ org: org.org, sites, units: [], inspections, period, siteId: siteId || null, type: type || null });
   }
 
   async function onCancel(v: FormValues) {
@@ -146,7 +166,7 @@ export function Inspections() {
       )}
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="row">
+        <div className="row" style={{ alignItems: 'flex-end' }}>
           <label className="field" style={{ flex: 2, minWidth: 200, marginBottom: 0 }}>
             Baustelle
             <select value={siteId} onChange={(e) => setSiteId(e.target.value)}>
@@ -177,6 +197,10 @@ export function Inspections() {
             Bis
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </label>
+          <ExcelButton
+            onExport={exportExcel}
+            title="Alle Prüfungen im gewählten Zeitraum als Excel-Datei — mit Summen je Baustelle, Stornos getrennt"
+          />
         </div>
       </div>
 

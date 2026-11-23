@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
+import { ExcelButton } from '../../components/ExcelButton';
+import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
@@ -9,9 +11,12 @@ import { REGALDEX_VOR_ORT } from '../vorOrt';
 import {
   fetchDamages,
   fetchInspectionMeta,
+  fetchLatestInspections,
+  fetchRacks,
   fetchWarehouses,
   type InspMeta,
 } from '../api';
+import { savePruefbuch } from '../exportLists';
 import { lastInspectionByWarehouse } from '../labels';
 import { WarehouseDialog } from '../dialogs';
 import type { Damage, Warehouse } from '../types';
@@ -49,14 +54,35 @@ export function Warehouses() {
     return { warehouses, lastByWh: lastInspectionByWarehouse(meta), openDamages };
   }, [client]);
 
+  const { data: org } = useOrg();
+  /** Prüfbuch-Übersicht als Excel — frisch und vollständig geladen (alle Orte, Bestand, letzte Inspektionen, offene Schäden). */
+  async function exportExcel() {
+    if (!org) throw new Error('Betrieb nicht geladen.');
+    const [sites, units, inspections, openDefects] = await Promise.all([
+      fetchWarehouses(client),
+      fetchRacks(client),
+      fetchLatestInspections(client),
+      fetchDamages(client, { status: 'open' }),
+    ]);
+    await savePruefbuch({ org: org.org, sites, units, inspections, openDefects });
+  }
+
   return (
     <>
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Lager</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => void onAdd()} disabled={checking}>
-          ＋ Lager anlegen
-        </button>
+        {/* Knöpfe zusammen rechts (sonst verteilt section-head sie über die Breite) */}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <ExcelButton
+            label="Prüfbuch (Excel)"
+            onExport={exportExcel}
+            title="Alle Lager und Regalzeilen als Excel-Datei: letzte Inspektion, nächste Experteninspektion fällig am, offene Schäden"
+          />
+          <button className="btn" onClick={() => void onAdd()} disabled={checking}>
+            ＋ Lager anlegen
+          </button>
+        </div>
       </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Alle Lagerstandorte mit letzter Inspektion und offenen Schäden.
