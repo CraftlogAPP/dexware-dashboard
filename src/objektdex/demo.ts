@@ -14,6 +14,8 @@ import {
 } from './turnus';
 import type { OdDefect, OdMember, OdOperation, OdProperty, OdService, OdShareLink, OdSollIstRow, OdTodayRow } from './types';
 import type { OdStreckeKurz, WdQuelle } from './uebernahme';
+import type { WdNachweisQuelle } from './jahresnachweis';
+import type { OperationAction, OperationWithPhotos } from '../winterdex/types';
 
 const did = (kind: number, n: number) => `0000${kind}000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const ORG = '00000000-0000-4000-8000-0000000000aa';
@@ -113,6 +115,122 @@ export interface DemoStore {
   orgName: string;
   /** WinterDex-Betrieb für „Aus WinterDex übernehmen“ (ohne Anmeldung) */
   winterdex: WdQuelle;
+  /** derselbe WinterDex-Betrieb mit Winterdienst-Einsätzen für den Ganzjahres-Nachweis (ohne Anmeldung) */
+  winterdexNachweis: WdNachweisQuelle;
+}
+
+/**
+ * Winterdienst-Einsätze der Beispiel-WinterDex-Objekte: November bis März des letzten Jahres, früh morgens, mit
+ * Wetterlage, GPS-Stempeln, Prüfcode und ab und zu Fotos. Je Objekt ein stornierter und ein nachgetragener Einsatz
+ * (ohne GPS, später eingegangen), damit die Kennzeichnung im PDF zu sehen ist.
+ */
+function demoWinterdexNachweis(q: WdQuelle, pro: boolean): WdNachweisQuelle {
+  const today = todayBerlin();
+  const ACTIONS: OperationAction[] = ['cleared_gritted', 'cleared_gritted', 'gritted', 'cleared', 'checked_no_action'];
+  const cache = new Map<string, OperationWithPhotos[]>();
+  const fotosCache = new Map<string, string[]>();
+  const einsaetze = (objektId: string): OperationWithPhotos[] => {
+    const hit = cache.get(objektId);
+    if (hit) return hit;
+    const oi = q.objekte.findIndex((o) => o.id === objektId);
+    const obj = q.objekte[oi];
+    const ops: OperationWithPhotos[] = [];
+    if (!obj) return ops;
+    let n = 0;
+    for (let i = 400; i >= 0; i--) {
+      const day = addDays(today, -i);
+      const month = Number(day.slice(5, 7));
+      if (!(month >= 11 || month <= 3) || (i * 7 + oi * 3) % 6 !== 0) continue;
+      n++;
+      const action = ACTIONS[(n + oi) % ACTIONS.length];
+      const minute = 5 * 60 + 15 + oi * 12 + (n % 4) * 5;
+      const started = at(day, Math.floor(minute / 60), minute % 60);
+      const ended = at(day, Math.floor((minute + 18) / 60), (minute + 18) % 60);
+      const fotoZahl = n % 3 === 0 ? 2 : n % 4 === 0 ? 1 : 0;
+      const id = `0000w100-0000-4000-8000-${String(oi * 1000 + n).padStart(12, '0')}`;
+      const temp = -6 + ((n * 5 + oi) % 9);
+      ops.push({
+        id,
+        org_id: '00000000-0000-4000-8000-0000000000bb',
+        property_id: obj.id,
+        started_at: started,
+        ended_at: ended,
+        lat: (obj.lat ?? 48.13) + 0.00006,
+        lng: (obj.lng ?? 11.57) - 0.00004,
+        gps_accuracy_m: 5 + (n % 8),
+        gps_at: started,
+        gps_mocked: null,
+        end_lat: (obj.lat ?? 48.13) + 0.00009,
+        end_lng: (obj.lng ?? 11.57) - 0.00002,
+        end_accuracy_m: 6 + (n % 5),
+        end_gps_at: ended,
+        end_mocked: null,
+        distance_m: 7 + (n % 6),
+        end_distance_m: 9 + (n % 5),
+        received_at: at(day, Math.floor((minute + 19) / 60), (minute + 19) % 60),
+        entry_hash: hash(5000 + oi * 100 + n),
+        nachgetragen: false,
+        action,
+        grit_material: action === 'cleared' || action === 'checked_no_action' ? null : n % 2 ? 'Splitt' : 'Salz',
+        grit_amount: action === 'cleared' || action === 'checked_no_action' ? null : n % 2 ? '25 kg' : '10 kg',
+        weather: {
+          temp_c: temp,
+          snowfall_cm: action === 'checked_no_action' ? 0 : (n % 5) + 1,
+          precip_mm: action === 'checked_no_action' ? 0 : (n % 3) + 0.5,
+          wind_kmh: 8 + (n % 4) * 6,
+          source: 'open-meteo',
+        },
+        notes: n % 5 === 0 ? 'Gehweg und Hauseingang, Rampe extra gestreut.' : null,
+        performed_by: null,
+        performer_name: ['Lena Krämer', 'Tom Berger'][(n + oi) % 2],
+        canceled: false,
+        cancel_reason: null,
+        canceled_at: null,
+        created_at: started,
+        photo_urls: [],
+        photo_total: fotoZahl,
+      });
+    }
+    // Kennzeichnungen im jüngsten Winter — so liegen sie auch in „letzte 12 Monate“
+    const storno = ops[ops.length - 3];
+    if (storno) Object.assign(storno, { canceled: true, cancel_reason: 'Doppelt erfasst — gleicher Einsatz wie davor', canceled_at: storno.ended_at });
+    const nachtrag = ops[ops.length - 6];
+    if (nachtrag)
+      Object.assign(nachtrag, {
+        nachgetragen: true,
+        lat: null,
+        lng: null,
+        gps_accuracy_m: null,
+        gps_at: null,
+        end_lat: null,
+        end_lng: null,
+        end_accuracy_m: null,
+        end_gps_at: null,
+        distance_m: null,
+        end_distance_m: null,
+        received_at: at(addDays(dayOf(nachtrag.started_at), 1), 9, 12),
+        photo_total: 0,
+      });
+    cache.set(objektId, ops);
+    return ops;
+  };
+  return {
+    betrieb: { id: '00000000-0000-4000-8000-0000000000bb', name: q.betrieb?.name ?? 'Objektservice Brandl', land: 'DE', address: q.betrieb?.address ?? null, created_at: at(addDays(today, -500), 9, 0) },
+    rolle: q.rolle,
+    email: q.email,
+    objekte: q.objekte.map((o) => ({ id: o.id, name: o.name, address: o.address, customer_name: o.customer_name, active: o.active })),
+    pro: () => new Promise((r) => setTimeout(() => r(pro), 120)),
+    async einsaetze(objektId, abIso, bisVorIso, fotos) {
+      const liste = einsaetze(objektId).filter((op) => op.started_at >= abIso && op.started_at < bisVorIso);
+      const out = liste.map((op) => {
+        if (!fotos || !op.photo_total) return { ...op, photo_urls: [] };
+        if (!fotosCache.has(op.id))
+          fotosCache.set(op.id, Array.from({ length: op.photo_total }, (_, k) => demoPhoto(k === 0 ? 'Gehweg geräumt' : 'gestreut', 195 + k * 25)).filter(Boolean));
+        return { ...op, photo_urls: fotosCache.get(op.id)! };
+      });
+      return new Promise((r) => setTimeout(() => r(out), 150));
+    },
+  };
 }
 
 /**
@@ -179,7 +297,7 @@ function demoWinterdex(): WdQuelle {
   };
 }
 
-export function createDemoStore(opts: { pro?: boolean } = {}): DemoStore {
+export function createDemoStore(opts: { pro?: boolean; wdPro?: boolean } = {}): DemoStore {
   const today = todayBerlin();
   const start = addDays(today, -70);
   const properties: OdProperty[] = [];
@@ -434,5 +552,6 @@ export function createDemoStore(opts: { pro?: boolean } = {}): DemoStore {
       await wait(null);
     },
   };
-  return { data, orgName: 'Objektservice Brandl', winterdex: demoWinterdex() };
+  const winterdex = demoWinterdex();
+  return { data, orgName: 'Objektservice Brandl', winterdex, winterdexNachweis: demoWinterdexNachweis(winterdex, opts.wdPro ?? true) };
 }

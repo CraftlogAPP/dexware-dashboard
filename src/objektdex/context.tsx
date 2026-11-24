@@ -2,6 +2,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 import type { OdData } from './data';
 import type { OdRole } from './types';
 import type { WdQuelle } from './uebernahme';
+import type { WdNachweisQuelle } from './jahresnachweis';
 
 export interface OdContextValue {
   data: OdData;
@@ -14,6 +15,8 @@ export interface OdContextValue {
   base: string;
   /** Nur Beispieldaten: WinterDex-Betrieb für „Aus WinterDex übernehmen“ (echt: Anmeldung bei WinterDex) */
   winterdexDemo?: WdQuelle;
+  /** Nur Beispieldaten: WinterDex-Betrieb mit Einsätzen für den Ganzjahres-Nachweis (echt: Anmeldung bei WinterDex) */
+  winterdexNachweisDemo?: WdNachweisQuelle;
 }
 
 const Ctx = createContext<OdContextValue | null>(null);

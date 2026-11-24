@@ -14,6 +14,9 @@ export const OBJEKTDEX_OEFFENTLICH = false;
 /** Übernahme WinterDex → ObjektDex im Dashboard (Stufe 1, Plan 5.6) */
 export const UEBERNAHME_PFAD = '/app/objektdex/aus-winterdex';
 
+/** Ganzjahres-Nachweis je Objekt (Winterdienst aus WinterDex + Objektbetreuung aus ObjektDex in einem PDF) */
+export const JAHRESNACHWEIS_PFAD = '/app/objektdex/jahresnachweis';
+
 /** ObjektDex bei Google Play — für den Team-Text nach der Übernahme (ObjektDex gibt es nur für Android). */
 export const OBJEKTDEX_PLAY_LINK = 'https://play.google.com/store/apps/details?id=com.objektdex.app';
 

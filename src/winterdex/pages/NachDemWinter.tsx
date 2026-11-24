@@ -8,7 +8,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { appIcon, getApp } from '../../apps/registry';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
-import { betriebstyp, kacheln, KOMMUNAL_LINK, UEBERNAHME_PFAD, websiteLink, type BrueckenApp } from '../../lib/ganzjahr';
+import { betriebstyp, JAHRESNACHWEIS_PFAD, kacheln, KOMMUNAL_LINK, UEBERNAHME_PFAD, websiteLink, type BrueckenApp } from '../../lib/ganzjahr';
 
 const KACHEL: Record<BrueckenApp, { titel: string; text: string; zusatz?: string }> = {
   objektdex: {
@@ -29,11 +29,29 @@ const KACHEL: Record<BrueckenApp, { titel: string; text: string; zusatz?: string
 export function NachDemWinter() {
   const { session } = useAppAuth();
   const { data } = useOrg();
-  return <NachDemWinterInhalt orgName={data?.org.name ?? ''} email={session?.user.email ?? ''} inhaber={data?.role === 'owner'} />;
+  return (
+    <NachDemWinterInhalt
+      orgName={data?.org.name ?? ''}
+      email={session?.user.email ?? ''}
+      inhaber={data?.role === 'owner'}
+      verwalter={data?.role === 'admin'}
+    />
+  );
 }
 
 /** Inhalt ohne Server — auch für die Dev-Vorschau (/vorschau?app=winterdex&seite=nach-dem-winter). */
-export function NachDemWinterInhalt({ orgName, email, inhaber }: { orgName: string; email: string; inhaber: boolean }) {
+export function NachDemWinterInhalt({
+  orgName,
+  email,
+  inhaber,
+  verwalter = false,
+}: {
+  orgName: string;
+  email: string;
+  inhaber: boolean;
+  /** Verwalter sehen wie der Inhaber den Weg zum Ganzjahres-Nachweis (Berichte), aber nicht die Übernahme */
+  verwalter?: boolean;
+}) {
   const typ = betriebstyp(orgName, email);
   const apps = kacheln(typ);
   return (
@@ -68,6 +86,11 @@ export function NachDemWinterInhalt({ orgName, email, inhaber }: { orgName: stri
               {id === 'objektdex' && inhaber && (
                 <p className="small" style={{ flex: 'none' }}>
                   Deine Objekte und Strecken übernimmst du danach mit einem Klick: <Link to={UEBERNAHME_PFAD}>Aus WinterDex übernehmen</Link>
+                </p>
+              )}
+              {id === 'objektdex' && (inhaber || verwalter) && (
+                <p className="small" style={{ flex: 'none' }}>
+                  Winter und Rest des Jahres in einem PDF für den Auftraggeber: <Link to={JAHRESNACHWEIS_PFAD}>Ganzjahres-Nachweis</Link>
                 </p>
               )}
               <div className="tile-foot">

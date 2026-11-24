@@ -302,6 +302,29 @@ export async function fetchOperationsForReport(
   return (await signPhotos(sb, (data ?? []).map(withPhotoTotal))) as unknown as OperationWithPhotos[];
 }
 
+/**
+ * Einsätze eines Objekts in [abIso, bisVorIso) — Grenzen fertig in der richtigen Zeitzone (Ganzjahres-Nachweis im
+ * ObjektDex-Bereich, objektdex/jahresnachweis.ts). Vollständig, älteste zuerst. `fotos` = false: Fotos nur zählen
+ * (photo_total), nicht signieren und nicht mitgeben.
+ */
+export async function fetchOperationsBetween(
+  sb: SupabaseClient,
+  propertyId: string,
+  abIso: string,
+  bisVorIso: string,
+  fotos: boolean,
+): Promise<OperationWithPhotos[]> {
+  const cols = `${await opCols(sb)}, photo_urls`;
+  const { data, error } = await fetchAllOf(
+    () => sb.from('operation').select(cols).eq('property_id', propertyId).gte('started_at', abIso).lt('started_at', bisVorIso),
+    [['started_at']],
+  );
+  if (error) fail('Winterdienst-Einsätze konnten nicht geladen werden', error);
+  const rows = (data ?? []).map(withPhotoTotal);
+  if (!fotos) return rows.map((r) => ({ ...(r as object), photo_urls: [] })) as unknown as OperationWithPhotos[];
+  return (await signPhotos(sb, rows)) as unknown as OperationWithPhotos[];
+}
+
 /** Gespeicherte Fotozahl merken, bevor nicht signierbare Pfade beim Signieren wegfallen (Bericht nennt die echte Zahl). */
 function withPhotoTotal<T>(row: T): T {
   const r = row as Record<string, unknown>;

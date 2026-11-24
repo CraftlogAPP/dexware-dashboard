@@ -90,6 +90,11 @@ export function PropertyDetail() {
               <Link className="btn ghost small" to={`${base}/soll-ist?objekt=${p.id}`}>
                 Soll/Ist
               </Link>
+              {role !== 'worker' && (
+                <Link className="btn ghost small" to={`${base}/jahresnachweis?objekt=${p.id}`} title="Winterdienst aus WinterDex und Objektbetreuung in einem PDF">
+                  Ganzjahres-Nachweis
+                </Link>
+              )}
               {owner && (
                 <>
                   <Link className="btn ghost small" to={`${base}/links?objekt=${p.id}`}>

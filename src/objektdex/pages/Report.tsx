@@ -1,15 +1,16 @@
 // Nachweis-PDF je Objekt und Zeitraum (Monat oder frei) — Druckansicht im Browser („Als PDF speichern“).
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { FileDown } from 'lucide-react';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
+import { isOwnerOrAdmin } from '../../lib/orgApi';
 import { useOd } from '../context';
 import { buildReportHtml } from '../report';
 import { addMonths, dayOf, daysBetween, firstOfMonth, formatDay, lastOfMonth, parseGermanDay, todayBerlin } from '../turnus';
 
 export function Report() {
-  const { data, orgName } = useOd();
+  const { data, orgName, role, base } = useOd();
   const [params] = useSearchParams();
   const today = todayBerlin();
   const prevFrom = addMonths(firstOfMonth(today), -1);
@@ -73,6 +74,13 @@ export function Report() {
       <p className="muted" style={{ marginTop: -6 }}>
         Leistungsnachweis je Objekt: Soll/Ist, alle Einsätze mit Person, Standort-Hinweis und Prüfcode, Fotos und Mängel. {pdfSaveHint()}
       </p>
+      {isOwnerOrAdmin(role) && (
+        <p className="small muted">
+          Winter und Rest des Jahres in einem PDF für den Auftraggeber:{' '}
+          <Link to={`${base}/jahresnachweis${propertyId ? `?objekt=${propertyId}` : ''}`}>Ganzjahres-Nachweis</Link> (mit dem Winterdienst aus
+          WinterDex)
+        </p>
+      )}
       <LoadGuard state={propsState}>
         {(props) => (
           <div className="card" style={{ maxWidth: 620 }}>

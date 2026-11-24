@@ -33,6 +33,8 @@ const AusWinterdexOhneBetrieb = lazy(() => import('./pages/AusWinterdex').then((
 const LeistungenSeite = lazy(() => import('./pages/Leistungen').then((m) => ({ default: m.LeistungenSeite })));
 // Excel-Import erst beim Öffnen laden (Leser für .xlsx/.csv)
 const ObjekteImport = lazy(() => import('./pages/ObjekteImport').then((m) => ({ default: m.ObjekteImport })));
+// Ganzjahres-Nachweis (WinterDex + ObjektDex in einem PDF) erst beim Öffnen laden (bringt die WinterDex-Anmeldung mit)
+const Jahresnachweis = lazy(() => import('./pages/Jahresnachweis').then((m) => ({ default: m.Jahresnachweis })));
 
 const spinner = (
   <div className="empty">
@@ -138,6 +140,7 @@ export function OdRoutes() {
         <Route path="maengel" element={<Defects />} />
         <Route path="soll-ist" element={<SollIst />} />
         <Route path="nachweis" element={<Report />} />
+        <Route path="jahresnachweis" element={<Lazy><Jahresnachweis /></Lazy>} />
         <Route path="links" element={<Links />} />
         <Route path="team" element={<Team />} />
         <Route path="abo" element={<AboOrHint />} />

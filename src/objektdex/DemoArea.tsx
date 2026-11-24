@@ -13,10 +13,18 @@ export function DemoArea({ app }: { app: AppConfig }) {
   const params = new URLSearchParams(window.location.search);
   const [clean] = useState(() => params.has('sauber'));
   const [role, setRole] = useState<OdRole>(() => { const r = params.get('rolle'); return r === 'worker' || r === 'admin' ? r : 'owner'; });
-  // …&gratis: ohne Pro (Gratis-Grenze bei Übernahme und Import sichtbar)
-  const [store] = useState(() => createDemoStore({ pro: !params.has('gratis') }));
+  // …&gratis: ohne Pro (Gratis-Grenze bei Übernahme und Import sichtbar); …&wdgratis: WinterDex ohne Pro (Ganzjahres-Nachweis)
+  const [store] = useState(() => createDemoStore({ pro: !params.has('gratis'), wdPro: !params.has('wdgratis') }));
   const value = useMemo(
-    () => ({ data: store.data, orgName: store.orgName, role, demo: true, base: `/app/${app.id}`, winterdexDemo: store.winterdex }),
+    () => ({
+      data: store.data,
+      orgName: store.orgName,
+      role,
+      demo: true,
+      base: `/app/${app.id}`,
+      winterdexDemo: store.winterdex,
+      winterdexNachweisDemo: store.winterdexNachweis,
+    }),
     [store, role, app.id],
   );
   const style = { '--accent': app.theme.accent, '--on-accent': app.theme.onAccent, '--bg': app.theme.bg } as React.CSSProperties;
