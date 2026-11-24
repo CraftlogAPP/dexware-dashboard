@@ -1,7 +1,7 @@
 // Nur Entwicklung (npm run dev → /vorschau?app=spieldex): zeigt alle UI-Bausteine
 // mit Beispieldaten, damit sich das Design ohne Test-Login prüfen lässt.
 // Wird im Produktions-Build nicht eingebunden (siehe App.tsx).
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import {
   ClipboardCheck,
@@ -22,12 +22,36 @@ export function Vorschau() {
   const [params] = useSearchParams();
   // ObjektDex hat einen eigenen Beispieldaten-Bereich (alle Seiten bedienbar)
   if (params.get('app') === 'objektdex') return <Navigate to={`/app/objektdex?demo${params.has('sauber') ? '&sauber' : ''}`} replace />;
+  // WinterDex „Nach dem Winter weitermachen“ (im Bereich erst sichtbar mit OBJEKTDEX_OEFFENTLICH): …&seite=nach-dem-winter&typ=gemeinde|galabau|hausbetreuung
+  if (params.get('app') === 'winterdex' && params.get('seite') === 'nach-dem-winter') return <NachDemWinterVorschau typ={params.get('typ') ?? ''} />;
   // Laufzettel (intern pinndex) hat einen eigenen Beispieldaten-Bereich (Pinnwand live, alle Seiten bedienbar)
   if (params.get('app') === 'pinndex' || params.get('app') === 'laufzettel') {
     const rolle = params.get('rolle');
     return <Navigate to={`/app/pinndex?demo${rolle ? `&rolle=${encodeURIComponent(rolle)}` : ''}`} replace />;
   }
   return <VorschauInhalt params={params} />;
+}
+
+const NachDemWinterInhalt = lazy(() => import('../winterdex/pages/NachDemWinter').then((m) => ({ default: m.NachDemWinterInhalt })));
+const TYP_BEISPIEL: Record<string, { name: string; email: string }> = {
+  gemeinde: { name: 'Marktgemeinde Musterdorf', email: 'bauhof@musterdorf.gv.at' },
+  galabau: { name: 'Huber Garten- und Landschaftsbau', email: 'office@huber-garten.example' },
+  hausbetreuung: { name: 'Hausbetreuung Brandl', email: 'office@brandl.example' },
+};
+
+function NachDemWinterVorschau({ typ }: { typ: string }) {
+  const app = APPS.find((a) => a.id === 'winterdex')!;
+  const b = TYP_BEISPIEL[typ] ?? { name: 'Muster GmbH', email: 'info@muster.example' };
+  const style = { '--accent': app.theme.accent, '--on-accent': app.theme.onAccent, '--bg': app.theme.bg } as React.CSSProperties;
+  return (
+    <div className="app-scope" style={style}>
+      <div className="page">
+        <Suspense fallback={null}>
+          <NachDemWinterInhalt orgName={b.name} email={b.email} inhaber />
+        </Suspense>
+      </div>
+    </div>
+  );
 }
 
 function VorschauInhalt({ params }: { params: URLSearchParams }) {

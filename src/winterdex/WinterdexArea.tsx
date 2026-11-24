@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import { Building2, CreditCard, FileDown, LayoutDashboard, MessageSquare, Monitor, Route as RouteIcon, Snowflake, Truck, Users } from 'lucide-react';
+import { Building2, CreditCard, FileDown, LayoutDashboard, MessageSquare, Monitor, Route as RouteIcon, Snowflake, Sprout, Truck, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -30,6 +30,7 @@ import { hasActiveRun, listPendingRuns } from './aussendienst/runStore';
 import { registerLogoutCount } from '../lib/logoutGuard';
 import { installWebApp } from '../lib/pwa';
 import { roleLabel } from '../lib/orgApi';
+import { OBJEKTDEX_OEFFENTLICH } from '../lib/ganzjahr';
 
 // Abmelde-Rückfrage auf ALLEN WinterDex-Seiten (auch im Dashboard), nicht nur im Außendienst: wartende Einsätze und
 // Fahrten, angefangene Einsätze und eine unterbrochene Aufzeichnung liegen nur auf diesem Gerät.
@@ -50,6 +51,9 @@ const EinsatzDemo = import.meta.env.DEV
 
 // Objekte importieren (Excel/CSV) erst beim Öffnen laden — der Leser braucht Teile des InstallateurDex-Imports.
 const PropertyImport = lazy(() => import('./pages/PropertyImport').then((m) => ({ default: m.PropertyImport })));
+
+// „Nach dem Winter weitermachen“ (Ganzjahres-Brücke) — Eintrag UND Adresse erst, wenn ObjektDex öffentlich ist (lib/ganzjahr.ts)
+const NachDemWinter = lazy(() => import('./pages/NachDemWinter').then((m) => ({ default: m.NachDemWinter })));
 
 function demoWanted(): boolean {
   try {
@@ -99,6 +103,22 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
               <Route path="abo" element={<AboPage />} />
               <Route path="rueckmeldungen" element={<NurDexware><FeedbackAdminPage /><FeedbackZentral /></NurDexware>} />
               <Route path="rueckmeldung" element={<FeedbackForm />} />
+              {OBJEKTDEX_OEFFENTLICH && (
+                <Route
+                  path="nach-dem-winter"
+                  element={
+                    <Suspense
+                      fallback={
+                        <div className="empty">
+                          <span className="spinner" />
+                        </div>
+                      }
+                    >
+                      <NachDemWinter />
+                    </Suspense>
+                  }
+                />
+              )}
             </Route>
           </Routes>
         </OrgGate>
@@ -218,6 +238,9 @@ function Shell() {
         <NavLink to={`${base}/team`}><Users className="i" aria-hidden /> Team</NavLink>
         <NavLink to={`${base}/bericht`}><FileDown className="i" aria-hidden /> Nachweis-PDF</NavLink>
         <NavLink to={`${base}/abo`}><CreditCard className="i" aria-hidden /> Abo</NavLink>
+        {OBJEKTDEX_OEFFENTLICH && (
+          <NavLink to={`${base}/nach-dem-winter`}><Sprout className="i" aria-hidden /> Nach dem Winter</NavLink>
+        )}
         <NavLink to={`${base}/rueckmeldung`}><MessageSquare className="i" aria-hidden /> Fehler melden</NavLink>
         {admin.data === true && (
           <NavLink to={`${base}/rueckmeldungen`}><MessageSquare className="i" aria-hidden /> Rückmeldungen</NavLink>

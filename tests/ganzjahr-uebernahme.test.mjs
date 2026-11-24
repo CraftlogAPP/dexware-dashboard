@@ -435,6 +435,28 @@ const zurueck = await lies(sh);
 check('Datei lässt sich lesen (Blatt „Einsätze“, 4 Zeilen + Kopf)', zurueck.rows.length === 5 && zurueck.rows[0][0] === 'Datum' && zurueck.rows[2][7] === 'Rasen mähen, Kehren', zurueck.rows[2]);
 check('keine Fotos/Koordinaten in der Datei', !/storage:|data:image|"lat"|47\.0/.test(JSON.stringify(sh.map((s) => s.rows))));
 
+// ============================================================================ WinterDex: „Nach dem Winter weitermachen“
+teil('WinterDex: Nach dem Winter (Betriebstyp, Kacheln, Links, Schalter)');
+const G = await web('src/lib/ganzjahr.ts');
+const typ = (name, email = '') => G.betriebstyp(name, email);
+check('Gemeinde: Name, .gv.at, gde@, Bauhof, Stadt/Markt am Wortanfang', ['Marktgemeinde Gnas', 'Stadtgemeinde Gleisdorf', 'Bauhof Feldbach', 'Wirtschaftshof Weiz', 'Stadt Graz', 'Markt Hartmannsdorf', 'Bauamt Musterstadt'].every((n) => typ(n) === 'gemeinde') && typ('Winterdienst', 'bauhof@gnas.gv.at') === 'gemeinde' && typ('X', 'gde@st-anna.at') === 'gemeinde');
+check('keine Gemeinde: Neustadt, Supermarkt, Gesamtservice', typ('Hausbetreuung Neustadt') === 'hausbetreuung' && typ('Supermarkt Huber') === 'unbekannt' && typ('Gesamtservice Berger') === 'unbekannt');
+check('Hausbetreuung (auch mit „Winterdienst“ im Namen)', ['Hausbetreuung & Winterdienst Huber', 'Hausmeisterservice Kern', 'Reinigung Gruber', 'Immobilien Graz', 'Objektservice Brandl'].every((n) => typ(n) === 'hausbetreuung'));
+check('GaLaBau/Winterdienst (Umlaute egal)', ['Huber Garten- und Landschaftsbau', 'Grünraumpflege Müller', 'Winterdienst Pichler', 'Schneeräumung Gruber', 'Lohnunternehmen Hofer', 'Erdbau Weber'].every((n) => typ(n) === 'galabau') && typ('Firma X', 'office@gartenbau-x.at') === 'galabau');
+check('unbekannt ohne Treffer', typ('Huber GmbH', 'info@huber.at') === 'unbekannt' && typ(null, null) === 'unbekannt');
+check('Reihenfolge laut 5.4, höchstens 3, ObjektDex außer Gemeinde zuerst', gleich(G.kacheln('gemeinde'), ['spieldex', 'objektdex', 'baumdex']) && gleich(G.kacheln('galabau'), ['objektdex', 'baumdex', 'spieldex']) && gleich(G.kacheln('hausbetreuung'), ['objektdex', 'spieldex']) && gleich(G.kacheln('unbekannt'), ['objektdex', 'spieldex', 'baumdex']));
+check('BaumDex nur bei Hausbetreuung weggelassen', ['gemeinde', 'galabau', 'unbekannt'].every((t) => G.kacheln(t).includes('baumdex')) && !G.kacheln('hausbetreuung').includes('baumdex'));
+const utm = 'utm_source=winterdex&utm_medium=dashboard&utm_campaign=nach-dem-winter';
+check('Links: Websites mit Herkunft, nie Google Play', ['objektdex', 'spieldex', 'baumdex'].every((a) => G.websiteLink(a) === `https://${a}.dexware.app/?${utm}`) && G.KOMMUNAL_LINK.endsWith(utm));
+check('Übernahme-Adresse = Route im ObjektDex-Bereich', G.UEBERNAHME_PFAD === '/app/objektdex/aus-winterdex' && /<Route path="aus-winterdex"/.test(liesWeb('src/objektdex/ObjektdexArea.tsx')));
+check('Schalter OBJEKTDEX_OEFFENTLICH steht auf false (ObjektDex noch nicht öffentlich)', G.OBJEKTDEX_OEFFENTLICH === false);
+const wdArea = liesWeb('src/winterdex/WinterdexArea.tsx');
+check('WinterDex-Bereich: Eintrag UND Adresse hängen am Schalter', /\{OBJEKTDEX_OEFFENTLICH && \(\s*<Route\s+path="nach-dem-winter"/.test(wdArea) && /\{OBJEKTDEX_OEFFENTLICH && \(\s*<NavLink to=\{`\$\{base\}\/nach-dem-winter`\}/.test(wdArea) && (wdArea.match(/nach-dem-winter/g) ?? []).length === 2);
+const reg = liesWeb('src/apps/registry.ts');
+check('ObjektDex-Bereich bleibt unlisted', /id: 'objektdex',[\s\S]{0,500}?unlisted: true/.test(reg));
+const ndw = liesWeb('src/winterdex/pages/NachDemWinter.tsx');
+check('Seite ohne Play-Link und ohne „rechtssicher/lückenlos“, Übernahme nur für Inhaber', !/play\.google|market:\/\//.test(ndw) && !/rechtssicher|lückenlos/i.test(ndw) && /id === 'objektdex' && inhaber/.test(ndw));
+
 // ============================================================================ Ergebnis
 console.log(`\n${ok} ok, ${fail} Fehler`);
 process.exit(fail ? 1 : 0);
