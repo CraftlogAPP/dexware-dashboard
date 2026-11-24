@@ -8,7 +8,7 @@
 //   …?weiter=1                          unterbrochene Aufzeichnung fortsetzen/abschließen
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Check, CloudOff, Play, Square, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Check, CloudOff, MapPinOff, Play, Square, SunMedium, TriangleAlert } from 'lucide-react';
 import { useUnsavedGuard } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtTime } from '../../lib/format';
@@ -25,6 +25,7 @@ import { Felder } from './Felder';
 import { PRO_HOW } from '../pro';
 import { coverage, flatTrack, fmtDur, simplify, thinTrack, type Coverage } from './geo';
 import { useRecorder } from './recorder';
+import { isIOS } from '../../lib/pwa';
 import { deleteActiveRun, getActiveRun, saveActiveRun, submitRun, type ActiveRun, type RunMode, type RunResult } from './runStore';
 
 export function StreckeFahren() {
@@ -48,6 +49,7 @@ type Phase = 'loading' | 'old' | 'ready' | 'recording' | 'finish' | 'plansave' |
 type Ask = null | 'stop' | 'empty' | 'discard';
 
 const SAVE_EVERY_MS = 10000;
+const COARSE_HINT_MS = 20000; // so lange nur sehr ungenaue Ortung (> ±100 m) → Anleitung „Genauer Standort“
 
 function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) {
   const { be, userId, orgId, base, owner } = useEinsatz();
@@ -70,6 +72,7 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [result, setResult] = useState<{ result: RunResult; onDevice: boolean; lengthM: number } | null>(null);
   const [savedRouteId, setSavedRouteId] = useState<string | null>(null);
+  const ios = useMemo(() => isIOS(), []); // Anleitungen mit den Wegen am iPhone bzw. an Android
 
   const rec = useRecorder((lat, lng) => {
     if (weatherRef.current) return;
@@ -328,7 +331,13 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
   const sketch = useMemo(
     () => (
       <div className="sr-map">
-        <RouteSketch plan={plan} track={rec.data.track} missed={cov && cov.pct > 0 ? cov.missed : null} label="Gefahrene Strecke" />
+        <RouteSketch
+          plan={plan}
+          track={rec.data.track}
+          missed={cov && cov.pct > 0 ? cov.missed : null}
+          label="Gefahrene Strecke"
+          mapLink={phase !== 'recording'}
+        />
       </div>
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -539,56 +548,29 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
 
   // bereit / Aufzeichnung läuft
   const recording = phase === 'recording';
-  return (
-    <div className="ez">
-      {!recording && back}
-      <h1>{title}</h1>
-      <p className="muted" style={{ marginTop: -6 }}>
-        {recording ? 'Aufzeichnung läuft' : 'Bereit'}
-        {recording ? ` · seit ${fmtTime(rec.data.startedAt)}` : ''}
+  const status = (
+    <div className={`sr-status ${gpsLine.tone}`} role="status">
+      <span className={`ez-dot ${gpsLine.dot}${recording && g.state === 'ok' ? ' pulse' : ''}`} aria-hidden />
+      <p>{gpsLine.text}</p>
+    </div>
+  );
+  // „Genauer Standort“ aus (iPhone) bzw. nur WLAN-/Mobilfunk-Ortung: Mit ±1–3 km kommt kein einziger Punkt durch
+  // (Grenze ±35 m) — nach 20 s dieselbe Anleitung wie beim Einsatz erfassen, auch schon vor dem Start.
+  const coarse = g.state === 'weak' && g.acc > 100 && Date.now() - g.since > COARSE_HINT_MS && (
+    <div className="sr-alert" role="alert">
+      <b>
+        <MapPinOff className="i" aria-hidden /> Ortung sehr ungenau (±{g.acc} m) — so wird keine Strecke aufgezeichnet
+      </b>
+      <p>
+        {ios
+          ? 'Meist ist „Genauer Standort“ aus: Einstellungen → Datenschutz & Sicherheit → Ortungsdienste → Safari-Websites → „Beim Verwenden“ und „Genauer Standort“ einschalten. Damit Safari nicht jedes Mal fragt: in der Adresszeile auf „aA“ → Website-Einstellungen → Standort: Erlauben.'
+          : 'Meist ist die genaue Ortung aus: Einstellungen → Standort → „Google-Standortgenauigkeit“ bzw. GPS einschalten und dem Browser in den Website-Einstellungen den genauen Standort erlauben.'}{' '}
+        Unter freiem Himmel kommt die Position am schnellsten.
       </p>
-
-      {stats}
-      {sketch}
-
-      <div className={`sr-status ${gpsLine.tone}`} role="status">
-        <span className={`ez-dot ${gpsLine.dot}${recording && g.state === 'ok' ? ' pulse' : ''}`} aria-hidden />
-        <p>{gpsLine.text}</p>
-      </div>
-
-      {recording ? (
-        <>
-          <p className="muted small">
-            📱 Seite offen und Bildschirm an lassen (Handy in die Halterung) — der Browser kann im Hintergrund nicht
-            aufzeichnen. Verlassen oder Sperren wird als Pause im Nachweis vermerkt.
-            {rec.awake === false && ' Dieser Browser kann den Bildschirm nicht selbst wach halten: bitte die automatische Sperre für die Fahrt ausschalten.'}
-            {rec.awake === true && ' Der Bildschirm bleibt von selbst an.'}
-          </p>
-          {gapsN > 0 && <p className="ez-warn small">{gapLine}</p>}
-          <button type="button" className="btn ez-big sr-stop" onClick={() => setAsk(rec.points < 2 ? 'empty' : 'stop')}>
-            <Square className="i" aria-hidden /> {isPlan ? 'Strecke fertig' : 'Fahrt beenden'}
-          </button>
-          <button type="button" className="btn ghost small" style={{ marginTop: 14 }} onClick={() => setAsk('discard')}>
-            Aufzeichnung verwerfen
-          </button>
-        </>
-      ) : (
-        <>
-          <p className="muted">
-            {isPlan
-              ? 'Fahre die Strecke einmal komplett ab. Daraus wird die Vorlage für alle künftigen Fahrten. Tipp: Erst starten, wenn du am Anfang der Strecke stehst.'
-              : 'Tippe auf Start, sobald du losfährst. Die gefahrene Strecke wird live eingezeichnet.'}
-          </p>
-          <button type="button" className="btn ez-save" onClick={start} disabled={g.state === 'denied' || g.state === 'unsupported'}>
-            <Play className="i" aria-hidden /> Start
-          </button>
-          <p className="muted small">
-            Wichtig im Browser: Während der Fahrt muss diese Seite offen und der Bildschirm an bleiben. Mit gesperrtem
-            Handy oder in einer anderen App wird nichts aufgezeichnet (das kann nur die Android-App).
-          </p>
-        </>
-      )}
-
+    </div>
+  );
+  const dialogs = (
+    <>
       {ask === 'stop' && (
         <Modal title={isPlan ? 'Strecke fertig abgefahren?' : 'Fahrt beenden?'} onClose={() => setAsk(null)} dirty={false}>
           <p>
@@ -620,6 +602,92 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
         </Modal>
       )}
       {ask === 'discard' && <DiscardDialog onClose={() => setAsk(null)} onDiscard={() => void discard()} />}
+    </>
+  );
+
+  if (recording) {
+    // Fahrt-Ansicht (Handy in der Halterung): Kennzahlen oben, Skizze in der Höhe begrenzt, GPS-Status und
+    // „Fahrt beenden“ in einer festen Leiste unten — hochkant auch unter Safaris Leisten, quer zweispaltig (index.css).
+    return (
+      <div className="ez sr-rec">
+        <div className="sr-rec-head">
+          <h1>{title}</h1>
+          <p className="muted">Aufzeichnung läuft · seit {fmtTime(rec.data.startedAt)}</p>
+        </div>
+        <div className="sr-rec-map">{sketch}</div>
+        <div className="sr-rec-side">
+          {stats}
+          {rec.awake === false && (
+            <div className="sr-alert" role="alert">
+              <b>
+                <SunMedium className="i" aria-hidden /> Bildschirm bleibt nicht von selbst an
+              </b>
+              <p>
+                {ios
+                  ? 'Bitte für die Fahrt die automatische Sperre ausschalten: Einstellungen → Anzeige & Helligkeit → Automatische Sperre → „Nie“ (danach zurückstellen).'
+                  : 'Bitte für die Fahrt das automatische Ausschalten verlängern: Einstellungen → Display → Bildschirm-Timeout (danach zurückstellen).'}{' '}
+                Geht der Bildschirm aus, pausiert die Aufzeichnung — das steht dann im Nachweis. Tipp: Handy ans Ladekabel.
+              </p>
+              <button type="button" className="btn ghost small" onClick={() => void rec.keepAwake()}>
+                Erneut versuchen
+              </button>
+            </div>
+          )}
+          {coarse}
+          {gapsN > 0 && <p className="ez-warn small sr-gaps">{gapLine}</p>}
+          <div className="sr-dock">
+            {status}
+            <button type="button" className="btn ez-big sr-stop" onClick={() => setAsk(rec.points < 2 ? 'empty' : 'stop')}>
+              <Square className="i" aria-hidden /> {isPlan ? 'Strecke fertig' : 'Fahrt beenden'}
+            </button>
+          </div>
+          <button type="button" className="btn ghost small sr-discard" onClick={() => setAsk('discard')}>
+            Aufzeichnung verwerfen
+          </button>
+          <p className="muted small sr-hint">
+            Seite offen und Bildschirm an lassen (Handy in die Halterung) — der Browser kann im Hintergrund nicht
+            aufzeichnen. Verlassen oder Sperren wird als Pause im Nachweis vermerkt.
+            {rec.awake === true &&
+              (ios
+                ? ' Der Bildschirm sollte von selbst an bleiben; geht er trotzdem aus, die automatische Sperre auf „Nie“ stellen.'
+                : ' Der Bildschirm bleibt von selbst an.')}
+          </p>
+        </div>
+        {dialogs}
+      </div>
+    );
+  }
+
+  return (
+    <div className="ez">
+      {back}
+      <h1>{title}</h1>
+      <p className="muted" style={{ marginTop: -6 }}>
+        Bereit
+      </p>
+      {stats}
+      {sketch}
+      {status}
+      {coarse}
+      {g.state !== 'ok' && !coarse && g.state !== 'denied' && g.state !== 'unsupported' && (
+        <p className="muted small">
+          Noch keine genaue Position (±35 m) — am besten erst starten, wenn „GPS gut“ steht. Bis dahin wird nichts
+          aufgezeichnet.
+        </p>
+      )}
+      <p className="muted">
+        {isPlan
+          ? 'Fahre die Strecke einmal komplett ab. Daraus wird die Vorlage für alle künftigen Fahrten. Tipp: Erst starten, wenn du am Anfang der Strecke stehst.'
+          : 'Tippe auf Start, sobald du losfährst. Die gefahrene Strecke wird live eingezeichnet.'}
+      </p>
+      <button type="button" className="btn ez-save" onClick={start} disabled={g.state === 'denied' || g.state === 'unsupported'}>
+        <Play className="i" aria-hidden /> Start
+      </button>
+      <p className="muted small">
+        Wichtig im Browser: Während der Fahrt muss diese Seite offen und der Bildschirm an bleiben. Mit gesperrtem
+        Handy oder in einer anderen App wird nichts aufgezeichnet (das kann nur die Android-App).
+      </p>
+      {dialogs}
     </div>
   );
 }

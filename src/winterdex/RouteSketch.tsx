@@ -23,11 +23,14 @@ export function RouteSketch({
   track,
   missed,
   label,
+  mapLink = true,
 }: {
   plan?: LatLng[] | null;
   track?: Track | null;
   missed?: LatLng[][] | null;
   label: string;
+  /** „Auf Karte zeigen ↗“ — während einer Aufzeichnung im Browser aus: der neue Tab verdeckt die Seite = Pause im Nachweis */
+  mapLink?: boolean;
 }) {
   const narrow = useNarrow();
   const s = buildSketch(plan, track, missed, narrow ? 360 : 640, narrow ? 300 : 360);
@@ -60,7 +63,7 @@ export function RouteSketch({
       <figcaption className="route-legend small muted">
         {items}
         <span>● Start grün · Ende dunkel</span>
-        {p && (
+        {p && mapLink && (
           <a href={`https://www.openstreetmap.org/?mlat=${p[0]}&mlon=${p[1]}#map=17/${p[0]}/${p[1]}`} target="_blank" rel="noreferrer">
             Auf Karte zeigen ↗
           </a>

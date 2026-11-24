@@ -1857,7 +1857,8 @@ a.due-row:hover {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset;
 }
 .btn.ez-danger {
-  background: var(--red);
+  /* #dc2626 statt --red: weiß darauf 4,8 : 1 (mit #ef4444 nur 3,76 : 1 — Feldtest 24.11.) */
+  background: #dc2626;
   color: #fff;
   box-shadow: none;
 }
@@ -2181,7 +2182,9 @@ a.due-row:hover {
 }
 .sr-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* so viele gleich breite Kacheln wie da sind (Freie Fahrt: 2, mit Vorlage: 3) — keine leere Spalte rechts */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 8px;
   margin: 12px 0;
 }
@@ -2241,9 +2244,97 @@ a.due-row:hover {
   margin: 0;
 }
 .btn.sr-stop {
-  background: var(--red);
+  background: #dc2626; /* weiß darauf 4,8 : 1 */
   color: #fff;
   box-shadow: none;
+}
+
+/* Fahrt läuft (StreckeFahren, Handy in der Halterung): Kennzahlen oben, Skizze in der Höhe begrenzt, GPS-Status und
+   „Fahrt beenden“ in einer festen Leiste unten — immer sichtbar, auch wenn Safari unten seine Leisten zeigt (dvh). */
+.sr-rec {
+  display: flex;
+  flex-direction: column;
+}
+.sr-rec-side {
+  display: contents;
+}
+.sr-rec-head h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.sr-rec-head p {
+  margin: 2px 0 0;
+}
+.sr-rec .sr-stats {
+  order: 1;
+  margin: 10px 0 0;
+}
+.sr-rec .sr-alert {
+  order: 2;
+}
+.sr-rec-map {
+  order: 3;
+}
+.sr-rec-map .sr-map svg {
+  max-height: 38vh;
+  max-height: 38dvh;
+}
+.sr-rec .sr-gaps {
+  order: 4;
+  margin: 0 0 8px;
+}
+.sr-dock {
+  order: 5;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: 4px -16px 0;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.sr-dock .sr-status {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+}
+.sr-dock .btn.sr-stop {
+  margin: 0;
+}
+.sr-rec .sr-discard {
+  order: 6;
+  align-self: flex-start;
+  margin-top: 14px;
+}
+.sr-rec .sr-hint {
+  order: 7;
+}
+/* Auffälliger Hinweis (Bildschirm bleibt nicht an, Ortung sehr ungenau) — statt eines grauen Nebensatzes */
+.sr-alert {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.12);
+  font-size: 14px;
+}
+.sr-alert b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fcd34d;
+}
+.sr-alert b .i {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.sr-alert p {
+  margin: 6px 0 0;
+}
+.sr-alert .btn {
+  margin-top: 10px;
 }
 .sr-legend {
   display: flex;
@@ -3253,6 +3344,62 @@ input {
   .ad-tabs a .i {
     width: 18px;
     height: 18px;
+  }
+  /* Fahrt läuft, quer in der Halterung: links die Skizze (so hoch wie der Bildschirm), rechts Titel, Kennzahlen,
+     Hinweise und die feste Leiste mit GPS-Status + „Fahrt beenden“ */
+  .sr-rec {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    column-gap: 16px;
+    align-items: start;
+  }
+  .sr-rec-head {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .sr-rec-head h1 {
+    font-size: 18px;
+  }
+  .sr-rec-map {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    position: sticky;
+    top: 52px;
+  }
+  .sr-rec-map .sr-map {
+    margin: 0;
+  }
+  .sr-rec-map .sr-map svg {
+    max-height: calc(100vh - 44px - 24px - 40px);
+    max-height: calc(100dvh - 44px - 24px - 40px);
+  }
+  .sr-rec-side {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+  }
+  .sr-rec .sr-stats {
+    margin-top: 8px;
+  }
+  .sr-rec .sr-stat {
+    padding: 6px 6px;
+  }
+  .sr-rec .sr-stat b {
+    font-size: 17px;
+  }
+  .sr-dock {
+    margin: 4px 0 0;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+  .sr-dock .sr-status {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .sr-dock .btn.ez-big {
+    min-height: 48px;
   }
 }
 

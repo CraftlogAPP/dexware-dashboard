@@ -28,7 +28,9 @@ const REWATCH_MS = 20000; // so lange ohne Position → Ortung neu anmelden
 
 export type GpsLive =
   | { state: 'wait' }
-  | { state: 'ok' | 'weak'; acc: number }
+  | { state: 'ok'; acc: number }
+  /** since: seit wann ununterbrochen nur ungenaue Positionen kommen (für die Anleitung „Genauer Standort“) */
+  | { state: 'weak'; acc: number; since: number }
   | { state: 'lost'; since: number }
   | { state: 'denied' }
   | { state: 'unsupported' };
@@ -40,7 +42,8 @@ export interface RecorderData {
   lengthM: number;
 }
 
-type WakeLockSentinelLike = { release: () => Promise<void> };
+type WakeLockSentinelLike = { release: () => Promise<void>; addEventListener?: (type: 'release', fn: () => void) => void };
+const REWAKE_MIN_MS = 10000; // vom System freigegeben: höchstens so oft von selbst neu anfordern
 
 /**
  * GPS-Loch von `from` bis `to` (ms) als Unterbrechung eintragen — wie die App: nur über 45 s und nur, wenn die Zeit
@@ -165,7 +168,8 @@ export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) 
         const ts = Number.isFinite(raw) && Math.abs(raw - Date.now()) < 5 * 60 * 1000 ? raw : Date.now();
         lastFixAtRef.current = Date.now();
         lastPosRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setGps({ state: acc <= MAX_ACC_M ? 'ok' : 'weak', acc: Math.round(acc) });
+        const a = Math.round(acc);
+        setGps((prev) => (acc <= MAX_ACC_M ? { state: 'ok', acc: a } : { state: 'weak', acc: a, since: prev.state === 'weak' ? prev.since : Date.now() }));
         if (!weatherAskedRef.current && acc <= 100) {
           weatherAskedRef.current = true;
           onFirstRef.current(pos.coords.latitude, pos.coords.longitude);
@@ -198,19 +202,35 @@ export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) 
   }, [recordFix]);
 
   // Bildschirm wach halten, solange aufgezeichnet wird (sonst sperrt das Handy und die Aufzeichnung pausiert).
+  // Gibt das System die Sperre frei (Stromsparen, Seite verdeckt), meldet das Sperr-Objekt „release“ — dann steht
+  // nicht mehr „bleibt von selbst an“, sondern die Anleitung; bei sichtbarer Seite wird neu angefordert.
+  const lastWakeAskRef = useRef(0);
+  const keepAwakeRef = useRef<() => Promise<void>>(async () => undefined);
   const keepAwake = useCallback(async () => {
     const wl = (navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<WakeLockSentinelLike> } }).wakeLock;
     if (!wl) return setAwake(false);
+    lastWakeAskRef.current = Date.now();
     try {
-      wakeRef.current = await wl.request('screen');
+      const s = await wl.request('screen');
+      wakeRef.current = s;
       setAwake(true);
+      s.addEventListener?.('release', () => {
+        if (wakeRef.current !== s) return; // selbst freigegeben (Fahrt beendet) oder schon ersetzt
+        wakeRef.current = null;
+        setAwake(false);
+        if (recordingRef.current && document.visibilityState === 'visible' && Date.now() - lastWakeAskRef.current > REWAKE_MIN_MS) {
+          void keepAwakeRef.current();
+        }
+      });
     } catch {
       setAwake(false);
     }
   }, []);
+  keepAwakeRef.current = keepAwake;
   const letSleep = useCallback(() => {
-    void wakeRef.current?.release().catch(() => undefined);
+    const s = wakeRef.current;
     wakeRef.current = null;
+    void s?.release().catch(() => undefined);
   }, []);
 
   // Seite verlassen / Handy gesperrt = Pause (wird im Nachweis vermerkt, wenn sie länger als 10 s dauert).
@@ -293,5 +313,5 @@ export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) 
   );
 
   const points = dataRef.current.track.reduce((n, s) => n + s.length, 0);
-  return { recording, gps, awake, data: dataRef.current, points, lastPos: lastPosRef.current, start, resume, load, stop };
+  return { recording, gps, awake, keepAwake, data: dataRef.current, points, lastPos: lastPosRef.current, start, resume, load, stop };
 }
