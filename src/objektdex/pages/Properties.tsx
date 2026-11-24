@@ -38,7 +38,8 @@ export function Properties() {
       </p>
       {role === 'owner' && (
         <p className="small" style={{ marginTop: -4 }}>
-          Objekte übernehmen: <Link to={`${base}/aus-winterdex`}>aus WinterDex</Link>
+          Objekte übernehmen: <Link to={`${base}/aus-winterdex`}>aus WinterDex</Link> ·{' '}
+          <Link to={`${base}/objekte/import`}>aus einer Excel-Liste</Link>
         </p>
       )}
       {adding && (

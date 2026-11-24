@@ -31,6 +31,8 @@ const DemoArea = import.meta.env.DEV ? lazy(() => import('./DemoArea').then((m) 
 const AusWinterdex = lazy(() => import('./pages/AusWinterdex').then((m) => ({ default: m.AusWinterdex })));
 const AusWinterdexOhneBetrieb = lazy(() => import('./pages/AusWinterdex').then((m) => ({ default: m.AusWinterdexOhneBetrieb })));
 const LeistungenSeite = lazy(() => import('./pages/Leistungen').then((m) => ({ default: m.LeistungenSeite })));
+// Excel-Import erst beim Öffnen laden (Leser für .xlsx/.csv)
+const ObjekteImport = lazy(() => import('./pages/ObjekteImport').then((m) => ({ default: m.ObjekteImport })));
 
 const spinner = (
   <div className="empty">
@@ -130,6 +132,7 @@ export function OdRoutes() {
         <Route index element={<Overview />} />
         <Route path="objekte" element={<Properties />} />
         <Route path="objekte/leistungen" element={<Lazy><LeistungenSeite /></Lazy>} />
+        <Route path="objekte/import" element={<Lazy><ObjekteImport /></Lazy>} />
         <Route path="objekte/:id" element={<PropertyDetail />} />
         <Route path="einsaetze" element={<Operations />} />
         <Route path="maengel" element={<Defects />} />

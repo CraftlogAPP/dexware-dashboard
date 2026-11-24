@@ -340,6 +340,101 @@ if (pg) {
   check('Gegenprobe: wöchentlich ohne Tag lehnt der Server ab (darum vorlageFehler)', !!falsch.err, falsch);
 }
 
+// ============================================================================ Excel-Import „Objekte aus Excel“
+teil('Excel-Import (WinterDex-Objektliste passt direkt)');
+// Der .xlsx-Leser braucht DOMParser (Browser). In Node: @xmldom/xmldom aus dem ObjektDex-App-Repo (nur Test, keine neue
+// Abhängigkeit im Dashboard) samt „children“, das xmldom nicht kennt.
+const xmldomPfad = path.join(OD, 'mobile/node_modules/@xmldom/xmldom/lib/index.js');
+let xlsxLesbar = typeof DOMParser !== 'undefined';
+if (!xlsxLesbar && existsSync(xmldomPfad)) {
+  const { DOMParser: XP } = (await import(pathToFileURL(xmldomPfad).href)).default;
+  const proto = Object.getPrototypeOf(new XP().parseFromString('<a/>', 'application/xml').documentElement);
+  if (!('children' in proto)) {
+    Object.defineProperty(proto, 'children', { get() { return Array.from(this.childNodes).filter((n) => n.nodeType === 1); } });
+  }
+  globalThis.DOMParser = XP;
+  xlsxLesbar = true;
+}
+if (!xlsxLesbar) console.log(`  (Rundweg über .xlsx übersprungen: ${xmldomPfad} fehlt)`);
+const IMP = await web('src/objektdex/importObjekte.ts');
+const TI = await web('src/lib/tableImport.ts');
+const XL = await web('src/lib/xlsx.ts');
+const { propertySheets } = await web('src/winterdex/exportLists.ts');
+const wdProps = WOBJ.map((o) => ({ ...o, org_id: 'org', duty_times: { mo_fr: '06:00-22:00', sa: '06:00-22:00', so: '06:00-22:00' }, created_at: '2026-11-01T08:00:00Z' }));
+/** Blatt 1 als Tabelle: echte .xlsx bauen und mit dem Leser des Dashboards lesen (ohne DOMParser: Zellen als Text) */
+const lies = async (sheets) => {
+  if (xlsxLesbar) return TI.readXlsx(await XL.buildXlsx(sheets, { timeZone: 'Europe/Berlin' }), 0);
+  const s0 = sheets[0];
+  const rows = [s0.columns.map((c) => c.header), ...s0.rows.map((r) => r.map((v) => (v == null ? '' : typeof v === 'object' ? String(v.v ?? '') : String(v))))];
+  return { rows, lines: rows.map((_, i) => i + 1) };
+};
+const tab = await lies(propertySheets({ id: 'org', name: 'Huber', land: 'AT', address: null, created_at: '' }, wdProps));
+const lay = TI.detectFieldLayout(IMP.OD_FIELDS, tab, { name: 0, address: 1 });
+check('Spalten der WinterDex-Liste erkannt (Name, Adresse, Auftraggeber, Kontakt, Flächen, Notizen, Koordinaten)', ['name', 'address', 'customer', 'contact', 'areas', 'notes', 'lat', 'lng'].every((k) => lay.mapping[k] !== undefined) && lay.hasHeader, lay.mapping);
+const odVorh = [{ id: 'x', name: 'Bauhof', address: 'Industriestraße 9, 8200 Gleisdorf', active: true }];
+const ip = IMP.planObjekte({ table: lay.table, hasHeader: lay.hasHeader, mapping: lay.mapping, existing: odVorh });
+const zeile = (name) => ip.rows.find((r) => r.title === name);
+check('alle 5 Zeilen gelesen: 3 neu, 1 schon vorhanden (Name + Adresse), 1 ohne Adresse übersprungen', ip.count.ok === 3 && ip.count.exists === 1 && ip.count.skip === 1, ip.count);
+check('Flächen → Notiz, Koordinaten übernommen', zeile('WEG Hauptplatz 1')?.payload?.notes === 'Flächen: Gehsteig 30 m, Zufahrt\nSchlüssel im Kasten' && Math.abs(zeile('WEG Hauptplatz 1').payload.lat - WOBJ[0].lat) < 1e-6, zeile('WEG Hauptplatz 1')?.payload);
+check('ohne Koordinaten bleibt ohne (kein Hinweis)', zeile('Gemeindeamt')?.payload?.lat === null && zeile('Gemeindeamt').hints.length === 0);
+check('Pflichtzeiten fallen weg (Hinweis), Saison-Pause wird aktiv angelegt (kein active-Feld)', ip.notes.some((x) => /Pflichtzeiten/.test(x)) && !('active' in zeile('Volksschule').payload));
+check('Zeile hat genau die Spalten für ObjektDex.property (ohne id/org_id)', gleich(Object.keys(zeile('Volksschule').payload).sort(), ['address', 'contact_person', 'customer_contact', 'customer_name', 'lat', 'lng', 'name', 'notes']));
+// eigene Liste mit „Ansprechpartner vor Ort“, Straße/Hausnummer/PLZ/Ort und kaputten Koordinaten
+const eigene = TI.tableFromPaste('Objekt\tStraße\tHausnr.\tPLZ\tOrt\tHausverwaltung\tAnsprechpartner vor Ort\tBreitengrad\tLängengrad\nWohnanlage A\tLindenweg\t4\t8010\tGraz\tHV Graz\tHr. Kern\t47,07\t15,44\nWohnanlage B\tLindenweg\t6\t8010\tGraz\t\t\t47,07\t\nWohnanlage A\tLindenweg\t4\t8010\tGraz\t\t\t\t');
+const el = TI.detectFieldLayout(IMP.OD_FIELDS, eigene);
+const ep = IMP.planObjekte({ table: el.table, hasHeader: el.hasHeader, mapping: el.mapping, existing: [] });
+check('Straße + Nr. + PLZ + Ort → Adresse, Komma-Zahlen als Koordinaten, Ansprechpartner vor Ort', ep.rows[0].payload?.address === 'Lindenweg 4, 8010 Graz' && ep.rows[0].payload.lat === 47.07 && ep.rows[0].payload.lng === 15.44 && ep.rows[0].payload.contact_person === 'Hr. Kern' && ep.rows[0].payload.customer_name === 'HV Graz', { p: ep.rows[0].payload, m: el.mapping });
+check('halbe Koordinate → ohne angelegt, mit Hinweis', ep.rows[1].payload?.lat === null && ep.rows[1].hints.length === 1);
+check('doppelte Zeile in der Liste → „doppelt“', ep.rows[2].status === 'dup');
+const sel = new Set(ip.rows.filter((r) => r.status === 'ok').map((r) => r.i));
+let fin = IMP.endAuswahl(ip, sel, odVorh, 1);
+check('Gratis mit 1 freiem Platz: nur die erste angehakte Zeile', fin.rows.length === 1 && fin.overLimit === 2);
+fin = IMP.endAuswahl(ip, sel, [...odVorh, { name: 'Gemeindeamt', address: 'Hauptplatz 5/2' }], null);
+check('inzwischen vorhanden (gleicher Name, Adresse ohne PLZ) → nicht noch einmal', fin.already === 1 && fin.rows.length === 2);
+check('Grenzen-Text: unklare Pro-Auskunft wird gesagt', /ließ sich gerade nicht prüfen/.test(IMP.limitText({ pro: null, aktiv: 0 }, 2)) && /angelegt wird jetzt nichts/.test(IMP.limitText({ pro: false, aktiv: 2 }, 0)));
+const vorlage = await lies(IMP.vorlageSheets());
+const vl2 = TI.detectFieldLayout(IMP.OD_FIELDS, vorlage);
+check('eigene Vorlage wird wieder vollständig erkannt', IMP.VORLAGE_SPALTEN.length === Object.keys(vl2.mapping).length && IMP.planObjekte({ ...vl2, existing: [] }).count.ok === 2, vl2.mapping);
+
+teil('Excel-Liste der Einsätze');
+const EX = await web('src/objektdex/exportEinsaetze.ts');
+const eprops = [
+  { id: 'p1', name: 'WEG Hauptplatz 1', address: 'Hauptplatz 1', customer_name: 'HV Muster', active: true },
+  { id: 'p2', name: 'Volksschule', address: 'Schulweg 3', customer_name: null, active: true },
+  { id: 'p3', name: 'Pausiert', address: 'X', customer_name: null, active: false },
+];
+const op = (id, pid, start, end, services, extra = {}) => ({
+  id, property_id: pid, started_at: start, ended_at: end, lat: 47, lng: 15, gps_accuracy_m: 7.6, gps_mocked: null, service_ids: [],
+  services: services.map((name, i) => ({ id: `s${i}`, name })), photo_count: 0, notes: null, performer_name: 'Lena K.', received_at: null,
+  distance_m: 5, entry_hash: 'abcdef0123456789', canceled: false, cancel_reason: null, canceled_at: null, ...extra,
+});
+const eops = [
+  op('o2', 'p1', '2027-04-02T06:00:00Z', '2027-04-02T07:30:00Z', ['Rasen mähen', 'Kehren'], { photo_count: 2, notes: 'alles gut' }),
+  op('o1', 'p1', '2027-04-01T06:00:00Z', '2027-04-01T06:45:00Z', ['Kehren']),
+  op('o3', 'p2', '2027-04-03T21:30:00Z', '2027-04-03T22:30:00Z', [], { lat: null, lng: null }),
+  op('o4', 'p2', '2027-04-04T08:00:00Z', null, ['Kehren'], { gps_mocked: true }),
+  op('o5', 'p1', '2027-04-05T08:00:00Z', '2027-04-05T09:00:00Z', ['Kehren'], { canceled: true, cancel_reason: 'falsches Objekt', canceled_at: '2027-04-05T10:00:00Z' }),
+];
+const sh = EX.einsatzSheets({ orgName: 'Huber', properties: eprops, ops: eops, from: '2027-04-01', to: '2027-04-30', propertyId: null, person: '' });
+check('Blätter: Einsätze, Je Objekt, Je Leistung, Storniert, Info', gleich(sh.map((s) => s.name), ['Einsätze', 'Je Objekt', 'Je Leistung', 'Storniert', 'Info']));
+const haupt = sh[0];
+check('Spalten: Datum … Leistungen, Durchgeführt von, Fotos, GPS, Notiz, Prüfcode', gleich(haupt.columns.map((c) => c.header), ['Datum', 'Beginn', 'Ende', 'Dauer (Std.)', 'Objekt', 'Adresse', 'Auftraggeber', 'Leistungen', 'Durchgeführt von', 'Fotos', 'GPS-Stempel', 'Notiz', 'Prüfcode']));
+check('chronologisch, ohne Storno', gleich(haupt.rows.map((r) => r[0]), ['2027-04-01T06:00:00Z', '2027-04-02T06:00:00Z', '2027-04-03T21:30:00Z', '2027-04-04T08:00:00Z']));
+check('Dauer in Stunden (2 Stellen), ohne Ende leer', gleich(haupt.rows.map((r) => r[3]), [0.75, 1.5, 1, null]));
+check('Leistungen, Fotos ja/nein, GPS', haupt.rows[1][7] === 'Rasen mähen, Kehren' && haupt.rows[1][9] === 'ja (2)' && haupt.rows[0][9] === 'nein' && haupt.rows[0][10] === 'ja (±8 m)' && haupt.rows[2][7] === 'Kontrolle vor Ort' && haupt.rows[2][10] === 'nein' && haupt.rows[3][10] === 'Fake-GPS gemeldet');
+check('Ende an einem anderen Tag (Berlin) mit Datum', typeof haupt.rows[2][2] === 'object' && haupt.rows[2][2].kind === 'datetime' && typeof haupt.rows[0][2] === 'string', haupt.rows[2][2]);
+const jeObj = sh[1].rows;
+check('Je Objekt: Auftraggeber zuerst, Summen, Storno gezählt, pausiertes Objekt fehlt', gleich(jeObj.map((r) => [r[0], r[3], r[4], r[5], r[6], r[9]]), [['WEG Hauptplatz 1', 2, 2.25, 0, 1, 1], ['Volksschule', 2, 1, 1, 0, 0]]), jeObj);
+check('Je Leistung: Kehren 3× (p1 2×, p2 1×), Rasen 1×, Kontrolle vor Ort 1×', gleich(sh[2].rows.map((r) => `${r[0]}|${r[2]}|${r[3]}`), ['WEG Hauptplatz 1|Kehren|2', 'WEG Hauptplatz 1|Rasen mähen|1', 'Volksschule|Kehren|1', 'Volksschule|Kontrolle vor Ort|1']), sh[2].rows);
+check('Storniert mit Grund', sh[3].rows.length === 1 && sh[3].rows[0][6] === 'falsches Objekt');
+const infoText = JSON.stringify(sh[4].rows);
+check('Info: Betrieb, Zeitraum, Summe, Hinweis „kein Nachweis“, ohne „rechtssicher/lückenlos“', infoText.includes('Huber') && infoText.includes('01.04.2027 – 30.04.2027') && infoText.includes('kein Nachweis') && !/rechtssicher|lückenlos/i.test(infoText + EX.EXPORT_NOTE));
+const mitPerson = EX.einsatzSheets({ orgName: 'Huber', properties: eprops, ops: eops.slice(0, 1), from: '2027-04-01', to: '2027-04-30', propertyId: 'p1', person: ' Lena ' });
+check('Filter stehen im Info-Blatt, ohne Storno kein Storno-Blatt', !mitPerson.some((s) => s.name === 'Storniert') && JSON.stringify(mitPerson.at(-1).rows).includes('nur „Lena“') && mitPerson[1].rows.length === 1);
+const zurueck = await lies(sh);
+check('Datei lässt sich lesen (Blatt „Einsätze“, 4 Zeilen + Kopf)', zurueck.rows.length === 5 && zurueck.rows[0][0] === 'Datum' && zurueck.rows[2][7] === 'Rasen mähen, Kehren', zurueck.rows[2]);
+check('keine Fotos/Koordinaten in der Datei', !/storage:|data:image|"lat"|47\.0/.test(JSON.stringify(sh.map((s) => s.rows))));
+
 // ============================================================================ Ergebnis
 console.log(`\n${ok} ok, ${fail} Fehler`);
 process.exit(fail ? 1 : 0);

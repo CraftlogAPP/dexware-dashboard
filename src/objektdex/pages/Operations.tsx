@@ -2,15 +2,18 @@
 // Einsätze sind unveränderlich — es gibt bewusst kein „Bearbeiten“ und kein „Nachtragen“ im Dashboard.
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { ExcelButton } from '../../components/ExcelButton';
 import { FormDialog, s, type FormValues } from '../../components/form';
 import { LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
+import { downloadXlsx, ExportNotice } from '../../lib/xlsx';
 import { useOd } from '../context';
+import { einsatzDateiname, einsatzSheets, EXPORT_TZ } from '../exportEinsaetze';
 import { fmtDayLong, fmtTimeB, PhotoButton } from '../parts';
 import { addDays, dayOf, formatDay, parseGermanDay, todayBerlin } from '../turnus';
 import type { OdOperation } from '../types';
 
 export function Operations() {
-  const { data, role } = useOd();
+  const { data, role, orgName } = useOd();
   const [params] = useSearchParams();
   const today = todayBerlin();
   const [propertyId, setPropertyId] = useState(params.get('objekt') ?? '');
@@ -29,6 +32,20 @@ export function Operations() {
   );
   useLiveRefresh([state.refresh]);
 
+  /** Excel-Liste zum Abrechnen: dieselben Filter wie die Liste (Objekt, Zeitraum, Person), vollständig neu geladen */
+  async function exportExcel() {
+    if (!rangeOk) throw new ExportNotice('Zeitraum bitte als TT.MM.JJJJ eingeben (Von nicht nach Bis).');
+    const [ops, properties] = await Promise.all([
+      data.listOperations({ from: fromDay!, to: toDay!, propertyId: propertyId || undefined }),
+      data.listProperties(),
+    ]);
+    const q = person.trim().toLowerCase();
+    const list = q ? ops.filter((o) => (o.performer_name ?? '').toLowerCase().includes(q)) : ops;
+    if (!list.length) throw new ExportNotice('Keine Einsätze im gewählten Zeitraum — die Liste wäre leer.');
+    const sheets = einsatzSheets({ orgName, properties, ops: list, from: fromDay!, to: toDay!, propertyId: propertyId || null, person });
+    await downloadXlsx(einsatzDateiname(fromDay!, toDay!), sheets, { title: 'ObjektDex Einsatzliste', creator: 'Dexware ObjektDex', timeZone: EXPORT_TZ });
+  }
+
   async function onCancel(v: FormValues) {
     if (!canceling) return;
     await data.cancelOperation(canceling.id, s(v.reason));
@@ -37,7 +54,13 @@ export function Operations() {
 
   return (
     <>
-      <h1>Einsätze</h1>
+      <div className="section-head">
+        <h1 style={{ margin: 0 }}>Einsätze</h1>
+        <ExcelButton
+          onExport={exportExcel}
+          title="Einsätze mit den gewählten Filtern als Excel-Datei: zum Abrechnen, mit Summen je Objekt und je Leistung"
+        />
+      </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Unveränderliches Protokoll aus der App — Stornos bleiben sichtbar und gekennzeichnet.
       </p>
