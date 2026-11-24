@@ -14,6 +14,11 @@ export interface Org {
 /** admin = Verwalter (bisher nur WinterDex): Mitarbeiter + Team-Code und Mitarbeiter entfernen, sonst wie worker. */
 export type Role = 'owner' | 'admin' | 'worker' | 'inspector';
 
+/** Inhaber oder Verwalter (admin) — leitet den Betrieb, z. B. Einsätze ohne GPS nachtragen (WinterDex). */
+export function isOwnerOrAdmin(role: string | null | undefined): boolean {
+  return role === 'owner' || role === 'admin';
+}
+
 /** Rollen-Name für die Anzeige. `workerLabel` z. B. „Prüfer“ bei PrüfDex. */
 export function roleLabel(role: string | null | undefined, workerLabel = 'Mitarbeiter'): string {
   return role === 'owner' ? 'Inhaber' : role === 'admin' ? 'Verwalter' : workerLabel;

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
+import { isOwnerOrAdmin } from '../../lib/orgApi';
 import { addOperation, cancelOperation, fetchOperations, fetchOperationsAll, fetchProperties } from '../api';
 import { ExcelButton } from '../../components/ExcelButton';
 import { ExportNotice } from '../../lib/xlsx';
@@ -32,6 +33,9 @@ export function Operations() {
     return toInputDate(d);
   });
   const [to, setTo] = useState(() => toInputDate(new Date()));
+  // „Einsatz nachtragen“ (ohne GPS, Fotos, Wetter, freie Uhrzeit) nur für Inhaber/Verwalter — in der App gibt es das
+  // nicht, und für Mitarbeiter wäre es im Außendienst neben „Einsatz erfassen“ verwechselbar (Feldtest 24.11.)
+  const canBackfill = isOwnerOrAdmin(org?.role);
 
   // Objektliste ändert sich durch Filter nicht — einmal laden, nicht pro Filterwechsel.
   const propsState = useAsync(() => fetchProperties(client), [client]);
@@ -97,16 +101,18 @@ export function Operations() {
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Einsätze</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => setAdding(true)}>
-          ＋ Einsatz nachtragen
-        </button>
+        {canBackfill && (
+          <button className="btn" onClick={() => setAdding(true)}>
+            ＋ Einsatz nachtragen
+          </button>
+        )}
       </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Append-only-Protokoll — jeder Eintrag bleibt unveränderlich, Stornos sind
         gekennzeichnet.
       </p>
 
-      {adding && (
+      {adding && canBackfill && (
         <FormDialog
           title="Einsatz nachtragen"
           submitLabel="Einsatz speichern"
@@ -120,7 +126,13 @@ export function Operations() {
               required: true,
               options: (propsState.data ?? []).map((p) => ({ value: p.id, label: p.name })),
             },
-            { key: 'started_at', label: 'Beginn', kind: 'datetime', required: true },
+            {
+              key: 'started_at',
+              label: 'Beginn',
+              kind: 'datetime',
+              required: true,
+              hint: 'Nachgetragene Einsätze haben keinen GPS-Stempel, keine Fotos und kein Wetter — der Nachweis weist sie so aus.',
+            },
             { key: 'ended_at', label: 'Ende', kind: 'datetime' },
             {
               key: 'action',
