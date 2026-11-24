@@ -3594,3 +3594,25 @@ input {
   gap: 10px;
   flex-wrap: wrap;
 }
+
+/* ---------- iPhone-Zoom: Safari zoomt beim Antippen eines Felds unter 16 px hinein und bleibt gezoomt ----------
+   (Feldtest 24.11.: Anmeldung 15 px, „Mehr“ → Name, alle eingebetteten Seiten). Am Touch-Gerät haben deshalb ALLE
+   Eingabefelder mindestens 16 px; am PC (Maus) bleibt es bei 15 px. Steht bewusst am Ende der Datei. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea,
+  .wd-imp-paste textarea {
+    font-size: 16px;
+  }
+  /* Portal-Seiten mit eigener, kleinerer Feldschrift — deren CSS wird später geladen, darum „html“ davor */
+  html .idx-scope .idx-geld-line input,
+  html .idx-scope .nf-text textarea,
+  html .idx-link-box input,
+  html .idx-scope .pp-add input,
+  html .idx-scope .pp-field-edit input,
+  html .idx-scope .pp-preview-pick select,
+  html .pinn-scope .pinn-member-actions select {
+    font-size: 16px;
+  }
+}
