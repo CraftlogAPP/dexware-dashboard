@@ -13,7 +13,13 @@ type Mode = 'login' | 'signup' | 'reset-request' | 'reset-code';
  * Login mit dem bestehenden App-Konto (E-Mail + Passwort).
  * Passwort-Reset per 6-stelligem OTP-Code — identisch zum Flow in den Mobile-Apps.
  */
-export function LoginScreen() {
+export function LoginScreen({ returnTo }: {
+  /**
+   * Anmeldung für einen ANDEREN Bereich (z. B. WinterDex-Konto auf der ObjektDex-Seite „Aus WinterDex übernehmen“):
+   * Google und der Bestätigungslink kehren in den Bereich dieser App zurück — von dort geht es hierhin weiter.
+   */
+  returnTo?: string;
+} = {}) {
   const { app, client, confirmReturn, dismissConfirm } = useAppAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
@@ -80,7 +86,7 @@ export function LoginScreen() {
       if (password.length < 6) throw new Error('Bitte ein Passwort mit mindestens 6 Zeichen wählen.');
       // Der Bestätigungslink kehrt zur Startseite des Bereichs zurück — die Unterseite (z. B. …/vor-ort) so lange merken,
       // wie der Link gilt (24 Stunden), nicht nur die 10 Minuten einer Google-Anmeldung.
-      rememberReturnPath(app.id, SIGNUP_RETURN_MS);
+      rememberReturnPath(app.id, SIGNUP_RETURN_MS, returnTo);
       const { data, error: err } = await client.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: confirmUrl } });
       if (err) throw new Error(signupErrorText(err.message));
       // Schon registrierte Adresse: der Server antwortet aus Datenschutzgründen ohne Fehler, aber ohne Identität.
@@ -99,7 +105,7 @@ export function LoginScreen() {
 
   function onResend() {
     void run(async () => {
-      rememberReturnPath(app.id, SIGNUP_RETURN_MS);
+      rememberReturnPath(app.id, SIGNUP_RETURN_MS, returnTo);
       const { error: err } = await client.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: confirmUrl } });
       if (err) throw new Error(signupErrorText(err.message));
       setUnconfirmed(false);
@@ -111,7 +117,7 @@ export function LoginScreen() {
     void run(async () => {
       // Google kehrt immer zur Startseite des Bereichs zurück — die gewünschte Unterseite (z. B. …/einsatz)
       // merken, AppArea leitet nach der Anmeldung dorthin weiter.
-      rememberReturnPath(app.id);
+      rememberReturnPath(app.id, RETURN_MS, returnTo);
       const { error: err } = await client.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -427,11 +433,16 @@ const RETURN_KEY = 'dexware-dash-return';
 const RETURN_MS = 10 * 60 * 1000;
 const SIGNUP_RETURN_MS = 24 * 60 * 60 * 1000;
 
-/** Vor der Google-Anmeldung bzw. Registrierung: Unterseite merken, auf der die Anmeldung begonnen wurde. */
-function rememberReturnPath(appId: string, ttl = RETURN_MS): void {
+/**
+ * Vor der Google-Anmeldung bzw. Registrierung: Unterseite merken, auf der die Anmeldung begonnen wurde.
+ * `returnTo`: Anmeldung für einen anderen Bereich (cross) — dorthin zurück statt auf eine Unterseite dieser App.
+ */
+function rememberReturnPath(appId: string, ttl = RETURN_MS, returnTo?: string): void {
   try {
     const path = window.location.pathname;
-    if (path.startsWith(`/app/${appId}/`) && path.length > `/app/${appId}/`.length) {
+    if (returnTo && returnTo.startsWith('/app/')) {
+      localStorage.setItem(RETURN_KEY, JSON.stringify({ appId, path: returnTo, at: Date.now(), ttl, cross: true }));
+    } else if (path.startsWith(`/app/${appId}/`) && path.length > `/app/${appId}/`.length) {
       localStorage.setItem(RETURN_KEY, JSON.stringify({ appId, path, at: Date.now(), ttl }));
     } else {
       localStorage.removeItem(RETURN_KEY);
@@ -450,8 +461,8 @@ export function takeReturnPath(appId: string): string | null {
     const raw = localStorage.getItem(RETURN_KEY);
     if (!raw) return null;
     localStorage.removeItem(RETURN_KEY);
-    const v = JSON.parse(raw) as { appId?: string; path?: string; at?: number; ttl?: number };
-    if (v.appId !== appId || typeof v.path !== 'string' || !v.path.startsWith(`/app/${appId}/`)) return null;
+    const v = JSON.parse(raw) as { appId?: string; path?: string; at?: number; ttl?: number; cross?: boolean };
+    if (v.appId !== appId || typeof v.path !== 'string' || !v.path.startsWith(v.cross ? '/app/' : `/app/${appId}/`)) return null;
     if (Date.now() - (v.at ?? 0) > Math.min(v.ttl ?? RETURN_MS, SIGNUP_RETURN_MS)) return null;
     return v.path;
   } catch {

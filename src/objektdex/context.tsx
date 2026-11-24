@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import type { OdData } from './data';
 import type { OdRole } from './types';
+import type { WdQuelle } from './uebernahme';
 
 export interface OdContextValue {
   data: OdData;
@@ -11,6 +12,8 @@ export interface OdContextValue {
   demo: boolean;
   /** Basis-Pfad des Bereichs, z. B. /app/objektdex */
   base: string;
+  /** Nur Beispieldaten: WinterDex-Betrieb für „Aus WinterDex übernehmen“ (echt: Anmeldung bei WinterDex) */
+  winterdexDemo?: WdQuelle;
 }
 
 const Ctx = createContext<OdContextValue | null>(null);

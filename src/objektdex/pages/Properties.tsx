@@ -31,6 +31,11 @@ export function Properties() {
       <p className="muted" style={{ marginTop: -6 }}>
         Je Objekt die Leistungen mit Turnus — daraus entstehen „Heute“ und Soll/Ist.
       </p>
+      {role === 'owner' && (
+        <p className="small" style={{ marginTop: -4 }}>
+          Objekte übernehmen: <Link to={`${base}/aus-winterdex`}>aus WinterDex</Link>
+        </p>
+      )}
       {adding && (
         <PropertyDialog
           onClose={() => setAdding(false)}
@@ -44,7 +49,19 @@ export function Properties() {
           const active = props.filter((p) => p.active);
           const paused = props.filter((p) => !p.active);
           const rows = showPaused ? props : active;
-          if (!props.length) return <div className="card empty">Noch keine Objekte. Leg das erste Objekt an — oder in der App.</div>;
+          if (!props.length) {
+            return (
+              <div className="card empty">
+                Noch keine Objekte. Leg das erste Objekt an — oder in der App.
+                {role === 'owner' && (
+                  <>
+                    {' '}
+                    Du nutzt WinterDex? <Link to={`${base}/aus-winterdex`}>Objekte und Strecken von dort übernehmen</Link>
+                  </>
+                )}
+              </div>
+            );
+          }
           return (
             <>
               <div className="table-wrap">

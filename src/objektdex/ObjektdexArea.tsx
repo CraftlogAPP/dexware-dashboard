@@ -1,11 +1,12 @@
 // ObjektDex-Bereich: Leistungsnachweis für Hausbetreuung, Grünpflege und Reinigung.
 // Echter Betrieb: Anmeldung + Betrieb wie alle Dex-Apps (AppArea/OrgProvider), Daten über supabaseData.
 // Ohne Supabase-Eintrag (Projekt noch nicht angelegt): im Dev-Server Beispieldaten, im Produktions-Build „noch nicht verbunden“.
-import { lazy, Suspense, useMemo } from 'react';
-import { Link, NavLink, Outlet, Route, Routes } from 'react-router-dom';
+import { lazy, Suspense, useMemo, type ReactNode } from 'react';
+import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { Building2, CheckCheck, FileDown, LayoutDashboard, Link2, ListChecks, TriangleAlert, Users, CreditCard } from 'lucide-react';
 import { appIcon, type AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
 import { AboPage } from '../components/AboPage';
@@ -25,6 +26,17 @@ import './objektdex.css';
 
 // Beispieldaten nur im Dev-Server (lazy → nie im Produktions-Build)
 const DemoArea = import.meta.env.DEV ? lazy(() => import('./DemoArea').then((m) => ({ default: m.DemoArea }))) : null;
+
+// Übernahme aus WinterDex erst beim Öffnen laden (bringt die WinterDex-Anmeldung und den Abgleich mit)
+const AusWinterdex = lazy(() => import('./pages/AusWinterdex').then((m) => ({ default: m.AusWinterdex })));
+const AusWinterdexOhneBetrieb = lazy(() => import('./pages/AusWinterdex').then((m) => ({ default: m.AusWinterdexOhneBetrieb })));
+
+const spinner = (
+  <div className="empty">
+    <span className="spinner" />
+  </div>
+);
+const Lazy = ({ children }: { children: ReactNode }) => <Suspense fallback={spinner}>{children}</Suspense>;
 
 function demoWanted(): boolean {
   try {
@@ -49,7 +61,7 @@ export function ObjektdexArea({ app }: { app: AppConfig }) {
   return (
     <AppArea app={app}>
       <OrgProvider>
-        <OrgGate>
+        <OrgGate noOrg={<OhneBetrieb />}>
           <LiveBridge>
             <OdRoutes />
           </LiveBridge>
@@ -76,6 +88,40 @@ function LiveBridge({ children }: { children: React.ReactNode }) {
   return <OdProvider value={value}>{children}</OdProvider>;
 }
 
+/**
+ * Konto ohne ObjektDex-Betrieb: auf …/aus-winterdex den Betrieb aus WinterDex vorbelegen und anlegen, sonst der gewohnte
+ * Hinweis (Betrieb in der App anlegen) mit dem Weg zur Übernahme.
+ */
+function OhneBetrieb() {
+  const { app, client } = useAppAuth();
+  const { reload } = useOrg();
+  const { pathname } = useLocation();
+  const base = `/app/${app.id}`;
+  if (pathname.replace(/\/+$/, '') === `${base}/aus-winterdex`) {
+    return (
+      <div className="page">
+        <ErrorBoundary resetKey={pathname}>
+          <Lazy>
+            <AusWinterdexOhneBetrieb odClient={client} onCreated={reload} />
+          </Lazy>
+        </ErrorBoundary>
+      </div>
+    );
+  }
+  return (
+    <div className="page">
+      <div className="info-box">
+        Dieses Konto gehört noch zu keinem Betrieb. Lege den Betrieb zuerst in der {app.name}-App am Handy an (oder tritt per
+        Einladungscode bei) — danach steht das Dashboard hier bereit.
+      </div>
+      <p className="muted">
+        Du nutzt schon WinterDex? Dann übernimm Betrieb, Objekte und Strecken direkt:{' '}
+        <Link to={`${base}/aus-winterdex`}>Aus WinterDex übernehmen</Link>
+      </p>
+    </div>
+  );
+}
+
 export function OdRoutes() {
   return (
     <Routes>
@@ -90,6 +136,7 @@ export function OdRoutes() {
         <Route path="links" element={<Links />} />
         <Route path="team" element={<Team />} />
         <Route path="abo" element={<AboOrHint />} />
+        <Route path="aus-winterdex" element={<Lazy><AusWinterdex /></Lazy>} />
       </Route>
     </Routes>
   );
@@ -102,6 +149,7 @@ function AboOrHint() {
 
 function Shell() {
   const { base, orgName, role } = useOd();
+  const { pathname } = useLocation();
   // Absolute Pfade: die Shell rendert in einer pfadlosen Layout-Route unter einer Splat-Route.
   return (
     <div className="app-shell od-scope">
@@ -124,7 +172,10 @@ function Shell() {
         </div>
       </nav>
       <main className="app-main">
-        <Outlet />
+        {/* Navigation bleibt stehen, wenn eine Seite (z. B. die nachgeladene Übernahme) nicht lädt */}
+        <ErrorBoundary resetKey={pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

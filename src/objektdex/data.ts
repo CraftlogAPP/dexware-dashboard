@@ -18,6 +18,7 @@ import type {
   PropertyInput,
   ServiceInput,
 } from './types';
+import type { OdLeistungNeu, OdObjektNeu, OdStreckeKurz, OdStreckeNeu } from './uebernahme';
 
 export interface OdData {
   listProperties(): Promise<OdProperty[]>;
@@ -45,6 +46,16 @@ export interface OdData {
   removeMember(membershipId: string): Promise<void>;
   /** Verwalter ernennen ('admin') / zurückstufen ('worker') — nur der Inhaber (Server prüft selbst) */
   setMemberRole(userId: string, role: 'admin' | 'worker'): Promise<void>;
+  /** Pro des Betriebs laut Server (org_pro_active): true/false, null = unklar (RevenueCat nicht erreichbar) */
+  proStatus(): Promise<boolean | null>;
+  /**
+   * Übernahme/Import: Objekte, Runden (Strecken) bzw. Leistungen mit festen ids anlegen — nur der Inhaber (RLS).
+   * Bei EINER Zeile zählt „gibt es schon“ (23505, Antwort beim ersten Versuch verloren) als angelegt (insertInChunks).
+   */
+  createProperties(rows: OdObjektNeu[]): Promise<void>;
+  listRoutes(): Promise<OdStreckeKurz[]>;
+  createRoutes(rows: OdStreckeNeu[]): Promise<void>;
+  createServices(rows: OdLeistungNeu[]): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------- Berliner Tagesgrenzen
@@ -81,6 +92,13 @@ const DEFECT_COLS =
 
 export function supabaseData(sb: SupabaseClient, orgId: string): OdData {
   const STORAGE = 'storage:';
+  async function insertRows(table: string, rows: object[], what: string): Promise<void> {
+    if (!rows.length) return;
+    const { error } = await sb.from(table).insert(rows.map((r) => ({ ...r, org_id: orgId })));
+    if (!error) return;
+    if (error.code === '23505' && rows.length === 1) return;
+    fail(`${what} konnten nicht angelegt werden`, error);
+  }
   return {
     async listProperties() {
       const { data, error } = await fetchAllRows<OdProperty>((a, b) => sb.from('property').select('*').order('name').order('id').range(a, b));
@@ -228,5 +246,22 @@ export function supabaseData(sb: SupabaseClient, orgId: string): OdData {
         fail('Rolle nicht geändert', error);
       }
     },
+    async proStatus() {
+      try {
+        const { data, error } = await sb.rpc('org_pro_active');
+        if (error || data === null || data === undefined) return null;
+        return data === true;
+      } catch {
+        return null;
+      }
+    },
+    createProperties: (rows) => insertRows('property', rows, 'Objekte'),
+    async listRoutes() {
+      const { data, error } = await fetchAllRows<OdStreckeKurz>((a, b) => sb.from('route').select('id, name').order('name').order('id').range(a, b));
+      if (error) fail('Runden konnten nicht geladen werden', error);
+      return data;
+    },
+    createRoutes: (rows) => insertRows('route', rows, 'Runden'),
+    createServices: (rows) => insertRows('service', rows, 'Leistungen'),
   };
 }

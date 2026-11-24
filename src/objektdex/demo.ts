@@ -13,6 +13,7 @@ import {
   type ServiceLike,
 } from './turnus';
 import type { OdDefect, OdMember, OdOperation, OdProperty, OdService, OdShareLink, OdSollIstRow, OdTodayRow } from './types';
+import type { OdStreckeKurz, WdQuelle } from './uebernahme';
 
 const did = (kind: number, n: number) => `0000${kind}000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const ORG = '00000000-0000-4000-8000-0000000000aa';
@@ -110,9 +111,75 @@ function demoPhoto(label: string, hue: number): string {
 export interface DemoStore {
   data: OdData;
   orgName: string;
+  /** WinterDex-Betrieb für „Aus WinterDex übernehmen“ (ohne Anmeldung) */
+  winterdex: WdQuelle;
 }
 
-export function createDemoStore(): DemoStore {
+/**
+ * Beispiel-WinterDex-Betrieb: zwei Objekte gibt es in ObjektDex schon (gleiche Adresse), drei sind in Saison-Pause,
+ * eine Strecke verbindet Objekte (property_ids werden beim Übernehmen umgeschlüsselt).
+ */
+function demoWinterdex(): WdQuelle {
+  const w = (n: number) => `0000w000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const o = (n: number, name: string, address: string, lat: number, lng: number, customer: string | null, areas: string | null, active = true, notes: string | null = null) => ({
+    id: w(n),
+    name,
+    address,
+    lat,
+    lng,
+    customer_name: customer,
+    customer_contact: customer ? '089 555 01' + n : null,
+    areas,
+    notes,
+    active,
+  });
+  return {
+    betrieb: { name: 'Objektservice Brandl', land: 'DE', address: 'Werkstraße 3, 80339 München' },
+    rolle: 'owner',
+    email: 'chef@objektservice-brandl.example',
+    objekte: [
+      o(1, 'WEG Lindenstraße 12', 'Lindenstraße 12, 80331 München', 48.1372, 11.5755, 'Hausverwaltung Meier GmbH', 'Gehweg 40 m, Hauseingang, Zufahrt Tiefgarage'),
+      o(2, 'Sonnenhof', 'Sonnenstraße 40–44', 48.1355, 11.5652, 'Huber & Partner Immobilien', 'Gehweg, Parkplatz'),
+      o(3, 'Grundschule Am Bach', 'Bachweg 1, 80337 München', 48.1301, 11.5608, 'Landeshauptstadt München', 'Pausenhof, Gehweg, Treppe Haupteingang', true, 'Hausmeister ab 6:30 da'),
+      o(4, 'Ärztehaus Mitte', 'Marienplatz 8, 80331 München', 48.1374, 11.5755, 'Praxisgemeinschaft Mitte', 'Gehweg, Rampe'),
+      o(5, 'Parkplatz Edeka Süd', 'Lindwurmstraße 120, 80337 München', 48.1243, 11.5532, 'Edeka Süd GmbH', 'Parkplatz 60 Stellplätze, Einkaufswagenbox', false),
+      o(6, 'Wohnanlage Isarblick', 'Isartalstraße 22, 80469 München', 48.1257, 11.5637, 'Verwaltung Berger', 'Gehweg, Müllplatz', false),
+      o(7, 'Kirchplatz St. Anton', 'Kapuzinerstraße 36, 80469 München', 48.1219, 11.5651, 'Pfarrei St. Anton', null, false),
+    ],
+    strecken: [
+      {
+        id: w(101),
+        name: 'Tour Mitte (Gehwege)',
+        notes: 'früh zuerst, vor 7 Uhr',
+        path: [
+          [48.1372, 11.5755],
+          [48.1374, 11.5755],
+          [48.1355, 11.5652],
+        ],
+        length_m: 820,
+        source: 'objects',
+        property_ids: [w(1), w(4), w(2)],
+        active: true,
+      },
+      {
+        id: w(102),
+        name: 'Räumstrecke Schulweg',
+        notes: null,
+        path: [
+          [48.1301, 11.5608],
+          [48.1289, 11.5631],
+          [48.1279, 11.5652],
+        ],
+        length_m: 410,
+        source: 'recorded',
+        property_ids: [],
+        active: true,
+      },
+    ],
+  };
+}
+
+export function createDemoStore(opts: { pro?: boolean } = {}): DemoStore {
   const today = todayBerlin();
   const start = addDays(today, -70);
   const properties: OdProperty[] = [];
@@ -221,6 +288,7 @@ export function createDemoStore(): DemoStore {
     { membership_id: did(6, 3), user_id: did(7, 3), email: 'tom.berger@objektservice-brandl.example', role: 'admin', joined_at: at(addDays(start, 5), 7, 45) },
   ];
   let code = { code: 'OD-K7MR-4QPZ', expires_at: at(addDays(today, 21), 12, 0), use_count: 2 };
+  const routes: OdStreckeKurz[] = [];
 
   const wait = <T,>(v: T) => new Promise<T>((r) => setTimeout(() => r(v), 120));
   const photoCache = new Map<string, string[]>();
@@ -344,6 +412,27 @@ export function createDemoStore(): DemoStore {
       if (m) m.role = role;
       await wait(null);
     },
+    // Beispieldaten: Pro an (…&gratis zeigt die Gratis-Grenze)
+    proStatus: () => wait(opts.pro ?? true),
+    async createProperties(rows) {
+      for (const r of rows) {
+        if (properties.some((p) => p.id === r.id)) continue;
+        properties.push({ ...r, org_id: ORG, active: true, created_at: new Date().toISOString() });
+      }
+      await wait(null);
+    },
+    listRoutes: () => wait([...routes]),
+    async createRoutes(rows) {
+      for (const r of rows) if (!routes.some((x) => x.id === r.id)) routes.push({ id: r.id, name: r.name });
+      await wait(null);
+    },
+    async createServices(rows) {
+      for (const r of rows) {
+        if (services.some((x) => x.id === r.id)) continue;
+        services.push({ ...r, org_id: ORG, end_on: null, active: true, created_at: new Date().toISOString() });
+      }
+      await wait(null);
+    },
   };
-  return { data, orgName: 'Objektservice Brandl' };
+  return { data, orgName: 'Objektservice Brandl', winterdex: demoWinterdex() };
 }

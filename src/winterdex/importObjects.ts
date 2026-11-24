@@ -377,7 +377,7 @@ export interface PlanInput {
  * Gleiches Objekt? Gleicher Name und gleiche Adresse (Vergleichsform aus cmpKey). Bei einer darf PLZ/Ort fehlen
  * („Hauptplatz 1“ = „Hauptplatz 1, 8200 Gleisdorf“) — eine andere Hausnummer („5/2“, „5-7“) ist aber ein anderes Objekt.
  */
-function sameAddress(a: string, b: string): boolean {
+export function sameAddress(a: string, b: string): boolean {
   if (a === b) return true;
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   if (!long.startsWith(short + ' ')) return false;

@@ -13,8 +13,12 @@ export function DemoArea({ app }: { app: AppConfig }) {
   const params = new URLSearchParams(window.location.search);
   const [clean] = useState(() => params.has('sauber'));
   const [role, setRole] = useState<OdRole>(() => { const r = params.get('rolle'); return r === 'worker' || r === 'admin' ? r : 'owner'; });
-  const [store] = useState(() => createDemoStore());
-  const value = useMemo(() => ({ data: store.data, orgName: store.orgName, role, demo: true, base: `/app/${app.id}` }), [store, role, app.id]);
+  // …&gratis: ohne Pro (Gratis-Grenze bei Übernahme und Import sichtbar)
+  const [store] = useState(() => createDemoStore({ pro: !params.has('gratis') }));
+  const value = useMemo(
+    () => ({ data: store.data, orgName: store.orgName, role, demo: true, base: `/app/${app.id}`, winterdexDemo: store.winterdex }),
+    [store, role, app.id],
+  );
   const style = { '--accent': app.theme.accent, '--on-accent': app.theme.onAccent, '--bg': app.theme.bg } as React.CSSProperties;
 
   return (
