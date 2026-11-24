@@ -38,7 +38,8 @@ let ok = 0;
 let fail = 0;
 let marke = '';
 const check = (name, cond, extra = '') => {
-  cond ? ok++ : fail++;
+  if (cond) ok++;
+  else fail++;
   console.log(`${cond ? '  ok  ' : 'FEHLER'}  ${marke}${name}${cond || extra === '' ? '' : '  → ' + (typeof extra === 'string' ? extra : JSON.stringify(extra))}`);
 };
 const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b);
