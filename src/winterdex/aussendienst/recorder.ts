@@ -20,6 +20,9 @@ const JOIN_MAX_S = 45;
 const JOIN_MAX_M = 400;
 const JOIN_STEP_M = 15;
 const GAP_MIN_MS = 10000; // kürzere Unterbrechungen nicht als Pause vermerken
+// So lange keine brauchbare Position (≤ ±35 m) WÄHREND der Aufzeichnung → im Nachweis als Unterbrechung vermerken
+// (wie die App seit 20./21.11.2026, RouteRunScreen GPS_HOLE_MS)
+export const GPS_HOLE_MS = 45000;
 const STALE_FIX_MS = 15000;
 const REWATCH_MS = 20000; // so lange ohne Position → Ortung neu anmelden
 
@@ -39,6 +42,19 @@ export interface RecorderData {
 
 type WakeLockSentinelLike = { release: () => Promise<void> };
 
+/**
+ * GPS-Loch von `from` bis `to` (ms) als Unterbrechung eintragen — wie die App: nur über 45 s und nur, wenn die Zeit
+ * nicht schon als Pause (Seite verlassen/gesperrt) vermerkt ist. Gibt true zurück, wenn eingetragen wurde.
+ */
+export function addGpsHole(gaps: [string, string][], from: number, to: number): boolean {
+  if (to - from <= GPS_HOLE_MS) return false;
+  const von = new Date(from).toISOString();
+  const bis = new Date(to).toISOString();
+  if (gaps.some(([a, b]) => a < bis && b > von)) return false;
+  gaps.push([von, bis]);
+  return true;
+}
+
 export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) {
   const [recording, setRecording] = useState(false);
   const [gps, setGps] = useState<GpsLive>({ state: 'wait' });
@@ -51,6 +67,8 @@ export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) 
   const lastFixAtRef = useRef(0);
   const lastPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const pausedAtRef = useRef<string | null>(null);
+  // Zeit (Messzeitpunkt) der letzten brauchbaren Position während der Aufzeichnung — für das GPS-Loch
+  const lastHeardRef = useRef<number | null>(null);
   const weatherAskedRef = useRef(false);
   const wakeRef = useRef<WakeLockSentinelLike | null>(null);
   const onFirstRef = useRef(onFirstGoodFix);
@@ -60,6 +78,12 @@ export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) 
     if (!recordingRef.current || pausedAtRef.current) return;
     if (acc > MAX_ACC_M) return;
     const d0 = dataRef.current;
+    // GPS-Loch bei LAUFENDER Aufzeichnung (Halle, Tiefgarage, „Genauer Standort“ aus): sonst wirkte die Fahrt im
+    // Nachweis lückenlos — ein Fahrer, der 3 Minuten in einer Halle steht und < 150 m weiter wieder auftaucht, wurde
+    // einfach gerade verbunden. Jetzt wie in der App als Unterbrechung vermerkt, außer sie ist schon als Pause erfasst.
+    const heard = lastHeardRef.current;
+    if (heard != null && addGpsHole(d0.gaps, heard, ts)) setTick((n) => n + 1);
+    if (heard == null || ts > heard) lastHeardRef.current = ts;
     const t = Math.round((ts - Date.parse(d0.startedAt)) / 1000);
     const p: TrackPoint = [round6(lat), round6(lng), t, Math.round(acc)];
     const last = lastRef.current;
@@ -217,6 +241,7 @@ export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) 
     lastRef.current = null;
     jumpRef.current = null;
     pausedAtRef.current = null;
+    lastHeardRef.current = null;
     recordingRef.current = true;
     setRecording(true);
     void keepAwake();
@@ -234,6 +259,7 @@ export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) 
       lastRef.current = (flat[flat.length - 1] as TrackPoint | undefined) ?? null;
       jumpRef.current = null;
       pausedAtRef.current = null;
+      lastHeardRef.current = null; // wie die App: die Unterbrechung bis jetzt ist oben schon vermerkt
       recordingRef.current = true;
       setRecording(true);
       void keepAwake();
@@ -248,11 +274,23 @@ export function useRecorder(onFirstGoodFix: (lat: number, lng: number) => void) 
     setRecording(false);
   }, []);
 
-  const stop = useCallback(() => {
-    recordingRef.current = false;
-    setRecording(false);
-    letSleep();
-  }, [letSleep]);
+  /**
+   * Aufzeichnung beenden. `gpsHoleUntil` (Stopp-Zeitpunkt, nur bei Fahrten — nicht beim Aufnehmen einer Strecke):
+   * Kam bis zum Beenden länger als 45 s keine brauchbare Position (z. B. am Ende in der Halle), wird das wie mitten in
+   * der Fahrt als Unterbrechung vermerkt — sonst hörte die Spur still vor der Endzeit auf (App seit 21.11.2026).
+   */
+  const stop = useCallback(
+    (gpsHoleUntil?: number) => {
+      const heard = lastHeardRef.current;
+      if (gpsHoleUntil != null && recordingRef.current && heard != null && !pausedAtRef.current) {
+        addGpsHole(dataRef.current.gaps, heard, gpsHoleUntil);
+      }
+      recordingRef.current = false;
+      setRecording(false);
+      letSleep();
+    },
+    [letSleep],
+  );
 
   const points = dataRef.current.track.reduce((n, s) => n + s.length, 0);
   return { recording, gps, awake, data: dataRef.current, points, lastPos: lastPosRef.current, start, resume, load, stop };

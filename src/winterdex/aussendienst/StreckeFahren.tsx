@@ -268,9 +268,10 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
 
   const confirmStop = () => {
     if (!sess) return;
-    const now = new Date().toISOString();
-    setStoppedAt(now);
-    rec.stop();
+    const stopAt = Date.now();
+    setStoppedAt(new Date(stopAt).toISOString());
+    // GPS-Loch bis zum Beenden als Unterbrechung — nur bei Fahrten (eine aufgenommene Strecke hat keinen Nachweis)
+    rec.stop(sess.mode === 'run' ? stopAt : undefined);
     setAsk(null);
     if (sess.mode === 'plan') {
       setPhase('plansave');
@@ -472,13 +473,22 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
       : g.state === 'weak'
         ? { tone: 'warn', dot: 'amber', text: `GPS schwach (±${g.acc} m) — ungenaue Punkte werden ausgelassen` }
         : g.state === 'lost'
-          ? { tone: 'bad', dot: 'red', text: `Kein GPS-Signal seit ${Math.round((Date.now() - g.since) / 1000)} s — es wird gerade nichts aufgezeichnet` }
+          ? {
+              tone: 'bad',
+              dot: 'red',
+              text: `Kein GPS-Signal seit ${Math.round((Date.now() - g.since) / 1000)} s — es wird gerade nichts aufgezeichnet${
+                phase === 'recording' ? '. Ab 45 s steht die Zeit als Unterbrechung im Nachweis.' : ''
+              }`,
+            }
           : g.state === 'denied'
             ? { tone: 'bad', dot: 'red', text: 'Standort nicht erlaubt — bitte in den Einstellungen des Browsers erlauben (iPhone: Einstellungen → Datenschutz & Sicherheit → Ortungsdienste → Safari-Websites → „Beim Verwenden“ + „Genauer Standort“), dann die Seite neu laden.' }
             : g.state === 'unsupported'
               ? { tone: 'bad', dot: 'red', text: 'Dieser Browser kann keinen Standort ermitteln.' }
               : { tone: '', dot: 'amber', text: 'Warte auf GPS-Signal … (unter freiem Himmel geht es schneller)' };
   const gapText = rec.data.gaps.map(([a, b]) => `${fmtTime(a).replace(' Uhr', '')}–${fmtTime(b).replace(' Uhr', '')}`).join(', ');
+  // Pause (Seite verlassen/gesperrt) oder GPS-Loch über 45 s — beides steht so im Nachweis (wie in der App)
+  const gapsN = rec.data.gaps.length;
+  const gapLine = `${gapsN === 1 ? '1 Unterbrechung' : `${gapsN} Unterbrechungen`} der Aufzeichnung (Pause oder kein GPS: ${gapText}) — wird im Nachweis vermerkt und nicht als gefahren gewertet.`;
 
   if (phase === 'finish') {
     return (
@@ -491,11 +501,7 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
         {sketch}
         {stats}
         {plan && <p className="muted small">Die Abdeckung wird beim Übertragen vom Server bestätigt (prüffest).</p>}
-        {rec.data.gaps.length > 0 && (
-          <p className="ez-warn small">
-            ⏸ {rec.data.gaps.length === 1 ? '1 Pause' : `${rec.data.gaps.length} Pausen`} in der Aufzeichnung ({gapText}) — wird im Nachweis vermerkt.
-          </p>
-        )}
+        {rec.data.gaps.length > 0 && <p className="ez-warn small">{gapLine}</p>}
         <Felder form={form} photos={photos} onForm={setForm} onPhotos={setPhotos} onBusy={setPhotoBusy} />
         {saveError && <div className="error-box">Fahrt nicht gespeichert: {saveError}</div>}
         <button type="button" className="btn ez-save" onClick={() => void saveRun()} disabled={saving || photoBusy}>
@@ -533,7 +539,6 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
 
   // bereit / Aufzeichnung läuft
   const recording = phase === 'recording';
-  const gapsN = rec.data.gaps.length;
   return (
     <div className="ez">
       {!recording && back}
@@ -559,11 +564,7 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
             {rec.awake === false && ' Dieser Browser kann den Bildschirm nicht selbst wach halten: bitte die automatische Sperre für die Fahrt ausschalten.'}
             {rec.awake === true && ' Der Bildschirm bleibt von selbst an.'}
           </p>
-          {gapsN > 0 && (
-            <p className="ez-warn small">
-              ⏸ {gapsN === 1 ? '1 Pause' : `${gapsN} Pausen`} in der Aufzeichnung ({gapText}) — wird im Nachweis vermerkt.
-            </p>
-          )}
+          {gapsN > 0 && <p className="ez-warn small">{gapLine}</p>}
           <button type="button" className="btn ez-big sr-stop" onClick={() => setAsk(rec.points < 2 ? 'empty' : 'stop')}>
             <Square className="i" aria-hidden /> {isPlan ? 'Strecke fertig' : 'Fahrt beenden'}
           </button>
