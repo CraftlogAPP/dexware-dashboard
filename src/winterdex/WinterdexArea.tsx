@@ -27,6 +27,7 @@ import { EinsatzCtx } from './einsatz/context';
 import { listDraftPropertyIds, listPending } from './einsatz/store';
 import { hasActiveRun, listPendingRuns } from './aussendienst/runStore';
 import { registerLogoutCount } from '../lib/logoutGuard';
+import { installWebApp } from '../lib/pwa';
 import { roleLabel } from '../lib/orgApi';
 
 // Abmelde-Rückfrage auf ALLEN WinterDex-Seiten (auch im Dashboard), nicht nur im Außendienst: wartende Einsätze und
@@ -168,8 +169,9 @@ function EinsatzScope({ children }: { children: ReactNode }) {
 }
 
 /**
- * „Zum Home-Bildschirm“ am iPhone: Symbol und Name von WinterDex statt des allgemeinen Dashboards,
- * solange dieser Bereich offen ist (Safari liest beides beim Hinzufügen aus der Seite).
+ * „Zum Home-Bildschirm“: Symbol und Name von WinterDex statt des allgemeinen Dashboards, solange dieser Bereich offen
+ * ist (Safari liest beides beim Hinzufügen aus der Seite). Dazu Manifest (Start im Außendienst, eigenes Fenster) und
+ * Service Worker: Das Symbol öffnet dann auch ohne Netz (public/winterdex.webmanifest, pwa/sw.js).
  */
 function useHomeScreenIcon() {
   useEffect(() => {
@@ -183,8 +185,10 @@ function useHomeScreenIcon() {
     head.appendChild(meta);
     icon?.setAttribute('href', '/icons/winterdex-180.png');
     document.title = 'WinterDex';
+    const removeWebApp = installWebApp({ manifest: '/winterdex.webmanifest', scope: '/app/winterdex' });
     return () => {
       meta.remove();
+      removeWebApp();
       if (icon && beforeIcon) icon.setAttribute('href', beforeIcon);
       document.title = beforeTitle;
     };
