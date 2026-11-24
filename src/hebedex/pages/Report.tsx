@@ -5,7 +5,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import {
   fetchDefectsForReport,
   fetchItems,
@@ -78,8 +78,7 @@ export function Report() {
         Prüfbuch für Anschlag-, Lastaufnahme- und Zurrmittel je Standort und Zeitraum — mit
         Rechtsgrundlage (BetrSichV / DGUV Regel 109-017, AT: AM-VO § 8), Checklisten-Ergebnissen,
         Ablegereife-Messwerten, Bestand und ausgesonderten Teilen, Mängel-Liste im
-        Ampelverfahren, GPS-Stempeln und Foto-Anhang. Im Druckdialog „Als PDF
-        speichern" wählen.
+        Ampelverfahren, GPS-Stempeln und Foto-Anhang. {pdfSaveHint()}
       </p>
 
       <LoadGuard state={sitesState}>

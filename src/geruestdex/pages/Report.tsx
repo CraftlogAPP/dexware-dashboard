@@ -5,7 +5,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import {
   fetchDamagesForReport,
   fetchInspectionsForReport,
@@ -78,7 +78,7 @@ export function Report() {
         Prüfbericht Gerüst je Baustelle und Zeitraum — mit Rechtsgrundlage
         (BetrSichV / TRBS 2121-1 / DGUV Information 201-011), Checklisten-Ergebnissen,
         Gerüst-Inventar inkl. Last-/Breitenklasse, Mängel-Liste im Ampelverfahren,
-        GPS-Stempeln und Foto-Anhang. Im Druckdialog „Als PDF speichern" wählen.
+        GPS-Stempeln und Foto-Anhang. {pdfSaveHint()}
       </p>
 
       <LoadGuard state={sitesState}>

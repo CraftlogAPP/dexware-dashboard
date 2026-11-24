@@ -1,5 +1,16 @@
 // App-neutraler Druck-Helfer: Bericht-HTML in neuem Fenster öffnen und den
 // Browser-Druckdialog starten (dort „Als PDF speichern").
+import { isIOS } from './pwa';
+
+/**
+ * So wird aus dem Druckfenster ein PDF — je Gerät. Am iPhone gibt es „Als PDF speichern“ nicht (Feldtest 24.11.):
+ * dort oben im Druckfenster „Teilen“ → „In Dateien sichern“ (oder direkt senden).
+ */
+export function pdfSaveHint(): string {
+  if (isIOS()) return 'Als PDF: im Druckfenster oben auf das Teilen-Symbol tippen → „In Dateien sichern“ (oder direkt per Mail/WhatsApp senden).';
+  if (/Android/i.test(navigator.userAgent)) return 'Als PDF: im Druckdialog oben als Drucker „Als PDF speichern“ wählen.';
+  return 'Im Druckdialog „Als PDF speichern“ wählen.';
+}
 
 function writeAndPrint(win: Window, html: string): void {
   win.document.open();

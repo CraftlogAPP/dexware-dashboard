@@ -11,6 +11,9 @@ import { loadEinsatzData } from '../einsatz/data';
 import { isToday } from '../einsatz/amount';
 import { deletePending, emitPendingChanged, listDraftPropertyIds, type Pending } from '../einsatz/store';
 import { nextTryLabel as nextLabel } from '../../lib/retryLater';
+import { isIOS, isStandalone } from '../../lib/pwa';
+
+const HOME_HINT_KEY = 'wd-home-hinweis-weg';
 
 export function Einsatz() {
   const { be, userId, orgId, base, owner } = useEinsatz();
@@ -20,6 +23,23 @@ export function Einsatz() {
   const [draftPropIds, setDraftPropIds] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [discard, setDiscard] = useState<Pending | null>(null);
+  const standalone = useMemo(() => isStandalone(), []);
+  const iosSafari = useMemo(() => isIOS() && !standalone, [standalone]);
+  const [homeHintGone, setHomeHintGone] = useState(() => {
+    try {
+      return localStorage.getItem(HOME_HINT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const hideHomeHint = () => {
+    setHomeHintGone(true);
+    try {
+      localStorage.setItem(HOME_HINT_KEY, '1');
+    } catch {
+      /* nur Komfort */
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -50,6 +70,33 @@ export function Einsatz() {
       <p className="muted" style={{ marginTop: -6 }}>
         Objekt antippen — Uhrzeit, Standort und Fotos werden direkt vor Ort festgehalten.
       </p>
+
+      {/* iPhone in Safari: einmal auffällig empfehlen, den Außendienst auf den Home-Bildschirm zu legen (Feldtest 24.11.) */}
+      {iosSafari && !homeHintGone && (
+        <div className="ez-home-card" role="note">
+          <b>
+            <Smartphone className="i" aria-hidden /> Tipp: WinterDex auf den Home-Bildschirm legen
+          </b>
+          <p>
+            Dann öffnet WinterDex wie eine App, auch im Funkloch — und deine Anmeldung und noch nicht gesendete
+            Einsätze bleiben sicher: In Safari löscht das iPhone Website-Daten, wenn die Seite 7 Tage (an denen Safari
+            benutzt wird) nicht geöffnet wurde. Für das Symbol auf dem Home-Bildschirm gilt das nicht.
+          </p>
+          <ol>
+            <li>Unten auf „Teilen“ tippen (neuere iPhones: erst „…“, dann „Teilen“).</li>
+            <li>„Zum Home-Bildschirm“ → „Hinzufügen“.</li>
+            <li>WinterDex über das neue Symbol öffnen und dort einmal anmelden — es hat einen eigenen Speicher.</li>
+          </ol>
+          <p className={pending.length > 0 ? 'ez-warn small' : 'muted small'}>
+            Vorher hier alles Wartende senden lassen
+            {pending.length > 0 ? ` (gerade ${pending.length === 1 ? 'wartet 1 Einsatz' : `warten ${pending.length} Einsätze`})` : ''} — was
+            in Safari wartet, sendet nur Safari.
+          </p>
+          <button type="button" className="btn ghost small" onClick={hideHomeHint}>
+            Verstanden
+          </button>
+        </div>
+      )}
 
       {pending.length > 0 && (
         <div className="ez-pending" role="status">
@@ -192,19 +239,25 @@ export function Einsatz() {
         }}
       </LoadGuard>
 
-      <details className="ez-home">
-        <summary>
-          <Smartphone className="i" aria-hidden /> Wie eine App auf den Startbildschirm legen
-        </summary>
-        <p>
-          <b>iPhone (Safari):</b> unten auf „Teilen“ tippen → „Zum Home-Bildschirm“ → „Hinzufügen“.
-          <br />
-          <b>Android (Chrome):</b> oben rechts auf ⋮ → „Zum Startbildschirm hinzufügen“.
-        </p>
-        <p className="muted small">
-          Das Symbol öffnet direkt diese Seite. Einmal anmelden genügt — die Anmeldung bleibt gespeichert.
-        </p>
-      </details>
+      {!standalone && (
+        <details className="ez-home">
+          <summary>
+            <Smartphone className="i" aria-hidden /> Wie eine App auf den Startbildschirm legen
+          </summary>
+          <p>
+            <b>iPhone (Safari):</b> auf „Teilen“ tippen (neuere iPhones: erst „…“, dann „Teilen“) → „Zum
+            Home-Bildschirm“ → „Hinzufügen“.
+            <br />
+            <b>Android (Chrome):</b> oben rechts auf ⋮ → „App installieren“ bzw. „Zum Startbildschirm hinzufügen“.
+          </p>
+          <p className="muted small">
+            Das Symbol öffnet direkt den Außendienst — wenn er einmal mit Netz geöffnet war, auch im Funkloch. Am iPhone
+            hat das Symbol einen eigenen Speicher: dort einmal neu anmelden, und vorher hier alles Wartende senden lassen.
+            Danach bleibt die Anmeldung gespeichert. In Safari löscht das iPhone Website-Daten, wenn die Seite 7 Tage
+            (an denen Safari benutzt wird) nicht geöffnet wurde — für das Symbol gilt das nicht.
+          </p>
+        </details>
+      )}
 
       {discard && (
         <Modal title="Einsatz verwerfen?" onClose={() => setDiscard(null)} dirty={false}>

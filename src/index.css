@@ -2043,6 +2043,40 @@ a.due-row:hover {
 .ez-home p:last-child {
   margin-bottom: 8px;
 }
+/* iPhone in Safari: auffällige Empfehlung oben (einmal, „Verstanden“ blendet sie aus) */
+.ez-home-card {
+  margin: 14px 0 6px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in oklab, var(--accent) 55%, transparent);
+  background: var(--accent-soft);
+  font-size: 14.5px;
+}
+.ez-home-card > b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15.5px;
+}
+.ez-home-card > b .i {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--accent-text);
+}
+.ez-home-card p {
+  margin: 8px 0 0;
+}
+.ez-home-card ol {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+.ez-home-card li + li {
+  margin-top: 4px;
+}
+.ez-home-card .btn {
+  margin-top: 10px;
+}
 .ez-done {
   padding-top: 20px;
   text-align: center;

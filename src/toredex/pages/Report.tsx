@@ -5,7 +5,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import {
   fetchDefectsForReport,
   fetchGates,
@@ -78,8 +78,7 @@ export function Report() {
         Prüfbericht kraftbetätigte Tore je Objekt und Zeitraum — mit Rechtsgrundlage
         (BetrSichV / ASR A1.7 / DGUV I 208-022), Checklisten-Ergebnissen,
         Tor-Inventar inkl. Torart/Antrieb/Baujahr, Mängel-Liste im
-        Ampelverfahren, GPS-Stempeln und Foto-Anhang. Im Druckdialog „Als PDF
-        speichern" wählen.
+        Ampelverfahren, GPS-Stempeln und Foto-Anhang. {pdfSaveHint()}
       </p>
 
       <LoadGuard state={sitesState}>

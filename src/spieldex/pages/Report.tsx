@@ -5,7 +5,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import {
   fetchDefectsForReport,
   fetchEquipment,
@@ -77,7 +77,7 @@ export function Report() {
       <p className="muted" style={{ marginTop: -6 }}>
         Spielplatz-Kontrollbuch je Spielplatz und Zeitraum — mit Rechtsgrundlage
         (DIN EN 1176-7), Checklisten-Ergebnissen, Geräte-Inventar, Mängel-Liste,
-        GPS-Stempeln und Foto-Anhang. Im Druckdialog „Als PDF speichern" wählen.
+        GPS-Stempeln und Foto-Anhang. {pdfSaveHint()}
       </p>
 
       <LoadGuard state={pgsState}>

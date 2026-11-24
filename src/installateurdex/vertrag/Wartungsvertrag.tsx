@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Check, FileSignature, Printer } from 'lucide-react';
 import { LoadGuard, useAsync, useUnsavedGuard } from '../../components/ui';
-import { openReportWindow } from '../../lib/print';
+import { openReportWindow, pdfSaveHint } from '../../lib/print';
 import { useInst } from '../context';
 import type { Land } from '../geld/invoice';
 import { cleanChecks } from '../pruefpunkte/logic';
@@ -466,8 +466,7 @@ function VertragForm({
           </label>
         </div>
         <p className="muted small">
-          Die Druckansicht enthält leere Unterschriftsfelder für Kunde und Betrieb. Im Druckfenster „Als PDF speichern“ wählen, um den Vertrag zu
-          verschicken.
+          Die Druckansicht enthält leere Unterschriftsfelder für Kunde und Betrieb. Zum Verschicken als PDF: {pdfSaveHint()}
         </p>
         <div className="row">
           <button type="button" className="btn" onClick={print}>

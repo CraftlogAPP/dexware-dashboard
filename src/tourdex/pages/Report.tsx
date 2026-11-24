@@ -5,7 +5,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { ExcelButton } from '../../components/ExcelButton';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import { downloadXlsx, ExportNotice } from '../../lib/xlsx';
 import { fetchTripsBefore, fetchTripsForExport, fetchTripsForReport, fetchVehicles } from '../api';
 import { checkPeriod, EXPORT_TZ, needsHistory, periodLabel, tripSheets } from '../exportLists';
@@ -120,8 +120,7 @@ export function Report() {
       <h1>Fahrtenbuch-PDF</h1>
       <p className="muted" style={{ marginTop: -6 }}>
         Fahrtenbuch je Fahrzeug und Zeitraum — mit Start/Ziel, Anlass, Kategorie,
-        Kilometern und Zusammenfassung nach Kategorien. Im Druckdialog „Als PDF
-        speichern" wählen.
+        Kilometern und Zusammenfassung nach Kategorien. {pdfSaveHint()}
       </p>
 
       <LoadGuard state={vehiclesState}>

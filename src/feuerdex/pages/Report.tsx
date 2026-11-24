@@ -5,7 +5,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import {
   fetchDefectsForReport,
   fetchExtinguishers,
@@ -78,8 +78,7 @@ export function Report() {
         Prüfbericht Feuerlöscher je Standort und Zeitraum — mit Rechtsgrundlage
         (ASR A2.2 / DIN 14406-4 / BetrSichV), Checklisten-Ergebnissen,
         Feuerlöscher-Inventar inkl. Löschmitteleinheiten, Mängel-Liste im
-        Ampelverfahren, GPS-Stempeln und Foto-Anhang. Im Druckdialog „Als PDF
-        speichern" wählen.
+        Ampelverfahren, GPS-Stempeln und Foto-Anhang. {pdfSaveHint()}
       </p>
 
       <LoadGuard state={sitesState}>

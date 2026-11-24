@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import { fetchCustomers, fetchDevices, fetchInspectionMeta } from '../api';
 import { lastInspectionByDevice } from '../labels';
 import { buildReportHtml, type DeviceRow } from '../report';
@@ -63,8 +63,7 @@ export function Report() {
       <p className="muted" style={{ marginTop: -6 }}>
         Geräteliste mit Prüfstatus je Kunde/Standort — QR-Kennzeichnung,
         Schutzklasse, letzte Prüfung und Fälligkeit auf einen Blick. Die
-        prüffesten Einzelprotokolle je Prüfung erzeugt die App. Im Druckdialog
-        „Als PDF speichern" wählen.
+        prüffesten Einzelprotokolle je Prüfung erzeugt die App. {pdfSaveHint()}
       </p>
 
       <LoadGuard state={custState}>

@@ -5,7 +5,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import {
   fetchDamagesForReport,
   fetchInspectionsForReport,
@@ -77,8 +77,7 @@ export function Report() {
       <p className="muted" style={{ marginTop: -6 }}>
         Prüfbericht Regalinspektion je Lager und Zeitraum — mit Rechtsgrundlage
         (DIN EN 15635 / DGUV Regel 108-007), Checklisten-Ergebnissen, Regal-Inventar,
-        Schadens-Liste im Ampelverfahren, GPS-Stempeln und Foto-Anhang. Im Druckdialog
-        „Als PDF speichern" wählen.
+        Schadens-Liste im Ampelverfahren, GPS-Stempeln und Foto-Anhang. {pdfSaveHint()}
       </p>
 
       <LoadGuard state={whsState}>

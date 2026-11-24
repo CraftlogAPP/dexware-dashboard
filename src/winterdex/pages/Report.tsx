@@ -6,7 +6,7 @@ import { useOrg } from '../../components/OrgContext';
 import { fetchOperationsForReport, fetchProperties } from '../api';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { addMonthsLocalISO, fmtDate, parseLocalDate, todayLocalISO, toInputDate } from '../../lib/format';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import { buildReportHtml } from '../report';
 import { fetchOrgPro, withWatermark } from '../pro';
 import type { Property } from '../types';
@@ -83,8 +83,7 @@ export function Report() {
       <h1>Nachweis-PDF</h1>
       <p className="muted" style={{ marginTop: -6 }}>
         Kontrollbuch je Objekt und Zeitraum — mit Rechtsgrundlage, archivierter
-        Wetterlage, GPS-Stempeln und Foto-Anhang. Im Druckdialog „Als PDF speichern"
-        wählen.
+        Wetterlage, GPS-Stempeln und Foto-Anhang. {pdfSaveHint()}
       </p>
 
       <LoadGuard state={propsState}>

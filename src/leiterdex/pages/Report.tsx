@@ -5,7 +5,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import {
   fetchDefectsForReport,
   fetchInspectionsForReport,
@@ -78,7 +78,7 @@ export function Report() {
         Prüfbericht Leitern & Tritte je Standort und Zeitraum — mit Rechtsgrundlage
         (BetrSichV § 14 / TRBS 2121-2 / DGUV Information 208-016 / DIN EN 131),
         Checklisten-Ergebnissen, Leitern-Inventar, Mängel-Liste im Ampelverfahren,
-        GPS-Stempeln und Foto-Anhang. Im Druckdialog „Als PDF speichern" wählen.
+        GPS-Stempeln und Foto-Anhang. {pdfSaveHint()}
       </p>
 
       <LoadGuard state={sitesState}>

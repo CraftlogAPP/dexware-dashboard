@@ -5,7 +5,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import {
   fetchDefectsForReport,
   fetchItems,
@@ -78,8 +78,7 @@ export function Report() {
         Prüfbericht PSA gegen Absturz je Standort und Zeitraum — mit Rechtsgrundlage
         (BetrSichV / DGUV R 112-198 / DGUV G 312-906 / EN 365), Checklisten-Ergebnissen,
         PSA-Inventar inkl. Herstellungsdatum/Gebrauchsdauer/Ablegereife, Mängel-Liste im
-        Ampelverfahren, GPS-Stempeln und Foto-Anhang. Im Druckdialog „Als PDF
-        speichern" wählen.
+        Ampelverfahren, GPS-Stempeln und Foto-Anhang. {pdfSaveHint()}
       </p>
 
       <LoadGuard state={sitesState}>

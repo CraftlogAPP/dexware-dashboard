@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileDown } from 'lucide-react';
 import { LoadGuard, useAsync } from '../../components/ui';
-import { openReportWindowAfter } from '../../lib/print';
+import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import { useOd } from '../context';
 import { buildReportHtml } from '../report';
 import { addMonths, dayOf, daysBetween, firstOfMonth, formatDay, lastOfMonth, parseGermanDay, todayBerlin } from '../turnus';
@@ -69,7 +69,7 @@ export function Report() {
     <>
       <h1>Nachweis-PDF</h1>
       <p className="muted" style={{ marginTop: -6 }}>
-        Leistungsnachweis je Objekt: Soll/Ist, alle Einsätze mit Person, Standort-Hinweis und Prüfcode, Fotos und Mängel. Im Druckdialog „Als PDF speichern“ wählen.
+        Leistungsnachweis je Objekt: Soll/Ist, alle Einsätze mit Person, Standort-Hinweis und Prüfcode, Fotos und Mängel. {pdfSaveHint()}
       </p>
       <LoadGuard state={propsState}>
         {(props) => (
