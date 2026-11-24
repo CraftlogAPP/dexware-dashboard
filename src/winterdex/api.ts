@@ -13,12 +13,25 @@ const OPERATION_COLS =
 const GPS_PROOF_COLS =
   'gps_at, gps_mocked, end_lat, end_lng, end_accuracy_m, end_gps_at, end_mocked, distance_m, end_distance_m, received_at, entry_hash';
 let gpsProof: boolean | null = null;
+// Kennzeichen „nachgetragen“ vom Server (NACHTRAG-PRUEFUNG-2026-11-21.sql: kein GPS-Beginn und Eingang mehr als 15 Min.
+// nach dem Ende). Nur mitladen, wenn die Datenbank die Spalte schon hat — sonst schlüge jede Abfrage fehl.
+let nachtragCol: boolean | null = null;
 async function opCols(sb: SupabaseClient): Promise<string> {
-  if (gpsProof === null) {
-    const { error } = await sb.from('operation').select('entry_hash').limit(1);
-    gpsProof = !(error && (error.code === '42703' || error.code === 'PGRST204' || /does not exist|could not find/i.test(error.message)));
-  }
-  return gpsProof ? `${OPERATION_COLS}, ${GPS_PROOF_COLS}` : OPERATION_COLS;
+  const [proof, nachtrag] = await Promise.all([
+    gpsProof === null ? columnExists(sb, 'operation', 'entry_hash') : gpsProof,
+    nachtragCol === null ? columnExists(sb, 'operation', 'nachgetragen') : nachtragCol,
+  ]);
+  if (gpsProof === null) gpsProof = proof !== false; // wie bisher: nur „Spalte fehlt“ schaltet ab
+  nachtragCol = nachtrag; // unklar (Netz) → diesmal ohne, beim nächsten Mal erneut fragen
+  return `${gpsProof ? `${OPERATION_COLS}, ${GPS_PROOF_COLS}` : OPERATION_COLS}${nachtrag ? ', nachgetragen' : ''}`;
+}
+
+/** Hat die Datenbank diese Spalte? null = unklar (z. B. kein Netz). */
+export async function columnExists(sb: SupabaseClient, table: string, column: string): Promise<boolean | null> {
+  const { error } = await sb.from(table).select(column).limit(1);
+  if (!error) return true;
+  if (error.code === '42703' || error.code === 'PGRST204' || /does not exist|could not find/i.test(error.message)) return false;
+  return null;
 }
 
 // Verständlich auf Deutsch (z. B. „dafür fehlt dir die Berechtigung“ statt „row-level security policy“)

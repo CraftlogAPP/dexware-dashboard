@@ -5,7 +5,7 @@ import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
 import { fmtDateTime, fmtNum, fmtTime, gpsLabel } from '../../lib/format';
 import { VerifyProof } from '../../components/VerifyProof';
 import { isSafeImgSrc } from '../../lib/imgSrc';
-import { gritLabel } from '../labels';
+import { gritLabel, WEATHER_SOURCE } from '../labels';
 import type { OperationWithPhotos, Property } from '../types';
 
 interface Data {
@@ -82,6 +82,12 @@ export function OperationDetail() {
                 {/* Seit 20.11.2026 End-Stempel nur aus einer höchstens 2 Minuten alten Position — Fehlen ausdrücklich nennen (wie PDF/App) */}
                 {op.end_lat == null && op.gps_at && (
                   <div className="small muted">Ende: kein GPS-Stempel (beim Speichern keine aktuelle Position)</div>
+                )}
+                {op.nachgetragen && (
+                  <div className="small" style={{ color: 'var(--danger, #DC2626)', fontWeight: 700 }}>
+                    Nachgetragen: ohne GPS-Stempel und erst mehr als 15 Minuten nach dem Ende beim Server eingegangen
+                    (Kennzeichen vom Server)
+                  </div>
                 )}
                 {(op.gps_mocked || op.end_mocked) && (
                   <div className="small" style={{ color: 'var(--danger, #DC2626)', fontWeight: 700 }}>
@@ -163,12 +169,12 @@ export function OperationDetail() {
                   <div className="kpi-value">
                     {typeof w.wind_kmh === 'number' ? `${fmtNum(w.wind_kmh)} km/h` : '—'}
                   </div>
-                  <div className="kpi-sub">Quelle: {w.source ?? 'open-meteo'}</div>
                 </div>
               </div>
             ) : (
               <div className="card empty">Kein Wetter-Snapshot vorhanden.</div>
             )}
+            {w && <p className="muted small">{WEATHER_SOURCE}</p>}
 
             {op.notes && (
               <>

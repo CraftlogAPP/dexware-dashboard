@@ -4,7 +4,7 @@
 import { fmtDate, fmtDateTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
 import { isSafeImgSrc } from '../lib/imgSrc';
-import { gritLabel, weatherLabel } from './labels';
+import { gritLabel, WEATHER_SOURCE_HTML, weatherLabel } from './labels';
 import { ACTION_LABELS, LEGAL_BASIS } from './types';
 import { buildSketch, fmtDistance, fmtDuration, fmtPct, fmtTimeSpan, pathLengthM, ROUTE_COLORS, sketchSvg, type Route, type Run, type RunMeta } from './routes';
 
@@ -32,7 +32,8 @@ function legend(plan: boolean, track: boolean, missed: boolean): string {
     .join(' &nbsp; ')}</div>`;
 }
 
-function page(title: string, body: string): string {
+/** weather: Bericht zeigt Wetterdaten → Namensnennung Open-Meteo (CC BY 4.0) in der Fußzeile. */
+function page(title: string, body: string, weather: boolean): string {
   return `<!doctype html>
 <html lang="de">
 <head>
@@ -68,7 +69,7 @@ function page(title: string, body: string): string {
 </head>
 <body>${body}
   <div class="footer">
-    <span>Erstellt mit WinterDex — winterdex.dexware.app</span>
+    <span>Erstellt mit WinterDex — winterdex.dexware.app${weather ? ` · ${WEATHER_SOURCE_HTML}` : ''}</span>
     <span>Erstellt am ${fmtDateTime(new Date().toISOString())}</span>
   </div>
 </body>
@@ -109,6 +110,7 @@ export function buildRunHtml(org: Org, run: Run): string {
     ${missed.length ? `<div class="warn">Nicht befahren: ${missed.length} ${missed.length === 1 ? 'Abschnitt' : 'Abschnitte'}, zusammen ${fmtDistance(run.missed_m ?? 0)} (rot in der Skizze)</div>` : ''}
     ${run.gaps.length ? `<div class="warn">Unterbrechungen der Aufzeichnung (Pause oder kein GPS): ${run.gaps.map(([a, b]) => fmtTimeSpan(a, b)).join(', ')}</div>` : ''}
     ${run.gps_mocked ? '<div class="warn">Achtung: Das Gerät hat Fake-GPS gemeldet (Android).</div>' : ''}
+    ${run.nachgetragen ? '<div class="warn">Nachgemeldet: ohne Fahrtpunkte und erst mehr als 15 Minuten nach dem Ende beim Server eingegangen (Kennzeichen vom Server, nicht änderbar).</div>' : ''}
     ${run.canceled ? `<div class="storno">STORNIERT am ${fmtDateTime(run.canceled_at)}: ${esc(run.cancel_reason ?? '')}</div>` : ''}
   </div>
   <div class="legal">${esc(LEGAL_BASIS[org.land])}</div>
@@ -116,7 +118,7 @@ export function buildRunHtml(org: Org, run: Run): string {
   ${photoNote(run)}
   ${PROOF_NOTE}
   ${run.entry_hash ? `<p class="small"><b>Prüfcode:</b> <span class="mono">${esc(run.entry_hash)}</span><br><b>Server-Eingang:</b> ${fmtDateTime(run.received_at ?? run.created_at)}</p>` : ''}`;
-  return page(`Strecken-Nachweis — ${name}`, body);
+  return page(`Strecken-Nachweis — ${name}`, body, !!run.weather);
 }
 
 /** Fahrtenbuch einer Strecke für einen Zeitraum. */
@@ -131,7 +133,7 @@ export function buildRouteLogHtml(org: Org, route: Route, runs: RunMeta[], perio
         <td>${fmtPct(r.coverage_pct)}${r.missed_m ? `<br><span class="small warn">${fmtDistance(r.missed_m)} nicht befahren</span>` : ''}</td>
         <td>${esc(ACTION_LABELS[r.action])}<br><span class="small">${esc(gritLabel(r.grit_material, r.grit_amount))}</span></td>
         <td class="small">${esc(weatherLabel(r.weather))}</td>
-        <td>${esc(r.performer_name ?? '—')}${r.gaps?.length ? `<br><span class="small warn">${r.gaps.length}× Unterbrechung</span>` : ''}${r.gps_mocked ? '<br><span class="small warn">Fake-GPS gemeldet</span>' : ''}</td>
+        <td>${esc(r.performer_name ?? '—')}${r.gaps?.length ? `<br><span class="small warn">${r.gaps.length}× Unterbrechung</span>` : ''}${r.gps_mocked ? '<br><span class="small warn">Fake-GPS gemeldet</span>' : ''}${r.nachgetragen ? '<br><span class="small warn">nachgemeldet ohne Fahrtpunkte</span>' : ''}</td>
         <td class="mono">${r.entry_hash ? esc(r.entry_hash.slice(0, 12)) : '—'}${r.canceled ? `<br><span class="storno">Storno: ${esc(r.cancel_reason ?? '')}</span>` : ''}</td>
       </tr>`;
     })
@@ -149,6 +151,6 @@ export function buildRouteLogHtml(org: Org, route: Route, runs: RunMeta[], perio
     <tbody>${rows || '<tr><td colspan="7">Keine Fahrten im Zeitraum.</td></tr>'}</tbody>
   </table>
   ${PROOF_NOTE}`;
-  return page(`Fahrtenbuch — ${route.name}`, body);
+  return page(`Fahrtenbuch — ${route.name}`, body, runs.some((r) => !!r.weather));
 }
 

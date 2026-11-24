@@ -11,7 +11,7 @@ import { ActionBadge, LoadGuard, useAsync, useLiveRefresh } from '../../componen
 import { ErsteSchritte } from '../../components/ErsteSchritte';
 import type { ErsteSchritteAdapter } from '../../lib/ersteSchritte';
 import { fmtDateTime } from '../../lib/format';
-import { lastOpByProperty, propertyNameMap, weatherLabel } from '../labels';
+import { lastOpByProperty, propertyNameMap, WEATHER_SOURCE, weatherLabel } from '../labels';
 import type { Operation, Property } from '../types';
 
 interface OverviewData {
@@ -187,6 +187,7 @@ export function Overview() {
                       ))}
                     </tbody>
                   </table>
+                  <p className="table-source muted small">{WEATHER_SOURCE}</p>
                 </div>
               )}
             </>

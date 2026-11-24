@@ -7,7 +7,7 @@ import { ArrowLeft, Camera, Check, CloudOff, MapPin, TriangleAlert, X } from 'lu
 import { useUnsavedGuard } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDateTime, fmtTime } from '../../lib/format';
-import { weatherLabel } from '../labels';
+import { WEATHER_SOURCE, weatherLabel } from '../labels';
 import { ACTION_LABELS, type Property, type WeatherSnapshot } from '../types';
 import {
   ACTIONS,
@@ -431,7 +431,9 @@ function Erfassen({ propertyId }: { propertyId: string }) {
           <p className="ez-warn">⚠ Dieser Browser kann keinen Standort ermitteln — gespeichert wird ohne GPS-Stempel.</p>
         )}
         {weather && weatherLabel(weather) !== '—' && (
-          <p className="muted small">Wetterlage wird archiviert: {weatherLabel(weather)}</p>
+          <p className="muted small">
+            Wetterlage wird archiviert: {weatherLabel(weather)} ({WEATHER_SOURCE})
+          </p>
         )}
       </div>
 

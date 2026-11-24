@@ -18,7 +18,7 @@ import {
   type FormValues,
 } from '../../components/form';
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
-import { gritLabel, propertyNameMap, weatherLabel } from '../labels';
+import { gritLabel, propertyNameMap, WEATHER_SOURCE, weatherLabel } from '../labels';
 import { ACTION_LABELS, type Operation, type OperationAction } from '../types';
 
 export function Operations() {
@@ -211,6 +211,14 @@ export function Operations() {
                       <tr key={op.id}>
                         <td>
                           <Link to={op.id}>{fmtDateTime(op.started_at)}</Link>
+                          {op.nachgetragen && (
+                            <>
+                              {' '}
+                              <span className="badge amber" title="Ohne GPS-Stempel, mehr als 15 Minuten nach dem Ende beim Server eingegangen">
+                                nachgetragen
+                              </span>
+                            </>
+                          )}
                         </td>
                         <td className="wrap">{names.get(op.property_id) ?? '—'}</td>
                         <td>
@@ -236,6 +244,7 @@ export function Operations() {
                   </tbody>
                 </table>
               </div>
+              <p className="muted small">{WEATHER_SOURCE}</p>
             </>
           );
         }}

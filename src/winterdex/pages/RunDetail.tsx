@@ -11,7 +11,7 @@ import { VerifyProof } from '../../components/VerifyProof';
 import { isSafeImgSrc } from '../../lib/imgSrc';
 import { fmtDateTime } from '../../lib/format';
 import { openReportWindow } from '../../lib/print';
-import { gritLabel, weatherLabel } from '../labels';
+import { gritLabel, WEATHER_SOURCE, weatherLabel } from '../labels';
 import { CoverageBadge, RouteSketch } from '../RouteSketch';
 import { buildRunHtml } from '../routeReport';
 import { fetchOrgPro, withWatermark } from '../pro';
@@ -100,8 +100,14 @@ export function RunDetail() {
 
             <RouteSketch plan={run.planned_path} track={run.track} missed={missed} label={`Kartenskizze der Fahrt ${name} vom ${fmtDateTime(run.started_at)}`} />
 
-            {(run.gaps.length > 0 || run.gps_mocked) && (
+            {(run.gaps.length > 0 || run.gps_mocked || run.nachgetragen) && (
               <div className="card" style={{ marginBottom: 16 }}>
+                {run.nachgetragen && (
+                  <div className="gps-warn" style={{ color: '#B91C1C', fontWeight: 700 }}>
+                    Nachgemeldet: ohne Fahrtpunkte und erst mehr als 15 Minuten nach dem Ende beim Server eingegangen
+                    (Kennzeichen vom Server)
+                  </div>
+                )}
                 {run.gaps.length > 0 && (
                   <div className="gps-warn" style={{ color: '#B91C1C', fontWeight: 700 }}>
                     Unterbrechungen der Aufzeichnung (Pause oder kein GPS): {run.gaps.map(([a, b]) => fmtTimeSpan(a, b)).join(', ')}
@@ -121,6 +127,7 @@ export function RunDetail() {
                 <div className="kpi-label">Maßnahme</div>
                 <div>{gritLabel(run.grit_material, run.grit_amount) === '—' ? '' : `Streumittel: ${gritLabel(run.grit_material, run.grit_amount)}`}</div>
                 <div className="muted small">Wetter (archiviert): {weatherLabel(run.weather)}</div>
+                {run.weather && <div className="muted small">{WEATHER_SOURCE}</div>}
               </div>
               <div className="card">
                 <div className="kpi-label">Prüffester Nachweis</div>

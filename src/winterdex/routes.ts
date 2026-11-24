@@ -8,6 +8,7 @@ import { fmtTime } from '../lib/format';
 import { signPhotos } from '../lib/photos';
 import { fetchAllOf, fetchLatestWindow } from '../lib/completeQueries';
 import type { OperationAction, WeatherSnapshot } from './types';
+import { columnExists } from './api';
 
 export type LatLng = [number, number];
 /** Teilstücke: [[[lat, lng, sekunde, genauigkeit], …], …] */
@@ -49,6 +50,8 @@ export interface RunMeta {
   coverage_pct: number | null;
   missed_m: number | null;
   entry_hash: string | null;
+  /** vom Server gesetzt (seit 21.11.2026): keine Fahrtpunkte und Eingang mehr als 15 Min. nach dem Ende */
+  nachgetragen?: boolean | null;
 }
 
 export interface Run extends RunMeta {
@@ -107,9 +110,14 @@ export interface RunFilter {
 /** Standard-Obergrenze der Fahrtenliste (ohne `all`). */
 export const RUNS_LIST_LIMIT = 500;
 
+// Kennzeichen „nachgetragen“ (NACHTRAG-PRUEFUNG-2026-11-21.sql) nur mitladen, wenn die Datenbank die Spalte hat.
+let runNachtragCol: boolean | null = null;
+
 export async function fetchRuns(sb: SupabaseClient, f: RunFilter = {}): Promise<RunMeta[]> {
+  if (runNachtragCol === null) runNachtragCol = await columnExists(sb, 'route_run', 'nachgetragen');
+  const cols = runNachtragCol ? `${RUN_META_COLS}, nachgetragen` : RUN_META_COLS;
   const build = () => {
-    let q = sb.from('route_run').select(RUN_META_COLS);
+    let q = sb.from('route_run').select(cols);
     if (f.routeId) q = q.eq('route_id', f.routeId);
     // Frei = nie mit Vorlage gefahren. Fahrten einer später gelöschten Strecke haben route_id NULL,
     // behalten aber route_name (ON DELETE SET NULL) — die gehören nicht hierher.

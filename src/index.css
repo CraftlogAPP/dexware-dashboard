@@ -762,6 +762,13 @@ button.badge:hover {
   border-radius: var(--radius);
   background: var(--card);
 }
+/* Quellenangabe unter einer Tabelle (z. B. Wetterdaten Open-Meteo) — bleibt beim seitlichen Scrollen stehen */
+.table-wrap .table-source {
+  position: sticky;
+  left: 0;
+  margin: 0;
+  padding: 8px 12px;
+}
 table {
   width: 100%;
   border-collapse: collapse;

@@ -84,6 +84,8 @@ export interface Operation {
   end_distance_m?: number | null;
   received_at?: string | null;
   entry_hash?: string | null;
+  /** vom Server gesetzt (seit 21.11.2026): kein GPS-Beginn und Eingang mehr als 15 Min. nach dem Ende; fehlt in älteren Datenbanken */
+  nachgetragen?: boolean | null;
   action: OperationAction;
   grit_material: string | null;
   grit_amount: string | null;

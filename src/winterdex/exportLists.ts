@@ -13,7 +13,7 @@ import { excelSerial, type XlsxCell, type XlsxSheet, type XlsxValue } from '../l
 import { fmtDateTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
 import { GPS_WEAK_M } from './einsatz/gps';
-import { weatherLabel } from './labels';
+import { WEATHER_SOURCE, weatherLabel } from './labels';
 import type { RunMeta } from './routes';
 import { ACTION_LABELS, type Operation, type OperationAction, type Property } from './types';
 
@@ -55,7 +55,7 @@ function endCell(start: string, end: string | null | undefined): XlsxValue | Xls
 
 function gpsCell(op: Operation): string {
   if (op.gps_mocked || op.end_mocked) return 'Fake-GPS gemeldet';
-  if (op.lat == null || op.lng == null) return 'nein';
+  if (op.lat == null || op.lng == null) return op.nachgetragen ? 'nein (nachgetragen)' : 'nein';
   if (op.gps_accuracy_m != null && op.gps_accuracy_m > GPS_WEAK_M) return `ungenau (±${Math.round(op.gps_accuracy_m)} m)`;
   return 'ja';
 }
@@ -258,6 +258,7 @@ export function operationSheets(input: OperationExportInput): XlsxSheet[] {
       ['', null],
       ['Hinweis', EXPORT_NOTE],
       ['Zeiten', TIME_NOTE],
+      ['Wetter', WEATHER_SOURCE],
     ]),
   );
   return sheets;
@@ -281,6 +282,7 @@ function runFlags(r: RunMeta): string | null {
   const f: string[] = [];
   if (r.gps_mocked) f.push('Fake-GPS gemeldet');
   if (r.gaps?.length) f.push(`${r.gaps.length}× Aufzeichnung unterbrochen`);
+  if (r.nachgetragen) f.push('nachgemeldet ohne Fahrtpunkte');
   return f.length ? f.join(', ') : null;
 }
 
@@ -428,6 +430,7 @@ export function runSheets(input: RunExportInput): XlsxSheet[] {
       ['Hinweis', EXPORT_NOTE],
       ['Zeiten', TIME_NOTE],
       ['Abdeckung', 'Vom Server beim Eingang berechnet, nur bei Fahrten auf einer Strecke mit Vorlage.'],
+      ['Wetter', WEATHER_SOURCE],
     ]),
   );
   return sheets;

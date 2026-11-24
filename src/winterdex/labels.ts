@@ -3,6 +3,12 @@
 import { fmtNum } from '../lib/format';
 import type { WeatherSnapshot } from './types';
 
+/** Namensnennung der Wetterdaten (Lizenz CC BY 4.0) — überall, wo Wetter steht: PDFs, Excel-Listen, Seiten. Wie die App. */
+export const WEATHER_SOURCE = 'Wetterdaten: Open-Meteo.com (CC BY 4.0)';
+/** Dasselbe als HTML mit Links (für die Druck-/PDF-Ansichten). */
+export const WEATHER_SOURCE_HTML =
+  'Wetterdaten: <a href="https://open-meteo.com/">Open-Meteo.com</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>)';
+
 /** Kompakte Wetterzeile, gleiche Logik wie mobile lib/weather.ts */
 export function weatherLabel(w: WeatherSnapshot | null | undefined): string {
   if (!w) return '—';

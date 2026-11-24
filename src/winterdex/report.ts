@@ -4,7 +4,7 @@
 import { fmtDate, fmtDateTime, fmtTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
 import { isSafeImgSrc } from '../lib/imgSrc';
-import { gritLabel, weatherLabel } from './labels';
+import { gritLabel, WEATHER_SOURCE_HTML, weatherLabel } from './labels';
 import {
   ACTION_LABELS,
   LEGAL_BASIS,
@@ -54,6 +54,11 @@ const PROOF_NOTE = `<p class="small" style="border:1.5px solid #AFC1D2;border-ra
   Hinweise in Rot: Ortung ungenauer als ±${GPS_WEAK_M} m, mehr als 100 m vom Objekt entfernt oder Fake-GPS gemeldet.
   Einträge ohne Prüfcode wurden vor Einführung des Prüfcodes erfasst.</p>`;
 
+// Kennzeichen „nachgetragen“ setzt der Server beim Eingang (NACHTRAG-PRUEFUNG-2026-11-21.sql), nicht änderbar
+const NACHTRAG_NOTE = `<p class="small" style="page-break-inside:avoid"><b style="color:#B91C1C">* Nachgetragen:</b> Der Einsatz hat
+  keinen GPS-Stempel und ist erst mehr als 15 Minuten nach seinem Ende beim Server eingegangen — im Dashboard nachgetragen
+  oder ohne Ortung erfasst und später übertragen. Das Kennzeichen setzt der Server beim Eingang; es ist nicht änderbar.</p>`;
+
 /** Foto-Spalte: nennt die WIRKLICHE Zahl. Fehlen im Bericht welche (nicht ladbar, unsichere Quelle), steht das da —
  *  sonst sähe es aus, als hätte der Einsatz keine Fotos. Gleicher Wortlaut wie die App (pdf/report.ts fotoZelle). */
 function fotoZelle(op: OperationWithPhotos): string {
@@ -82,9 +87,10 @@ export function buildReportHtml(
       const time = `${fmtDate(op.started_at)}<br>${fmtTime(op.started_at)}${
         op.ended_at ? ` – ${fmtTime(op.ended_at)}` : ''
       }`;
-      const proof = op.entry_hash
-        ? `<br><span class="small">Server-Eingang ${fmtDateTime(op.received_at ?? op.created_at)}</span><br><span class="small mono">Prüfcode ${esc(op.entry_hash.slice(0, 12))}</span>`
-        : '';
+      const proof =
+        (op.entry_hash
+          ? `<br><span class="small">Server-Eingang ${fmtDateTime(op.received_at ?? op.created_at)}</span><br><span class="small mono">Prüfcode ${esc(op.entry_hash.slice(0, 12))}</span>`
+          : '') + (op.nachgetragen ? '<div style="color:#B91C1C;font-weight:700">Nachgetragen*</div>' : '');
       return `<tr class="${op.canceled ? 'canceled' : ''}">
         <td>${time}${proof}</td>
         <td>${action}${op.notes?.trim() ? `<div style="font-size:10px">Notiz: ${esc(op.notes.trim())}</div>` : ''}</td>
@@ -166,9 +172,10 @@ export function buildReportHtml(
 
   ${photoBlocks ? `<h2>Foto-Anhang</h2>${photoBlocks}` : ''}
   ${hasProof ? PROOF_NOTE : ''}
+  ${ops.some((o) => o.nachgetragen) ? NACHTRAG_NOTE : ''}
 
   <div class="footer">
-    <span>Erstellt mit WinterDex — winterdex.dexware.app</span>
+    <span>Erstellt mit WinterDex — winterdex.dexware.app${ops.some((o) => o.weather) ? ` · ${WEATHER_SOURCE_HTML}` : ''}</span>
     <span>Erstellt am ${fmtDateTime(new Date().toISOString())}</span>
   </div>
 </body>
