@@ -3,7 +3,8 @@
 //
 // Ablauf: 1. bei WinterDex anmelden (gewohnte Anmeldung; eigene Sitzung dexware-dash-winterdex im selben Browser) →
 //         2. ohne ObjektDex-Betrieb: Betrieb aus den WinterDex-Angaben vorbelegen, Nutzer bestätigt (create_org_with_owner) →
-//         3. Objekte und Strecken anhaken → anlegen (Gratis-Grenze wie die App) → 4. Team-Code teilen.
+//         3. Objekte und Strecken anhaken → anlegen (Gratis-Grenze wie die App) → 4. optional Leistungen für die neuen
+//         Objekte (Leistungen.tsx) → 5. Team-Code teilen.
 // Lesen nur über RLS mit der WinterDex-Sitzung, Schreiben nur über RLS mit der ObjektDex-Sitzung — kein Server-Schlüssel,
 // kein neuer Server. Logik (Mapping, Dubletten, Umschlüsseln, Grenze): ../uebernahme.ts.
 import { useMemo, useState, type ReactNode } from 'react';
@@ -20,6 +21,7 @@ import { fetchOrgContext, readableDbError, roleLabel } from '../../lib/orgApi';
 import { insertInChunks, type ImportProgress, type InsertFailure } from '../../lib/tableImport';
 import { useOd } from '../context';
 import { CopyButton } from '../parts';
+import { LeistungenSammel } from './Leistungen';
 import type { OdProperty } from '../types';
 import {
   betriebVorbelegung,
@@ -310,6 +312,14 @@ function Uebernahme({ quelle, onAbmelden }: { quelle: WdQuelle; onAbmelden: (() 
             )}
           </LoadGuard>
           {ergebnis && <ErgebnisBox e={ergebnis} base={base} />}
+          {ergebnis && ergebnis.neueObjekte.length > 0 && (
+            <section style={{ marginTop: 24 }}>
+              <div className="section-head">
+                <h2>Weiter: Leistungen für die übernommenen Objekte</h2>
+              </div>
+              <LeistungenSammel key={ergebnis.neueObjekte.join()} vorauswahl={ergebnis.neueObjekte} />
+            </section>
+          )}
           {ergebnis && ergebnis.objekte + ergebnis.strecken > 0 && <TeamKarte pro={ergebnis.pro} />}
         </>
       )}

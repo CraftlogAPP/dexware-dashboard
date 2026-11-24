@@ -30,6 +30,7 @@ const DemoArea = import.meta.env.DEV ? lazy(() => import('./DemoArea').then((m) 
 // Übernahme aus WinterDex erst beim Öffnen laden (bringt die WinterDex-Anmeldung und den Abgleich mit)
 const AusWinterdex = lazy(() => import('./pages/AusWinterdex').then((m) => ({ default: m.AusWinterdex })));
 const AusWinterdexOhneBetrieb = lazy(() => import('./pages/AusWinterdex').then((m) => ({ default: m.AusWinterdexOhneBetrieb })));
+const LeistungenSeite = lazy(() => import('./pages/Leistungen').then((m) => ({ default: m.LeistungenSeite })));
 
 const spinner = (
   <div className="empty">
@@ -128,6 +129,7 @@ export function OdRoutes() {
       <Route element={<Shell />}>
         <Route index element={<Overview />} />
         <Route path="objekte" element={<Properties />} />
+        <Route path="objekte/leistungen" element={<Lazy><LeistungenSeite /></Lazy>} />
         <Route path="objekte/:id" element={<PropertyDetail />} />
         <Route path="einsaetze" element={<Operations />} />
         <Route path="maengel" element={<Defects />} />

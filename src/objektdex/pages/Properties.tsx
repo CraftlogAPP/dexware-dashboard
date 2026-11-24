@@ -23,9 +23,14 @@ export function Properties() {
         <h1 style={{ margin: 0 }}>Objekte</h1>
         <div className="spacer" />
         {role === 'owner' && (
-          <button className="btn" onClick={() => setAdding(true)}>
-            ＋ Objekt anlegen
-          </button>
+          <div className="row" style={{ gap: 8 }}>
+            <Link className="btn ghost" to={`${base}/objekte/leistungen`}>
+              Leistungen für mehrere Objekte
+            </Link>
+            <button className="btn" onClick={() => setAdding(true)}>
+              ＋ Objekt anlegen
+            </button>
+          </div>
         )}
       </div>
       <p className="muted" style={{ marginTop: -6 }}>

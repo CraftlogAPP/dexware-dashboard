@@ -284,6 +284,62 @@ if (!existsSync(pglitePfad)) {
   pg.mit = mit;
 }
 
+// ============================================================================ Leistungen für mehrere Objekte
+teil('Leistungen für mehrere Objekte');
+const { SERVICE_TEMPLATES } = await web('src/objektdex/types.ts');
+const vl = (key, extra = {}) => {
+  const t = SERVICE_TEMPLATES.find((x) => x.key === key);
+  return { key, name: t.name, cadence: t.cadence, weekdays: [...t.weekdays], monthDay: t.monthDay ?? null, ...extra };
+};
+check('Vorlage ohne Wochentag (wöchentlich) → Fehler wie service_cadence_ok', !!U.vorlageFehler(vl('stairs', { weekdays: [] })) && !!U.vorlageFehler(vl('mow', { weekdays: [9] })));
+check('monatlich ohne Tag → Fehler; mit Tag 1–31 in Ordnung', !!U.vorlageFehler(vl('lights', { monthDay: null })) && !!U.vorlageFehler(vl('lights', { monthDay: 32 })) && U.vorlageFehler(vl('meters')) === null);
+check('leerer bzw. zu langer Name → Fehler', !!U.vorlageFehler(vl('special', { name: '  ' })) && !!U.vorlageFehler(vl('special', { name: 'x'.repeat(81) })));
+check('Vorlagen der App: täglich/nach Bedarf ohne Tage in Ordnung', SERVICE_TEMPLATES.every((t) => U.vorlageFehler(vl(t.key)) === null));
+const vorh = [
+  { property_id: 'p1', name: 'Kehren Zufahrt', template_key: 'sweep', active: true },
+  { property_id: 'p1', name: 'Rasen mähen', template_key: null, active: true },
+  { property_id: 'p2', name: 'Kehren', template_key: 'sweep', active: false }, // beendet
+  { property_id: 'p2', name: 'Sonderreinigung', template_key: 'special', active: true },
+];
+n = 0;
+const pl = U.planLeistungen({ objektIds: ['p1', 'p2', 'p3'], vorlagen: [vl('sweep'), vl('mow'), vl('special'), vl('stairs', { weekdays: [4, 1, 1] })], vorhandene: vorh, startOn: '2027-03-01', neueId });
+const paare = pl.zeilen.map((z) => `${z.property_id}:${z.template_key}`);
+check('gleiche Vorlage läuft schon → übersprungen (p1 Kehren)', !paare.includes('p1:sweep'));
+check('gleicher Name ohne Vorlage → übersprungen (p1 Rasen mähen)', !paare.includes('p1:mow'));
+check('beendete Leistung zählt nicht → p2 bekommt Kehren', paare.includes('p2:sweep'));
+check('Sonderreinigung darf mehrfach — aber nicht mit gleichem Namen', paare.includes('p1:special') && !paare.includes('p2:special'));
+check('Anzahl: 3 Objekte × 4 Vorlagen − 3 Doppelte', pl.zeilen.length === 9 && pl.doppelt === 3, { n: pl.zeilen.length, doppelt: pl.doppelt });
+const st = pl.zeilen.find((z) => z.template_key === 'stairs');
+check('Wochentage sortiert ohne Doppelte, Start, Turnus-Spalten wie die App (serviceToRow)', gleich(st.weekdays, [1, 4]) && st.start_on === '2027-03-01' && st.month_day === null && st.sort === 0 && st.notes === null);
+const ms = U.planLeistungen({ objektIds: ['p9'], vorlagen: [vl('meters'), vl('hedge', { weekdays: [3] })], vorhandene: [], startOn: '2027-03-01', neueId }).zeilen;
+check('monatlich: month_day gesetzt, keine Wochentage; nach Bedarf: keine Tage', ms[0].month_day === 31 && gleich(ms[0].weekdays, []) && ms[1].cadence === 'on_demand' && gleich(ms[1].weekdays, []) && ms[1].month_day === null);
+check('Zeile hat genau die Spalten für ObjektDex.service (ohne org_id)', gleich(Object.keys(st).sort(), ['cadence', 'id', 'month_day', 'name', 'notes', 'property_id', 'sort', 'start_on', 'template_key', 'weekdays']));
+if (existsSync(path.join(OD, 'mobile/src/types.ts'))) {
+  const appTypes = liesRepo(OD, 'mobile/src/types.ts');
+  const keys = [...appTypes.matchAll(/\{ key: '([a-z]+)', name: '([^']+)',[^}]*?cadence: '([a-z_]+)', weekdays: \[([\d, ]*)\](?:, monthDay: (\d+))? \}/g)].map(
+    (m) => `${m[1]}|${m[2]}|${m[3]}|${m[4].replace(/ /g, '')}|${m[5] ?? ''}`,
+  );
+  const unsere = SERVICE_TEMPLATES.map((t) => `${t.key}|${t.name}|${t.cadence}|${t.weekdays.join(',')}|${t.monthDay ?? ''}`);
+  check('Vorlagen = SERVICE_TEMPLATES der App (Schlüssel, Name, Turnus, Tage)', keys.length === 12 && gleich(keys, unsere), { app: keys, dashboard: unsere });
+}
+if (pg) {
+  const props = (await pg.als(pg.chef, `select id, name from public.property where active order by name`)).rows;
+  const svcVorher = (await pg.als(pg.chef, `select property_id, name, template_key, active from public.service`)).rows;
+  const ids = props.map((p) => p.id);
+  const plan1 = U.planLeistungen({ objektIds: ids, vorlagen: [vl('sweep'), vl('lights'), vl('mow', { weekdays: [3] })], vorhandene: svcVorher, startOn: '2027-03-01', neueId: () => crypto.randomUUID() });
+  const insS = await pg.einfuegen(pg.chef, 'service', plan1.zeilen, pg.orgId);
+  check('Leistungen eingefügt (Turnus-Prüfungen des Servers bestanden)', !insS.err && plan1.zeilen.length === ids.length * 3, insS.err);
+  const svc = (await pg.als(pg.chef, `select property_id, name, template_key, active from public.service`)).rows;
+  const plan2 = U.planLeistungen({ objektIds: ids, vorlagen: [vl('sweep'), vl('bins')], vorhandene: svc, startOn: '2027-03-01', neueId: () => crypto.randomUUID() });
+  check('zweiter Durchgang: laufende Leistungen übersprungen, nur neue Vorlage', plan2.doppelt === ids.length && plan2.zeilen.length === ids.length && plan2.zeilen.every((z) => z.template_key === 'bins'));
+  const ueb = (await pg.als(pg.chef, `select count(*)::int as n from public.today_overview('2027-03-03')`)).rows?.[0]?.n;
+  check('Heute-Übersicht kennt die Objekte mit Leistungen', ueb === ids.length, ueb);
+  const wS = await pg.einfuegen(pg.mit, 'service', [{ ...plan2.zeilen[0], id: crypto.randomUUID() }], pg.orgId);
+  check('Mitarbeiter darf keine Leistungen anlegen (RLS)', !!wS.err, wS);
+  const falsch = await pg.einfuegen(pg.chef, 'service', [{ ...plan2.zeilen[0], id: crypto.randomUUID(), cadence: 'weekly', weekdays: [] }], pg.orgId);
+  check('Gegenprobe: wöchentlich ohne Tag lehnt der Server ab (darum vorlageFehler)', !!falsch.err, falsch);
+}
+
 // ============================================================================ Ergebnis
 console.log(`\n${ok} ok, ${fail} Fehler`);
 process.exit(fail ? 1 : 0);
