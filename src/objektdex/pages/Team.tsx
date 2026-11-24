@@ -16,8 +16,10 @@ export function Team() {
   const owner = role === 'owner';
   const manages = owner || role === 'admin';
   const state = useAsync(async () => {
-    const [members, code] = await Promise.all([data.listMembers(), manages ? data.teamCode(false).catch(() => null) : Promise.resolve(null)]);
-    return { members, code };
+    // Einladen ist Pro (wie die App: TeamScreen zeigt den Code nur mit Pro); unklare Auskunft sperrt nicht
+    const pro = manages ? await data.proStatus() : null;
+    const [members, code] = await Promise.all([data.listMembers(), manages && pro !== false ? data.teamCode(false).catch(() => null) : Promise.resolve(null)]);
+    return { members, code, ohnePro: manages && pro === false };
   }, [data, manages]);
   const [busy, setBusy] = useState(false);
 
@@ -59,10 +61,16 @@ export function Team() {
         einen Platz).
       </p>
       <LoadGuard state={state}>
-        {({ members, code }) => {
+        {({ members, code, ohnePro }) => {
           const codeActive = !!code && new Date(code.expires_at).getTime() > Date.now();
           return (
             <>
+              {ohnePro && (
+                <div className="info-box">
+                  Mitarbeiter einladen gehört zu ObjektDex Pro — Pro schließt du in der ObjektDex-App unter „Abo“ ab (mit einem
+                  Dexware-Suite-Abo ist es schon dabei).
+                </div>
+              )}
               {manages && code && (
                 <div className="card od-code">
                   <div>

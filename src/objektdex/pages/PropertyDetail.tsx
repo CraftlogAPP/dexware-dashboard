@@ -21,6 +21,8 @@ import {
   type Cadence,
 } from '../turnus';
 import { SERVICE_TEMPLATES, type OdProperty, type OdService } from '../types';
+import type { OdData } from '../data';
+import { objektGrenzeText } from '../grenze';
 
 export function PropertyDetail() {
   const { id = '' } = useParams();
@@ -101,7 +103,10 @@ export function PropertyDetail() {
                     disabled={busy}
                     onClick={() =>
                       void toggle(
-                        () => data.setPropertyActive(p.id, !p.active),
+                        async () => {
+                          if (!p.active) await grenzePruefen(data);
+                          await data.setPropertyActive(p.id, !p.active);
+                        },
                         p.active ? 'Objekt pausieren? Es erscheint dann nicht mehr unter „Heute“. Nachweise bleiben erhalten.' : 'Objekt wieder aktivieren?',
                       )
                     }
@@ -276,10 +281,18 @@ function Fact({ k, v }: { k: string; v: string | null }) {
   );
 }
 
+/** Gratis-Grenze vor einem weiteren aktiven Objekt (neu anlegen oder wieder aktivieren) — wie propertyGate der App */
+async function grenzePruefen(data: OdData): Promise<void> {
+  const [props, pro] = await Promise.all([data.listProperties(), data.proStatus()]);
+  const text = objektGrenzeText(pro, props.filter((p) => p.active).length);
+  if (text) throw new Error(text);
+}
+
 /** Objekt anlegen/bearbeiten (Inhaber) */
 export function PropertyDialog({ property, onClose, onSaved }: { property?: OdProperty; onClose: () => void; onSaved: () => void }) {
   const { data } = useOd();
   async function onSave(v: FormValues) {
+    if (!property) await grenzePruefen(data);
     await data.saveProperty({
       id: property?.id,
       name: s(v.name),

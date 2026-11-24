@@ -457,6 +457,18 @@ check('ObjektDex-Bereich bleibt unlisted', /id: 'objektdex',[\s\S]{0,500}?unlist
 const ndw = liesWeb('src/winterdex/pages/NachDemWinter.tsx');
 check('Seite ohne Play-Link und ohne „rechtssicher/lückenlos“, Übernahme nur für Inhaber', !/play\.google|market:\/\//.test(ndw) && !/rechtssicher|lückenlos/i.test(ndw) && /id === 'objektdex' && inhaber/.test(ndw));
 
+// ============================================================================ Gratis-Grenze von Hand
+teil('Gratis-Grenze von Hand (Formular, Wieder aktivieren, Team-Code)');
+const GR = await web('src/objektdex/grenze.ts');
+check('ohne Pro bei 2 aktiven: gesperrt mit Erklärung; bei 1 aktivem frei', /2 aktive Objekte möglich/.test(GR.objektGrenzeText(false, 2) ?? '') && GR.objektGrenzeText(false, 1) === null);
+check('Pro oder unklare Auskunft: ein einzelnes Objekt wird nie gesperrt', GR.objektGrenzeText(true, 9) === null && GR.objektGrenzeText(null, 9) === null);
+check('Übernahme nutzt dieselben Werte (Re-Export)', U.GRATIS_OBJEKTE === GR.GRATIS_OBJEKTE && U.gratisRahmen === GR.gratisRahmen);
+const pd = liesWeb('src/objektdex/pages/PropertyDetail.tsx');
+check('„Objekt anlegen“ und „Wieder aktivieren“ prüfen die Grenze', pd.includes('if (!property) await grenzePruefen(data);') && pd.includes('if (!p.active) await grenzePruefen(data);'));
+if (existsSync(path.join(OD, 'mobile/src/screens/TeamScreen.tsx'))) {
+  check('App zeigt den Team-Code nur mit Pro — Dashboard ebenso', /if \(await isPro\(\)\) setTeamCode/.test(liesRepo(OD, 'mobile/src/screens/TeamScreen.tsx')) && /manages && pro !== false \? data\.teamCode\(false\)/.test(liesWeb('src/objektdex/pages/Team.tsx')));
+}
+
 // ============================================================================ Ergebnis
 console.log(`\n${ok} ok, ${fail} Fehler`);
 process.exit(fail ? 1 : 0);

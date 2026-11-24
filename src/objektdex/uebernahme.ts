@@ -18,10 +18,10 @@ import { cmpKey } from '../lib/tableImport';
 import { OBJEKTDEX_PLAY_LINK } from '../lib/ganzjahr';
 import { sameAddress } from '../winterdex/importObjects';
 import type { Cadence, Day } from './turnus';
+import { gratisRahmen } from './grenze';
 
-/** Wie FREE_LIMITS in der App (ObjektDex/mobile/src/lib/entitlement.ts) */
-export const GRATIS_OBJEKTE = 2;
-export const GRATIS_STRECKEN = 0;
+// Gratis-Grenze wie die App — eigenes kleines Modul (auch für Formular und „Wieder aktivieren“)
+export { GRATIS_OBJEKTE, GRATIS_STRECKEN, gratisRahmen, objektGrenzeText } from './grenze';
 
 // ---------------------------------------------------------------------------- Eingangsdaten
 
@@ -240,14 +240,6 @@ export function standardAuswahl(plan: UebPlan, streckenErlaubt: boolean): { obje
     objekte: new Set(plan.objekte.filter((z) => z.status === 'neu').map((z) => z.w.id)),
     strecken: new Set(streckenErlaubt ? plan.strecken.filter((z) => z.status === 'neu').map((z) => z.w.id) : []),
   };
-}
-
-// ---------------------------------------------------------------------------- Gratis-Grenze
-
-/** Wie viele dürfen neu dazu? null = unbegrenzt (Pro). Unklare Pro-Auskunft (null) zählt wie Gratis. */
-export function gratisRahmen(pro: boolean | null, aktiveObjekte: number): { objekte: number | null; strecken: number | null } {
-  if (pro === true) return { objekte: null, strecken: null };
-  return { objekte: Math.max(0, GRATIS_OBJEKTE - aktiveObjekte), strecken: GRATIS_STRECKEN };
 }
 
 // ---------------------------------------------------------------------------- Auftrag (beim Klick, gegen frische Daten)
