@@ -46,7 +46,7 @@ function gpsProofCell(op: OperationWithPhotos): string {
         ? '<div><b>Ende:</b> kein GPS-Stempel (beim Speichern keine aktuelle Position)</div>'
         : '');
 }
-const PROOF_NOTE = `<p class="small" style="border:1.5px solid #AFC1D2;border-radius:8px;padding:8px 12px;page-break-inside:avoid">
+export const PROOF_NOTE = `<p class="small" style="border:1.5px solid #AFC1D2;border-radius:8px;padding:8px 12px;page-break-inside:avoid">
   <b>Prüffester GPS-Nachweis.</b> Jeder Einsatz trägt einen GPS-Stempel zu Beginn und — wenn beim Speichern eine höchstens 2 Minuten
   alte Position vorlag — einen zweiten beim Speichern, jeweils mit Uhrzeit der Ortung und Genauigkeit; fehlt ein Stempel, steht das beim Einsatz.
   Abstand zum hinterlegten Objekt-Standort und Server-Eingang berechnet der Server selbst — unabhängig von Handy-Uhr und App.
@@ -55,27 +55,27 @@ const PROOF_NOTE = `<p class="small" style="border:1.5px solid #AFC1D2;border-ra
   Einträge ohne Prüfcode wurden vor Einführung des Prüfcodes erfasst.</p>`;
 
 // Kennzeichen „nachgetragen“ setzt der Server beim Eingang (NACHTRAG-PRUEFUNG-2026-11-21.sql), nicht änderbar
-const NACHTRAG_NOTE = `<p class="small" style="page-break-inside:avoid"><b style="color:#B91C1C">* Nachgetragen:</b> Der Einsatz hat
+export const NACHTRAG_NOTE = `<p class="small" style="page-break-inside:avoid"><b style="color:#B91C1C">* Nachgetragen:</b> Der Einsatz hat
   keinen GPS-Stempel und ist erst mehr als 15 Minuten nach seinem Ende beim Server eingegangen — im Dashboard nachgetragen
   oder ohne Ortung erfasst und später übertragen. Das Kennzeichen setzt der Server beim Eingang; es ist nicht änderbar.</p>`;
 
 /** Foto-Spalte: nennt die WIRKLICHE Zahl. Fehlen im Bericht welche (nicht ladbar, unsichere Quelle), steht das da —
  *  sonst sähe es aus, als hätte der Einsatz keine Fotos. Gleicher Wortlaut wie die App (pdf/report.ts fotoZelle). */
-function fotoZelle(op: OperationWithPhotos): string {
+function fotoZelle(op: OperationWithPhotos, ohneAnhang = false): string {
   const drin = op.photo_urls.filter(isSafeImgSrc).length;
   const gesamt = Math.max(drin, op.photo_total ?? 0);
   if (gesamt === 0) return '—';
-  if (drin === gesamt) return `${gesamt} Foto${gesamt === 1 ? '' : 's'}`;
+  // Bericht bewusst ohne Foto-Anhang (z. B. Ganzjahres-Nachweis „ohne Fotos“): nur die Zahl, kein Warnhinweis
+  if (drin === gesamt || ohneAnhang) return `${gesamt} Foto${gesamt === 1 ? '' : 's'}`;
   return `${gesamt} Foto${gesamt === 1 ? '' : 's'}<div style="font-size:10px;color:#B91C1C;font-weight:700">${drin === 0 ? 'in diesem Bericht nicht enthalten' : `davon ${drin} in diesem Bericht`} — weiterhin beim Einsatz gespeichert</div>`;
 }
 
-export function buildReportHtml(
-  org: Org,
-  property: Property,
-  ops: OperationWithPhotos[],
-  periodLabel: string,
-): string {
-  const hasProof = ops.some((o) => !!o.entry_hash);
+/**
+ * Einsatz-Tabelle des Nachweises (Datum/Uhrzeit mit Server-Eingang + Prüfcode, Maßnahme, Streumittel, Wetterlage,
+ * GPS-Stempel, Person, Fotos) — auch für den Ganzjahres-Nachweis im ObjektDex-Bereich. Klassen: canceled, small, mono.
+ * `ohneFotoAnhang`: Fotos werden nur gezählt, nicht angehängt.
+ */
+export function einsatzTabelle(ops: OperationWithPhotos[], ohneFotoAnhang = false): string {
   const rows = ops
     .map((op) => {
       const action = op.canceled
@@ -98,12 +98,29 @@ export function buildReportHtml(
         <td>${esc(weatherLabel(op.weather))}</td>
         <td class="small">${gpsProofCell(op)}</td>
         <td>${esc(op.performer_name ?? '—')}</td>
-        <td>${fotoZelle(op)}</td>
+        <td>${fotoZelle(op, ohneFotoAnhang)}</td>
       </tr>`;
     })
     .join('');
+  return `<table>
+    <thead>
+      <tr>
+        <th>Datum / Uhrzeit</th>
+        <th>Maßnahme</th>
+        <th>Streumittel</th>
+        <th>Wetterlage (archiviert)</th>
+        <th>GPS-Stempel</th>
+        <th>Dokumentiert von</th>
+        <th>Fotos</th>
+      </tr>
+    </thead>
+    <tbody>${rows || '<tr><td colspan="7">Keine Einsätze im Zeitraum.</td></tr>'}</tbody>
+  </table>`;
+}
 
-  const photoBlocks = ops
+/** Foto-Anhang (leer, wenn kein Einsatz ein anzeigbares Foto hat). Klassen: photo-group, photos. */
+export function fotoAnhang(ops: OperationWithPhotos[]): string {
+  return ops
     .filter((op) => op.photo_urls.some(isSafeImgSrc))
     .map(
       (op) => `<div class="photo-group">
@@ -116,6 +133,16 @@ export function buildReportHtml(
       </div>`,
     )
     .join('');
+}
+
+export function buildReportHtml(
+  org: Org,
+  property: Property,
+  ops: OperationWithPhotos[],
+  periodLabel: string,
+): string {
+  const hasProof = ops.some((o) => !!o.entry_hash);
+  const photoBlocks = fotoAnhang(ops);
 
   return `<!doctype html>
 <html lang="de">
@@ -155,20 +182,7 @@ export function buildReportHtml(
   }</div>
   <div class="legal">${esc(LEGAL_BASIS[org.land])}</div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Datum / Uhrzeit</th>
-        <th>Maßnahme</th>
-        <th>Streumittel</th>
-        <th>Wetterlage (archiviert)</th>
-        <th>GPS-Stempel</th>
-        <th>Dokumentiert von</th>
-        <th>Fotos</th>
-      </tr>
-    </thead>
-    <tbody>${rows || '<tr><td colspan="7">Keine Einsätze im Zeitraum.</td></tr>'}</tbody>
-  </table>
+  ${einsatzTabelle(ops)}
 
   ${photoBlocks ? `<h2>Foto-Anhang</h2>${photoBlocks}` : ''}
   ${hasProof ? PROOF_NOTE : ''}

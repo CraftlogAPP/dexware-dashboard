@@ -41,11 +41,13 @@ export function Report() {
     try {
       // Fenster sofort öffnen (im Klick), Daten danach laden — sonst blockt der Browser das Pop-up (iPhone, viele Fotos)
       const opened = await openReportWindowAfter(async () => {
-        const [ops, sollIst, services, defects] = await Promise.all([
+        const [ops, sollIst, services, defects, pro] = await Promise.all([
           data.listOperations({ from: per.from, to: per.to, propertyId }),
           data.sollIst(propertyId, per.from, per.to),
           data.listServices(),
           data.listDefects(),
+          // ohne Pro trägt das PDF den Gratis-Hinweis wie in der App
+          data.proStatus(),
         ]);
         const ds = defects.filter(
           (d) => d.property_id === propertyId && (d.status === 'open' || (dayOf(d.created_at) >= per.from && dayOf(d.created_at) <= per.to)),
@@ -54,7 +56,7 @@ export function Report() {
           data.photos('operation', ops.filter((o) => o.photo_count > 0 && !o.canceled).map((o) => o.id)),
           data.photos('defect', ds.filter((d) => d.photo_count > 0).map((d) => d.id)),
         ]);
-        const html = buildReportHtml({ orgName, property, periodLabel: per.label, sollIst, services, ops, defects: ds, opPhotos, defectPhotos });
+        const html = buildReportHtml({ orgName, property, periodLabel: per.label, sollIst, services, ops, defects: ds, opPhotos, defectPhotos, pro });
         return html;
       });
       if (!opened) setError('Der Browser hat das Berichtsfenster blockiert. Bitte Pop-ups für diese Seite erlauben und erneut versuchen.');

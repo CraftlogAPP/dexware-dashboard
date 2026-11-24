@@ -1,6 +1,8 @@
 // Nachweis-PDF je Objekt und Zeitraum — Aufbau wie in der App (ObjektDex/mobile/src/pdf/report.ts):
 // Kopf, Soll/Ist je Leistung, Einsätze mit Person/GPS/Prüfcode, Fotos, Mängel, Erklärung des Prüfcodes.
 // Ausgabe über openReportWindow (Browser-Druckdialog → „Als PDF speichern“). Ehrlich: „Leistungsnachweis“.
+// Ohne Pro wie die App: Hinweis „Erstellt mit ObjektDex – Gratis-Version“ (GRATIS_HINWEIS). Die Tabellen-Bausteine nutzt
+// auch der Ganzjahres-Nachweis (jahresnachweisPdf.ts).
 import { isSafeImgSrc } from '../lib/imgSrc';
 import { fmtDateTimeB, fmtTimeB } from './parts';
 import { cadenceText, dayOf, formatDay, isoDow, WEEKDAY_SHORT } from './turnus';
@@ -23,7 +25,17 @@ export interface ReportInput {
   defects: OdDefect[];
   opPhotos: Map<string, string[]>;
   defectPhotos: Map<string, string[]>;
+  /** Pro laut Server: false = Gratis-Hinweis wie die App; null (unklar) zählt wie Pro — nie einen zahlenden Betrieb kennzeichnen */
+  pro?: boolean | null;
 }
+
+/** Wie die App ohne Pro (ObjektDex/mobile/src/pdf/report.ts) */
+export const GRATIS_HINWEIS = 'Erstellt mit ObjektDex – Gratis-Version · objektdex.dexware.app';
+
+/** Erklärung des Prüfcodes (ohne Fußzeile) */
+export const PRUEFCODE_HINWEIS = `<b>Zum Prüfcode:</b> Jeder Einsatz wird beim Eingang auf dem Server versiegelt — mit Serverzeit, Abstand zum Objekt und einem
+Prüfcode (SHA-256 über die Nachweisfelder). Einsätze lassen sich danach nicht mehr ändern; Korrekturen sind nur als Storno mit Begründung möglich
+und bleiben sichtbar. Ein Tag zählt im Soll/Ist einmal, auch bei mehreren Einsätzen.`;
 
 function sollIstCell(r: OdSollIstRow): string {
   if (r.soll == null) return `${r.ist}× (nach Bedarf)`;
@@ -32,16 +44,22 @@ function sollIstCell(r: OdSollIstRow): string {
   return `<b style="color:${color}">${r.ist} von ${r.soll}</b>`;
 }
 
-export function buildReportHtml(x: ReportInput): string {
-  const p = x.property;
-  const valid = x.ops.filter((o) => !o.canceled);
-  const siRows = x.sollIst
+/** Soll/Ist je Leistung als Tabelle (oder „Keine Leistungen im Zeitraum.“) */
+export function sollIstTabelle(sollIst: OdSollIstRow[], services: OdService[]): string {
+  const siRows = sollIst
     .map((r) => {
-      const sv = x.services.find((s) => s.id === r.service_id);
+      const sv = services.find((s) => s.id === r.service_id);
       return `<tr><td>${esc(r.name)}</td><td>${esc(sv ? cadenceText({ cadence: sv.cadence, weekdays: sv.weekdays, monthDay: sv.month_day }) : '')}</td><td style="text-align:right">${sollIstCell(r)}</td></tr>`;
     })
     .join('');
-  const opRows = [...x.ops]
+  return siRows
+    ? `<table><thead><tr><th>Leistung</th><th>Turnus</th><th style="text-align:right">erledigt</th></tr></thead><tbody>${siRows}</tbody></table>`
+    : '<p class="muted">Keine Leistungen im Zeitraum.</p>';
+}
+
+/** Einsätze (Datum, Leistungen, Person, Standort, Prüfcode) als Tabelle, älteste zuerst. Klassen: cx, small, mono. */
+export function einsatzTabelle(ops: OdOperation[]): string {
+  const opRows = [...ops]
     .sort((a, b) => (a.started_at < b.started_at ? -1 : 1))
     .map((o) => {
       const d = dayOf(o.started_at);
@@ -55,24 +73,44 @@ export function buildReportHtml(x: ReportInput): string {
       return `<tr${o.canceled ? ' class="cx"' : ''}><td>${WEEKDAY_SHORT[isoDow(d)]} ${formatDay(d)}<br><span class="small">${fmtTimeB(o.started_at)}${o.ended_at ? `–${fmtTimeB(o.ended_at)}` : ''}</span></td><td>${what}</td><td>${esc(o.performer_name ?? '—')}</td><td class="small">${gps}</td><td class="mono small">${esc((o.entry_hash ?? '').slice(0, 12))}</td></tr>`;
     })
     .join('');
-  const photoBlocks = [...x.ops]
-    .filter((o) => (x.opPhotos.get(o.id) ?? []).some(isSafeImgSrc))
+  return opRows
+    ? `<table><thead><tr><th>Datum</th><th>Leistungen</th><th>Person</th><th>Standort</th><th>Prüfcode</th></tr></thead><tbody>${opRows}</tbody></table>`
+    : '<p class="muted">Keine Einsätze im Zeitraum.</p>';
+}
+
+/** Fotos je Einsatz (leer, wenn keine anzeigbaren). Klassen: pg, small. */
+export function fotoBloecke(ops: OdOperation[], opPhotos: Map<string, string[]>): string {
+  return [...ops]
+    .filter((o) => (opPhotos.get(o.id) ?? []).some(isSafeImgSrc))
     .map(
       (o) =>
-        `<div class="pg"><div class="small"><b>${formatDay(dayOf(o.started_at))} ${fmtTimeB(o.started_at)}</b> · ${esc(o.services.map((s) => s.name).join(', '))}</div>${(x.opPhotos.get(o.id) ?? [])
+        `<div class="pg"><div class="small"><b>${formatDay(dayOf(o.started_at))} ${fmtTimeB(o.started_at)}</b> · ${esc(o.services.map((s) => s.name).join(', '))}</div>${(opPhotos.get(o.id) ?? [])
           .filter(isSafeImgSrc)
           .map((u) => `<img src="${esc(u)}" alt="">`)
           .join('')}</div>`,
     )
     .join('');
-  const defectRows = x.defects
+}
+
+/** Mängel (gemeldet, Text mit Fotos, Stand) als Tabelle (oder „Keine Mängel im Zeitraum.“). Klasse: dimg. */
+export function maengelTabelle(defects: OdDefect[], defectPhotos: Map<string, string[]>): string {
+  const defectRows = defects
     .map((d) => {
-      const imgs = (x.defectPhotos.get(d.id) ?? []).filter(isSafeImgSrc).map((u) => `<img class="dimg" src="${esc(u)}" alt="">`).join('');
+      const imgs = (defectPhotos.get(d.id) ?? []).filter(isSafeImgSrc).map((u) => `<img class="dimg" src="${esc(u)}" alt="">`).join('');
       return `<tr><td>${fmtDateTimeB(d.created_at)}</td><td>${esc(d.text)}${imgs ? `<div>${imgs}</div>` : ''}</td><td>${
         d.status === 'done' ? `<b style="color:#047857">erledigt</b> ${fmtDateTimeB(d.resolved_at)}${d.resolved_note ? `<div class="small">${esc(d.resolved_note)}</div>` : ''}` : '<b style="color:#C2410C">offen</b>'
       }</td></tr>`;
     })
     .join('');
+  return defectRows
+    ? `<table><thead><tr><th>Gemeldet</th><th>Mangel</th><th>Stand</th></tr></thead><tbody>${defectRows}</tbody></table>`
+    : '<p class="muted">Keine Mängel im Zeitraum.</p>';
+}
+
+export function buildReportHtml(x: ReportInput): string {
+  const p = x.property;
+  const valid = x.ops.filter((o) => !o.canceled);
+  const photoBlocks = fotoBloecke(x.ops, x.opPhotos);
 
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Leistungsnachweis ${esc(p.name)} ${esc(x.periodLabel)}</title>
 <style>
@@ -85,20 +123,21 @@ export function buildReportHtml(x: ReportInput): string {
   .kpis{display:flex;gap:10px;margin:12px 0} .kpi{border:1px solid #D6E4DF;border-radius:10px;padding:8px 12px;min-width:110px}
   .kpi b{font-size:18px;display:block} .pg{page-break-inside:avoid;margin:8px 0} .pg img{height:150px;margin:4px 6px 0 0;border-radius:6px}
   .dimg{height:90px;margin:4px 6px 0 0;border-radius:6px} .note{border:1.5px solid #AFC9C1;border-radius:8px;padding:8px 12px;margin-top:20px;page-break-inside:avoid}
+  .free{margin-top:6px;font-size:10px;color:#55706A}
   @page{margin:14mm}
 </style></head><body>
 <div class="head"><div><h1>Leistungsnachweis</h1><div class="muted">${esc(x.orgName)}</div></div>
 <div style="text-align:right"><b>${esc(p.name)}</b><div class="muted">${esc(p.address)}</div>${p.customer_name ? `<div class="muted">für ${esc(p.customer_name)}</div>` : ''}<div><b>Zeitraum:</b> ${esc(x.periodLabel)}</div></div></div>
 <div class="kpis"><div class="kpi"><span class="small">Einsätze</span><b>${valid.length}</b></div><div class="kpi"><span class="small">storniert</span><b>${x.ops.length - valid.length}</b></div><div class="kpi"><span class="small">Mängel (offen + im Zeitraum)</span><b>${x.defects.length}</b></div></div>
 <h2>Soll/Ist je Leistung</h2>
-${siRows ? `<table><thead><tr><th>Leistung</th><th>Turnus</th><th style="text-align:right">erledigt</th></tr></thead><tbody>${siRows}</tbody></table>` : '<p class="muted">Keine Leistungen im Zeitraum.</p>'}
+${sollIstTabelle(x.sollIst, x.services)}
 <h2>Einsätze</h2>
-${opRows ? `<table><thead><tr><th>Datum</th><th>Leistungen</th><th>Person</th><th>Standort</th><th>Prüfcode</th></tr></thead><tbody>${opRows}</tbody></table>` : '<p class="muted">Keine Einsätze im Zeitraum.</p>'}
+${einsatzTabelle(x.ops)}
 ${photoBlocks ? `<h2>Fotos</h2>${photoBlocks}` : ''}
 <h2>Mängel</h2>
-${defectRows ? `<table><thead><tr><th>Gemeldet</th><th>Mangel</th><th>Stand</th></tr></thead><tbody>${defectRows}</tbody></table>` : '<p class="muted">Keine Mängel im Zeitraum.</p>'}
-<div class="note small"><b>Zum Prüfcode:</b> Jeder Einsatz wird beim Eingang auf dem Server versiegelt — mit Serverzeit, Abstand zum Objekt und einem
-Prüfcode (SHA-256 über die Nachweisfelder). Einsätze lassen sich danach nicht mehr ändern; Korrekturen sind nur als Storno mit Begründung möglich
-und bleiben sichtbar. Ein Tag zählt im Soll/Ist einmal, auch bei mehreren Einsätzen. Erstellt mit ObjektDex · ${esc(fmtDateTimeB(new Date().toISOString()))}</div>
+${maengelTabelle(x.defects, x.defectPhotos)}
+<div class="note small">${PRUEFCODE_HINWEIS} Erstellt mit ObjektDex · ${esc(fmtDateTimeB(new Date().toISOString()))}${
+    x.pro === false ? `<div class="free">${GRATIS_HINWEIS}</div>` : ''
+  }</div>
 </body></html>`;
 }
