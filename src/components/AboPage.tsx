@@ -145,6 +145,8 @@ function AboContent({ info }: { info: AboInfo }) {
             Nach einer Kündigung bleibt der Tarif bis zum Ende des bezahlten Zeitraums aktiv. Innerhalb von 14 Tagen nach
             dem Kauf bekommst du dein Geld zurück — schreib an support@dexware.app.{' '}
             <a href="https://dexware.app/erstattung.html" target="_blank" rel="noreferrer">Widerruf &amp; Erstattung</a>
+            {' · '}
+            <a href="https://dexware.app/agb.html" target="_blank" rel="noreferrer">AGB</a>
           </p>
         </div>
       ) : (

@@ -88,6 +88,8 @@ export function WebBuy({ groups, dexId, email }: { groups: WebBuyGroup[]; dexId:
       <p className="muted small" style={{ marginBottom: 0 }}>
         Verkäufer und Zahlungsabwicklung: Paddle.{' '}
         {anyLive && <>Nach dem Kauf diese Seite neu laden — die Freischaltung dauert meist unter einer Minute. </>}<a href="https://dexware.app/erstattung.html" target="_blank" rel="noreferrer">Widerruf &amp; Erstattung</a>
+        {' · '}
+        <a href="https://dexware.app/agb.html" target="_blank" rel="noreferrer">AGB</a>
       </p>
     </div>
   );

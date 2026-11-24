@@ -10,6 +10,10 @@ export function LegalLinks() {
       <a href="https://dexware.app/datenschutz.html" target="_blank" rel="noreferrer">
         Datenschutz
       </a>
+      {' · '}
+      <a href="https://dexware.app/agb.html" target="_blank" rel="noreferrer">
+        AGB
+      </a>
     </p>
   );
 }
