@@ -3,9 +3,10 @@
 // (Objekte, Strecken, Karte, Einsätze, Mehr). Einsätze, Nachweis-PDF, Team, Abo und Objektverwaltung sind dieselben Seiten
 // wie im Dashboard (eine Quelle), nur im Handy-Rahmen — niemand muss fürs PDF die Ansicht wechseln.
 // Das Dashboard bleibt das Werkzeug fürs Büro; gewechselt wird oben rechts.
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { Building2, Map as MapIcon, Menu, Route as RouteIcon, Snowflake } from 'lucide-react';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { TeamPage } from '../../components/TeamPage';
 import { AboPage } from '../../components/AboPage';
 import { Operations } from '../pages/Operations';
@@ -17,8 +18,10 @@ import { RunDetail } from '../pages/RunDetail';
 import { Mehr } from './Mehr';
 import { FeedbackForm } from '../../components/FeedbackForm';
 
-// Karte mit Leaflet: eigener Chunk, erst beim Öffnen des Reiters geladen.
-const Karte = lazy(() => import('./Karte'));
+// Karte mit Leaflet: eigener Chunk, erst beim Öffnen des Reiters geladen — aber nach dem Start im Leerlauf schon
+// vorgeladen (solange Netz da ist): dann öffnet der Reiter später auch im Funkloch, selbst ohne Service Worker.
+const loadKarte = () => import('./Karte');
+const Karte = lazy(loadKarte);
 import { useEinsatz } from '../einsatz/context';
 import { Einsatz } from '../pages/Einsatz';
 import { EinsatzErfassen } from '../pages/EinsatzErfassen';
@@ -38,6 +41,18 @@ export function Aussendienst() {
   // Während einer laufenden Fahrt keine Reiter: ein Fehlgriff würde die Aufzeichnung verlassen.
   const recording = /\/strecken\/(frei|[^/]+\/fahren)$/.test(pathname);
 
+  useEffect(() => {
+    if (!navigator.onLine) return;
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number; cancelIdleCallback?: (id: number) => void };
+    const load = () => void loadKarte().catch(() => undefined);
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(load);
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = window.setTimeout(load, 3000); // Safari kennt requestIdleCallback nicht
+    return () => window.clearTimeout(t);
+  }, []);
+
   return (
     <div className={`ad${recording ? ' ad-full' : ''}`}>
       <main className="ad-main">
@@ -47,26 +62,33 @@ export function Aussendienst() {
             Einsätze und Fahrten vor Ort bitte mit dem Handy erfassen. Fürs Büro gibt es oben rechts das Dashboard.
           </div>
         )}
-        <Routes>
-          <Route index element={<Einsatz />} />
-          <Route path="objekt/:id" element={<EinsatzErfassen />} />
-          <Route path="strecken" element={<Strecken />} />
-          <Route path="strecken/frei" element={<StreckeFahren />} />
-          <Route path="strecken/fahrten/:id" element={<RunDetail />} />
-          <Route path="strecken/:id" element={<StreckeDetail />} />
-          <Route path="strecken/:id/fahren" element={<StreckeFahren />} />
-          <Route path="karte" element={<Suspense fallback={<p className="muted">Karte wird geladen …</p>}><Karte /></Suspense>} />
-          <Route path="einsaetze" element={<Operations />} />
-          <Route path="einsaetze/:id" element={<OperationDetail />} />
-          <Route path="objekte" element={<Properties />} />
-          <Route path="objekte/:id" element={<PropertyDetail />} />
-          <Route path="bericht" element={<Report />} />
-          <Route path="team" element={<TeamPage />} />
-          <Route path="abo" element={<AboPage />} />
-          <Route path="mehr" element={<Mehr />} />
-          <Route path="rueckmeldung" element={<FeedbackForm />} />
-          <Route path="*" element={<Navigate to={base} replace />} />
-        </Routes>
+        {/* Fehlergrenze INNERHALB des Inhalts: die Reiter bleiben stehen, ein Reiterwechsel zeigt wieder normal an */}
+        <ErrorBoundary
+          resetKey={pathname}
+          home={tab !== 'objekte' ? { to: base, label: 'Zu den Objekten' } : undefined}
+          note="Erfasste Einsätze und Fahrten bleiben auf diesem Gerät gesichert."
+        >
+          <Routes>
+            <Route index element={<Einsatz />} />
+            <Route path="objekt/:id" element={<EinsatzErfassen />} />
+            <Route path="strecken" element={<Strecken />} />
+            <Route path="strecken/frei" element={<StreckeFahren />} />
+            <Route path="strecken/fahrten/:id" element={<RunDetail />} />
+            <Route path="strecken/:id" element={<StreckeDetail />} />
+            <Route path="strecken/:id/fahren" element={<StreckeFahren />} />
+            <Route path="karte" element={<Suspense fallback={<p className="muted">Karte wird geladen …</p>}><Karte /></Suspense>} />
+            <Route path="einsaetze" element={<Operations />} />
+            <Route path="einsaetze/:id" element={<OperationDetail />} />
+            <Route path="objekte" element={<Properties />} />
+            <Route path="objekte/:id" element={<PropertyDetail />} />
+            <Route path="bericht" element={<Report />} />
+            <Route path="team" element={<TeamPage />} />
+            <Route path="abo" element={<AboPage />} />
+            <Route path="mehr" element={<Mehr />} />
+            <Route path="rueckmeldung" element={<FeedbackForm />} />
+            <Route path="*" element={<Navigate to={base} replace />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
       {!recording && (
         <nav className="ad-tabs" aria-label="Außendienst">

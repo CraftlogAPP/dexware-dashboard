@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-
 import { Building2, CreditCard, FileDown, LayoutDashboard, MessageSquare, Monitor, Route as RouteIcon, Snowflake, Truck, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { OrgGate, OrgProvider, useOrg } from '../components/OrgContext';
 import { TeamPage } from '../components/TeamPage';
@@ -200,6 +201,7 @@ function Shell() {
   // Nur für Dexware selbst (Konten aus app_admin): Rückmeldungen aus der App lesen und bedanken.
   const admin = useAsync<boolean>(() => fetchFeedbackAdmin(client), [client]);
   const { data } = useOrg();
+  const { pathname } = useLocation();
   // Absolute Pfade: Die Shell rendert in einer pathless Layout-Route unter einer
   // Splat-Route — relative NavLinks würden sich dort an die aktuelle URL anhängen.
   const base = `/app/${app.id}`;
@@ -231,7 +233,10 @@ function Shell() {
         </div>
       </nav>
       <main className="app-main">
-        <Outlet />
+        {/* Navigation links bleibt stehen, wenn eine Seite (z. B. der nachgeladene Import) nicht lädt */}
+        <ErrorBoundary resetKey={pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

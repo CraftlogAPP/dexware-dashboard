@@ -3415,3 +3415,35 @@ input {
     transition: none;
   }
 }
+
+/* ---------- Fehlergrenze (components/ErrorBoundary.tsx): Meldung statt weißer Seite ---------- */
+.err-boundary {
+  max-width: 560px;
+  margin: 32px auto;
+  padding: 0 16px;
+}
+.ad-main .err-boundary,
+.app-main .err-boundary {
+  margin: 8px 0;
+  padding: 0;
+}
+.err-boundary h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.err-boundary h2 .i {
+  width: 20px;
+  height: 20px;
+  color: var(--amber);
+  flex: none;
+}
+.err-boundary p {
+  margin: 0 0 14px;
+}
+.err-boundary .row {
+  gap: 10px;
+  flex-wrap: wrap;
+}

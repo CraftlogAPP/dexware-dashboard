@@ -1,7 +1,8 @@
-import { lazy, Suspense, type ComponentType } from 'react';
+import { lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Home } from './pages/Home';
 import { APPS, type AppConfig } from './apps/registry';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Dashboard-Bereiche je App, lazy geladen (Code-Splitting: der Entry-Screen
 // bleibt klein, jeder Bereich wird erst beim Öffnen geladen).
@@ -81,30 +82,43 @@ function LaufzettelRedirect() {
   return <Navigate to={loc.pathname.replace(/^\/app\/laufzettel/, '/app/pinndex') + loc.search} replace />;
 }
 
+/** Fehlergrenze für die nachgeladenen App-Bereiche — ein anderer Bereich (andere Adresse) zeigt wieder normal an. */
+function AreaBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  const area = pathname.split('/').slice(0, 3).join('/');
+  return (
+    <ErrorBoundary resetKey={area} home={area.length > 1 ? { to: '/', label: 'Alle Dashboards' } : undefined}>
+      {children}
+    </ErrorBoundary>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <div className="bg-decor" aria-hidden />
-      <Suspense fallback={loading}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          {APPS.filter((a) => a.status === 'dashboard' && AREAS[a.id]).map((app) => {
-            const Area = AREAS[app.id];
-            return (
-              <Route
-                key={app.id}
-                path={`/app/${app.id}/*`}
-                element={<Area app={app} />}
-              />
-            );
-          })}
-          {/* Laufzettel (intern pinndex): sprechende Adresse /app/laufzettel/… leitet weiter */}
-          <Route path="/app/laufzettel/*" element={<LaufzettelRedirect />} />
-          {Vorschau && <Route path="/vorschau" element={<Vorschau />} />}
-          {KaufVorschau && <Route path="/vorschau-kauf" element={<KaufVorschau />} />}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+      <AreaBoundary>
+        <Suspense fallback={loading}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            {APPS.filter((a) => a.status === 'dashboard' && AREAS[a.id]).map((app) => {
+              const Area = AREAS[app.id];
+              return (
+                <Route
+                  key={app.id}
+                  path={`/app/${app.id}/*`}
+                  element={<Area app={app} />}
+                />
+              );
+            })}
+            {/* Laufzettel (intern pinndex): sprechende Adresse /app/laufzettel/… leitet weiter */}
+            <Route path="/app/laufzettel/*" element={<LaufzettelRedirect />} />
+            {Vorschau && <Route path="/vorschau" element={<Vorschau />} />}
+            {KaufVorschau && <Route path="/vorschau-kauf" element={<KaufVorschau />} />}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </AreaBoundary>
     </BrowserRouter>
   );
 }
