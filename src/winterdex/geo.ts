@@ -11,6 +11,9 @@
 //    (auch nur Straße/PLZ-Gebiet oder ein gleichnamiges Haus im Nachbarort)
 //  - Ergebnisse nur im Arbeitsspeicher dieser Seite, nicht im Browser-Speicher (Kundenadressen bleiben nicht auf
 //    einem gemeinsam genutzten PC liegen)
+//  - seit 26.11.2026 (Datenschutz, Regel 1 zum Server): an Nominatim geht NUR „Straße Hausnummer, PLZ Ort“ (suchText) —
+//    wie der Server (WinterDex backend/src/glaette-orte.ts). Vorher ging das ganze Adressfeld mit, also auch Zusätze
+//    davor wie „Fam. Müller, …“; die Datenschutzerklärung (Buchstaben d2 und j) beschreibt genau diese Form.
 // Bewusst ohne Abhängigkeit vom Import-Modul (das Formular soll den Excel-Leser nicht mitladen).
 
 import { throttledLookup, type GeoPoint } from '../pinndex/geocode';
@@ -40,6 +43,18 @@ export function addressPlace(address: string): AddressPlace | null {
   const zip = last[2];
   const countries = pre === 'D' ? 'de' : pre === 'A' ? 'at' : pre === 'CH' ? 'ch' : zip.length === 5 ? 'de' : 'at,ch';
   return { zip, place, countries };
+}
+
+/**
+ * Suchtext für Nominatim: nur „Straße Hausnummer, PLZ Ort“ — der Teil direkt vor PLZ/Ort und PLZ/Ort selbst, ohne
+ * Länderkürzel (das Land steht in countrycodes). Teile davor („Fam. Müller, Hauptstraße 5, 8010 Graz“) fallen weg,
+ * genau wie beim Server (glaette-orte.ts: `${strasse}, ${zip} ${place}`). null = keine PLZ mit Ort in der Adresse.
+ */
+export function suchText(address: string): string | null {
+  const where = addressPlace(address);
+  if (!where) return null;
+  const { strasse } = strasseVorPlz(address);
+  return `${strasse ? `${strasse}, ` : ''}${where.zip} ${where.place}`;
 }
 
 /** Für Orts-Vergleiche: klein, Umlaute ausgeschrieben, „St.“ = „Sankt“, nur Buchstaben/Ziffern. */
@@ -79,14 +94,15 @@ const memo = new Map<string, LocateResult>();
 /** Adresse → Standort. Ohne PLZ/Ort oder ohne passenden Treffer: kein Standort (dann in der App vor Ort festlegen). */
 export function locateAddress(address: string): Promise<LocateResult> {
   const where = addressPlace(address);
-  if (!where) return Promise.resolve({ point: null, why: 'noPlace' });
+  const q = suchText(address);
+  if (!where || !q) return Promise.resolve({ point: null, why: 'noPlace' });
   const key = `${placeKey(address)}|${where.countries}`;
   const known = memo.get(key);
   if (known) return Promise.resolve(known);
   return throttledLookup(async (): Promise<LocateResult> => {
     const url =
       'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=10&addressdetails=1&accept-language=de' +
-      `&countrycodes=${where.countries}&q=${encodeURIComponent(address.trim())}`;
+      `&countrycodes=${where.countries}&q=${encodeURIComponent(q)}`;
     const ctrl = new AbortController();
     const t = window.setTimeout(() => ctrl.abort(), TIMEOUT_MS);
     try {
