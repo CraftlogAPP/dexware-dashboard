@@ -6,11 +6,15 @@
 //    (operation_seal → distance_m). Ein falscher Standort ist schlimmer als keiner.
 //  - nur im Land der PLZ (5-stellig Deutschland, 4-stellig Österreich/Schweiz, Kürzel D-/A-/CH-)
 //  - ein Treffer zählt nur, wenn seine PLZ zur Adresse passt (oder er keine hat und der Ort passt)
+//  - seit 26.11.2026 nur HAUSGENAU und EINDEUTIG (hausGenau.ts, gleiche Regel wie der Server beim Nachholen): PLZ, Straße
+//    UND Hausnummer passen, alle solchen Treffer ≤ 150 m auseinander — vorher reichte der erste Treffer mit passender PLZ
+//    (auch nur Straße/PLZ-Gebiet oder ein gleichnamiges Haus im Nachbarort)
 //  - Ergebnisse nur im Arbeitsspeicher dieser Seite, nicht im Browser-Speicher (Kundenadressen bleiben nicht auf
 //    einem gemeinsam genutzten PC liegen)
 // Bewusst ohne Abhängigkeit vom Import-Modul (das Formular soll den Excel-Leser nicht mitladen).
 
 import { throttledLookup, type GeoPoint } from '../pinndex/geocode';
+import { hausgenauerPunkt, strasseVorPlz } from './hausGenau';
 
 export type LocateResult = { point: GeoPoint; why?: undefined } | { point: null; why: 'noPlace' | 'notFound' };
 
@@ -81,7 +85,7 @@ export function locateAddress(address: string): Promise<LocateResult> {
   if (known) return Promise.resolve(known);
   return throttledLookup(async (): Promise<LocateResult> => {
     const url =
-      'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=3&addressdetails=1&accept-language=de' +
+      'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=10&addressdetails=1&accept-language=de' +
       `&countrycodes=${where.countries}&q=${encodeURIComponent(address.trim())}`;
     const ctrl = new AbortController();
     const t = window.setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -89,16 +93,9 @@ export function locateAddress(address: string): Promise<LocateResult> {
       const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
       if (!res.ok) return { point: null, why: 'notFound' }; // Dienst gestört: nicht merken, beim nächsten Mal neu
       const list = (await res.json()) as unknown;
-      let out: LocateResult = { point: null, why: 'notFound' };
-      for (const hit of Array.isArray(list) ? (list as Hit[]) : []) {
-        const lat = Number(hit.lat);
-        const lng = Number(hit.lon);
-        const valid = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
-        if (valid && hitFits(hit, where)) {
-          out = { point: { lat, lng } };
-          break;
-        }
-      }
+      // nur hausgenau + eindeutig (sonst kein Standort — ein falscher stünde im versiegelten Nachweis)
+      const punkt = hausgenauerPunkt(list, { zip: where.zip, place: where.place, ...strasseVorPlz(address) });
+      const out: LocateResult = punkt ? { point: { lat: punkt.lat, lng: punkt.lng } } : { point: null, why: 'notFound' };
       memo.set(key, out);
       return out;
     } catch {

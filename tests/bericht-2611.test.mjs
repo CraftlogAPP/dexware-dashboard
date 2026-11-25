@@ -338,6 +338,26 @@ console.log('\n[31b] Objekt-Einsatz-Nachweis ebenfalls in der Zone des Betriebs 
   check('Ganzjahres-Nachweis (ohne Zone) unverändert aufrufbar', typeof WR.einsatzTabelle([op]) === 'string');
 }
 
+console.log('\n[26b] Standort aus der Adresse nur hausgenau + eindeutig (Regel 1 zur Nachprüfung 26.11. von Fund 26)');
+{
+  const HG = await web('src/winterdex/hausGenau.ts');
+  const hit = (lat, lon, road, nr, postcode, ort = 'Gleisdorf') => ({ lat: String(lat), lon: String(lon), address: { road, house_number: nr, postcode, town: ort } });
+  const wo = (adresse) => ({ zip: '8200', place: 'Gleisdorf', ...HG.strasseVorPlz(adresse) });
+  check('Straße/Nr. vor PLZ (Namen davor fallen weg)', JSON.stringify(HG.strasseVorPlz('Fam. Huber, Hauptstraße 12a, 8200 Gleisdorf')) === JSON.stringify({ strasse: 'Hauptstraße 12a', hausnummer: '12a' }));
+  const p1 = HG.hausgenauerPunkt([hit(47.1, 15.7, 'Hauptstraße', '12', '8200')], wo('Hauptstraße 12, 8200 Gleisdorf'));
+  check('PLZ + Straße + Nummer passen → Standort', p1 && p1.lat === 47.1 && p1.lng === 15.7, JSON.stringify(p1));
+  check('zwei Treffer desselben Hauses (≤ 150 m) → Standort', !!HG.hausgenauerPunkt([hit(47.1, 15.7, 'Hauptstraße', '12', '8200'), hit(47.1005, 15.7005, 'Hauptstraße', '12', '8200')], wo('Hauptstraße 12, 8200 Gleisdorf')));
+  check('gleiche Dorfstraße 5 in zwei Orten der PLZ (4 km) → KEIN Standort (vorher: erster Treffer)',
+    HG.hausgenauerPunkt([hit(47.104, 15.708, 'Dorfstraße', '5', '8200', 'Gleisdorf'), hit(47.14, 15.72, 'Dorfstraße', '5', '8200', 'Albersdorf-Prebuch')], wo('Dorfstraße 5, 8200 Gleisdorf')) === null);
+  check('andere Straße, gleiche Nummer („Bahnhofstraße 12“ für „Hauptstraße 12“) → KEIN Standort', HG.hausgenauerPunkt([hit(47.1, 15.7, 'Bahnhofstraße', '12', '8200')], wo('Hauptstraße 12, 8200 Gleisdorf')) === null);
+  check('nur die Straße (ohne Hausnummer im Treffer) → KEIN Standort', HG.hausgenauerPunkt([{ lat: '47.1', lon: '15.7', address: { road: 'Hauptstraße', postcode: '8200' } }], wo('Hauptstraße 12, 8200 Gleisdorf')) === null);
+  check('Adresse ohne Hausnummer → KEIN Standort', HG.hausgenauerPunkt([hit(47.1, 15.7, 'Hauptstraße', '12', '8200')], wo('Hauptstraße, 8200 Gleisdorf')) === null);
+  check('falsche PLZ zuerst, richtige danach → der richtige', HG.hausgenauerPunkt([hit(47.3, 15.9, 'Hauptstraße', '5', '8311'), hit(47.1, 15.7, 'Hauptstraße', '5', '8200')], wo('Hauptstraße 5, 8200 Gleisdorf'))?.lat === 47.1);
+  check('„Str.“ = „Straße“, Umlaute/Bindestriche egal', !!HG.hausgenauerPunkt([hit(47.1, 15.7, 'Doktor-Karl-Renner-Straße', '3', '8200')], wo('Dr.-Karl-Renner-Str. 3, 8200 Gleisdorf')));
+  const geo = lies('src/winterdex/geo.ts');
+  check('geo.ts: nur hausgenauerPunkt ins Objekt, Suche mit limit=10', /hausgenauerPunkt\(list,/.test(geo) && /limit=10&/.test(geo) && !/out = \{ point: \{ lat, lng \} \};\s*break;/.test(geo));
+}
+
 console.log('\n[45b] Einsatz nachtragen: eine Kennung je Formular (Regel 1 zu Fund 45, Prüfer 26.11.)');
 {
   const op = lies('src/winterdex/pages/Operations.tsx');

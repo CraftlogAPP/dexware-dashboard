@@ -124,7 +124,8 @@ if (existsSync(path.join(OD, 'mobile/src/lib/entitlement.ts'))) {
   const ent = liesRepo(OD, 'mobile/src/lib/entitlement.ts');
   const m = ent.match(/FREE_LIMITS = \{ properties: (\d+), routes: (\d+) \}/);
   check('Grenzen = FREE_LIMITS der ObjektDex-App', !!m && Number(m[1]) === U.GRATIS_OBJEKTE && Number(m[2]) === U.GRATIS_STRECKEN, m?.[0]);
-  check('App zählt nur AKTIVE Objekte (listProperties ohne includeInactive)', /const count = \(await repo\.listProperties\(\)\)\.length;/.test(ent));
+  // seit ObjektDex d97d08c (Tagescheck 25.11. Fund 42): zaehltFuerGrenze(…, eigeneId) — das eigene Objekt zählt nicht mit
+  check('App zählt nur AKTIVE Objekte (listProperties ohne includeInactive)', /const count = (?:\(await repo\.listProperties\(\)\)\.length|zaehltFuerGrenze\(await repo\.listProperties\(\), eigeneId\));/.test(ent));
 } else check('ObjektDex-Repo gefunden (FREE_LIMITS abgleichen)', false, OD);
 
 // ============================================================================ Auftrag beim Klick
