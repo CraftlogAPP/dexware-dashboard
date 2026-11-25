@@ -143,5 +143,23 @@ console.log('\n[6] Quelltext');
   check('nichts wird gelöscht (kein delete im Gratis-Baustein)', !/\.delete\(/.test(ui));
 }
 
+console.log('\n[7] Karte im Außendienst (Ausschnitt wie die App, mobile 278395c)');
+{
+  const K = await web('src/winterdex/aussendienst/kartenAusschnitt.ts');
+  const b = K.boxOf([[47.07, 15.44], [47.08, 15.43], [NaN, 1]]);
+  check('Rechteck um alle Punkte (ungültige ignoriert)', b && b.minLat === 47.07 && b.maxLat === 47.08 && b.minLng === 15.43 && b.maxLng === 15.44, JSON.stringify(b));
+  check('ohne Punkte → null (dann eigener Standort bzw. Land)', K.boxOf([]) === null);
+  check('Land aus der Zeitzone: Wien → AT, Zürich → CH, sonst DE', K.landAusZeitzone('Europe/Vienna') === 'AT' && K.landAusZeitzone('Europe/Zurich') === 'CH' && K.landAusZeitzone('Europe/Berlin') === 'DE');
+  check('Länder-Ausschnitte für AT/DE/CH (kein Europa)', ['AT', 'DE', 'CH'].every((l) => K.LAND_BOX[l].maxLng - K.LAND_BOX[l].minLng < 10));
+  check('1 Objekt = Straßenebene (Zoom 16)', K.STRASSE_ZOOM === 16);
+  check('Chip: tippen = dieser, nochmal = alle', K.naechsterFilter('alle', 'offen') === 'offen' && K.naechsterFilter('offen', 'offen') === 'alle' && K.naechsterFilter('offen', 'erledigt') === 'erledigt' && K.naechsterFilter('alle', 'alle') === 'alle');
+  check('Ausschnitt-Schlüssel ändert sich mit neuen Objekten', K.boxKey(b) !== K.boxKey(K.boxOf([[47.07, 15.44], [47.2, 15.43]])) && K.boxKey(null) === '-');
+  const karte = lies('src/winterdex/aussendienst/Karte.tsx');
+  check('kein fester Europa-Start mehr (setView(START, 6))', !/setView\(START/.test(karte) && !/48\.7, 10\.5/.test(karte));
+  check('Nachführen nur, solange nicht von Hand bewegt', /if \(vonHand\.current\) return;/.test(karte) && /'dragstart'/.test(karte));
+  check('Knöpfe „Alle Objekte“ und „Mein Standort“', /Alle Objekte/.test(karte) && /Mein Standort/.test(karte));
+  check('ohne Standorte: Standort nur mit schon erteilter Erlaubnis, sonst Land', /standortOhneNachfrage\(\)/.test(karte) && /LAND_BOX\[land \?\? landAusZeitzone\(\)\]/.test(karte));
+}
+
 console.log(`\n${fail === 0 ? 'ALLES GRÜN' : 'FEHLER'}: ${ok} ok, ${fail} Fehler`);
 process.exit(fail === 0 ? 0 : 1);
