@@ -30,7 +30,7 @@ export default function KaufVorschau() {
             offer: {
               link: TEST,
               plans: [
-                { pkg: '$rc_six_month', title: 'Saison', price: '39,99 €', per: 'pro Jahr', note: 'deckt die ganze Wintersaison', best: true, tag: 'Meist gewählt' },
+                { pkg: '$rc_six_month', title: 'Saison', price: '49,99 €', per: 'pro Jahr', note: 'deckt die ganze Wintersaison', best: true, tag: 'Meist gewählt' },
                 { pkg: '$rc_monthly', title: 'Monatlich', price: '9,99 €', per: 'pro Monat', note: 'monatlich kündbar' },
               ],
             },

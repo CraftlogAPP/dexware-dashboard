@@ -236,7 +236,7 @@ export const APPS: AppConfig[] = [
         plans: [
           // Seit 20.11.2026 ist die Saison ein Jahresabo zum selben Preis (Play: Basistarif „jahr“). Vor dem Freischalten des
           // Web-Kaufs: Paddle-Preis + RevenueCat-Web-Paket auf den Jahrestarif umstellen und pkg hier nachziehen (Memo winterdex-jahresabo).
-          { pkg: '$rc_six_month', title: 'Saison', price: '39,99 €', per: 'pro Jahr', note: 'deckt die ganze Wintersaison', best: true, tag: 'Meist gewählt' },
+          { pkg: '$rc_six_month', title: 'Saison', price: '49,99 €', per: 'pro Jahr', note: 'deckt die ganze Wintersaison', best: true, tag: 'Meist gewählt' },
           { pkg: '$rc_monthly', title: 'Monatlich', price: '9,99 €', per: 'pro Monat', note: 'monatlich kündbar' },
         ],
       },

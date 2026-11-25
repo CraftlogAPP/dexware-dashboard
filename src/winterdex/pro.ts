@@ -30,7 +30,7 @@ export const FREE_ROUTES = 1;
 
 /** Text für alle Stellen, an denen eine Gratis-Grenze greift (Abo nur über Google Play — ohne Android: auf Rechnung). */
 export const PRO_HOW =
-  'Pro schließt du in der WinterDex-App (Android) unter „Abo“ ab. Kein Android-Gerät? Wir schalten Pro auch auf Rechnung frei (39,99 € pro Jahr) — schreib uns an support@dexware.app.';
+  'Pro schließt du in der WinterDex-App (Android) unter „Abo“ ab. Kein Android-Gerät? Wir schalten Pro auch auf Rechnung frei (49,99 € pro Jahr) — schreib uns an support@dexware.app.';
 export const PRO_MAILTO = 'mailto:support@dexware.app?subject=WinterDex%20Pro%20auf%20Rechnung';
 
 const APP = 'winterdex';
