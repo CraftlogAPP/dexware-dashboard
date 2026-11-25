@@ -170,7 +170,7 @@ try {
   // Regler in die Pause (Zeitleiste-Zeile der Unterbrechung anklicken)
   await main.ev(`document.querySelector('.fk-zeitleiste summary').click()`);
   const zeilen = await main.ev(`[...document.querySelectorAll('.fk-zeitleiste tbody tr')].map((r) => r.innerText.replace(/\\s+/g, ' '))`);
-  check('Zeitleiste: Start … Ende, Unterbrechung, Stillstand', /^\d\d:\d\d 0,0 km Start$/.test(zeilen[0]) && /Ende$/.test(zeilen.at(-1)) && zeilen.some((z) => z.includes('Unterbrechung')) && zeilen.some((z) => z.includes('Stillstand')), zeilen.join(' / '));
+  check('Zeitleiste: Start … Ende, Unterbrechung, Stillstand', /^\d\d:\d\d 0,0 km (\S.* )?Start$/.test(zeilen[0]) && /Ende$/.test(zeilen.at(-1)) && zeilen.some((z) => z.includes('Unterbrechung')) && zeilen.some((z) => z.includes('Stillstand')), zeilen.join(' / '));
   await main.ev(`[...document.querySelectorAll('.fk-z-luecke .fk-zeit-btn')][0].click()`);
   check('Zeile „Unterbrechung“ antippen → Regler zeigt Unterbrechung', await warteAuf(`(document.querySelector('.fk-info')?.textContent ?? '').includes('Unterbrechung')`, 3000));
   await main.ev('window.scrollTo(0, 0)');
@@ -180,8 +180,13 @@ try {
   // PDF: Berichtsfenster abfangen
   await main.ev(`(() => { window.__html = null; window.open = () => { const w = { document: { open() {}, write(h) { window.__html = (window.__html ?? '') + h; }, close() {}, readyState: 'complete' }, print() {}, addEventListener() {}, closed: false }; return w; }; return true; })()`);
   await main.ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Nachweis als PDF')).click()`, true);
-  const html = (await warteAuf('!!window.__html', 5000)) ? await main.ev('window.__html') : '';
-  check('PDF: Zeitleiste + Zeitmarken in der Skizze', /Zeitleiste — wann war das Fahrzeug wo/.test(html) && /fill="#0C1B2A">\d\d:\d\d/.test(html));
+  // seit 25.11.2026 geht das Fenster sofort auf („Bericht wird erstellt …“), der Bericht mit Kartenbild kommt nach (≤ ~8 s)
+  const roh = (await warteAuf(`/Strecken-Nachweis Winterdienst[\\s\\S]*Erstellt am/.test(window.__html ?? '')`, 15000)) ? await main.ev('window.__html') : '';
+  const html = roh.slice(roh.lastIndexOf('<!doctype html>'));
+  check(
+    'PDF: Zeitleiste + echtes Kartenbild (Rückfall: Zeitmarken in der Skizze)',
+    /Zeitleiste — wann war das Fahrzeug wo/.test(html) && (html.includes('<figure class="karte"><img src="data:image/jpeg') || /fill="#0C1B2A">\d\d:\d\d/.test(html)),
+  );
   if (html) {
     writeFileSync(path.join(aus, 'A-nachweis.html'), html);
     const t = await main.send('Target.createTarget', { url: 'about:blank' });

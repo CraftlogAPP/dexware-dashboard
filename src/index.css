@@ -1815,6 +1815,56 @@ a.due-row:hover {
     min-width: 0;
   }
 }
+/* Straßenverlauf („wann auf welcher Straße“, seit 25.11.2026) — Daten aus route_run_strassen (OSM) */
+.fk-strassen {
+  margin-top: 12px;
+  padding: 10px 14px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.fk-strassen-titel {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+.fk-strassen .table-wrap {
+  margin-bottom: 6px;
+}
+.fk-strassen th,
+.fk-strassen td {
+  padding: 7px 12px;
+}
+.fk-strassen td.wrap {
+  min-width: 120px;
+}
+.fk-strassen .fk-r,
+.fk-strassen th.fk-r {
+  text-align: right;
+  white-space: nowrap;
+}
+.fk-strassen-quelle {
+  margin: 4px 0 8px;
+}
+.fk-strassen-hinweis {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+@media (max-width: 560px) {
+  .fk-strassen {
+    padding: 8px 10px 2px;
+  }
+  .fk-strassen table {
+    font-size: 13px;
+  }
+  .fk-strassen th,
+  .fk-strassen td {
+    padding: 7px 6px;
+  }
+  .fk-strassen td.wrap {
+    min-width: 0;
+  }
+}
 .fk-zeit-btn {
   min-height: 28px;
   padding: 0;

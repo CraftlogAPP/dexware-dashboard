@@ -10,11 +10,12 @@ import { ExportNotice } from '../../lib/xlsx';
 import { checkPeriod, requirePro, saveSheets } from '../exportActions';
 import { periodLabel, runSheets } from '../exportLists';
 import { fmtDate, fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
-import { openReportWindow } from '../../lib/print';
+import { openReportWindowAfter } from '../../lib/print';
 import { FahrtAnsicht } from '../FahrtAnsicht';
-import { buildRouteLogHtml } from '../routeReport';
+import { buildRouteLogHtmlMitDetails, type FahrtenLader } from '../routeReport';
 import { fetchOrgPro, withWatermark } from '../pro';
-import { fetchRoute, fetchRun, fetchRuns, fmtDistance, type Route, type Run } from '../routes';
+import { fetchRoute, fetchRun, fetchRunTracks, fetchRuns, fmtDistance, type Route, type Run } from '../routes';
+import { fetchStrassen, fetchStrassenViele, type StrassenStand } from '../strassen';
 import { RunTable } from './Routes';
 
 export function RouteDetail() {
@@ -29,14 +30,14 @@ export function RouteDetail() {
   const [to, setTo] = useState(() => toInputDate(new Date()));
   const [printErr, setPrintErr] = useState<string | null>(null);
 
-  const state = useAsync<{ route: Route; last: Run | null }>(async () => {
+  const state = useAsync<{ route: Route; last: Run | null; lastStrassen: StrassenStand | null }>(async () => {
     const route = await fetchRoute(client, id!);
     if (!route) throw new Error('Diese Strecke wurde nicht gefunden.');
-    // Letzte gültige Fahrt mit Spur für die Skizze (grün über grau).
+    // Letzte gültige Fahrt mit Spur für die Karte (grün über grau) — mit Uhrzeiten und Straßenverlauf wie im Fahrt-Detail.
     const recent = await fetchRuns(client, { routeId: route.id, limit: 20 });
     const lastMeta = recent.find((r) => !r.canceled);
-    const last = lastMeta ? await fetchRun(client, lastMeta.id) : null;
-    return { route, last };
+    const [last, lastStrassen] = lastMeta ? await Promise.all([fetchRun(client, lastMeta.id), fetchStrassen(client, lastMeta.id)]) : [null, null];
+    return { route, last, lastStrassen };
   }, [client, id]);
 
   const runsState = useAsync(
@@ -56,14 +57,20 @@ export function RouteDetail() {
 
   // Pro vorab laden: das Druckfenster muss direkt beim Klick aufgehen (sonst blockt der Browser das Pop-up)
   const proState = useAsync(() => fetchOrgPro(client), [client]);
+  // Fahrtenbuch mit den Fahrten im Einzelnen (Straßenverlauf + kompaktes Kartenbild je Fahrt, seit 25.11.2026):
+  // Fenster sofort im Klick öffnen, Details mit Fristen nachladen — das PDF entsteht immer.
   function printLog(route: Route) {
     setPrintErr(null);
     if (!org) return setPrintErr('Betrieb nicht geladen.');
     if (!from || !to) return setPrintErr('Bitte Von- und Bis-Datum wählen.');
     const runs = [...(runsState.data ?? [])].reverse(); // chronologisch
     const period = `${fmtDate(parseLocalDate(from).toISOString())} – ${fmtDate(parseLocalDate(to).toISOString())}`;
-    if (!openReportWindow(withWatermark(buildRouteLogHtml(org.org, route, runs, period), proState.data ?? true)))
-      setPrintErr('Das Druckfenster wurde blockiert — bitte Pop-ups für dieses Dashboard erlauben.');
+    const lader: FahrtenLader = { spuren: (ids) => fetchRunTracks(client, ids), strassen: (ids) => fetchStrassenViele(client, ids) };
+    openReportWindowAfter(async () => withWatermark(await buildRouteLogHtmlMitDetails(org.org, route, runs, period, lader), proState.data ?? true))
+      .then((ok) => {
+        if (!ok) setPrintErr('Das Druckfenster wurde blockiert — bitte Pop-ups für dieses Dashboard erlauben.');
+      })
+      .catch((e) => setPrintErr(`Fahrtenbuch konnte nicht erstellt werden: ${String((e as Error)?.message ?? e)}`));
   }
 
   /** Fahrten dieser Strecke im Zeitraum als Excel (frisch geladen, vollständig). */
@@ -82,7 +89,7 @@ export function RouteDetail() {
 
   return (
     <LoadGuard state={state}>
-      {({ route, last }) => (
+      {({ route, last, lastStrassen }) => (
         <>
           <p className="small" style={{ marginBottom: 4 }}>
             <Link to="../strecken">← Alle Strecken</Link>
@@ -104,7 +111,9 @@ export function RouteDetail() {
             gaps={last?.gaps}
             startedAt={last?.started_at}
             endedAt={last?.ended_at}
-            zeit={false}
+            zeit={!!last}
+            strassen={lastStrassen}
+            canceled={last?.canceled}
             label={`Karte der Strecke ${route.name}${last ? ` mit der letzten Fahrt vom ${fmtDateTime(last.started_at)}` : ''}`}
           />
           <p className="small muted" style={{ marginTop: -8 }}>

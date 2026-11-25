@@ -6,11 +6,12 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllOf } from '../../lib/completeQueries';
-import { fetchRoute, fetchRoutes, fetchRuns } from '../routes';
+import { fetchRoute, fetchRoutes, fetchRun, fetchRuns } from '../routes';
+import { fetchStrassen, type StrassenStand } from '../strassen';
 import { orgProFuerGrenze } from '../pro';
 import { nachTour } from '../tour';
 import type { OperationAction, Property, WeatherSnapshot } from '../types';
-import type { LatLng, Route, RunMeta, Track } from '../routes';
+import type { LatLng, Route, Run, RunMeta, Track } from '../routes';
 
 export interface TodayOp {
   id: string;
@@ -95,6 +96,10 @@ export interface EinsatzBackend {
   listTodayRuns(): Promise<RunMeta[]>;
   /** Jüngste Fahrten einer Strecke. */
   listRouteRuns(routeId: string, limit: number): Promise<RunMeta[]>;
+  /** Eine Fahrt mit Spur (Karte der letzten Fahrt auf der Strecken-Seite) */
+  getRun?(id: string): Promise<Run | null>;
+  /** Straßenverlauf einer Fahrt (route_run_strassen) — wirft nie */
+  getStrassen?(id: string): Promise<StrassenStand | null>;
   /** Fahrt anlegen; „ID gibt es schon“ (Wiederholung) zählt als Erfolg. */
   insertRun(row: RunRow, photoUrls: string[]): Promise<void>;
   /** Pro des Betriebs laut Server (Abo, Team, Kommunal-Lizenz, Suite) für Grenzen: unklar → letzter sicherer Stand, sonst ProUnklarError. */
@@ -235,6 +240,8 @@ export function supabaseBackend(
     },
 
     listRouteRuns: (routeId, limit) => fetchRuns(sb, { routeId, limit }),
+    getRun: (id) => fetchRun(sb, id),
+    getStrassen: (id) => fetchStrassen(sb, id),
 
     async insertRun(row, photoUrls) {
       const { error } = await withTimeout(sb.from('route_run').insert({ ...row, photo_urls: photoUrls }), 30000);

@@ -18,6 +18,17 @@ import {
   zeitMarken,
 } from './fahrtZeit';
 import type { KartenCursor } from './FahrtKarte';
+import {
+  fmtStrecke,
+  ortText,
+  STRASSEN_ERMITTELT,
+  STRASSEN_QUELLE,
+  STRASSEN_QUELLE_URL,
+  strassenAnzeige,
+  strasseZu,
+  strassenText,
+  type StrassenStand,
+} from './strassen';
 
 const FahrtKarte = lazy(() => import('./FahrtKarte'));
 
@@ -31,6 +42,10 @@ export interface FahrtAnsichtProps {
   label: string;
   /** Zeitmarken, Regler und Zeitleiste (Standard an; aus z. B. für eine Strecken-Vorlage oder „letzte Fahrt“) */
   zeit?: boolean;
+  /** Straßenverlauf (route_run_strassen, seit 25.11.2026); null/undefiniert = keiner bzw. noch nicht geladen */
+  strassen?: StrassenStand | null;
+  /** stornierte Fahrten werden nie ermittelt → kein „wird ermittelt“ */
+  canceled?: boolean;
 }
 
 /** Fängt jeden Fehler der Karte/Zeitleiste ab und zeigt stattdessen die Skizze. */
@@ -88,6 +103,16 @@ function Ansicht(props: FahrtAnsichtProps) {
       missed: (Array.isArray(missed) ? missed : []).map((s) => vereinfacheLinie(s)).filter((s) => s.length >= 2),
     };
   }, [F, zeitAn, plan, missed]);
+
+  const str = useMemo(() => {
+    try {
+      return startedAt ? strassenAnzeige(props.strassen, { started_at: startedAt, canceled: props.canceled }, zeitAn) : null;
+    } catch (e) {
+      console.error('Straßenverlauf ausgelassen:', e);
+      return null;
+    }
+  }, [props.strassen, props.canceled, startedAt, zeitAn]);
+  const strTab = str?.art === 'tabelle' ? str : null;
 
   const [ansicht, setAnsicht] = useState<'karte' | 'skizze'>(() =>
     typeof navigator !== 'undefined' && navigator.onLine === false ? 'skizze' : 'karte',
@@ -253,6 +278,61 @@ function Ansicht(props: FahrtAnsichtProps) {
         </div>
       )}
 
+      {str?.art === 'ermittelt' && (
+        <p className="small muted fk-strassen-hinweis" data-testid="strassen-ermittelt">
+          {STRASSEN_ERMITTELT}
+        </p>
+      )}
+      {strTab && (
+        <section className="fk-strassen" aria-label="Straßenverlauf">
+          <h2 className="fk-strassen-titel">Straßenverlauf — wann auf welcher Straße</h2>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Uhrzeit</th>
+                  <th>Straße</th>
+                  <th>Ort</th>
+                  <th className="fk-r">Strecke</th>
+                </tr>
+              </thead>
+              <tbody>
+                {strTab.zeilen.map((z, i) => {
+                  const von = fmtUhr(z.von);
+                  const bis = fmtUhr(z.bis);
+                  const zeitText = von === bis ? von : `${von}–${bis}`;
+                  return (
+                    <tr key={i}>
+                      <td>
+                        {ansicht === 'karte' ? (
+                          <button type="button" className="fk-zeit-btn" onClick={() => zeigeZeit(clamp(z.von))} title="Auf der Karte zeigen">
+                            {zeitText}
+                          </button>
+                        ) : (
+                          zeitText
+                        )}
+                      </td>
+                      <td className="wrap">
+                        <b>{z.strasse}</b>
+                      </td>
+                      <td className="wrap">{ortText(z)}</td>
+                      <td className="fk-r">{fmtStrecke(z.m)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="small muted fk-strassen-quelle">
+            Straßennamen:{' '}
+            <a href={STRASSEN_QUELLE_URL} target="_blank" rel="noreferrer">
+              {STRASSEN_QUELLE}
+            </a>{' '}
+            — nach der Fahrt aus den GPS-Punkten ermittelt, nicht Teil des Prüfcodes.
+          </p>
+        </section>
+      )}
+
       {zeitAn && d.zeilen.length > 0 && (
         <details className="fk-zeitleiste">
           <summary>
@@ -265,12 +345,14 @@ function Ansicht(props: FahrtAnsichtProps) {
                 <tr>
                   <th>Uhrzeit</th>
                   <th>km seit Start</th>
+                  {strTab && <th>Straße</th>}
                   <th>Abschnitt</th>
                 </tr>
               </thead>
               <tbody>
                 {d.zeilen.map((z, i) => {
                   const zeitText = `${fmtUhr(z.t)}${z.bis ? `–${fmtUhr(z.bis)}` : ''}`;
+                  const s = strTab && z.art !== 'luecke' ? strasseZu(strTab.zeilen, z.t) : undefined;
                   return (
                     <tr key={i} className={`fk-z-${z.art}`}>
                       <td>
@@ -283,6 +365,7 @@ function Ansicht(props: FahrtAnsichtProps) {
                         )}
                       </td>
                       <td>{fmtKm(z.dM)}</td>
+                      {strTab && <td className="wrap">{s ? strassenText(s, strTab.mehrereOrte) : '—'}</td>}
                       <td className="wrap">{z.text}</td>
                     </tr>
                   );

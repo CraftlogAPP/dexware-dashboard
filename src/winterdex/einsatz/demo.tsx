@@ -7,7 +7,10 @@
 import { useMemo, useState } from 'react';
 import { Link, Route as RouterRoute, Routes, useParams } from 'react-router-dom';
 import { RunView } from '../pages/RunDetail';
-import { DEMO_FAHRTEN, demoRun } from './demoFahrt';
+import { DEMO_FAHRTEN, demoRun, demoStrassen } from './demoFahrt';
+import { strassenStandAus } from '../strassen';
+import { buildRouteLogHtmlMitDetails, type FahrtenLader } from '../routeReport';
+import { openReportWindowAfter } from '../../lib/print';
 import type { AppConfig } from '../../apps/registry';
 import type { Property } from '../types';
 import type { EinsatzBackend, OperationRow, RouteRow, RunRow, TodayOp } from './backend';
@@ -114,7 +117,18 @@ function createBackend(netz: () => Netz, log: (line: string) => void): EinsatzBa
     },
     async listRouteRuns(routeId) {
       await gate();
-      return runs.filter((r) => r.route_id === routeId);
+      // ?mitfahrt: die Beispiel-Fahrt „mit Vorlage“ als letzte Fahrt dieser Strecke (Karte + Straßenverlauf testen)
+      const beispiel = new URLSearchParams(window.location.search).has('mitfahrt') ? demoRun('demo-vorlage') : null;
+      const extra = beispiel && beispiel.route_id === routeId ? [{ ...beispiel, id: 'demo-vorlage' }] : [];
+      return [...runs.filter((r) => r.route_id === routeId), ...extra];
+    },
+    async getRun(id) {
+      await gate();
+      return demoRun(id);
+    },
+    async getStrassen(id) {
+      const s = new URLSearchParams(window.location.search).get('strassen') === 'ermittelt' ? null : demoStrassen(id);
+      return s ? strassenStandAus(s) : strassenStandAus(null);
     },
     async insertRun(row: RunRow, photoUrls) {
       await gate();
@@ -196,11 +210,52 @@ const DEMO_ORG = { id: ORG, name: 'Bauhof Musterstadt (Beispiel)', land: 'AT' as
 function DemoFahrt() {
   const { id = '' } = useParams();
   const run = useMemo(() => demoRun(id), [id]);
+  // Straßenverlauf wie aus der Datenbank (auch die kaputten Einträge der Form „kaputt“ gehen durch die Säuberung);
+  // ?strassen=ermittelt zeigt jede Fahrt im Zustand „wird ermittelt“
+  const strassen = useMemo(() => {
+    if (new URLSearchParams(window.location.search).get('strassen') === 'ermittelt') return strassenStandAus(null);
+    const s = demoStrassen(id);
+    return s ? strassenStandAus(s) : null;
+  }, [id]);
   if (!run) return <div className="error-box">Unbekannte Beispiel-Fahrt „{id}“.</div>;
-  return <RunView run={run} org={DEMO_ORG} pro canCancel={!run.canceled} onCancel={async () => undefined} />;
+  return <RunView run={run} strassen={strassen} org={DEMO_ORG} pro canCancel={!run.canceled} onCancel={async () => undefined} />;
+}
+
+/**
+ * Fahrtenbuch (Sammel-Nachweis) mit den Beispiel-Fahrten: alle Formen bzw. ?buch=viele (120 Fahrten → ohne Kartenbilder).
+ * Gleiche Funktion wie das Dashboard (buildRouteLogHtmlMitDetails), nur mit erfundenen Daten.
+ */
+function demoFahrtenbuch(): Promise<boolean> {
+  const viele = new URLSearchParams(window.location.search).get('buch') === 'viele';
+  const formen = DEMO_FAHRTEN.map((f) => f.id);
+  const ids = viele ? Array.from({ length: 120 }, (_, i) => `${formen[i % 2 === 0 ? 0 : 1]}#${i}`) : formen;
+  const basis = (id: string) => id.split('#')[0];
+  const runs: RunMeta[] = ids.map((id) => ({ ...(demoRun(basis(id)) as RunMeta), id })).sort((a, b) => a.started_at.localeCompare(b.started_at));
+  const route: Route = {
+    id: '00000000-0000-4000-8000-0000000000c1',
+    org_id: ORG,
+    name: 'Ortskern Runde (Beispiel)',
+    notes: null,
+    path: demoRun('demo-vorlage')?.planned_path ?? [],
+    length_m: 7800,
+    source: 'recorded',
+    property_ids: [],
+    active: true,
+    created_at: '2026-11-01T06:00:00.000Z',
+  };
+  const lader: FahrtenLader = {
+    async spuren(liste) {
+      return new Map(liste.map((id) => [id, demoRun(basis(id))!] as const).filter(([, r]) => !!r));
+    },
+    async strassen(liste) {
+      return new Map(liste.map((id) => [id, strassenStandAus(demoStrassen(basis(id)))] as const));
+    },
+  };
+  return openReportWindowAfter(() => buildRouteLogHtmlMitDetails(DEMO_ORG, route, runs, '20.10.2026 – 25.11.2026 (Beispiel)', lader));
 }
 
 function DemoFahrtenListe({ base }: { base: string }) {
+  const [fehler, setFehler] = useState<string | null>(null);
   return (
     <div className="page">
       <h1>Beispiel-Fahrten</h1>
@@ -212,6 +267,23 @@ function DemoFahrtenListe({ base }: { base: string }) {
           </li>
         ))}
       </ul>
+      <p>
+        <button
+          type="button"
+          className="btn"
+          data-testid="demo-fahrtenbuch"
+          onClick={() => {
+            setFehler(null);
+            demoFahrtenbuch()
+              .then((ok) => !ok && setFehler('Druckfenster blockiert'))
+              .catch((e) => setFehler(String(e)));
+          }}
+        >
+          Fahrtenbuch-PDF (Sammel-Nachweis) aller Beispiel-Fahrten
+        </button>{' '}
+        <Link to={`${base}/aussendienst/strecken/00000000-0000-4000-8000-0000000000c1?demo&mitfahrt`}>Strecke mit letzter Fahrt (Außendienst)</Link>
+      </p>
+      {fehler && <div className="error-box">{fehler}</div>}
     </div>
   );
 }

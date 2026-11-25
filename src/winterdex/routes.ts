@@ -169,6 +169,25 @@ export async function fetchRun(sb: SupabaseClient, id: string): Promise<Run> {
   return { ...run, track: cleanTrack(run.track), gaps: cleanGaps(run.gaps), photo_urls: run.photo_urls ?? [], photo_total };
 }
 
+/**
+ * Nur die Spuren vieler Fahrten (Fahrtenbuch mit Kartenbildern) — in kleinen Blöcken, weil Spuren groß sind.
+ * Ein Block mit Fehler wird ausgelassen (diese Fahrten dann ohne Kartenbild), nie ein Abbruch.
+ */
+export async function fetchRunTracks(sb: SupabaseClient, ids: readonly string[]): Promise<Map<string, Pick<Run, 'track' | 'gaps' | 'missed'>>> {
+  const out = new Map<string, Pick<Run, 'track' | 'gaps' | 'missed'>>();
+  for (let i = 0; i < ids.length; i += 10) {
+    try {
+      const { data, error } = await sb.from('route_run').select('id, track, gaps, missed').in('id', ids.slice(i, i + 10));
+      if (error) continue;
+      for (const r of (data ?? []) as { id: string; track: unknown; gaps: unknown; missed: unknown }[])
+        out.set(r.id, { track: cleanTrack(r.track), gaps: cleanGaps(r.gaps), missed: Array.isArray(r.missed) ? (r.missed as LatLng[][]) : null });
+    } catch {
+      /* Block auslassen */
+    }
+  }
+  return out;
+}
+
 export async function cancelRun(sb: SupabaseClient, id: string, reason: string): Promise<void> {
   const { error } = await sb.rpc('cancel_route_run', { p_run: id, p_reason: reason });
   if (error) fail('Storno fehlgeschlagen', error);

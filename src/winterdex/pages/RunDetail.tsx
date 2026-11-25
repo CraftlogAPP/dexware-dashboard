@@ -12,19 +12,22 @@ import { VerifyProof } from '../../components/VerifyProof';
 import { isSafeImgSrc } from '../../lib/imgSrc';
 import { fmtDateTime } from '../../lib/format';
 import type { Org } from '../../lib/orgApi';
-import { openReportWindow } from '../../lib/print';
+import { openReportWindowAfter } from '../../lib/print';
 import { gritLabel, WEATHER_SOURCE, weatherLabel } from '../labels';
 import { CoverageBadge } from '../RouteSketch';
 import { FahrtAnsicht } from '../FahrtAnsicht';
-import { buildRunHtml } from '../routeReport';
+import { buildRunHtmlMitKarte } from '../routeReport';
 import { fetchOrgPro, withWatermark } from '../pro';
 import { cancelRun, cleanGaps, fetchRun, fmtDistance, fmtDuration, fmtTimeSpan, type Run } from '../routes';
+import { fetchStrassen, type StrassenStand } from '../strassen';
 
 export function RunDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
   const { data: org } = useOrg();
   const state = useAsync<Run>(() => fetchRun(client, id!), [client, id]);
+  // Straßenverlauf (route_run_strassen) getrennt laden — wirft nie; fehlt er, fehlt nur der Abschnitt
+  const strState = useAsync(() => fetchStrassen(client, id!), [client, id]);
   // Pro vorab laden: das Druckfenster muss direkt beim Klick aufgehen (sonst blockt der Browser das Pop-up)
   const proState = useAsync(() => fetchOrgPro(client), [client]);
 
@@ -33,6 +36,7 @@ export function RunDetail() {
       {(run) => (
         <RunView
           run={run}
+          strassen={strState.data ?? null}
           org={org?.org ?? null}
           pro={proState.data ?? true}
           canCancel={!run.canceled && org?.role === 'owner'}
@@ -49,12 +53,15 @@ export function RunDetail() {
 /** Anzeige einer geladenen Fahrt — ohne eigenen Server-Zugriff (auch für die Beispieldaten im Dev-Server). */
 export function RunView({
   run,
+  strassen = null,
   org,
   pro,
   canCancel,
   onCancel,
 }: {
   run: Run;
+  /** Straßenverlauf (seit 25.11.2026) — null = keiner/noch nicht geladen */
+  strassen?: StrassenStand | null;
   org: Org | null;
   pro: boolean;
   canCancel: boolean;
@@ -62,12 +69,19 @@ export function RunView({
 }) {
   const [canceling, setCanceling] = useState(false);
   const [printErr, setPrintErr] = useState<string | null>(null);
+  const [druckt, setDruckt] = useState(false);
 
+  // Fenster sofort im Klick öffnen („Bericht wird erstellt …“), dann Kartenbild (≤ 8 s, sonst Skizze) + Bericht
   function print() {
     setPrintErr(null);
     if (!org) return setPrintErr('Betrieb nicht geladen.');
-    if (!openReportWindow(withWatermark(buildRunHtml(org, run), pro)))
-      setPrintErr('Das Druckfenster wurde blockiert — bitte Pop-ups für dieses Dashboard erlauben.');
+    setDruckt(true);
+    openReportWindowAfter(async () => withWatermark(await buildRunHtmlMitKarte(org, run, strassen), pro))
+      .then((ok) => {
+        if (!ok) setPrintErr('Das Druckfenster wurde blockiert — bitte Pop-ups für dieses Dashboard erlauben.');
+      })
+      .catch((e) => setPrintErr(`Bericht konnte nicht erstellt werden: ${String((e as Error)?.message ?? e)}`))
+      .finally(() => setDruckt(false));
   }
 
   const hasPlan = !!run.planned_path && run.planned_path.length >= 2;
@@ -136,6 +150,8 @@ export function RunView({
         startedAt={run.started_at}
         endedAt={run.ended_at}
         label={`Karte der Fahrt ${name} vom ${fmtDateTime(run.started_at)}`}
+        strassen={strassen}
+        canceled={run.canceled}
       />
 
       {frei && (
@@ -228,8 +244,8 @@ export function RunView({
       )}
 
       <div className="row" style={{ marginTop: 20 }}>
-        <button className="btn" onClick={print}>
-          <FileDown className="i" aria-hidden /> Nachweis als PDF
+        <button className="btn" onClick={print} disabled={druckt} aria-busy={druckt}>
+          <FileDown className="i" aria-hidden /> {druckt ? 'Bericht mit Karte wird erstellt …' : 'Nachweis als PDF'}
         </button>
         {canCancel && (
           <button className="btn ghost" onClick={() => setCanceling(true)}>

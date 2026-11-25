@@ -25,6 +25,15 @@ export function StreckeDetail() {
     const [route, runs] = await Promise.all([be.getRoute(id), be.listRouteRuns(id, 20)]);
     return { route, runs };
   }, [be, id]);
+  // Letzte gültige Fahrt mit Spur, Uhrzeiten und Straßenverlauf über der Vorlage (wie Dashboard-Strecke/Fahrt-Detail).
+  // Scheitert das Laden (kein Netz), bleibt einfach die Vorlage stehen.
+  const lastId = state.data?.runs.find((r) => !r.canceled)?.id ?? null;
+  const lastState = useAsync(async () => {
+    if (!lastId || !be.getRun) return null;
+    const [run, strassen] = await Promise.all([be.getRun(lastId).catch(() => null), be.getStrassen ? be.getStrassen(lastId).catch(() => null) : null]);
+    return run ? { run, strassen } : null;
+  }, [be, lastId]);
+  const last = lastState.data ?? null;
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
@@ -114,8 +123,27 @@ export function StreckeDetail() {
               </p>
               {route.notes && <p>{route.notes}</p>}
 
-              {/* echte Karte der Vorlage (Skizze als Rückfall ohne Netz) */}
-              <FahrtAnsicht plan={route.path} label={`Karte der Strecke ${route.name}`} zeit={false} />
+              {/* echte Karte der Vorlage + letzte Fahrt mit Uhrzeiten und Straßenverlauf (Skizze als Rückfall ohne Netz) */}
+              <FahrtAnsicht
+                key={last?.run.id ?? 'vorlage'}
+                plan={route.path}
+                track={last?.run.track}
+                missed={last?.run.missed}
+                gaps={last?.run.gaps}
+                startedAt={last?.run.started_at}
+                endedAt={last?.run.ended_at}
+                zeit={!!last}
+                strassen={last?.strassen ?? null}
+                canceled={last?.run.canceled}
+                label={`Karte der Strecke ${route.name}${last ? ` mit der letzten Fahrt vom ${fmtDateTime(last.run.started_at)}` : ''}`}
+              />
+              {last && (
+                <p className="small muted" style={{ marginTop: -8 }}>
+                  Grün: letzte Fahrt vom {fmtDateTime(last.run.started_at)}
+                  {last.run.performer_name ? ` (${last.run.performer_name})` : ''} —{' '}
+                  <Link to={`${base}/strecken/fahrten/${last.run.id}`}>Nachweis mit PDF öffnen</Link>
+                </p>
+              )}
 
               {route.active && (
                 <Link to={`${list}/${route.id}/fahren`} className="btn ez-save">
