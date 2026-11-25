@@ -3,7 +3,16 @@
 //   Pro:    unbegrenzt, PDF ohne Wasserzeichen, Team.
 // Ob ein Betrieb Pro hat, sagt der SERVER (RPC org_pro_active: Abo des Inhabers bei Google Play/RevenueCat inkl. Team-Stufen,
 // Suite-Abo, Kommunal-Lizenz, Empfehlungs-Bonus, Freischaltung auf Rechnung über org.pro_bonus_until) — dieselbe Auskunft
-// nutzt die App für Mitarbeiter. Antwortet der Server nicht eindeutig, gilt „Pro“: nie einen zahlenden Betrieb zu Unrecht sperren.
+// nutzt die App für Mitarbeiter.
+//
+// Antwortet der Server NICHT eindeutig (RevenueCat/Suite gestört → null, Netzfehler), gilt seit 25.11.2026:
+//   · GRENZEN (Objekt/Strecke anlegen oder wieder aktivieren, Import) — orgProFuerGrenze(): der letzte SICHERE Stand
+//     dieses Kontos in diesem Browser (35 Tage); gibt es keinen, freundlich „Pro-Status wird geprüft — gleich nochmal“.
+//     Vorher galt hier „im Zweifel Pro“ → bei jeder Störung waren die Grenzen offen (auch der Import).
+//   · ANZEIGE (Wasserzeichen, Excel-Liste, Team-Hinweis) — fetchOrgPro(): letzter sicherer Stand, sonst Pro (einen
+//     zahlenden Betrieb nie wegen einer Störung mit Wasserzeichen ärgern).
+// Zusätzlich prüft der Server selbst (NACHTRAG-GRATIS-GRENZE-2026-11-25, Auslöser auf property/route) — seine Ablehnung
+// erkennt istGratisGrenze().
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -15,22 +24,99 @@ export const PRO_HOW =
   'Pro schließt du in der WinterDex-App (Android) unter „Abo“ ab. Kein Android-Gerät? Wir schalten Pro auch auf Rechnung frei (39,99 € pro Jahr) — schreib uns an support@dexware.app.';
 export const PRO_MAILTO = 'mailto:support@dexware.app?subject=WinterDex%20Pro%20auf%20Rechnung';
 
-const cache = new WeakMap<SupabaseClient, { v: boolean; at: number }>();
-const FRESH_MS = 5 * 60 * 1000;
+/** Meldung, wenn der Pro-Status gerade nicht sicher feststellbar ist (statt still zu erlauben oder falsch zu sperren). */
+export const PRO_UNKLAR =
+  'Der Pro-Status deines Betriebs lässt sich gerade nicht prüfen (der Abo-Dienst antwortet nicht). Bitte in einer Minute noch einmal versuchen.';
 
-export async function fetchOrgPro(sb: SupabaseClient, fresh = false): Promise<boolean> {
-  const hit = cache.get(sb);
-  if (!fresh && hit && Date.now() - hit.at < FRESH_MS) return hit.v;
-  try {
-    const { data, error } = await sb.rpc('org_pro_active');
-    if (error || data === null || data === undefined) return true; // unklar → nicht sperren (nicht merken)
-    const v = data === true;
-    cache.set(sb, { v, at: Date.now() });
-    return v;
-  } catch {
-    return true;
+export class ProUnklarError extends Error {
+  constructor() {
+    super(PRO_UNKLAR);
+    this.name = 'ProUnklarError';
   }
 }
+
+const cache = new WeakMap<SupabaseClient, { v: boolean; at: number }>();
+const FRESH_MS = 5 * 60 * 1000;
+/** So lange gilt der letzte sichere Stand bei einer Störung (wie der Server: 35 Tage). */
+const LETZTER_MS = 35 * 24 * 60 * 60 * 1000;
+const KEY = 'winterdex.orgPro.';
+
+async function nutzerId(sb: SupabaseClient): Promise<string | null> {
+  try {
+    const { data } = await sb.auth.getSession();
+    return data.session?.user.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function merke(uid: string | null, v: boolean): void {
+  if (!uid) return;
+  try {
+    localStorage.setItem(KEY + uid, JSON.stringify({ v, at: Date.now() }));
+  } catch {
+    /* privates Fenster / Speicher gesperrt: dann eben ohne Merker */
+  }
+}
+
+function letzterStand(uid: string | null): boolean | null {
+  if (!uid) return null;
+  try {
+    const j = JSON.parse(localStorage.getItem(KEY + uid) ?? 'null') as { v?: unknown; at?: unknown } | null;
+    if (j && typeof j.v === 'boolean' && typeof j.at === 'number' && Date.now() - j.at < LETZTER_MS) return j.v;
+  } catch {
+    /* kaputter Eintrag: wie keiner */
+  }
+  return null;
+}
+
+/**
+ * Pro des Betriebs: true/false, null = nicht sicher feststellbar. Eine sichere Server-Antwort wird gemerkt (5 Minuten im
+ * Speicher, als „letzter sicherer Stand“ 35 Tage im Browser); bei Störung kommt der letzte sichere Stand zurück.
+ */
+export async function orgProStand(sb: SupabaseClient, fresh = false): Promise<boolean | null> {
+  const hit = cache.get(sb);
+  if (!fresh && hit && Date.now() - hit.at < FRESH_MS) return hit.v;
+  const uid = await nutzerId(sb);
+  try {
+    const { data, error } = await sb.rpc('org_pro_active');
+    if (!error && typeof data === 'boolean') {
+      cache.set(sb, { v: data, at: Date.now() });
+      merke(uid, data);
+      return data;
+    }
+  } catch {
+    /* Netz weg — unten der letzte sichere Stand */
+  }
+  return letzterStand(uid);
+}
+
+/** Für ANZEIGE (Wasserzeichen, Excel-Liste, Team-Hinweis): unklar ohne letzten Stand → Pro (nie zu Unrecht ärgern). */
+export async function fetchOrgPro(sb: SupabaseClient, fresh = false): Promise<boolean> {
+  return (await orgProStand(sb, fresh)) ?? true;
+}
+
+/**
+ * Für GRENZEN (Anlegen, Wieder-Aktivieren, Import): immer frisch gefragt; unklar → letzter sicherer Stand; gibt es keinen,
+ * wirft ProUnklarError (freundlicher Text PRO_UNKLAR) — weder still erlauben noch einen Zahlenden fälschlich sperren.
+ */
+export async function orgProFuerGrenze(sb: SupabaseClient): Promise<boolean> {
+  const v = await orgProStand(sb, true);
+  if (v === null) throw new ProUnklarError();
+  return v;
+}
+
+/** Hat der SERVER wegen der Gratis-Grenze abgelehnt? (Auslöser aus NACHTRAG-GRATIS-GRENZE-2026-11-25) */
+export function istGratisGrenze(e: unknown): boolean {
+  const err = (typeof e === 'object' && e !== null ? e : {}) as { hint?: unknown; message?: unknown };
+  return (
+    (typeof err.hint === 'string' && err.hint.startsWith('gratis_grenze')) ||
+    (typeof err.message === 'string' && err.message.includes('Gratis-Grenze'))
+  );
+}
+
+/** Text an der Objekt-Grenze (Dialog, Import, Server-Ablehnung). */
+export const GRENZE_OBJEKTE = `Im Gratis-Paket sind ${FREE_PROPERTIES} aktive Objekte möglich — unbegrenzt viele gibt es mit Pro. ${PRO_HOW}`;
 
 /** Wasserzeichen wie im PDF der App („Erstellt mit WinterDex Free“) — nur ohne Pro. */
 export function withWatermark(html: string, pro: boolean): string {

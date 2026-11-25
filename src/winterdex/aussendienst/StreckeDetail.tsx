@@ -14,6 +14,7 @@ import { isNetworkError } from '../einsatz/backend';
 import { useEinsatz } from '../einsatz/context';
 import { fmtDur } from './geo';
 import { FREE_ROUTES, FREE_ROUTES_TEXT } from './Strecken';
+import { ProUnklarError, istGratisGrenze } from '../pro';
 
 export function StreckeDetail() {
   const { id = '' } = useParams();
@@ -50,6 +51,8 @@ export function StreckeDetail() {
       setEditing(false);
       state.reload();
     } catch (e) {
+      // Server-Grenze (NACHTRAG-GRATIS-GRENZE-2026-11-25): wie die eigene Prüfung → Hinweis mit Pro-Weg
+      if (istGratisGrenze(e)) return setAsk('gate');
       const m = String((e as { message?: string })?.message ?? e);
       setError(
         isNetworkError(e)
@@ -72,7 +75,11 @@ export function StreckeDetail() {
       } catch (e) {
         // ohne diese Meldung passierte beim Tippen ohne Netz einfach nichts
         return setError(
-          isNetworkError(e) ? 'Zum Ändern einer Strecke braucht es kurz Internet. Bitte bei Empfang erneut versuchen.' : `Nicht gespeichert: ${String((e as Error)?.message ?? e)}`,
+          isNetworkError(e)
+            ? 'Zum Ändern einer Strecke braucht es kurz Internet. Bitte bei Empfang erneut versuchen.'
+            : e instanceof ProUnklarError
+              ? e.message
+              : `Nicht gespeichert: ${String((e as Error)?.message ?? e)}`,
         );
       }
     }

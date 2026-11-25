@@ -15,7 +15,7 @@ import { newId } from '../einsatz/data';
 import { emitPendingChanged, onPendingChanged } from '../einsatz/store';
 import { pathLengthM, round6 } from './geo';
 import { nextTryLabel as nextLabel } from '../../lib/retryLater';
-import { FREE_ROUTES, PRO_HOW } from '../pro';
+import { FREE_ROUTES, PRO_HOW, PRO_UNKLAR, ProUnklarError, istGratisGrenze } from '../pro';
 import { deleteActiveRun, deletePendingRun, getActiveRun, listPendingRuns, type ActiveRun, type PendingRun } from './runStore';
 
 export { FREE_ROUTES };
@@ -42,7 +42,7 @@ export function Strecken() {
   const [active, setActive] = useState<ActiveRun | null>(null);
   const [pending, setPending] = useState<PendingRun[]>([]);
   const [creating, setCreating] = useState(false);
-  const [gate, setGate] = useState(false);
+  const [gate, setGate] = useState<false | 'grenze' | 'unklar'>(false);
   const [discard, setDiscard] = useState<'active' | PendingRun | null>(null);
   const [query, setQuery] = useState('');
 
@@ -68,7 +68,12 @@ export function Strecken() {
   }, [userId]);
 
   const newRoute = async (routes: Route[]) => {
-    if (routes.filter((r) => r.active).length >= FREE_ROUTES && !(await be.isPro())) return setGate(true);
+    if (routes.filter((r) => r.active).length >= FREE_ROUTES) {
+      // Pro unklar (Abo-Dienst gestört, kein letzter sicherer Stand) → Hinweis „gleich nochmal“ statt still erlauben
+      const pro = await be.isPro().catch((e: unknown) => (e instanceof ProUnklarError ? null : Promise.reject(e)));
+      if (pro === null) return setGate('unklar');
+      if (!pro) return setGate('grenze');
+    }
     setCreating(true);
   };
 
@@ -270,8 +275,8 @@ export function Strecken() {
       </LoadGuard>
 
       {gate && (
-        <Modal title="Mehr Strecken mit Pro" onClose={() => setGate(false)} dirty={false}>
-          <p>{FREE_ROUTES_TEXT}</p>
+        <Modal title={gate === 'unklar' ? 'Pro-Status wird geprüft' : 'Mehr Strecken mit Pro'} onClose={() => setGate(false)} dirty={false}>
+          <p>{gate === 'unklar' ? PRO_UNKLAR : FREE_ROUTES_TEXT}</p>
           <div className="ez-actions">
             <button type="button" className="btn ez-big" onClick={() => setGate(false)}>
               Verstanden
@@ -349,7 +354,9 @@ function NeueStrecke({ onClose, onSaved }: { onClose: () => void; onSaved: (id: 
       setError(
         isNetworkError(e)
           ? 'Zum Speichern einer Strecke braucht es kurz Internet. Bitte bei Empfang erneut versuchen.'
-          : `Nicht gespeichert: ${e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e)}`,
+          : istGratisGrenze(e) // Server-Grenze (zweites Gerät hat inzwischen eine Strecke aktiv)
+            ? FREE_ROUTES_TEXT
+            : `Nicht gespeichert: ${e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e)}`,
       );
     } finally {
       setBusy(false);

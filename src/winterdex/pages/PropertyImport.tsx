@@ -25,7 +25,7 @@ import {
   type PlanRow,
   type Table,
 } from '../importObjects';
-import { FREE_PROPERTIES, PRO_HOW, PRO_MAILTO, fetchOrgPro } from '../pro';
+import { FREE_PROPERTIES, GRENZE_OBJEKTE, PRO_HOW, PRO_MAILTO, fetchOrgPro, istGratisGrenze, orgProFuerGrenze } from '../pro';
 import { DUTY_DEFAULTS, DUTY_HINTS, LAND_LABELS, type DutyTimes, type Land, type Property } from '../types';
 
 // Objekte aus einer Excel-/CSV-Liste anlegen (nur Inhaber). Logik in ../importObjects.ts, hier nur die drei Schritte:
@@ -39,7 +39,7 @@ const CHUNK = 50;
  */
 const GEO_MAX = 200;
 /** Fehler, bei denen jede weitere Zeile genauso scheitert — dann nicht Zeile für Zeile weiterprobieren */
-const FATAL = /keine Verbindung|fehlt dir die Berechtigung|Anmeldung ist abgelaufen/;
+const FATAL = /keine Verbindung|fehlt dir die Berechtigung|Anmeldung ist abgelaufen|Im Gratis-Paket/;
 
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString('de-DE')} ${n === 1 ? one : many}`;
 
@@ -243,9 +243,10 @@ function ImportFlow({
     cancelGeo.current = false;
     let created = 0;
     try {
-      // Frisch vom Server: Objektliste (nichts doppelt anlegen) und Pro (Gratis-Grenze) — im Zweifel Pro.
+      // Frisch vom Server: Objektliste (nichts doppelt anlegen) und Pro (Gratis-Grenze). Pro unklar → letzter sicherer
+      // Stand, sonst Abbruch mit „gleich nochmal“ (ProUnklarError) — nicht mehr „im Zweifel Pro“ (unbegrenzter Import).
       setPhase({ step: 'check' });
-      const [fresh, proNow] = await Promise.all([fetchProperties(client), fetchOrgPro(client, true)]);
+      const [fresh, proNow] = await Promise.all([fetchProperties(client), orgProFuerGrenze(client)]);
       const { rows, already, overLimit } = finalRows(plan, new Set(plan.rows.filter(isSel).map((r) => r.i)), fresh, proNow);
 
       // Standort aus der Adresse (OpenStreetMap, ≥ 1,1 s Abstand; nur mit PLZ und Ort) — abbrechbar, dann ohne Standort weiter
@@ -263,7 +264,9 @@ function ImportFlow({
       const items = rows.map((r) => ({ r, row: propertyRow(orgId, r.input!, undefined, loc.get(r.i) ?? null) }));
       const failed: Result['failed'] = [];
       const okIds = new Set<number>();
-      const why = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^Objekte konnten nicht angelegt werden: /, '');
+      // Lehnt der Server wegen der Gratis-Grenze ab (Auslöser NACHTRAG-GRATIS-GRENZE-2026-11-25), scheitert jede weitere Zeile genauso.
+      const why = (e: unknown) =>
+        istGratisGrenze(e) ? GRENZE_OBJEKTE : (e instanceof Error ? e.message : String(e)).replace(/^Objekte konnten nicht angelegt werden: /, '');
       let fatal = '';
       for (let k = 0; k < items.length; k += CHUNK) {
         setPhase({ step: 'save', done: k, total: items.length });

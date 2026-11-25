@@ -17,7 +17,7 @@ import { lastOpByProperty } from '../labels';
 import { PropertyDialog } from '../dialogs';
 import { Modal } from '../../components/form';
 import { useOrg } from '../../components/OrgContext';
-import { FREE_PROPERTIES, PRO_HOW, PRO_MAILTO, fetchOrgPro } from '../pro';
+import { FREE_PROPERTIES, PRO_HOW, PRO_MAILTO, PRO_UNKLAR, ProUnklarError, orgProFuerGrenze } from '../pro';
 import type { DutyTimes, Property } from '../types';
 
 interface Data {
@@ -30,7 +30,7 @@ export function Properties() {
   // Objekte anlegen/ändern darf am Server nur der Inhaber (property_insert/update) — sonst kämen nur Fehlermeldungen.
   const owner = useOrg().data?.role === 'owner';
   const [editing, setEditing] = useState<Property | 'new' | null>(null);
-  const [gate, setGate] = useState(false);
+  const [gate, setGate] = useState<false | 'grenze' | 'unklar'>(false);
 
   const state = useAsync<Data>(async () => {
     const [properties, meta] = await Promise.all([
@@ -71,9 +71,14 @@ export function Properties() {
                 className="btn"
                 onClick={() => {
                   void (async () => {
-                    // Gratis: 2 aktive Objekte (wie in der App); Pro laut Server, im Zweifel erlaubt.
+                    // Gratis: 2 aktive Objekte (wie in der App); Pro laut Server. Unklar → letzter sicherer Stand,
+                    // sonst Hinweis „gleich nochmal“ (nicht mehr „im Zweifel erlaubt“). Der Dialog prüft beim Speichern erneut.
                     const count = (state.data?.properties ?? []).filter((p) => p.active).length;
-                    if (count >= FREE_PROPERTIES && !(await fetchOrgPro(client, true))) return setGate(true);
+                    if (count >= FREE_PROPERTIES) {
+                      const pro = await orgProFuerGrenze(client).catch((e) => (e instanceof ProUnklarError ? null : Promise.reject(e)));
+                      if (pro === null) return setGate('unklar');
+                      if (!pro) return setGate('grenze');
+                    }
                     setEditing('new');
                   })();
                 }}
@@ -148,11 +153,15 @@ export function Properties() {
       </LoadGuard>
 
       {gate && (
-        <Modal title="Mehr Objekte mit Pro" onClose={() => setGate(false)} dirty={false}>
-          <p>
-            Im Gratis-Paket sind {FREE_PROPERTIES} aktive Objekte möglich — unbegrenzt viele gibt es mit Pro. {PRO_HOW}{' '}
-            <a href={PRO_MAILTO}>E-Mail schreiben</a>
-          </p>
+        <Modal title={gate === 'unklar' ? 'Pro-Status wird geprüft' : 'Mehr Objekte mit Pro'} onClose={() => setGate(false)} dirty={false}>
+          {gate === 'unklar' ? (
+            <p>{PRO_UNKLAR}</p>
+          ) : (
+            <p>
+              Im Gratis-Paket sind {FREE_PROPERTIES} aktive Objekte möglich — unbegrenzt viele gibt es mit Pro. {PRO_HOW}{' '}
+              <a href={PRO_MAILTO}>E-Mail schreiben</a>
+            </p>
+          )}
           <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
             <button type="button" className="btn" onClick={() => setGate(false)}>
               Verstanden

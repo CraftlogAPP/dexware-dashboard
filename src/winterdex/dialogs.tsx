@@ -3,7 +3,7 @@ import { useOrg } from '../components/OrgContext';
 import { FormDialog, orNull, s, type FormValues } from '../components/form';
 import { saveProperty, fetchProperties } from './api';
 import { locateAddress } from './geo';
-import { FREE_PROPERTIES, PRO_HOW, fetchOrgPro } from './pro';
+import { FREE_PROPERTIES, GRENZE_OBJEKTE, istGratisGrenze, orgProFuerGrenze } from './pro';
 import type { Property } from './types';
 
 export function PropertyDialog({
@@ -22,34 +22,39 @@ export function PropertyDialog({
   async function onSave(v: FormValues) {
     if (!org) throw new Error('Kein Betrieb geladen');
     // Gratis-Paket: höchstens 2 aktive Objekte (wie in der App) — gilt fürs Anlegen und fürs Wieder-Aktivieren.
+    // Pro-Status unklar (Abo-Dienst gestört, kein letzter Stand) → ProUnklarError mit freundlichem Text (nicht still erlauben).
     const wasActive = property !== 'new' && property.active;
     if (v.active === true && !wasActive) {
       const others = (await fetchProperties(client)).filter((p) => p.active && (property === 'new' || p.id !== property.id)).length;
-      if (others >= FREE_PROPERTIES && !(await fetchOrgPro(client, true))) {
-        throw new Error(`Im Gratis-Paket sind ${FREE_PROPERTIES} aktive Objekte möglich. ${PRO_HOW}`);
-      }
+      if (others >= FREE_PROPERTIES && !(await orgProFuerGrenze(client))) throw new Error(GRENZE_OBJEKTE);
     }
     // Wie die App: ohne Standort die Adresse in Koordinaten umrechnen (Wetter-Rückgriff, Glätte-Frühwarnung,
     // GPS-Abstand im Nachweis). Nur mit PLZ und Ort (sonst eher ein falscher Ort als keiner — siehe geo.ts).
     // Best effort — klappt es nicht, wird trotzdem gespeichert.
     const address = s(v.address);
     const location = noLocation ? ((await locateAddress(address)).point ?? undefined) : undefined;
-    await saveProperty(
-      client,
-      org.org.id,
-      {
-        name: s(v.name),
-        address,
-        customer_name: orNull(v.customer_name),
-        customer_contact: orNull(v.customer_contact),
-        areas: orNull(v.areas),
-        duty_times: { mo_fr: s(v.duty_mo_fr), sa: s(v.duty_sa), so: s(v.duty_so) },
-        notes: orNull(v.notes),
-        active: v.active === true,
-      },
-      property === 'new' ? undefined : property,
-      location,
-    );
+    // Der Server prüft die Grenze selbst (z. B. zweites Gerät hat inzwischen angelegt) — seine Ablehnung verständlich zeigen.
+    try {
+      await saveProperty(
+        client,
+        org.org.id,
+        {
+          name: s(v.name),
+          address,
+          customer_name: orNull(v.customer_name),
+          customer_contact: orNull(v.customer_contact),
+          areas: orNull(v.areas),
+          duty_times: { mo_fr: s(v.duty_mo_fr), sa: s(v.duty_sa), so: s(v.duty_so) },
+          notes: orNull(v.notes),
+          active: v.active === true,
+        },
+        property === 'new' ? undefined : property,
+        location,
+      );
+    } catch (e) {
+      if (istGratisGrenze(e)) throw new Error(GRENZE_OBJEKTE);
+      throw e;
+    }
     onSaved();
   }
 

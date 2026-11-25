@@ -22,7 +22,7 @@ import { useEinsatz } from '../einsatz/context';
 import { getPerformerName, newId, setPerformerName } from '../einsatz/data';
 import type { FormValues } from '../einsatz/store';
 import { Felder } from './Felder';
-import { PRO_HOW } from '../pro';
+import { PRO_HOW, istGratisGrenze } from '../pro';
 import { coverage, flatTrack, fmtDur, simplify, thinTrack, type Coverage } from './geo';
 import { useRecorder } from './recorder';
 import { isIOS } from '../../lib/pwa';
@@ -258,7 +258,9 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
             ? 'Zum Speichern einer Strecke braucht es kurz Internet. Die Aufnahme bleibt gesichert — bitte bei Empfang erneut auf „Strecke speichern“ tippen.'
             : /row-level security|permission denied/i.test(String((e as Error)?.message))
               ? 'Strecken anlegen und ändern kann nur der Inhaber des Betriebs.'
-              : e instanceof Error
+              : istGratisGrenze(e) // Server-Grenze — Aufnahme bleibt gesichert
+                ? `Im Gratis-Paket ist 1 aktive Strecke möglich. Die Aufnahme bleibt gesichert — mit Pro hier unter „Strecken“ fortsetzen und speichern. ${PRO_HOW}`
+                : e instanceof Error
                 ? e.message
                 : String(e),
         );
