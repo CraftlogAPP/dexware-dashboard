@@ -75,7 +75,8 @@ export function einloeseWeg(app: GutscheinApp): { app: string; web: string; webT
     };
   }
   return {
-    app: `In der ${APP_NAME[app]}-App: Einstellungen → „Code einlösen“`,
+    // Apps: ObjektDex Reiter „Mehr“ → „Code einlösen“, SpielDex Reiter „Mehr“ (Einstellungen-Seite) → „Code einlösen“
+    app: `In der ${APP_NAME[app]}-App: Mehr → „Code einlösen“`,
     web: `/app/${app}/code-einloesen`,
     webText: `hier im ${APP_NAME[app]}-Dashboard`,
   };
