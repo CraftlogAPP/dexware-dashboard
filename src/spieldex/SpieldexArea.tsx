@@ -27,6 +27,8 @@ import { SPIELDEX_DEMO_ROWS, SPIELDEX_VOR_ORT } from './vorOrt';
 
 // Import ist Schreibtischarbeit: eigene Seite, erst beim Öffnen geladen (nicht in „Vor Ort“)
 const PlaygroundImport = lazy(() => import('./pages/PlaygroundImport').then((m) => ({ default: m.PlaygroundImport })));
+// Jahresabo-Dankeschön aus WinterDex einlösen (direkt erreichbar, Link auf der Abo-Seite)
+const CodeEinloesen = lazy(() => import('../components/CodeEinloesen').then((m) => ({ default: m.CodeEinloesen })));
 
 // „Vor Ort“ mit Beispieldaten — nur im Dev-Server (/app/spieldex/vor-ort?demo), fehlt im Produktions-Build.
 const VorOrtDemo = import.meta.env.DEV
@@ -94,6 +96,20 @@ export function SpieldexArea({ app }: { app: AppConfig }) {
               <Route path="team" element={<TeamPage />} />
               <Route path="bericht" element={<Report />} />
               <Route path="abo" element={<AboPage />} />
+              <Route
+                path="code-einloesen"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="empty">
+                        <span className="spinner" />
+                      </div>
+                    }
+                  >
+                    <CodeEinloesen />
+                  </Suspense>
+                }
+              />
               <Route path="rueckmeldung" element={<FeedbackForm />} />
               <Route path="rueckmeldungen" element={<FeedbackAdminPage />} />
             </Route>

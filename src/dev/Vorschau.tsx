@@ -17,9 +17,15 @@ import {
 import { APPS, appIcon } from '../apps/registry';
 import { FormDialog } from '../components/form';
 import { gpsProofHtml, proofStampHtml } from '../lib/gpsProof';
+import { GutscheinFehler, type DankeschoenApi, type EinloesenApi, type Gutschein, type GutscheinApp } from '../lib/gutschein';
 
 export function Vorschau() {
   const [params] = useSearchParams();
+  // Jahresabo-Dankeschön: …?app=winterdex&seite=dankeschoen&zustand=neu|code|eingeloest|probe|monat|ohne|fehler
+  //                       …?app=spieldex|objektdex&seite=code-einloesen[&zustand=erfolg][&rolle=mitarbeiter]
+  //                         (WD-ABCD-2345 klappt, WD-2222-2222 unbekannt,
+  //                         WD-3333-3333 andere App, WD-4444-4444 schon eingelöst, sonst fremder Code)
+  if (params.get('seite') === 'dankeschoen' || params.get('seite') === 'code-einloesen') return <GutscheinVorschau params={params} />;
   // ObjektDex hat einen eigenen Beispieldaten-Bereich (alle Seiten bedienbar)
   if (params.get('app') === 'objektdex') return <Navigate to={`/app/objektdex?demo${params.has('sauber') ? '&sauber' : ''}`} replace />;
   // WinterDex „Nach dem Winter weitermachen“ (im Bereich erst sichtbar mit OBJEKTDEX_OEFFENTLICH): …&seite=nach-dem-winter&typ=gemeinde|galabau|hausbetreuung
@@ -52,6 +58,73 @@ function NachDemWinterVorschau({ typ }: { typ: string }) {
       </div>
     </div>
   );
+}
+
+const DankeschoenInhalt = lazy(() => import('../winterdex/pages/Dankeschoen').then((m) => ({ default: m.DankeschoenInhalt })));
+const CodeEinloesenInhalt = lazy(() => import('../components/CodeEinloesen').then((m) => ({ default: m.CodeEinloesenInhalt })));
+
+function GutscheinVorschau({ params }: { params: URLSearchParams }) {
+  const seite = params.get('seite');
+  const appId = seite === 'dankeschoen' ? 'winterdex' : params.get('app') === 'objektdex' ? 'objektdex' : 'spieldex';
+  const app = APPS.find((a) => a.id === appId)!;
+  const style = { '--accent': app.theme.accent, '--on-accent': app.theme.onAccent, '--bg': app.theme.bg } as React.CSSProperties;
+  const [apis] = useState(() => gutscheinDemo(params.get('zustand') ?? 'neu', appId as GutscheinApp));
+  return (
+    <div className="app-scope" style={style}>
+      <div className="page">
+        <Suspense fallback={null}>
+          {seite === 'dankeschoen' ? (
+            <DankeschoenInhalt api={apis.dank} />
+          ) : (
+            <CodeEinloesenInhalt
+              app={appId as GutscheinApp}
+              api={apis.einloesen}
+              inhaber={params.get('rolle') !== 'mitarbeiter'}
+              vorschauProBis={params.get('zustand') === 'erfolg' ? new Date(Date.now() + 30 * 864e5).toISOString() : null}
+            />
+          )}
+        </Suspense>
+      </div>
+    </div>
+  );
+}
+
+/** Beispiel-Server für die Vorschau (kein Netz). */
+function gutscheinDemo(zustand: string, app: GutscheinApp): { dank: DankeschoenApi; einloesen: EinloesenApi } {
+  const warte = (ms = 450) => new Promise((r) => setTimeout(r, ms));
+  const inEinemJahr = new Date(Date.now() + 365 * 864e5).toISOString();
+  let g: Gutschein | null =
+    zustand === 'code'
+      ? { code: 'WD-7K3M-9P2X', app: 'objektdex', gueltig_bis: inEinemJahr, eingeloest_am: null, pro_bis: null }
+      : zustand === 'eingeloest'
+        ? { code: 'WD-7K3M-9P2X', app: 'spieldex', gueltig_bis: inEinemJahr, eingeloest_am: new Date().toISOString(), pro_bis: new Date(Date.now() + 30 * 864e5).toISOString() }
+        : null;
+  const dank: DankeschoenApi = {
+    async status() {
+      await warte();
+      if (zustand === 'fehler') throw new GutscheinFehler('server');
+      if (zustand === 'probe') return { berechtigt: false, grund: 'kein_jahresabo', probe_bis: new Date(Date.now() + 5 * 864e5).toISOString(), gutschein: null };
+      if (zustand === 'monat') return { berechtigt: false, grund: 'kein_jahresabo', gutschein: null };
+      if (zustand === 'ohne') return { berechtigt: false, grund: 'kein_abo', gutschein: null };
+      return { berechtigt: true, gutschein: g };
+    },
+    async waehlen(a) {
+      await warte(600);
+      g = g ? { ...g, app: a } : { code: 'WD-7K3M-9P2X', app: a, gueltig_bis: inEinemJahr, eingeloest_am: null, pro_bis: null };
+      return g;
+    },
+  };
+  const einloesen: EinloesenApi = {
+    async einloesen(code) {
+      await warte(700);
+      if (code === 'WD-ABCD-2345') return { pro_bis: new Date(Date.now() + 30 * 864e5).toISOString() };
+      if (code === 'WD-2222-2222') throw new GutscheinFehler('code_unbekannt');
+      if (code === 'WD-3333-3333') throw new GutscheinFehler('falsche_app', { app: app === 'objektdex' ? 'spieldex' : 'objektdex' });
+      if (code === 'WD-4444-4444') throw new GutscheinFehler('schon_eingeloest', { app, pro_bis: new Date(Date.now() + 12 * 864e5).toISOString() });
+      throw new GutscheinFehler('nicht_dein_code');
+    },
+  };
+  return { dank, einloesen };
 }
 
 function VorschauInhalt({ params }: { params: URLSearchParams }) {

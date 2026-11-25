@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import { Building2, CreditCard, FileDown, LayoutDashboard, MessageSquare, Monitor, Route as RouteIcon, Snowflake, Sprout, Truck, Users } from 'lucide-react';
+import { Building2, CreditCard, FileDown, Gift, LayoutDashboard, MessageSquare, Monitor, Route as RouteIcon, Snowflake, Sprout, Truck, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
 import { AppArea } from '../components/AppArea';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -31,6 +31,7 @@ import { registerLogoutCount } from '../lib/logoutGuard';
 import { installWebApp } from '../lib/pwa';
 import { roleLabel } from '../lib/orgApi';
 import { OBJEKTDEX_OEFFENTLICH } from '../lib/ganzjahr';
+import { dankeschoenApi } from '../lib/gutschein';
 
 // Abmelde-Rückfrage auf ALLEN WinterDex-Seiten (auch im Dashboard), nicht nur im Außendienst: wartende Einsätze und
 // Fahrten, angefangene Einsätze und eine unterbrochene Aufzeichnung liegen nur auf diesem Gerät.
@@ -54,6 +55,9 @@ const PropertyImport = lazy(() => import('./pages/PropertyImport').then((m) => (
 
 // „Nach dem Winter weitermachen“ (Ganzjahres-Brücke) — Eintrag UND Adresse erst, wenn ObjektDex öffentlich ist (lib/ganzjahr.ts)
 const NachDemWinter = lazy(() => import('./pages/NachDemWinter').then((m) => ({ default: m.NachDemWinter })));
+
+// „Dein Dankeschön“ (Jahresabo-Dankeschön, 25.11.2026): Adresse immer erreichbar, Eintrag links nur für Berechtigte.
+const Dankeschoen = lazy(() => import('./pages/Dankeschoen').then((m) => ({ default: m.Dankeschoen })));
 
 function demoWanted(): boolean {
   try {
@@ -103,6 +107,20 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
               <Route path="abo" element={<AboPage />} />
               <Route path="rueckmeldungen" element={<NurDexware><FeedbackAdminPage /><FeedbackZentral /></NurDexware>} />
               <Route path="rueckmeldung" element={<FeedbackForm />} />
+              <Route
+                path="dankeschoen"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="empty">
+                        <span className="spinner" />
+                      </div>
+                    }
+                  >
+                    <Dankeschoen />
+                  </Suspense>
+                }
+              />
               {OBJEKTDEX_OEFFENTLICH && (
                 <Route
                   path="nach-dem-winter"
@@ -220,6 +238,15 @@ function Shell() {
   const { app, client } = useAppAuth();
   // Nur für Dexware selbst (Konten aus app_admin): Rückmeldungen aus der App lesen und bedanken.
   const admin = useAsync<boolean>(() => fetchFeedbackAdmin(client), [client]);
+  // Eintrag „Dein Dankeschön“ nur für Jahreskunden bzw. wer schon einen Code hat (Server nicht erreichbar → ausgeblendet)
+  const dank = useAsync<boolean>(async () => {
+    try {
+      const s = await dankeschoenApi(async () => (await client.auth.getSession()).data.session?.access_token).status();
+      return s.berechtigt || !!s.gutschein;
+    } catch {
+      return false;
+    }
+  }, [client]);
   const { data } = useOrg();
   const { pathname } = useLocation();
   // Absolute Pfade: Die Shell rendert in einer pathless Layout-Route unter einer
@@ -238,6 +265,9 @@ function Shell() {
         <NavLink to={`${base}/team`}><Users className="i" aria-hidden /> Team</NavLink>
         <NavLink to={`${base}/bericht`}><FileDown className="i" aria-hidden /> Nachweis-PDF</NavLink>
         <NavLink to={`${base}/abo`}><CreditCard className="i" aria-hidden /> Abo</NavLink>
+        {(dank.data === true || pathname.startsWith(`${base}/dankeschoen`)) && (
+          <NavLink to={`${base}/dankeschoen`}><Gift className="i" aria-hidden /> Dein Dankeschön</NavLink>
+        )}
         {OBJEKTDEX_OEFFENTLICH && (
           <NavLink to={`${base}/nach-dem-winter`}><Sprout className="i" aria-hidden /> Nach dem Winter</NavLink>
         )}

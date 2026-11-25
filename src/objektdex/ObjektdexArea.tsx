@@ -35,6 +35,8 @@ const LeistungenSeite = lazy(() => import('./pages/Leistungen').then((m) => ({ d
 const ObjekteImport = lazy(() => import('./pages/ObjekteImport').then((m) => ({ default: m.ObjekteImport })));
 // Ganzjahres-Nachweis (WinterDex + ObjektDex in einem PDF) erst beim Öffnen laden (bringt die WinterDex-Anmeldung mit)
 const Jahresnachweis = lazy(() => import('./pages/Jahresnachweis').then((m) => ({ default: m.Jahresnachweis })));
+// Jahresabo-Dankeschön aus WinterDex einlösen (direkt erreichbar, Link auf der Abo-Seite)
+const CodeEinloesen = lazy(() => import('../components/CodeEinloesen').then((m) => ({ default: m.CodeEinloesen })));
 
 const spinner = (
   <div className="empty">
@@ -144,6 +146,7 @@ export function OdRoutes() {
         <Route path="links" element={<Links />} />
         <Route path="team" element={<Team />} />
         <Route path="abo" element={<AboOrHint />} />
+        <Route path="code-einloesen" element={<CodeOrHint />} />
         <Route path="aus-winterdex" element={<Lazy><AusWinterdex /></Lazy>} />
       </Route>
     </Routes>
@@ -153,6 +156,17 @@ export function OdRoutes() {
 function AboOrHint() {
   const { demo } = useOd();
   return demo ? <div className="info-box">Abo-Anzeige gibt es nur mit echtem Konto (RevenueCat).</div> : <AboPage />;
+}
+
+function CodeOrHint() {
+  const { demo } = useOd();
+  return demo ? (
+    <div className="info-box">Code einlösen gibt es nur mit echtem Konto (Vorschau: /vorschau?app=spieldex&amp;seite=code-einloesen).</div>
+  ) : (
+    <Lazy>
+      <CodeEinloesen />
+    </Lazy>
+  );
 }
 
 function Shell() {

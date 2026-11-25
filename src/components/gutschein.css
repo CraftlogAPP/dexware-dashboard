@@ -1,0 +1,262 @@
+/* Jahresabo-Dankeschön (25.11.2026): WinterDex „Dein Dankeschön“ (winterdex/pages/Dankeschoen.tsx) und
+   „Code einlösen“ in ObjektDex/SpielDex (components/CodeEinloesen.tsx). Nur Bausteine aus index.css + diese Ergänzungen. */
+
+.gs-page {
+  max-width: 980px;
+}
+.gs-page h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gs-h1-icon {
+  width: 26px;
+  height: 26px;
+  color: var(--accent-text);
+  flex: none;
+}
+.gs-lead {
+  max-width: 720px;
+  margin-top: -4px;
+}
+
+/* ---------- Auswahl (3 Karten) ---------- */
+.gs-wahl {
+  margin-top: 14px;
+}
+.gs-karte .tile-foot {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.gs-karte.gs-aktiv {
+  border-color: color-mix(in oklab, var(--tile-accent) 55%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tile-accent) 35%, transparent);
+}
+.gs-hinweis {
+  flex: none !important;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.gs-fuss {
+  margin-top: 14px;
+  max-width: 720px;
+}
+
+/* ---------- Code ---------- */
+.gs-code-karte {
+  max-width: 660px;
+  margin-top: 12px;
+}
+.gs-code-zeile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.gs-code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed color-mix(in oklab, var(--accent) 55%, var(--border));
+  background: var(--accent-soft);
+  color: var(--text);
+  white-space: nowrap;
+  user-select: all;
+}
+@media (max-width: 420px) {
+  .gs-code {
+    font-size: 22px;
+    padding: 8px 12px;
+  }
+}
+.gs-neu-zeile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-weight: 600;
+  color: var(--accent-text);
+  animation: gs-fade 0.4s ease both;
+}
+.gs-neu .gs-code {
+  animation: gs-code-in 0.6s cubic-bezier(0.2, 0.7, 0.3, 1) 0.1s both;
+}
+.gs-anleitung {
+  margin: 14px 0 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.gs-anleitung h3 {
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+.gs-anleitung ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.gs-erfolg-zeile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.gs-haken {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--green);
+}
+.gs-leer {
+  max-width: 660px;
+}
+
+/* ---------- Einlösen ---------- */
+.gs-form {
+  max-width: 580px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gs-eingabe-zeile {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.gs-form label.field {
+  margin-bottom: 0;
+}
+.gs-eingabe {
+  flex: 1 1 220px;
+  min-width: 0;
+  width: auto;
+  margin: 0;
+  height: 46px;
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.gs-eingabe::placeholder {
+  letter-spacing: 0.08em;
+  opacity: 0.45;
+}
+.gs-eingabe-zeile .btn {
+  height: 46px;
+}
+
+/* ---------- Erfolg: ruhig. Kreis zeichnet sich, der Haken folgt, ein sanfter Ring breitet sich EINMAL aus. ---------- */
+.gs-erfolg {
+  max-width: 580px;
+  padding: 32px 24px 26px;
+  text-align: center;
+  animation: gs-hoch 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.gs-erfolg h2 {
+  margin: 0 0 2px;
+  font-size: 22px;
+}
+.gs-erfolg-bild {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 14px;
+}
+.gs-erfolg-bild svg {
+  display: block;
+  overflow: visible;
+}
+.gs-kreis {
+  fill: color-mix(in oklab, var(--accent) 10%, transparent);
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-dasharray: 176;
+  stroke-dashoffset: 176;
+  transform: rotate(-90deg);
+  transform-origin: 32px 32px;
+  animation: gs-zeichnen 0.7s cubic-bezier(0.65, 0, 0.35, 1) 0.1s forwards;
+}
+.gs-strich {
+  fill: none;
+  stroke: var(--accent-text);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: gs-zeichnen 0.45s cubic-bezier(0.65, 0, 0.35, 1) 0.7s forwards;
+}
+.gs-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: gs-ring 1.4s ease-out 0.95s 1 both;
+}
+.gs-erfolg-bis {
+  margin: 0 0 12px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
+  animation: gs-fade 0.5s ease 0.9s both;
+}
+
+@keyframes gs-zeichnen {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes gs-ring {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 45%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 22px transparent;
+  }
+}
+@keyframes gs-hoch {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+@keyframes gs-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes gs-code-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+    letter-spacing: 0.18em;
+  }
+}
+
+/* Bewegung reduziert: alles sofort im Endzustand, nichts blinkt oder zeichnet sich */
+@media (prefers-reduced-motion: reduce) {
+  .gs-erfolg,
+  .gs-erfolg-bis,
+  .gs-neu .gs-code,
+  .gs-neu-zeile,
+  .gs-karte {
+    animation: none;
+  }
+  .gs-ring {
+    display: none;
+  }
+  .gs-kreis,
+  .gs-strich {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

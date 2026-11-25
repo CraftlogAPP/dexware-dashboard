@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+import { Ticket } from 'lucide-react';
 import { useAppAuth } from '../auth/AppAuthContext';
 import {
   loadAboInfo,
@@ -171,6 +173,14 @@ function AboContent({ info }: { info: AboInfo }) {
             aktiv und läuft dann automatisch aus.
           </p>
         </div>
+      )}
+
+      {/* Jahresabo-Dankeschön aus WinterDex (25.11.2026): Einlösen in ObjektDex/SpielDex (BaumDex im eigenen Portal) */}
+      {(app.id === 'objektdex' || app.id === 'spieldex') && (
+        <p className="muted small" style={{ margin: 0 }}>
+          <Ticket className="i" aria-hidden style={{ width: 15, height: 15, verticalAlign: '-2px' }} /> Du hast einen
+          Dankeschön-Code aus WinterDex (WD-…)? <Link to={`/app/${app.id}/code-einloesen`}>Code einlösen</Link>
+        </p>
       )}
     </div>
   );
