@@ -5,6 +5,7 @@ import { fmtDate, fmtDateTime, fmtTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
 import { isSafeImgSrc } from '../lib/imgSrc';
 import { gritLabel, WEATHER_SOURCE_HTML, weatherLabel } from './labels';
+import { nachweisZone, zonenHinweis } from './nachweisZeit';
 import {
   ACTION_LABELS,
   LEGAL_BASIS,
@@ -25,21 +26,21 @@ function esc(s: string): string {
 const GPS_WEAK_M = 50;
 const mapLink = (lat: number, lng: number) =>
   `https://www.google.com/maps/search/?api=1&amp;query=${lat.toFixed(6)},${lng.toFixed(6)}`;
-function stamp(label: string, lat?: number | null, lng?: number | null, acc?: number | null, at?: string | null, dist?: number | null, mocked?: boolean | null): string {
+function stamp(label: string, lat?: number | null, lng?: number | null, acc?: number | null, at?: string | null, dist?: number | null, mocked?: boolean | null, timeZone?: string): string {
   if (lat == null || lng == null) return `<div><b>${label}:</b> kein GPS</div>`;
   const warn: string[] = [];
   if (acc != null && acc > GPS_WEAK_M) warn.push(`Ortung ungenau (±${Math.round(acc)} m)`);
   if (dist != null && dist > Math.max(100, (acc ?? 0) * 2)) warn.push(`${Math.round(dist)} m vom Objekt entfernt`);
   if (mocked) warn.push('Fake-GPS gemeldet (Android)');
-  return `<div><b>${label}</b>${at ? ` ${fmtTime(at)}` : ''} · ${lat.toFixed(5)}, ${lng.toFixed(5)}${acc != null ? ` · ±${Math.round(acc)} m` : ''}${
+  return `<div><b>${label}</b>${at ? ` ${fmtTime(at, timeZone)}` : ''} · ${lat.toFixed(5)}, ${lng.toFixed(5)}${acc != null ? ` · ±${Math.round(acc)} m` : ''}${
     dist != null ? ` · ${Math.round(dist)} m vom Objekt` : ''
   } · <a href="${mapLink(lat, lng)}">Karte</a></div>${warn.map((w) => `<div style="color:#B91C1C;font-weight:700">Achtung: ${w}</div>`).join('')}`;
 }
-function gpsProofCell(op: OperationWithPhotos): string {
+function gpsProofCell(op: OperationWithPhotos, timeZone?: string): string {
   if (op.lat == null && op.end_lat == null) return '<span style="color:#B91C1C;font-weight:700">kein GPS-Stempel</span>';
-  return stamp('Beginn', op.lat, op.lng, op.gps_accuracy_m, op.gps_at, op.distance_m, op.gps_mocked) +
+  return stamp('Beginn', op.lat, op.lng, op.gps_accuracy_m, op.gps_at, op.distance_m, op.gps_mocked, timeZone) +
     (op.end_lat != null
-      ? stamp('Ende', op.end_lat, op.end_lng, op.end_accuracy_m, op.end_gps_at, op.end_distance_m, op.end_mocked)
+      ? stamp('Ende', op.end_lat, op.end_lng, op.end_accuracy_m, op.end_gps_at, op.end_distance_m, op.end_mocked, timeZone)
       : // Seit 20.11.2026 nur aus einer höchstens 2 Minuten alten Position — sonst bewusst keiner (z. B. Handy gesperrt).
         // Ausdrücklich nennen, damit das Fehlen nicht wie ein Lesefehler wirkt (gps_at = Einsatz mit Prüfnachweis-Feldern). Wie die App.
         op.gps_at
@@ -73,9 +74,10 @@ function fotoZelle(op: OperationWithPhotos, ohneAnhang = false): string {
 /**
  * Einsatz-Tabelle des Nachweises (Datum/Uhrzeit mit Server-Eingang + Prüfcode, Maßnahme, Streumittel, Wetterlage,
  * GPS-Stempel, Person, Fotos) — auch für den Ganzjahres-Nachweis im ObjektDex-Bereich. Klassen: canceled, small, mono.
- * `ohneFotoAnhang`: Fotos werden nur gezählt, nicht angehängt.
+ * `ohneFotoAnhang`: Fotos werden nur gezählt, nicht angehängt. `timeZone`: Ortszeit des Betriebs (nachweisZone) — ohne Angabe
+ * die Zeitzone des Geräts (wie bisher, z. B. Ganzjahres-Nachweis).
  */
-export function einsatzTabelle(ops: OperationWithPhotos[], ohneFotoAnhang = false): string {
+export function einsatzTabelle(ops: OperationWithPhotos[], ohneFotoAnhang = false, timeZone?: string): string {
   const rows = ops
     .map((op) => {
       const action = op.canceled
@@ -84,19 +86,19 @@ export function einsatzTabelle(ops: OperationWithPhotos[], ohneFotoAnhang = fals
           }`
         : esc(ACTION_LABELS[op.action]);
       const grit = esc(gritLabel(op.grit_material, op.grit_amount));
-      const time = `${fmtDate(op.started_at)}<br>${fmtTime(op.started_at)}${
-        op.ended_at ? ` – ${fmtTime(op.ended_at)}` : ''
+      const time = `${fmtDate(op.started_at, timeZone)}<br>${fmtTime(op.started_at, timeZone)}${
+        op.ended_at ? ` – ${fmtTime(op.ended_at, timeZone)}` : ''
       }`;
       const proof =
         (op.entry_hash
-          ? `<br><span class="small">Server-Eingang ${fmtDateTime(op.received_at ?? op.created_at)}</span><br><span class="small mono">Prüfcode ${esc(op.entry_hash.slice(0, 12))}</span>`
+          ? `<br><span class="small">Server-Eingang ${fmtDateTime(op.received_at ?? op.created_at, timeZone)}</span><br><span class="small mono">Prüfcode ${esc(op.entry_hash.slice(0, 12))}</span>`
           : '') + (op.nachgetragen ? '<div style="color:#B91C1C;font-weight:700">Nachgetragen*</div>' : '');
       return `<tr class="${op.canceled ? 'canceled' : ''}">
         <td>${time}${proof}</td>
         <td>${action}${op.notes?.trim() ? `<div style="font-size:10px">Notiz: ${esc(op.notes.trim())}</div>` : ''}</td>
         <td>${grit}</td>
         <td>${esc(weatherLabel(op.weather))}</td>
-        <td class="small">${gpsProofCell(op)}</td>
+        <td class="small">${gpsProofCell(op, timeZone)}</td>
         <td>${esc(op.performer_name ?? '—')}</td>
         <td>${fotoZelle(op, ohneFotoAnhang)}</td>
       </tr>`;
@@ -119,12 +121,12 @@ export function einsatzTabelle(ops: OperationWithPhotos[], ohneFotoAnhang = fals
 }
 
 /** Foto-Anhang (leer, wenn kein Einsatz ein anzeigbares Foto hat). Klassen: photo-group, photos. */
-export function fotoAnhang(ops: OperationWithPhotos[]): string {
+export function fotoAnhang(ops: OperationWithPhotos[], timeZone?: string): string {
   return ops
     .filter((op) => op.photo_urls.some(isSafeImgSrc))
     .map(
       (op) => `<div class="photo-group">
-        <h3>${fmtDateTime(op.started_at)} — ${esc(ACTION_LABELS[op.action])}${
+        <h3>${fmtDateTime(op.started_at, timeZone)} — ${esc(ACTION_LABELS[op.action])}${
           op.canceled ? ' (STORNIERT)' : ''
         }</h3>
         <div class="photos">
@@ -142,7 +144,9 @@ export function buildReportHtml(
   periodLabel: string,
 ): string {
   const hasProof = ops.some((o) => !!o.entry_hash);
-  const photoBlocks = fotoAnhang(ops);
+  // Uhrzeiten IMMER in der Ortszeit des Betriebs, nie in der des Geräts — wie der Fahrt-Nachweis (Regel 1 zu Fund 31)
+  const tz = nachweisZone(org.land);
+  const photoBlocks = fotoAnhang(ops, tz);
 
   return `<!doctype html>
 <html lang="de">
@@ -180,9 +184,10 @@ export function buildReportHtml(
       ? ` (zzgl. ${ops.filter((o) => o.canceled).length} stornierte Einträge, gekennzeichnet)`
       : ''
   }</div>
+  <div class="meta">${esc(zonenHinweis(tz, org.land, ops.map((o) => Date.parse(o.started_at))))}</div>
   <div class="legal">${esc(LEGAL_BASIS[org.land])}</div>
 
-  ${einsatzTabelle(ops)}
+  ${einsatzTabelle(ops, false, tz)}
 
   ${photoBlocks ? `<h2>Foto-Anhang</h2>${photoBlocks}` : ''}
   ${hasProof ? PROOF_NOTE : ''}
@@ -190,7 +195,7 @@ export function buildReportHtml(
 
   <div class="footer">
     <span>Erstellt mit WinterDex — winterdex.dexware.app${ops.some((o) => o.weather) ? ` · ${WEATHER_SOURCE_HTML}` : ''}</span>
-    <span>Erstellt am ${fmtDateTime(new Date().toISOString())}</span>
+    <span>Erstellt am ${fmtDateTime(new Date().toISOString(), tz)}</span>
   </div>
 </body>
 </html>`;

@@ -251,6 +251,8 @@ export interface OperationInput {
   grit_amount: string | null;
   notes: string | null;
   performer_name: string | null;
+  /** feste Kennung je Formular (Regel 1 zu Fund 45): ein zweites „Speichern“ nach verlorener Antwort legt nichts doppelt an */
+  id?: string;
 }
 
 /** Einsatz nachtragen (append-only, wie app-seitiges addOperation — ohne GPS/Fotos). */
@@ -261,7 +263,7 @@ export async function addOperation(
   input: OperationInput,
 ): Promise<void> {
   const { error } = await sb.from('operation').insert({
-    id: crypto.randomUUID(),
+    id: input.id ?? crypto.randomUUID(),
     org_id: orgId,
     property_id: input.property_id,
     started_at: input.started_at,
@@ -279,7 +281,8 @@ export async function addOperation(
     performer_name: input.performer_name,
     created_at: new Date().toISOString(),
   });
-  if (error) fail('Einsatz konnte nicht gespeichert werden', error);
+  // 23505 mit fester Kennung = der erste Versuch ist schon angekommen (nur die Antwort ging verloren) → gespeichert
+  if (error && !(input.id && error.code === '23505')) fail('Einsatz konnte nicht gespeichert werden', error);
 }
 
 /** Einsatz stornieren — bleibt sichtbar, wird nur gekennzeichnet (RPC wie die App). */

@@ -4,6 +4,8 @@ import { fetchOperationWithPhotos, fetchProperty } from '../api';
 import { ActionBadge, LoadGuard, useAsync } from '../../components/ui';
 import { fmtDateTime, fmtNum, fmtTime, gpsLabel } from '../../lib/format';
 import { VerifyProof } from '../../components/VerifyProof';
+import { useOrg } from '../../components/OrgContext';
+import { nachweisZone } from '../nachweisZeit';
 import { isSafeImgSrc } from '../../lib/imgSrc';
 import { gritLabel, WEATHER_SOURCE } from '../labels';
 import type { OperationWithPhotos, Property } from '../types';
@@ -16,6 +18,9 @@ interface Data {
 export function OperationDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
+  // Ortszeit des Betriebs wie im Nachweis-PDF (Regel 1 zu Fund 31), nicht die Zeitzone des Geräts
+  const { data: orgData } = useOrg();
+  const tz = nachweisZone(orgData?.org?.land);
 
   const state = useAsync<Data>(async () => {
     const op = await fetchOperationWithPhotos(client, id!);
@@ -33,7 +38,7 @@ export function OperationDetail() {
               <Link to="../einsaetze">← Alle Einsätze</Link>
             </p>
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h1 style={{ marginBottom: 0 }}>Einsatz · {fmtDateTime(op.started_at)}</h1>
+              <h1 style={{ marginBottom: 0 }}>Einsatz · {fmtDateTime(op.started_at, tz)}</h1>
               <ActionBadge action={op.action} canceled={op.canceled} />
             </div>
             <p className="muted">
@@ -47,7 +52,7 @@ export function OperationDetail() {
 
             {op.canceled && (
               <div className="error-box">
-                Storniert am {fmtDateTime(op.canceled_at)} — Begründung:{' '}
+                Storniert am {fmtDateTime(op.canceled_at, tz)} — Begründung:{' '}
                 {op.cancel_reason ?? '—'}
               </div>
             )}
@@ -56,8 +61,8 @@ export function OperationDetail() {
               <div className="card">
                 <div className="kpi-label">Zeitraum</div>
                 <div>
-                  {fmtTime(op.started_at)}
-                  {op.ended_at ? ` – ${fmtTime(op.ended_at)}` : ' (offen)'}
+                  {fmtTime(op.started_at, tz)}
+                  {op.ended_at ? ` – ${fmtTime(op.ended_at, tz)}` : ' (offen)'}
                 </div>
               </div>
               <div className="card">
@@ -69,13 +74,13 @@ export function OperationDetail() {
                 <div className="mono small">
                   {op.end_lat != null ? 'Beginn: ' : ''}
                   {gpsLabel(op.lat, op.lng, op.gps_accuracy_m)}
-                  {op.gps_at ? ` · ${fmtTime(op.gps_at)}` : ''}
+                  {op.gps_at ? ` · ${fmtTime(op.gps_at, tz)}` : ''}
                   {op.distance_m != null ? ` · ${Math.round(op.distance_m)} m vom Objekt` : ''}
                 </div>
                 {op.end_lat != null && (
                   <div className="mono small">
                     Ende: {gpsLabel(op.end_lat, op.end_lng ?? null, op.end_accuracy_m ?? null)}
-                    {op.end_gps_at ? ` · ${fmtTime(op.end_gps_at)}` : ''}
+                    {op.end_gps_at ? ` · ${fmtTime(op.end_gps_at, tz)}` : ''}
                     {op.end_distance_m != null ? ` · ${Math.round(op.end_distance_m)} m vom Objekt` : ''}
                   </div>
                 )}
@@ -101,7 +106,7 @@ export function OperationDetail() {
                 )}
                 {op.entry_hash && (
                   <div className="muted small">
-                    Server-Eingang {fmtDateTime(op.received_at ?? op.created_at)} · Prüfcode{' '}
+                    Server-Eingang {fmtDateTime(op.received_at ?? op.created_at, tz)} · Prüfcode{' '}
                     <span className="mono">{op.entry_hash.slice(0, 12)}</span>
                   </div>
                 )}

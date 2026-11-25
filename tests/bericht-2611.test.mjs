@@ -321,5 +321,50 @@ console.log('\n[16] Zeile „Unterbrechungen der Aufzeichnung“ = Grenzen der Z
   check('Fahrt-Detail: gleiche Zeile über unterbrechungenFuer', /unterbrechungenFuer\(run, F\)/.test(rd) && !/cleanGaps\(run\.gaps\)/.test(rd));
 }
 
+console.log('\n[31b] Objekt-Einsatz-Nachweis ebenfalls in der Zone des Betriebs (Regel 1 zu Fund 31, Prüfer 26.11.)');
+{
+  const WR = await web('src/winterdex/report.ts');
+  const op = {
+    id: 'e1', property_id: 'p1', started_at: '2026-11-25T05:10:00Z', ended_at: '2026-11-25T05:40:00Z', action: 'cleared',
+    grit_material: null, grit_amount: null, notes: null, performer_name: 'Test', photo_urls: [], photo_total: 0, weather: null,
+    canceled: false, lat: 48.1, lng: 16.1, gps_accuracy_m: 5, gps_at: '2026-11-25T05:10:30Z', distance_m: 12, gps_mocked: false,
+    end_lat: null, end_lng: null, entry_hash: 'abcdef0123456789', received_at: '2026-11-25T05:41:00Z', created_at: '2026-11-25T05:41:00Z',
+  };
+  const html = WR.buildReportHtml(orgAT, { id: 'p1', name: 'Objekt 1', address: 'Hauptplatz 1' }, [op], 'November 2026');
+  check('Gerät auf UTC: Einsatz 06:10–06:40 (Wien), GPS 06:10, Eingang 06:41 — nicht 05:10', /06:10/.test(html) && /06:40/.test(html) && /06:41/.test(html) && !/05:10/.test(html) && !/05:40/.test(html));
+  check('Zone im Kopf genannt', /Alle Uhrzeiten in Ortszeit Österreich \(Europe\/Vienna/.test(html));
+  const od = lies('src/winterdex/pages/OperationDetail.tsx');
+  check('Einsatz-Detail: alle Uhrzeiten mit tz (nachweisZone)', /nachweisZone\(orgData\?\.org\?\.land\)/.test(od) && !/fmt(DateTime|Time)\(op\.[a-z_]+\)/.test(od));
+  check('Ganzjahres-Nachweis (ohne Zone) unverändert aufrufbar', typeof WR.einsatzTabelle([op]) === 'string');
+}
+
+console.log('\n[45b] Einsatz nachtragen: eine Kennung je Formular (Regel 1 zu Fund 45, Prüfer 26.11.)');
+{
+  const op = lies('src/winterdex/pages/Operations.tsx');
+  const api = lies('src/winterdex/api.ts');
+  check('Kennung beim Öffnen des Formulars festgelegt, nicht je Klick auf Speichern', /setNeuId\(crypto\.randomUUID\(\)\);\s*setAdding\(true\)/.test(op) && /id: neuId \?\? undefined/.test(op));
+  check('addOperation nimmt die feste Kennung, 23505 mit fester Kennung = schon gespeichert', /id: input\.id \?\? crypto\.randomUUID\(\)/.test(api) && /!\(input\.id && error\.code === '23505'\)/.test(api));
+  // Verhalten mit nachgestelltem Server: erster Versuch kommt an (Antwort verloren), zweiter trifft dieselbe Kennung
+  const zeilen = new Map();
+  const sb = { from: () => ({ insert: async (row) => (zeilen.has(row.id) ? { error: { code: '23505', message: 'duplicate key' } } : (zeilen.set(row.id, row), { error: null })) }) };
+  const eingabe = { property_id: 'p1', started_at: '2026-11-25T05:00:00Z', ended_at: null, action: 'cleared', grit_material: null, grit_amount: null, notes: null, performer_name: null, id: 'feste-id-1' };
+  await API.addOperation(sb, 'o', 'u', eingabe);
+  let wurf = null;
+  try {
+    await API.addOperation(sb, 'o', 'u', eingabe);
+  } catch (e) {
+    wurf = e;
+  }
+  check('zweites Speichern mit derselben Kennung: kein Fehler, nur EIN Einsatz', wurf === null && zeilen.size === 1, String(wurf));
+  let wurf2 = null;
+  try {
+    await API.addOperation(sb, 'o', 'u', { ...eingabe, id: undefined, property_id: 'p2' });
+    await API.addOperation({ from: () => ({ insert: async () => ({ error: { code: '23505', message: 'x' } }) }) }, 'o', 'u', { ...eingabe, id: undefined });
+  } catch (e) {
+    wurf2 = e;
+  }
+  check('ohne feste Kennung bleibt 23505 ein Fehler', wurf2 !== null);
+}
+
 console.log(`\n${fail === 0 ? 'ALLES GRÜN' : 'FEHLER'}: ${ok} ok, ${fail} Fehler`);
 process.exit(fail === 0 ? 0 : 1);

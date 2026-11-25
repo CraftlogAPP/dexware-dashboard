@@ -27,6 +27,8 @@ export function Operations() {
   const { client, session, app } = useAppAuth();
   const { data: org } = useOrg();
   const [adding, setAdding] = useState(false);
+  // eine Kennung je geöffnetem Formular: „Speichern“ nach verlorener Antwort nochmal = derselbe Einsatz, nicht doppelt
+  const [neuId, setNeuId] = useState<string | null>(null);
   // Gratis nach Ablauf von Pro: Ablehnung des Servers → Auswahl/Tausch bzw. Pro statt Formular-Fehler
   const [gratis, setGratis] = useState<{ art: GratisArt; propertyId: string } | null>(null);
   const { pathname } = useLocation();
@@ -75,6 +77,7 @@ export function Operations() {
         grit_amount: orNull(v.grit_amount),
         notes: orNull(v.notes),
         performer_name: orNull(v.performer_name),
+        id: neuId ?? undefined,
       });
     } catch (e) {
       const art = gratisArt(e);
@@ -116,7 +119,13 @@ export function Operations() {
         <h1 style={{ margin: 0 }}>Einsätze</h1>
         <div className="spacer" />
         {canBackfill && (
-          <button className="btn" onClick={() => setAdding(true)}>
+          <button
+            className="btn"
+            onClick={() => {
+              setNeuId(crypto.randomUUID());
+              setAdding(true);
+            }}
+          >
             ＋ Einsatz nachtragen
           </button>
         )}
