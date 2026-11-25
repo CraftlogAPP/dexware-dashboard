@@ -20,7 +20,8 @@ const lies = (f) => readFileSync(path.join(here, '..', f), 'utf8').replace(/\r\n
 let ok = 0;
 let fail = 0;
 const check = (name, cond, extra = '') => {
-  cond ? ok++ : fail++;
+  if (cond) ok++;
+  else fail++;
   console.log(`${cond ? '  ok  ' : 'FEHLER'}  ${name}${cond || !extra ? '' : '  → ' + extra}`);
 };
 
@@ -63,7 +64,7 @@ console.log('\n[2] Antwort lesen, RPC fehlt');
   check('pro unbekannt bleibt null', G.leseLage({ ...voll, pro: null }).pro === null);
   let aufrufe = 0;
   const gut = { rpc: async () => (aufrufe++, { data: voll, error: null }) };
-  check('RPC liefert Lage', (await G.fetchGratisLage(gut))?.aktive_objekte === 5);
+  check('RPC liefert Lage', (await G.fetchGratisLage(gut))?.aktive_objekte === 5 && aufrufe === 1, String(aufrufe));
   const kaputt = { rpc: async () => { throw new Error('netz'); } };
   check('Netzfehler → null (wirft nie)', (await G.fetchGratisLage(kaputt)) === null);
   const anderer = { rpc: async () => ({ data: null, error: { code: '500', message: 'boom' } }) };
