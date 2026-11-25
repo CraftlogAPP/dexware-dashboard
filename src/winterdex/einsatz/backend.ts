@@ -8,6 +8,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllOf } from '../../lib/completeQueries';
 import { fetchRoute, fetchRoutes, fetchRuns } from '../routes';
 import { orgProFuerGrenze } from '../pro';
+import { nachTour } from '../tour';
 import type { OperationAction, Property, WeatherSnapshot } from '../types';
 import type { LatLng, Route, RunMeta, Track } from '../routes';
 
@@ -179,7 +180,8 @@ export function supabaseBackend(
     async listProperties() {
       const { data, error } = await fetchAllOf(() => sb.from('property').select('*'), [['name']]);
       if (error) throw error;
-      return (data ?? []) as Property[];
+      // Tour-Reihenfolge (teamweit), leere zuletzt, dann Name
+      return ((data ?? []) as Property[]).sort(nachTour);
     },
 
     async listTodayOps() {

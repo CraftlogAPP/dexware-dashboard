@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FileUp } from 'lucide-react';
+import { ArrowDownUp, FileUp } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import {
   fetchOperationMeta,
@@ -19,6 +19,9 @@ import { Modal } from '../../components/form';
 import { useOrg } from '../../components/OrgContext';
 import { FREE_PROPERTIES, PRO_HOW, PRO_MAILTO, PRO_UNKLAR, ProUnklarError, orgProFuerGrenze } from '../pro';
 import type { DutyTimes, Property } from '../types';
+import { TourReihenfolge } from '../GratisHinweise';
+import { aufGratisAenderung } from '../gratisLage';
+import { hatTourSpalte } from '../tour';
 
 interface Data {
   properties: Property[];
@@ -31,6 +34,7 @@ export function Properties() {
   const owner = useOrg().data?.role === 'owner';
   const [editing, setEditing] = useState<Property | 'new' | null>(null);
   const [gate, setGate] = useState<false | 'grenze' | 'unklar'>(false);
+  const [tour, setTour] = useState(false);
 
   const state = useAsync<Data>(async () => {
     const [properties, meta] = await Promise.all([
@@ -39,6 +43,11 @@ export function Properties() {
     ]);
     return { properties, lastByProp: lastOpByProperty(meta) };
   }, [client]);
+  // Nach „Objekte wählen“ (Gratis nach Ablauf von Pro) sind Objekte stillgelegt → Liste auffrischen
+  useEffect(() => aufGratisAenderung(state.refresh), [state.refresh]);
+  // „Reihenfolge ändern“ nur, wenn die Datenbank die Spalte schon kennt (sonst gar nicht anbieten) und es etwas zu sortieren gibt
+  const props = state.data?.properties ?? [];
+  const tourMoeglich = owner && hatTourSpalte(props) && props.filter((p) => p.active).length >= 2;
 
   const { data: org } = useOrg();
   /** Objektliste als Excel — frisch geladen, damit gerade Angelegtes dabei ist. */
@@ -62,6 +71,11 @@ export function Properties() {
             onExport={exportExcel}
             title="Alle Objekte als Excel-Datei — lässt sich unter „Objekte importieren“ wieder einlesen"
           />
+          {tourMoeglich && (
+            <button className="btn ghost" onClick={() => setTour(true)} title="Reihenfolge der Tour festlegen — gilt für das ganze Team">
+              <ArrowDownUp className="i" aria-hidden /> Reihenfolge ändern
+            </button>
+          )}
           {owner && (
             <>
               <Link className="btn ghost" to="import" title="Objekte aus einer Excel- oder CSV-Liste übernehmen">
@@ -168,6 +182,17 @@ export function Properties() {
             </button>
           </div>
         </Modal>
+      )}
+
+      {tour && (
+        <TourReihenfolge
+          objekte={props}
+          onClose={() => setTour(false)}
+          onSaved={() => {
+            setTour(false);
+            state.reload();
+          }}
+        />
       )}
 
       {editing && (

@@ -39,6 +39,8 @@ export interface Property {
   notes: string | null;
   active: boolean;
   created_at: string;
+  /** Tour-Reihenfolge (teamweit); fehlt, solange NACHTRAG-GRATIS-NACH-ABLAUF nicht eingespielt ist */
+  tour_pos?: number | null;
 }
 
 export type OperationAction =

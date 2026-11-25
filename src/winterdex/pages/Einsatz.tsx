@@ -12,6 +12,9 @@ import { isToday } from '../einsatz/amount';
 import { deletePending, emitPendingChanged, listDraftPropertyIds, type Pending } from '../einsatz/store';
 import { nextTryLabel as nextLabel } from '../../lib/retryLater';
 import { isIOS, isStandalone } from '../../lib/pwa';
+import { GratisFehler } from '../GratisHinweise';
+import { aufGratisAenderung, gratisArt } from '../gratisLage';
+import { nachTour } from '../tour';
 
 const HOME_HINT_KEY = 'wd-home-hinweis-weg';
 
@@ -19,6 +22,8 @@ export function Einsatz() {
   const { be, userId, orgId, base, owner } = useEinsatz();
   const state = useAsync(() => loadEinsatzData(be, userId, orgId), [be, userId, orgId]);
   useLiveRefresh([state.refresh]);
+  // Nach „Objekte wählen“ (Gratis nach Ablauf von Pro) sind Objekte stillgelegt → Liste auffrischen
+  useEffect(() => aufGratisAenderung(state.refresh), [state.refresh]);
   const { pending, sending, sendNow } = usePendingSync();
   const [draftPropIds, setDraftPropIds] = useState<string[]>([]);
   const [query, setQuery] = useState('');
@@ -133,6 +138,20 @@ export function Einsatz() {
           <button type="button" className="btn small" onClick={sendNow} disabled={sending}>
             {sending ? 'Sendet …' : 'Jetzt senden'}
           </button>
+          {/* Gratis nach Ablauf von Pro: statt nur „nicht angenommen“ gleich wählen/tauschen bzw. Pro holen */}
+          {(() => {
+            const g = pending.find((p) => p.lastError && gratisArt(p.lastError));
+            const art = g ? gratisArt(g.lastError) : null;
+            return g && art ? (
+              <GratisFehler
+                art={art}
+                zielId={g.row.property_id}
+                aboUrl={`${base}/abo`}
+                zusatz="Die wartenden Einsätze bleiben auf diesem Gerät gesichert und gehen nach der Auswahl (oder mit Pro) raus."
+                onGewaehlt={sendNow}
+              />
+            ) : null;
+          })()}
         </div>
       )}
 
@@ -151,10 +170,8 @@ export function Einsatz() {
           const q = query.trim().toLowerCase();
           const shown = active
             .filter((p) => !q || `${p.name} ${p.address} ${p.customer_name ?? ''}`.toLowerCase().includes(q))
-            .sort(
-              (a, b) =>
-                Number(doneAt.has(a.id)) - Number(doneAt.has(b.id)) || a.name.localeCompare(b.name, 'de'),
-            );
+            // heute offene zuerst, darin in Tour-Reihenfolge (teamweit, leere zuletzt), dann Name
+            .sort((a, b) => Number(doneAt.has(a.id)) - Number(doneAt.has(b.id)) || nachTour(a, b));
           const doneCount = active.filter((p) => doneAt.has(p.id)).length;
 
           if (active.length === 0) {

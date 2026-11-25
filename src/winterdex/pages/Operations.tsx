@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { GratisFehler } from '../GratisHinweise';
+import { gratisArt, type GratisArt } from '../gratisLage';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { isOwnerOrAdmin } from '../../lib/orgApi';
@@ -22,9 +24,13 @@ import { gritLabel, propertyNameMap, WEATHER_SOURCE, weatherLabel } from '../lab
 import { ACTION_LABELS, type Operation, type OperationAction } from '../types';
 
 export function Operations() {
-  const { client, session } = useAppAuth();
+  const { client, session, app } = useAppAuth();
   const { data: org } = useOrg();
   const [adding, setAdding] = useState(false);
+  // Gratis nach Ablauf von Pro: Ablehnung des Servers → Auswahl/Tausch bzw. Pro statt Formular-Fehler
+  const [gratis, setGratis] = useState<{ art: GratisArt; propertyId: string } | null>(null);
+  const { pathname } = useLocation();
+  const aboUrl = pathname.includes('/aussendienst') ? `/app/${app.id}/aussendienst/abo` : `/app/${app.id}/abo`;
   const [canceling, setCanceling] = useState<Operation | null>(null);
   const [propertyId, setPropertyId] = useState('');
   const [from, setFrom] = useState(() => {
@@ -59,16 +65,24 @@ export function Operations() {
     if (Date.parse(started) > Date.now() + 5 * 60 * 1000) throw new Error('Der Beginn liegt in der Zukunft. Nachgetragen werden nur erledigte Einsätze.');
     const ended = isoFromLocal(v.ended_at);
     if (ended && Date.parse(ended) < Date.parse(started)) throw new Error('Das Ende liegt vor dem Beginn — bitte die Zeiten prüfen.');
-    await addOperation(client, org.org.id, session.user.id, {
-      property_id: s(v.property_id),
-      started_at: started,
-      ended_at: isoFromLocal(v.ended_at),
-      action: s(v.action) as OperationAction,
-      grit_material: orNull(v.grit_material),
-      grit_amount: orNull(v.grit_amount),
-      notes: orNull(v.notes),
-      performer_name: orNull(v.performer_name),
-    });
+    try {
+      await addOperation(client, org.org.id, session.user.id, {
+        property_id: s(v.property_id),
+        started_at: started,
+        ended_at: isoFromLocal(v.ended_at),
+        action: s(v.action) as OperationAction,
+        grit_material: orNull(v.grit_material),
+        grit_amount: orNull(v.grit_amount),
+        notes: orNull(v.notes),
+        performer_name: orNull(v.performer_name),
+      });
+    } catch (e) {
+      const art = gratisArt(e);
+      if (!art) throw e;
+      setGratis({ art, propertyId: s(v.property_id) }); // Formular schließt, Hinweis mit Auswahl erscheint oben
+      return;
+    }
+    setGratis(null);
     opsState.reload();
   }
 
@@ -111,6 +125,16 @@ export function Operations() {
         Append-only-Protokoll — jeder Eintrag bleibt unveränderlich, Stornos sind
         gekennzeichnet.
       </p>
+
+      {gratis && (
+        <GratisFehler
+          art={gratis.art}
+          zielId={gratis.propertyId}
+          aboUrl={aboUrl}
+          zusatz="Der nachgetragene Einsatz wurde nicht gespeichert — nach der Auswahl (oder mit Pro) bitte erneut nachtragen."
+          onGewaehlt={() => setGratis(null)}
+        />
+      )}
 
       {adding && canBackfill && (
         <FormDialog

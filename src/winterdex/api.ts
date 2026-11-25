@@ -3,6 +3,7 @@ import { signPhotos } from '../lib/photos';
 import { fetchAllOf, fetchLatestWindow } from '../lib/completeQueries';
 import { readableDbError } from '../lib/orgApi';
 import type { DutyTimes, Operation, OperationWithPhotos, Property } from './types';
+import { aktivNachTour } from './tour';
 
 // Spaltenliste für Einsätze OHNE photo_urls (Base64-Fotos, nur im Detail laden!)
 const OPERATION_COLS =
@@ -56,7 +57,8 @@ export async function fetchProperty(
 export async function fetchProperties(sb: SupabaseClient): Promise<Property[]> {
   const { data, error } = await fetchAllOf(() => sb.from('property').select('*'), [['active', false], ['name']]);
   if (error) fail('Objekte konnten nicht geladen werden', error);
-  return (data ?? []) as Property[];
+  // Aktive zuerst, dann Tour-Reihenfolge (teamweit, leere zuletzt), dann Name — ohne Spalte wie bisher nach Name
+  return ((data ?? []) as Property[]).sort(aktivNachTour);
 }
 
 export interface OperationFilter {

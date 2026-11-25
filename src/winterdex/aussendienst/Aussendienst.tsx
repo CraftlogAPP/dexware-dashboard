@@ -17,6 +17,7 @@ import { Report } from '../pages/Report';
 import { RunDetail } from '../pages/RunDetail';
 import { Mehr } from './Mehr';
 import { FeedbackForm } from '../../components/FeedbackForm';
+import { GratisBanner } from '../GratisHinweise';
 
 // Karte mit Leaflet: eigener Chunk, erst beim Öffnen des Reiters geladen — aber nach dem Start im Leerlauf schon
 // vorgeladen (solange Netz da ist): dann öffnet der Reiter später auch im Funkloch, selbst ohne Service Worker.
@@ -56,6 +57,8 @@ export function Aussendienst() {
   return (
     <div className={`ad${recording ? ' ad-full' : ''}`}>
       <main className="ad-main">
+        {/* Gratis nach Ablauf von Pro (nicht während einer Aufzeichnung — dort zählt nur die Fahrt) */}
+        {!recording && <GratisBanner aboUrl={`${base}/abo`} />}
         {!recording && fieldPage && (
           <div className="info-box ad-pc-hint">
             Der Außendienst ist fürs Handy gedacht. Am PC ist der Standort meist ungenau (Ortung über WLAN statt GPS) —

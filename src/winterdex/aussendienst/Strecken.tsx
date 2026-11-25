@@ -17,6 +17,8 @@ import { pathLengthM, round6 } from './geo';
 import { nextTryLabel as nextLabel } from '../../lib/retryLater';
 import { FREE_ROUTES, PRO_HOW, PRO_UNKLAR, ProUnklarError, istGratisGrenze } from '../pro';
 import { deleteActiveRun, deletePendingRun, getActiveRun, listPendingRuns, type ActiveRun, type PendingRun } from './runStore';
+import { GratisFehler } from '../GratisHinweise';
+import { aufGratisAenderung, gratisArt } from '../gratisLage';
 
 export { FREE_ROUTES };
 export const FREE_ROUTES_TEXT = `Im Gratis-Paket ist 1 aktive Strecke möglich — mehr Strecken (Gehwege, Straßen, Radwege) gibt es mit Pro. ${PRO_HOW}`;
@@ -36,6 +38,8 @@ export function Strecken() {
     }
   }, [be]);
   useLiveRefresh([state.refresh]);
+  // Nach „Strecke wählen“ (Gratis nach Ablauf von Pro) sind Strecken stillgelegt → Liste auffrischen
+  useEffect(() => aufGratisAenderung(state.refresh), [state.refresh]);
   // wartende Einsätze und Fahrten im Hintergrund nachsenden; „Jetzt senden“ versucht auch abgelehnte sofort
   const { sending, sendNow } = usePendingSync();
 
@@ -140,6 +144,20 @@ export function Strecken() {
           <button type="button" className="btn small" onClick={sendNow} disabled={sending}>
             {sending ? 'Sendet …' : 'Jetzt senden'}
           </button>
+          {/* Gratis nach Ablauf von Pro: statt nur „nicht angenommen“ gleich wählen/tauschen bzw. Pro holen */}
+          {(() => {
+            const g = pending.find((p) => p.lastError && gratisArt(p.lastError));
+            const art = g ? gratisArt(g.lastError) : null;
+            return g && art ? (
+              <GratisFehler
+                art={art}
+                zielId={g.row.route_id}
+                aboUrl={`${base}/abo`}
+                zusatz="Die wartenden Fahrten bleiben auf diesem Gerät gesichert und gehen nach der Auswahl (oder mit Pro) raus."
+                onGewaehlt={sendNow}
+              />
+            ) : null;
+          })()}
         </div>
       )}
 

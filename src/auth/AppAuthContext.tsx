@@ -85,3 +85,8 @@ export function useAppAuth(): AppAuthValue {
   if (!v) throw new Error('useAppAuth außerhalb von AppAuthProvider');
   return v;
 }
+
+/** Wie useAppAuth, aber null ohne AppAuthProvider (z. B. Außendienst mit Beispieldaten im Dev-Server). */
+export function useAppAuthOptional(): AppAuthValue | null {
+  return useContext(Ctx);
+}

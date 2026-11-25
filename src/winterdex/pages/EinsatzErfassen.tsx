@@ -28,6 +28,9 @@ import { getPerformerName, loadEinsatzData, newId, setPerformerName } from '../e
 import { GPS_GOOD_M, GPS_WEAK_M, useGpsStamp } from '../einsatz/gps';
 import { fileToPhoto } from '../einsatz/photo';
 import { submit, type SubmitResult } from '../einsatz/send';
+import { GratisFehler } from '../GratisHinweise';
+import { gratisArt } from '../gratisLage';
+import { nachTour } from '../tour';
 import {
   deleteDraft,
   draftKey,
@@ -644,9 +647,11 @@ function Done({
   hadGps: boolean;
 }) {
   const { be, userId, orgId, base } = useEinsatz();
-  const { pending, loaded } = usePendingSync();
+  const { pending, loaded, sendNow } = usePendingSync();
   const [next, setNext] = useState<{ open: Property[]; known: boolean } | null>(null);
   const rejected = typeof result === 'object' ? result.rejected : null;
+  // Gratis nach Ablauf von Pro: Auswahl/Tausch bzw. Pro statt des rohen Server-Texts
+  const gratis = rejected ? gratisArt(rejected) : null;
   const queued = result !== 'synced';
 
   useEffect(() => {
@@ -658,9 +663,8 @@ function Done({
         if (offline) return setNext({ open: [], known: false });
         const done = new Set(todayOps.filter((o) => !o.canceled && isToday(o.started_at)).map((o) => o.property_id));
         done.add(propertyId);
-        const open = properties
-          .filter((p) => p.active && !done.has(p.id))
-          .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+        // nächstes offenes Objekt in Tour-Reihenfolge (teamweit, leere zuletzt, dann Name)
+        const open = properties.filter((p) => p.active && !done.has(p.id)).sort(nachTour);
         setNext({ open, known: true });
       },
       () => {
@@ -686,7 +690,17 @@ function Done({
       </div>
       <h1>{queued && !sentLater ? 'Auf dem Gerät gesichert' : 'Einsatz gesichert'}</h1>
       <p className="muted">{propertyName}</p>
-      {rejected ? (
+      {gratis ? (
+        <div style={{ textAlign: 'left' }}>
+          <GratisFehler
+            art={gratis}
+            zielId={propertyId}
+            aboUrl={`${base}/abo`}
+            zusatz="Der Einsatz ist mit Fotos auf diesem Gerät gesichert und geht nach der Auswahl (oder mit Pro) automatisch raus — „Jetzt senden“ unter „Objekte“ versucht es sofort."
+            onGewaehlt={sendNow}
+          />
+        </div>
+      ) : rejected ? (
         <div className="error-box" style={{ textAlign: 'left' }}>
           <TriangleAlert className="i" aria-hidden /> Vom Server nicht angenommen: {rejected}
           <br />

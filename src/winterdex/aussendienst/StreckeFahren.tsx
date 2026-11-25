@@ -23,6 +23,8 @@ import { getPerformerName, newId, setPerformerName } from '../einsatz/data';
 import type { FormValues } from '../einsatz/store';
 import { Felder } from './Felder';
 import { PRO_HOW, istGratisGrenze } from '../pro';
+import { GratisFehler } from '../GratisHinweise';
+import { gratisArt } from '../gratisLage';
 import { coverage, flatTrack, fmtDur, simplify, thinTrack, type Coverage } from './geo';
 import { useRecorder } from './recorder';
 import { isIOS } from '../../lib/pwa';
@@ -424,6 +426,16 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
         <p className="muted">{title}</p>
         {isPlan ? (
           <p>Die Strecke steht jetzt als Vorlage bereit — jede Fahrt darauf wird mit Abdeckung in % nachgewiesen.</p>
+        ) : rejected && gratisArt(rejected) ? (
+          // Gratis nach Ablauf von Pro: Strecke wählen/tauschen bzw. Pro statt des rohen Server-Texts
+          <div style={{ textAlign: 'left' }}>
+            <GratisFehler
+              art={gratisArt(rejected) ?? 'auswahl_strecken'}
+              zielId={sess?.routeId ?? null}
+              aboUrl={`${base}/abo`}
+              zusatz="Die Fahrt ist auf diesem Gerät gesichert und geht nach der Auswahl (oder mit Pro) raus — „Jetzt senden“ unter „Strecken“ versucht es sofort."
+            />
+          </div>
         ) : rejected ? (
           <div className="error-box" style={{ textAlign: 'left' }}>
             <TriangleAlert className="i" aria-hidden /> Vom Server nicht angenommen: {rejected}

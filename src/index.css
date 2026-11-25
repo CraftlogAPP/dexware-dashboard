@@ -3636,6 +3636,136 @@ input {
   flex-wrap: wrap;
 }
 
+/* ---------- WinterDex: Gratis nach Ablauf von Pro (src/winterdex/GratisHinweise.tsx) ----------
+   Banner oben (Nachfrist = bernstein, gesperrt = rot), Hinweis bei Ablehnung, Auswahl-Dialog, Tour-Reihenfolge. */
+.wd-gratis {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(245, 158, 11, 0.42);
+  background: rgba(245, 158, 11, 0.09);
+  color: #fde68a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.wd-gratis.gesperrt {
+  border-color: rgba(239, 68, 68, 0.42);
+  background: rgba(239, 68, 68, 0.09);
+  color: #fecaca;
+}
+.ez .wd-gratis,
+.ez-pending .wd-gratis {
+  margin: 12px 0 4px;
+}
+.wd-gratis > .i {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  color: var(--amber);
+}
+.wd-gratis.gesperrt > .i {
+  color: var(--red);
+}
+.wd-gratis-body {
+  flex: 1;
+  min-width: 0;
+}
+.wd-gratis-body p {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.wd-gratis-body b {
+  color: var(--text, #fff);
+}
+.wd-gratis-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.wd-gratis-actions .small {
+  opacity: 0.9;
+}
+.wd-wahl,
+.wd-tour {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(55vh, 480px);
+  overflow-y: auto;
+}
+.wd-wahl label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.wd-wahl label.an {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.wd-wahl input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+.wd-wahl label > span,
+.wd-tour-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.wd-tour li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.wd-tour-nr {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 700;
+  font-size: 13px;
+}
+.wd-tour-name {
+  flex: 1;
+}
+.wd-tour .btn.small {
+  flex: none;
+  width: 40px;
+  padding: 0;
+}
+[data-theme='light'] .wd-gratis {
+  color: #78350f;
+}
+[data-theme='light'] .wd-gratis.gesperrt {
+  color: #7f1d1d;
+}
+[data-theme='light'] .wd-gratis-body b {
+  color: inherit;
+}
+
 /* ---------- iPhone-Zoom: Safari zoomt beim Antippen eines Felds unter 16 px hinein und bleibt gezoomt ----------
    (Feldtest 24.11.: Anmeldung 15 px, „Mehr“ → Name, alle eingebetteten Seiten). Am Touch-Gerät haben deshalb ALLE
    Eingabefelder mindestens 16 px; am PC (Maus) bleibt es bei 15 px. Steht bewusst am Ende der Datei. */

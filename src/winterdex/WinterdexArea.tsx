@@ -32,6 +32,7 @@ import { installWebApp } from '../lib/pwa';
 import { roleLabel } from '../lib/orgApi';
 import { OBJEKTDEX_OEFFENTLICH } from '../lib/ganzjahr';
 import { dankeschoenApi } from '../lib/gutschein';
+import { GratisBanner } from './GratisHinweise';
 
 // Abmelde-Rückfrage auf ALLEN WinterDex-Seiten (auch im Dashboard), nicht nur im Außendienst: wartende Einsätze und
 // Fahrten, angefangene Einsätze und eine unterbrochene Aufzeichnung liegen nur auf diesem Gerät.
@@ -286,6 +287,8 @@ function Shell() {
         </div>
       </nav>
       <main className="app-main">
+        {/* Gratis nach Ablauf von Pro: Nachfrist bzw. „wähle deine 2 Objekte“ (ohne Server-Nachtrag: nichts) */}
+        <GratisBanner aboUrl={`${base}/abo`} />
         {/* Navigation links bleibt stehen, wenn eine Seite (z. B. der nachgeladene Import) nicht lädt */}
         <ErrorBoundary resetKey={pathname}>
           <Outlet />
