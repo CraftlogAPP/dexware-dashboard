@@ -65,7 +65,9 @@ export const STRASSEN_QUELLE_URL = 'https://www.openstreetmap.org/copyright';
  * Nominatim (Verfahren 1/2): Stichproben entlang der Spur. Unbekannt → neutral.
  */
 export function strassenMethode(quelle: string | null | undefined): string {
-  if (quelle && /overpass/i.test(quelle)) return 'nach der Fahrt jedem GPS-Punkt die nächstgelegene Straße aus den OpenStreetMap-Straßendaten zugeordnet';
+  // Verfahren 3 = Kartenabgleich (Viterbi über das OSM-Wegenetz): die PASSENDE Straße, nicht zwingend die nächstgelegene
+  if (quelle && /overpass/i.test(quelle))
+    return 'nach der Fahrt per Kartenabgleich jedem GPS-Punkt die passende Straße aus den OpenStreetMap-Straßendaten zugeordnet (Straßen ab ca. 30 m bzw. 10 s)';
   if (quelle && /nominatim/i.test(quelle)) return 'nach der Fahrt an Stichproben entlang der GPS-Spur ermittelt (sehr kurze Straßenstücke können fehlen)';
   return 'nach der Fahrt aus den GPS-Punkten ermittelt';
 }
@@ -84,13 +86,19 @@ export function spurMeter(F: FahrtDaten, vonMs: number, bisMs: number): number |
 }
 
 /** Zusatz zur Fußnote: woher die Meter kommen bzw. warum die Summe nicht die gefahrenen Meter ergibt. */
-export function strassenMeterHinweis(t: Pick<StrassenTabelle, 'mAusSpur' | 'abweichung' | 'summeM' | 'gesamtM'>): string {
+export function strassenMeterHinweis(t: Pick<StrassenTabelle, 'mAusSpur' | 'abweichung' | 'summeM' | 'gesamtM'> & { quelle?: string | null }): string {
   const teile: string[] = [];
   if (t.mAusSpur) teile.push('Strecke je Zeile aus der GPS-Spur im Zeitraum der Zeile berechnet (wie „km seit Start“).');
-  if (t.abweichung && t.summeM != null && t.gesamtM != null)
-    teile.push(
-      `Die Zeilen ergeben zusammen ${fmtStrecke(t.summeM)} von ${fmtStrecke(t.gesamtM)} gefahrenen — der Rest liegt auf Wegstücken ohne Straßenzuordnung (z. B. Hof, Parkplatz).`,
-    );
+  if (t.abweichung && t.summeM != null && t.gesamtM != null) {
+    const summe = `Die Zeilen ergeben zusammen ${fmtStrecke(t.summeM)} von ${fmtStrecke(t.gesamtM)} gefahrenen`;
+    // Grund ehrlich nennen (Prüfer 26.11.): ohne Spur bleiben bei Verfahren 1/2 die zu knappen Meter des alten Wegzählers
+    // stehen — das ist KEIN Wegstück ohne Straße; „der Rest …“ nur, wenn wirklich Meter fehlen
+    const altesVerfahren = !t.mAusSpur && !(t.quelle && /overpass/i.test(t.quelle));
+    if (altesVerfahren)
+      teile.push(`${summe} — Strecke je Zeile nach dem bisherigen Verfahren (einzelne Zeilen zu knapp); maßgeblich ist die gefahrene Strecke laut GPS.`);
+    else if (t.summeM < t.gesamtM) teile.push(`${summe} — der Rest liegt auf Wegstücken ohne Straßenzuordnung (z. B. Hof, Parkplatz).`);
+    else teile.push(`${summe} — maßgeblich ist die gefahrene Strecke laut GPS.`);
+  }
   return teile.join(' ');
 }
 

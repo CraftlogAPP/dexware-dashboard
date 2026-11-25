@@ -30,6 +30,8 @@ export interface Unterbrechung {
   an: LatLng | null;
   /** gefahrene Meter bis zur Unterbrechung */
   dM: number;
+  /** aus einer vermerkten Unterbrechung (route_run.gaps) — nicht nur ein Wechsel des Teilstücks */
+  vermerkt: boolean;
 }
 
 export interface Stillstand {
@@ -281,6 +283,7 @@ export function fahrtDaten(
     const a = stuecke[s + 1][0];
     let uv = t[e];
     let ub = t[a];
+    let vermerkt = false;
     if (mitZeit) {
       // Zeiten der passenden vermerkten Unterbrechung(en): frühester Beginn, spätestes Ende
       let pv = Infinity;
@@ -293,11 +296,20 @@ export function fahrtDaten(
         }
       });
       if (pv < pb) {
-        uv = pv;
-        ub = pb;
+        // Auf die Punkte begrenzen: Die App setzt das Ende einer Pause auf den Moment des Fortsetzens, der erste Punkt
+        // danach kann aber früher liegen (zwischengespeicherte Position) — sonst stand „Unterbrechung bis 11:53“ und direkt
+        // darunter „Stillstand ab 11:52“ (Tagescheck 25.11., echte Fahrt mit 28 s Überlappung). Dieselben Grenzen gelten in
+        // Zeitleiste, Regler/Antippen und in der Zeile „Unterbrechungen der Aufzeichnung“ (unterbrechungsSpannen).
+        uv = Math.max(pv, t[e]);
+        ub = Math.min(pb, t[a]);
+        if (!(ub > uv)) {
+          uv = t[e];
+          ub = t[a];
+        }
+        vermerkt = true;
       }
     }
-    unterbrechungen.push({ von: uv, bis: ub, ab: [lat[e], lng[e]], an: [lat[a], lng[a]], dM: d[e] });
+    unterbrechungen.push({ von: uv, bis: ub, vermerkt, ab: [lat[e], lng[e]], an: [lat[a], lng[a]], dM: d[e] });
   }
   if (mitZeit) {
     luecken.forEach(([ga, gb], gi) => {
@@ -311,6 +323,7 @@ export function fahrtDaten(
         ab: vor >= 0 ? [lat[vor], lng[vor]] : null,
         an: nach >= 0 ? [lat[nach], lng[nach]] : null,
         dM: vor >= 0 ? d[vor] : 0,
+        vermerkt: true,
       });
     });
   }
@@ -533,6 +546,65 @@ export function stillstandZu(F: FahrtDaten, ms: number): Stillstand | undefined 
 /** Höchstens so viele Stillstände bekommen eine eigene Marke (die längsten) — sonst wird die Karte unruhig. */
 const MAX_STILL_MARKEN = 6;
 
+/** Stillstände näher beieinander als so viele Meter teilen sich EINE Marke (Bauhof: Beginn, Streugut laden, Ende). */
+const STILL_GLEICH_M = 30;
+/** Folgt ein Stillstand innerhalb so kurzer Zeit auf den vorigen (GPS-Drift teilte ihn), wird eine Spanne daraus. */
+const STILL_ANSCHLUSS_MS = 2 * 60000;
+/** Höchstens so viele Spannen auf einem Schild, danach „…“ (alle stehen in der Zeitleiste). */
+const MAX_SPANNEN_JE_MARKE = 3;
+
+/**
+ * Stillstände am selben Ort (< 30 m zu einem anderen der Gruppe, auch über Zwischenglieder) zu Gruppen zusammenfassen,
+ * je Gruppe nach Zeit. Vorher lagen zwei Schilder am Bauhof („09:42–10:30“ und „10:41–11:04“, 5 m auseinander)
+ * deckungsgleich übereinander — eine Stillstands-Zeit war in der Karte nicht zu sehen (Tagescheck 25.11.).
+ */
+function stillGruppen(F: FahrtDaten, still: readonly Stillstand[]): Stillstand[][] {
+  const gruppen: Stillstand[][] = [...still].sort((a, b) => a.von - b.von).map((s) => [s]);
+  // Lage = Schwerpunkt der Punkte (der erste Punkt liegt oft noch auf der Anfahrt); direkt aneinander anschließende
+  // Stillstände (GPS-Drift teilte einen langen Halt) dürfen bis 60 m auseinander liegen
+  const mitte = new Map<Stillstand, [number, number]>();
+  for (const s of still) {
+    let sx = 0, sy = 0;
+    for (let k = s.i; k <= s.j; k++) {
+      sx += F.x[k];
+      sy += F.y[k];
+    }
+    const n = Math.max(1, s.j - s.i + 1);
+    mitte.set(s, [sx / n, sy / n]);
+  }
+  const nah = (a: Stillstand, b: Stillstand) => {
+    const [ax, ay] = mitte.get(a)!;
+    const [bx, by] = mitte.get(b)!;
+    const d = Math.hypot(ax - bx, ay - by);
+    const anschluss = Math.abs(b.von - a.bis) <= STILL_ANSCHLUSS_MS || Math.abs(a.von - b.bis) <= STILL_ANSCHLUSS_MS;
+    return d < STILL_GLEICH_M || (anschluss && d < 2 * STILL_GLEICH_M);
+  };
+  for (let geaendert = true; geaendert; ) {
+    geaendert = false;
+    for (let p = 0; p < gruppen.length && !geaendert; p++)
+      for (let q = p + 1; q < gruppen.length; q++)
+        if (gruppen[p].some((a) => gruppen[q].some((b) => nah(a, b)))) {
+          gruppen[p] = [...gruppen[p], ...gruppen[q]].sort((a, b) => a.von - b.von);
+          gruppen.splice(q, 1);
+          geaendert = true;
+          break;
+        }
+  }
+  return gruppen.sort((a, b) => a[0].von - b[0].von);
+}
+
+/** „09:42–10:30, 10:41–11:04“ — direkt aneinander anschließende Stillstände als eine Spanne („11:52–13:45“). */
+function stillLabel(g: readonly Stillstand[], tz?: string): string {
+  const spannen: [number, number][] = [];
+  for (const s of g) {
+    const last = spannen[spannen.length - 1];
+    if (last && s.von - last[1] <= STILL_ANSCHLUSS_MS) last[1] = Math.max(last[1], s.bis);
+    else spannen.push([s.von, s.bis]);
+  }
+  const txt = spannen.slice(0, MAX_SPANNEN_JE_MARKE).map(([a, b]) => fmtSpanne(a, b, tz));
+  return `${txt.join(', ')}${spannen.length > MAX_SPANNEN_JE_MARKE ? ' …' : ''}`;
+}
+
 /**
  * Zeitmarken entlang der Spur („09:45“) — adaptiv alle 5/10/15/30 Min., ~6–12 Stück. Marken in einer Unterbrechung
  * entfallen. Stillstände (≥ 5 Min., die 6 längsten) bekommen immer eine Marke mit ihrer Dauer („07:33–07:48“),
@@ -543,13 +615,13 @@ export function zeitMarken(F: FahrtDaten, opts: { schrittMin?: number; timeZone?
   const schritt = opts.schrittMin ?? waehleSchritt(F.t[0], F.t[F.n - 1]);
   const tz = opts.timeZone;
   const still = [...F.stillstaende].sort((a, b) => b.bis - b.von - (a.bis - a.von)).slice(0, MAX_STILL_MARKEN);
-  const stillMarken: ZeitMarke[] = still.map((st) => ({
-    t: st.von,
-    bis: st.bis,
-    lat: F.lat[st.i],
-    lng: F.lng[st.i],
-    dM: st.dM,
-    label: fmtSpanne(st.von, st.bis, tz),
+  const stillMarken = stillGruppen(F, still).map((g): ZeitMarke => ({
+    t: g[0].von,
+    bis: g[g.length - 1].bis,
+    lat: F.lat[g[0].i],
+    lng: F.lng[g[0].i],
+    dM: g[0].dM,
+    label: stillLabel(g, tz),
   }));
   const out: ZeitMarke[] = [];
   for (const T of rasterZeiten(F, schritt)) {
@@ -628,6 +700,17 @@ export function zeitleiste(F: FahrtDaten, opts: { schrittMin?: number } = {}): Z
   return zeilen;
 }
 const rang = (a: ZeitZeile['art']) => ['start', 'erste', 'fahrt', 'steht', 'letzte', 'luecke', 'ende'].indexOf(a);
+
+/**
+ * Vermerkte Unterbrechungen mit denselben (auf die Punkte begrenzten) Grenzen wie die Zeitleiste — für die Zeile
+ * „Unterbrechungen der Aufzeichnung“ (App und PDF). null = ohne Punkt-Zeiten (dann die rohen gaps nehmen).
+ */
+export function unterbrechungsSpannen(F: FahrtDaten | null | undefined): [string, string][] | null {
+  if (!F || !F.mitZeit) return null;
+  return F.unterbrechungen
+    .filter((u) => u.vermerkt && Number.isFinite(u.von) && Number.isFinite(u.bis) && u.bis > u.von)
+    .map((u) => [new Date(u.von).toISOString(), new Date(u.bis).toISOString()] as [string, string]);
+}
 
 // ---------------------------------------------------------------- Vereinfachen fürs Zeichnen
 

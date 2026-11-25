@@ -1,7 +1,7 @@
 // Eine Fahrt: echte Karte mit Zeitmarken + Zeit-Regler + Zeitleiste („wann war er wo“, seit 25.11.2026; Skizze als
 // Rückfall), Server-Werte (Länge/Abdeckung/nicht befahren), Hinweise, Prüfcode prüfen, Nachweis als PDF,
 // Storno mit Pflicht-Begründung. Dashboard und Außendienst zeigen dieselbe Seite.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { FileDown, Info } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
@@ -16,9 +16,10 @@ import { openReportWindowAfter } from '../../lib/print';
 import { gritLabel, WEATHER_SOURCE, weatherLabel } from '../labels';
 import { CoverageBadge } from '../RouteSketch';
 import { FahrtAnsicht } from '../FahrtAnsicht';
-import { buildRunHtmlMitKarte } from '../routeReport';
+import { buildRunHtmlMitKarte, unterbrechungenFuer } from '../routeReport';
+import { fahrtDaten } from '../fahrtZeit';
 import { fetchOrgPro, withWatermark } from '../pro';
-import { cancelRun, cleanGaps, fetchRun, fmtDistance, fmtDuration, fmtTimeSpan, type Run } from '../routes';
+import { cancelRun, fetchRun, fmtDistance, fmtDuration, fmtTimeSpan, type Run } from '../routes';
 import { fetchStrassen, STRASSEN_PDF_HINWEIS, strassenFrisch, strassenOffen, type StrassenStand } from '../strassen';
 import { useStrassenNachladen } from '../strassenNachladen';
 import { nachweisZone } from '../nachweisZeit';
@@ -83,6 +84,16 @@ export function RunView({
   const strAnzeige = frisch?.id === run.id && (frisch.stand.status !== 'in_arbeit' || !strassen) ? frisch.stand : strassen;
   // Uhrzeiten IMMER in der Zone des Betriebs (Land), nie in der des Geräts (Tagescheck 26.11.2026, Fund 31)
   const tz = nachweisZone(org?.land);
+  // „Unterbrechungen der Aufzeichnung“ mit denselben Grenzen wie die Zeitleiste (Fund 16, wie App + PDF)
+  const gaps = useMemo(() => {
+    let F = null;
+    try {
+      F = fahrtDaten(run.track, run.started_at, run.ended_at, run.gaps);
+    } catch {
+      F = null; // kaputte Spur: rohe gaps wie bisher, die Seite bleibt stehen
+    }
+    return unterbrechungenFuer(run, F);
+  }, [run]);
 
   // Fenster sofort im Klick öffnen („Bericht wird erstellt …“), dann Straßenverlauf frisch (≤ 3 s, Tagescheck
   // 26.11.2026 Fund 10: sonst blieb „wird ermittelt“ im PDF, obwohl der Server längst fertig war), Kartenbild (≤ 8 s,
@@ -114,7 +125,6 @@ export function RunView({
   const name = run.route_name ?? 'Freie Fahrt';
   // nie mit Vorlage gefahren (Fahrten einer später gelöschten Strecke behalten route_name)
   const frei = !run.route_id && !run.route_name;
-  const gaps = cleanGaps(run.gaps);
   return (
     <>
       <p className="small" style={{ marginBottom: 4 }}>

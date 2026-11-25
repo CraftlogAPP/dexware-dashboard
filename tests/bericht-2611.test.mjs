@@ -177,6 +177,12 @@ console.log('\n[11] Spalte „Strecke“ = gefahrene Meter');
   const c = S.strassenAnzeige(teil, run, true, { F: FB, gefahrenM: run.track_length_m });
   check('Lücke zwischen den Zeilen → Hinweis „Rest auf Wegstücken ohne Straßenzuordnung“', c.abweichung && /ohne Straßenzuordnung/.test(S.strassenMeterHinweis(c)), S.strassenMeterHinweis(c));
   check('ohne Spur (z. B. Fahrtenbuch ohne geladene Punkte) → Server-Meter, kein Fehler', S.strassenAnzeige(alt, run, true).mAusSpur === false);
+  // Prüfer 26.11.: ohne Spur + altes Verfahren → ehrlicher Grund (alter Wegzähler), NICHT „Wegstücke ohne Straßenzuordnung“
+  const ohneSpur = S.strassenAnzeige({ ...alt, quelle: 'osm-nominatim' }, run, true, { gefahrenM: run.track_length_m });
+  const hOhne = S.strassenMeterHinweis(ohneSpur);
+  check('ohne Spur, altes Verfahren, Σ −20 %: Hinweis „bisheriges Verfahren … maßgeblich laut GPS“, nicht „ohne Straßenzuordnung“', ohneSpur.abweichung && /bisherigen Verfahren/.test(hOhne) && /maßgeblich ist die gefahrene Strecke laut GPS/.test(hOhne) && !/ohne Straßenzuordnung/.test(hOhne), hOhne);
+  const zuViel = S.strassenMeterHinweis({ mAusSpur: true, abweichung: true, summeM: 1200, gesamtM: 1000, quelle: 'osm-overpass' });
+  check('Summe ÜBER den gefahrenen Metern: kein „der Rest …“', !/der Rest/.test(zuViel) && /maßgeblich/.test(zuViel), zuViel);
   check('2-%-Regel: über 2 % und mehr als 10 m', S.meterWeichenAb(12000, 13510) && !S.meterWeichenAb(13300, 13510) && !S.meterWeichenAb(5, 12) && S.meterWeichenAb(0, 11));
   // Verfahren 1/2 (Nominatim, 20-m-Zähler): Summe nur −2,0 %, einzelne Zeilen aber bis −32 % (echte Fahrt 25.11.) →
   // bei altem Verfahren IMMER aus der Spur rechnen, auch wenn die Summe knapp passt
@@ -196,9 +202,9 @@ console.log('\n[v3] Straßenverlauf mit quelle osm-overpass / version 3');
   const zeile = { run_id: 'r', status: 'fertig', quelle: 'osm-overpass', version: 3, abschnitte: [{ sek_von: 0, sek_bis: 120, strasse: 'Wiener Straße', ort: 'Musterstadt', m: 400, ref: 'B4', osm_id: 123 }] };
   const st = S.strassenStandAus(zeile);
   check('Zeile Verfahren 3 wird gelesen (unbekannte Felder egal)', st.status === 'fertig' && st.quelle === 'osm-overpass' && st.abschnitte.length === 1 && st.abschnitte[0].strasse === 'Wiener Straße');
-  check('Verfahren-Text Overpass ≠ Nominatim, Quellenangabe gleich', /nächstgelegene Straße aus den OpenStreetMap-Straßendaten/.test(S.strassenMethode('osm-overpass')) && /Stichproben/.test(S.strassenMethode('osm-nominatim')) && S.STRASSEN_QUELLE === '© OpenStreetMap-Mitwirkende');
+  check('Verfahren-Text Overpass ≠ Nominatim, Quellenangabe gleich', /per Kartenabgleich jedem GPS-Punkt die passende Straße aus den OpenStreetMap-Straßendaten/.test(S.strassenMethode('osm-overpass')) && !/nächstgelegene/.test(S.strassenMethode('osm-overpass')) && /Stichproben/.test(S.strassenMethode('osm-nominatim')) && S.STRASSEN_QUELLE === '© OpenStreetMap-Mitwirkende');
   const html = RR.buildRunHtml(orgAT, D.demoRun('demo-bauhof'), undefined, { strassen: S.strassenStandAus(D.demoStrassen('demo-bauhof')) });
-  check('PDF: Quellenangabe „© OpenStreetMap-Mitwirkende“, Verfahren 3 beschrieben, keine falsche „Abtastung alle 200 m“', html.includes('Straßennamen: © OpenStreetMap-Mitwirkende (ODbL), nach der Fahrt jedem GPS-Punkt die nächstgelegene Straße') && !html.includes('Abtastung etwa alle 200 m') && !/overpass|nominatim/i.test(html.replace(/https?:\/\/[^"]+/g, '')));
+  check('PDF: Quellenangabe „© OpenStreetMap-Mitwirkende“, Verfahren 3 beschrieben, keine falsche „Abtastung alle 200 m“', html.includes('Straßennamen: © OpenStreetMap-Mitwirkende (ODbL), nach der Fahrt per Kartenabgleich jedem GPS-Punkt die passende Straße') && !html.includes('Abtastung etwa alle 200 m') && !/overpass|nominatim/i.test(html.replace(/https?:\/\/[^"]+/g, '')));
   const fa = lies('src/winterdex/FahrtAnsicht.tsx');
   check('Fahrt-Detail: Verfahren je Quelle', /strassenMethode\(strTab\.quelle\)/.test(fa));
 }
@@ -287,6 +293,32 @@ console.log('\n[45] Eine Kennung je Formular (Regel 1 zu App 737a926)');
   const odData = lies('src/objektdex/data.ts');
   const odDlg = lies('src/objektdex/pages/PropertyDetail.tsx');
   check('ObjektDex: Upsert mit fester Kennung, Grenze ohne eigene Kennung', /upsert\(\{ \.\.\.row, org_id: orgId, id: p\.neu_id \}\)/.test(odData) && /grenzePruefen\(data, neuId\)/.test(odDlg) && /p\.id !== eigeneId/.test(odDlg));
+}
+
+console.log('\n[16] Zeile „Unterbrechungen der Aufzeichnung“ = Grenzen der Zeitleiste (App-Rechnung, Regel 1)');
+{
+  // Pause 10:02:30–10:34:00 UTC vermerkt, erster Punkt danach aber schon 10:33:00 (zwischengespeicherte Position)
+  const basis = D.demoRun('demo-bauhof');
+  const run = {
+    ...basis,
+    started_at: '2026-11-25T10:00:00Z',
+    ended_at: '2026-11-25T10:35:00Z',
+    track: [
+      [[48.0, 16.0, 0], [48.0005, 16.0, 60], [48.001, 16.0, 120]],
+      [[48.002, 16.0, 1980], [48.0025, 16.0, 2040], [48.003, 16.0, 2100]],
+    ],
+    gaps: [['2026-11-25T10:02:30Z', '2026-11-25T10:34:00Z']],
+  };
+  const F = Z.fahrtDaten(run.track, run.started_at, run.ended_at, run.gaps);
+  const u = RR.unterbrechungenFuer(run, F);
+  check('Ende auf den ersten Punkt danach begrenzt (10:33:00 statt 10:34:00)', u.length === 1 && u[0][0] === '2026-11-25T10:02:30.000Z' && u[0][1] === '2026-11-25T10:33:00.000Z', JSON.stringify(u));
+  check('ohne Punkt-Zeiten / ohne F: rohe gaps', RR.unterbrechungenFuer(run, null).length === 1 && RR.unterbrechungenFuer(run, null)[0][1] === '2026-11-25T10:34:00Z');
+  check('ohne vermerkte gaps: nichts', RR.unterbrechungenFuer({ ...run, gaps: [] }, F).length === 0);
+  const html = RR.buildRunHtml(orgAT, run, undefined, {});
+  const zeile = (html.match(/Unterbrechungen der Aufzeichnung \(Pause oder kein GPS\): ([^<]*)</) ?? [])[1] ?? '';
+  check('PDF-Zeile: 11:02–11:33 (Wien), nicht bis 11:34', /11:02/.test(zeile) && /11:33/.test(zeile) && !/11:34/.test(zeile), zeile);
+  const rd = lies('src/winterdex/pages/RunDetail.tsx');
+  check('Fahrt-Detail: gleiche Zeile über unterbrechungenFuer', /unterbrechungenFuer\(run, F\)/.test(rd) && !/cleanGaps\(run\.gaps\)/.test(rd));
 }
 
 console.log(`\n${fail === 0 ? 'ALLES GRÜN' : 'FEHLER'}: ${ok} ok, ${fail} Fehler`);

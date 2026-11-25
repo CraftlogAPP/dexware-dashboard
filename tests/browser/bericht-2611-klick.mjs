@@ -156,7 +156,7 @@ try {
   const summe = await main.ev(`document.querySelector('.fk-strassen tr.fk-summe')?.innerText.replace(/\\s+/g, ' ').trim() ?? ''`);
   check(`Straßenverlauf: Summenzeile „${summe}“`, /^zusammen \(gefahren laut GPS: 13,8 km\) 13,8 km$/.test(summe), summe);
   const quelle = await main.ev(`document.querySelector('.fk-strassen-quelle')?.textContent ?? ''`);
-  check('Verfahren 3: „© OpenStreetMap-Mitwirkende — nach der Fahrt jedem GPS-Punkt die nächstgelegene Straße …“', /© OpenStreetMap-Mitwirkende — nach der Fahrt jedem GPS-Punkt die nächstgelegene Straße/.test(quelle) && !/overpass|nominatim/i.test(quelle), quelle);
+  check('Verfahren 3: „© OpenStreetMap-Mitwirkende — nach der Fahrt per Kartenabgleich jedem GPS-Punkt die passende Straße …“', /© OpenStreetMap-Mitwirkende — nach der Fahrt per Kartenabgleich jedem GPS-Punkt die passende Straße/.test(quelle) && !/overpass|nominatim/i.test(quelle), quelle);
   const ersteZeile = await main.ev(`document.querySelector('.fk-strassen tbody tr')?.innerText.replace(/\\s+/g, ' ').trim()`);
   check(`Straßenverlauf in Wiener Zeit: „${ersteZeile}“`, /^09:33–09:3\d Hauptstraße Musterstadt/.test(ersteZeile), ersteZeile);
   console.log('  Bild:', await bild('F-detail-bauhof.png'));

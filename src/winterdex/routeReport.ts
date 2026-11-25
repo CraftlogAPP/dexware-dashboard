@@ -16,6 +16,7 @@ import {
   waehleSchritt,
   zeitleiste,
   zeitMarken,
+  unterbrechungsSpannen,
   type FahrtDaten,
   type ZeitMarke,
   type ZeitZeile,
@@ -37,6 +38,22 @@ import { nachweisZone, zonenHinweis } from './nachweisZeit';
 import { KARTE_QUELLE, kartenBilder, kartenBilderSammel, MAX_SAMMEL_BILDER, type KartenBild, type KartenBilder } from './kartenBild';
 
 const LEER_F = fahrtDaten([], null);
+
+/**
+ * Zeile „Unterbrechungen der Aufzeichnung“: dieselben, auf die Punkte begrenzten Grenzen wie die Zeitleiste (Tagescheck
+ * 25.11.2026 Fund 16, Regel 1 aus der App: mobile/src/pdf/routeReport.ts unterbrechungenText) — ohne Punkt-Zeiten die rohen gaps.
+ */
+export function unterbrechungenFuer(run: Pick<Run, 'gaps'>, F: FahrtDaten | null | undefined): [string, string][] {
+  const roh = cleanGaps(run.gaps);
+  if (!roh.length) return [];
+  let spannen: [string, string][] | null = null;
+  try {
+    spannen = unterbrechungsSpannen(F);
+  } catch {
+    spannen = null;
+  }
+  return spannen && spannen.length ? spannen : roh;
+}
 
 /**
  * „Wann war er wo“ fürs PDF (seit 25.11.2026): Zeitmarken für die Skizze + kurze Zeit-Tabelle aus den Punkt-Zeiten.
@@ -301,7 +318,7 @@ export function buildRunHtml(org: Org, run: Run, timeZone?: string, extra: RunBe
     <div><b>Dokumentiert von:</b> ${esc(run.performer_name ?? '—')}</div>
     ${run.notes ? `<div><b>Notiz:</b> ${esc(run.notes)}</div>` : ''}
     ${missed.length ? `<div class="warn">Nicht befahren: ${missed.length} ${missed.length === 1 ? 'Abschnitt' : 'Abschnitte'}, zusammen ${fmtDistance(run.missed_m ?? 0)} (rot in der Skizze)</div>` : ''}
-    ${cleanGaps(run.gaps).length ? `<div class="warn">Unterbrechungen der Aufzeichnung (Pause oder kein GPS): ${cleanGaps(run.gaps).map(([a, b]) => fmtTimeSpan(a, b, tz)).join(', ')}</div>` : ''}
+    ${unterbrechungenFuer(run, zt.F).length ? `<div class="warn">Unterbrechungen der Aufzeichnung (Pause oder kein GPS): ${unterbrechungenFuer(run, zt.F).map(([a, b]) => fmtTimeSpan(a, b, tz)).join(', ')}</div>` : ''}
     ${run.gps_mocked ? '<div class="warn">Achtung: Das Gerät hat Fake-GPS gemeldet (Android).</div>' : ''}
     ${run.nachgetragen ? '<div class="warn">Nachgemeldet: ohne Fahrtpunkte und erst mehr als 15 Minuten nach dem Ende beim Server eingegangen (Kennzeichen vom Server, nicht änderbar).</div>' : ''}
     ${run.canceled ? `<div class="storno">STORNIERT am ${fmtDateTime(run.canceled_at, tz)}: ${esc(run.cancel_reason ?? '')}</div>` : ''}
