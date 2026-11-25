@@ -16,7 +16,7 @@ import {
 import { DefectStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, itemNameMap, itemMetaLabel } from '../labels';
 import { SiteDialog } from '../dialogs';
-import { gateText, unitGate } from '../../pruefen/pro';
+import { gateText, mitGrenzText, unitGate, zeigeGrenzFehler } from '../../pruefen/pro';
 import { GURTDEX_VOR_ORT } from '../vorOrt';
 import {
   ITEM_CATEGORIES,
@@ -42,7 +42,7 @@ export function SiteDetail() {
     PsaItem | 'new' | null
   >(null);
   const [editingSite, setEditingSite] = useState(false);
-  // Gratis-Grenze wie in der App (2 PSA-Artikel im Bestand, ausgesonderte zählen nicht); Pro laut Server, im Zweifel erlaubt.
+  // Gratis-Grenze wie in der App (2 PSA-Artikel im Bestand, ausgesonderte zählen nicht); Pro laut Server; unklar → letzter sicherer Stand, sonst „gleich nochmal“.
   const [gate, setGate] = useState(false);
   const [checking, setChecking] = useState(false);
 
@@ -52,6 +52,8 @@ export function SiteDetail() {
     try {
       if ((await unitGate(client, GURTDEX_VOR_ORT)).allowed) setEditingItem('new');
       else setGate(true);
+    } catch (e) {
+      zeigeGrenzFehler(e);
     } finally {
       setChecking(false);
     }
@@ -71,25 +73,31 @@ export function SiteDetail() {
     if (!org || !id) throw new Error('Kein Betrieb geladen');
     // Wieder in Betrieb nehmen zählt wie Anlegen (in der App genauso).
     const backInUse = editingItem !== 'new' && editingItem?.retired === true && v.retired !== true;
-    if (backInUse && !(await unitGate(client, GURTDEX_VOR_ORT)).allowed) throw new Error(gateText(GURTDEX_VOR_ORT));
-    await saveItem(
-      client,
-      org.org.id,
-      {
-        site_id: id,
-        name: s(v.name),
-        category: s(v.category),
-        manufacturer: orNull(v.manufacturer),
-        model: orNull(v.model),
-        serial_no: orNull(v.serial_no),
-        manufacture_date: orNull(v.manufacture_date),
-        first_use_date: orNull(v.first_use_date),
-        max_life_years: orNull(v.max_life_years),
-        wearer_name: orNull(v.wearer_name),
-        notes: orNull(v.notes),
-        retired: v.retired === true,
-      },
-      editingItem === 'new' ? undefined : (editingItem ?? undefined),
+    // Neu anlegen zählt wie Wieder-in-Betrieb-Nehmen — beim Speichern erneut geprüft (Dialog lange offen, zweiter Tab),
+    // seit NACHTRAG-PAYWALL-2026-11-25 lehnt auch der Server ab (dann derselbe Hinweis).
+    const isNew = editingItem === 'new' && v.retired !== true;
+    if ((isNew || backInUse) && !(await unitGate(client, GURTDEX_VOR_ORT)).allowed) throw new Error(gateText(GURTDEX_VOR_ORT));
+    await mitGrenzText(
+      saveItem(
+        client,
+        org.org.id,
+        {
+          site_id: id,
+          name: s(v.name),
+          category: s(v.category),
+          manufacturer: orNull(v.manufacturer),
+          model: orNull(v.model),
+          serial_no: orNull(v.serial_no),
+          manufacture_date: orNull(v.manufacture_date),
+          first_use_date: orNull(v.first_use_date),
+          max_life_years: orNull(v.max_life_years),
+          wearer_name: orNull(v.wearer_name),
+          notes: orNull(v.notes),
+          retired: v.retired === true,
+        },
+        editingItem === 'new' ? undefined : (editingItem ?? undefined),
+      ),
+      gateText(GURTDEX_VOR_ORT),
     );
     state.reload();
   }

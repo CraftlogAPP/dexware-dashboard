@@ -12,6 +12,24 @@ import {
   updateVehicle,
 } from './api';
 import type { Driver, UvvResult, Vehicle, VehicleType } from './types';
+import { GATE_TEXT, fleetGate } from './vorOrt/backend';
+import { FREE_LIMITS } from './vorOrt/rows';
+import { istGratisGrenze } from '../lib/proStand';
+
+/**
+ * Gratis-Grenze beim SPEICHERN eines neuen Fahrzeugs/Fahrers erneut prüfen (vorher nur am „+“: Dialog lange offen,
+ * zweiter Tab) und eine Ablehnung des Servers (NACHTRAG-PAYWALL-2026-11-25) als derselbe Hinweis zeigen.
+ */
+async function neuMitGrenze(client: Parameters<typeof fleetGate>[0], kind: 'vehicle' | 'driver', anlegen: () => Promise<void>): Promise<void> {
+  const limit = kind === 'vehicle' ? FREE_LIMITS.vehicles : FREE_LIMITS.drivers;
+  if (!(await fleetGate(client, kind, limit)).allowed) throw new Error(GATE_TEXT[kind]);
+  try {
+    await anlegen();
+  } catch (e) {
+    if (istGratisGrenze(e)) throw new Error(GATE_TEXT[kind]);
+    throw e;
+  }
+}
 import { CHECK_ITEMS, UVV_RESULT_LABEL, VEHICLE_TYPE_LABEL } from './types';
 
 export function VehicleDialog({
@@ -35,7 +53,7 @@ export function VehicleDialog({
       first_registration: orNull(v.first_registration),
       last_uvv: orNull(v.last_uvv),
     };
-    if (vehicle === 'new') await insertVehicle(client, org.org.id, input);
+    if (vehicle === 'new') await neuMitGrenze(client, 'vehicle', () => insertVehicle(client, org.org.id, input));
     else await updateVehicle(client, vehicle.id, input);
     onSaved();
   }
@@ -165,7 +183,7 @@ export function DriverDialog({
       last_check: orNull(v.last_check),
       active: v.active === true,
     };
-    if (driver === 'new') await insertDriver(client, org.org.id, input);
+    if (driver === 'new') await neuMitGrenze(client, 'driver', () => insertDriver(client, org.org.id, input));
     else await updateDriver(client, driver.id, input);
     onSaved();
   }

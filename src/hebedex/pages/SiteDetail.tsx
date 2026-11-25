@@ -18,7 +18,7 @@ import {
 import { DefectStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, itemNameMap, itemMetaLabel, lastInspectionByType } from '../labels';
 import { SiteDialog } from '../dialogs';
-import { gateText, unitGate } from '../../pruefen/pro';
+import { gateText, mitGrenzText, unitGate, zeigeGrenzFehler } from '../../pruefen/pro';
 import { HEBEDEX_VOR_ORT } from '../vorOrt';
 import {
   crackDue,
@@ -53,7 +53,7 @@ export function SiteDetail() {
     LiftingItem | 'new' | null
   >(null);
   const [editingSite, setEditingSite] = useState(false);
-  // Gratis-Grenze wie in der App (3 aktive Teile; ausgesonderte und Beispieldaten zählen nicht); Pro laut Server, im Zweifel erlaubt.
+  // Gratis-Grenze wie in der App (3 aktive Teile; ausgesonderte und Beispieldaten zählen nicht); Pro laut Server; unklar → letzter sicherer Stand, sonst „gleich nochmal“.
   const [gate, setGate] = useState(false);
   const [checking, setChecking] = useState(false);
 
@@ -63,6 +63,8 @@ export function SiteDetail() {
     try {
       if ((await unitGate(client, HEBEDEX_VOR_ORT)).allowed) setEditingItem('new');
       else setGate(true);
+    } catch (e) {
+      zeigeGrenzFehler(e);
     } finally {
       setChecking(false);
     }
@@ -93,28 +95,34 @@ export function SiteDetail() {
     const kind = s(v.kind) as LiftingItem['kind'];
     // Wieder in den Bestand nehmen zählt wie Anlegen (in der App genauso) — Beispieldaten zählen nicht.
     const backInUse = editingItem !== 'new' && editingItem?.retired === true && !retired && !editingItem.is_demo;
-    if (backInUse && !(await unitGate(client, HEBEDEX_VOR_ORT)).allowed) throw new Error(gateText(HEBEDEX_VOR_ORT));
-    await saveItem(
-      client,
-      org.org.id,
-      {
-        site_id: id,
-        name: s(v.name),
-        kind,
-        wll_kg: wll ?? null,
-        length_m: orNull(v.length_m),
-        nominal_mm: kindInfo(kind).sizeLabel ? orNull(v.nominal_mm) : null,
-        rope_kind:
-          kind === 'wire_rope' ? ((s(v.rope_kind) || 'strand') as 'strand' | 'cable') : null,
-        manufacturer: orNull(v.manufacturer),
-        serial_no: orNull(v.serial_no),
-        build_year: orNull(v.build_year),
-        color: orNull(v.color),
-        notes: orNull(v.notes),
-        retired,
-        retire_reason: orNull(v.retire_reason),
-      },
-      editingItem === 'new' ? undefined : (editingItem ?? undefined),
+    // Neu anlegen zählt wie Wieder-in-Betrieb-Nehmen — beim Speichern erneut geprüft (Dialog lange offen, zweiter Tab),
+    // seit NACHTRAG-PAYWALL-2026-11-25 lehnt auch der Server ab (dann derselbe Hinweis).
+    const isNew = editingItem === 'new' && !retired;
+    if ((isNew || backInUse) && !(await unitGate(client, HEBEDEX_VOR_ORT)).allowed) throw new Error(gateText(HEBEDEX_VOR_ORT));
+    await mitGrenzText(
+      saveItem(
+        client,
+        org.org.id,
+        {
+          site_id: id,
+          name: s(v.name),
+          kind,
+          wll_kg: wll ?? null,
+          length_m: orNull(v.length_m),
+          nominal_mm: kindInfo(kind).sizeLabel ? orNull(v.nominal_mm) : null,
+          rope_kind:
+            kind === 'wire_rope' ? ((s(v.rope_kind) || 'strand') as 'strand' | 'cable') : null,
+          manufacturer: orNull(v.manufacturer),
+          serial_no: orNull(v.serial_no),
+          build_year: orNull(v.build_year),
+          color: orNull(v.color),
+          notes: orNull(v.notes),
+          retired,
+          retire_reason: orNull(v.retire_reason),
+        },
+        editingItem === 'new' ? undefined : (editingItem ?? undefined),
+      ),
+      gateText(HEBEDEX_VOR_ORT),
     );
     state.reload();
   }

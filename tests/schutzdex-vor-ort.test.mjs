@@ -336,7 +336,7 @@ async function pruefe(voll, nachtrag, marke) {
   r = (await t.als(U, () => t.db.query(`select count(*)::int as aktiv from public.member where aktiv = true`))).rows[0];
   check2('Zählung für die Gratis-Grenze: 2 aktive Mitarbeiter (inaktive zählen nicht) → ab hier nur mit Pro', r?.aktiv === 2 && !withinFreeMembers(r.aktiv), r);
   r = (await q(`select to_regprocedure('public.org_pro_active()') is null as fehlt`))[0];
-  check2('SchutzDex hat keine Server-Auskunft zum Tarif (kein org_pro_active) — deshalb liest das Dashboard RevenueCat/Suite (src/lib/abo.ts)', r?.fehlt === true && liesWeb('src/schutzdex/pro.ts').includes(`loadAboInfo(app, session)`), r);
+  check2('SchutzDex hat keine Server-Auskunft zum Tarif (kein org_pro_active) — deshalb liest das Dashboard RevenueCat/Suite (src/lib/abo.ts)', r?.fehlt === true && liesWeb('src/schutzdex/pro.ts').includes('aboProStand(app, session') && liesWeb('src/lib/aboProStand.ts').includes('loadAboInfo(app, session)'), r);
   await t.db.close?.();
 }
 

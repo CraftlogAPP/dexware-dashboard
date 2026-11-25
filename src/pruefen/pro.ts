@@ -4,27 +4,20 @@
 // GerüstDex, RegalDex und SpielDex begrenzen statt der Einheiten die ORTE (1 aktive Baustelle / 1 aktives Lager /
 // 1 aktiver Spielplatz, stillgelegte zählen nicht) — siteGate unten.
 // Ob ein Betrieb Pro hat, sagt der SERVER (RPC org_pro_active: Abo des Inhabers, Suite-Abo, Sonderlizenz).
-// Antwortet er nicht eindeutig, gilt „Pro“: nie einen zahlenden Betrieb zu Unrecht sperren.
+//
+// Seit 25.11.2026 (Paywall dicht, Muster WinterDex): KEIN „im Zweifel Pro“ mehr an den Grenzen.
+//   · Antwortet der Server nicht eindeutig, gilt der letzte sichere Stand dieses Kontos (src/lib/proStand.ts, 35 Tage);
+//     gibt es keinen, kommt „bitte in einer Minute noch einmal“ (ProUnklarError) — vorher war die Grenze offen und der
+//     Import UNBEGRENZT.
+//   · Lässt sich der Bestand nicht zählen, wird ebenfalls nicht erlaubt (vorher: „0 gezählt“ → erlaubt).
+//   · Der Server lehnt seit NACHTRAG-PAYWALL-2026-11-25 selbst ab (hint gratis_grenze_…) — istGratisGrenze erkennt das.
+// Für ANZEIGE (Wasserzeichen) bleibt fetchOrgPro nachsichtig (letzter Stand, sonst Pro).
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PruefConfig } from './config';
+import { GRENZE_UNKLAR, ProUnklarError, istGratisGrenze, orgProFuerGrenze } from '../lib/proStand.ts';
 
-const cache = new WeakMap<SupabaseClient, { v: boolean; at: number }>();
-const FRESH_MS = 5 * 60 * 1000;
-
-export async function fetchOrgPro(sb: SupabaseClient, fresh = false): Promise<boolean> {
-  const hit = cache.get(sb);
-  if (!fresh && hit && Date.now() - hit.at < FRESH_MS) return hit.v;
-  try {
-    const { data, error } = await sb.rpc('org_pro_active');
-    if (error || data === null || data === undefined) return true; // unklar → nicht sperren (nicht merken)
-    const v = data === true;
-    cache.set(sb, { v, at: Date.now() });
-    return v;
-  } catch {
-    return true;
-  }
-}
+export { fetchOrgPro, istGratisGrenze, orgProFuerGrenze, ProUnklarError } from '../lib/proStand.ts';
 
 export interface UnitGate {
   allowed: boolean;
@@ -35,7 +28,8 @@ export interface UnitGate {
 
 /**
  * Darf eine weitere Einheit in den Bestand (neu anlegen oder wieder in Betrieb nehmen)?
- * Gezählt wird betriebsweit über alle Standorte, wie in der App. Lässt sich die Zahl nicht ermitteln, wird nicht gesperrt.
+ * Gezählt wird betriebsweit über alle Standorte, wie in der App. Lässt sich die Zahl nicht ermitteln oder der Pro-Status
+ * nicht sicher feststellen (auch kein letzter Stand), wirft es ProUnklarError („gleich nochmal“) — nie still erlauben.
  */
 export async function unitGate(sb: SupabaseClient, cfg: PruefConfig): Promise<UnitGate> {
   const limit = cfg.freeUnits ?? Infinity;
@@ -44,23 +38,47 @@ export async function unitGate(sb: SupabaseClient, cfg: PruefConfig): Promise<Un
   // Beispieldaten zählen nicht mit (HebeDex — wie gateItem in der App)
   if (cfg.cols.demo) q = q.eq(cfg.cols.demo, false);
   const { count, error } = await q;
-  if (error || count === null) return { allowed: true, count: 0, limit };
+  if (error || typeof count !== 'number') throw new ProUnklarError(GRENZE_UNKLAR);
   if (count < limit) return { allowed: true, count, limit };
-  return { allowed: await fetchOrgPro(sb, true), count, limit };
+  return { allowed: await orgProFuerGrenze(sb, cfg.appId), count, limit };
 }
 
 /**
  * Darf ein weiterer Ort aktiv sein (neu anlegen oder wieder aktivieren)? Für Apps mit cfg.freeSites
  * (GerüstDex, RegalDex, SpielDex). Gezählt werden wie in der App die AKTIVEN Orte des Betriebs.
- * Lässt sich die Zahl nicht ermitteln, wird nicht gesperrt.
+ * Unklare Zählung oder unklarer Pro-Status → ProUnklarError (wie unitGate).
  */
 export async function siteGate(sb: SupabaseClient, cfg: PruefConfig): Promise<UnitGate> {
   const limit = cfg.freeSites ?? Infinity;
   if (!Number.isFinite(limit)) return { allowed: true, count: 0, limit };
   const { count, error } = await sb.from(cfg.tables.site).select('id', { count: 'exact', head: true }).eq('active', true);
-  if (error || count === null) return { allowed: true, count: 0, limit };
+  if (error || typeof count !== 'number') throw new ProUnklarError(GRENZE_UNKLAR);
   if (count < limit) return { allowed: true, count, limit };
-  return { allowed: await fetchOrgPro(sb, true), count, limit };
+  return { allowed: await orgProFuerGrenze(sb, cfg.appId), count, limit };
+}
+
+/** Pro-Auskunft für den Import: ohne Grenze in dieser App unnötig (true), sonst wie an jeder Grenze (unklar → wirft). */
+export async function importPro(sb: SupabaseClient, cfg: PruefConfig): Promise<boolean> {
+  if (cfg.freeUnits === undefined && cfg.freeSites === undefined) return true;
+  return orgProFuerGrenze(sb, cfg.appId);
+}
+
+/**
+ * Speichern mit Grenz-Text: Lehnt der SERVER wegen der Gratis-Grenze ab (Auslöser NACHTRAG-PAYWALL-2026-11-25), kommt
+ * statt „… konnte nicht gespeichert werden: Gratis-Grenze: …“ derselbe Hinweis wie an der Oberfläche.
+ */
+export async function mitGrenzText<T>(arbeit: Promise<T>, text: string): Promise<T> {
+  try {
+    return await arbeit;
+  } catch (e) {
+    if (istGratisGrenze(e)) throw new Error(text);
+    throw e;
+  }
+}
+
+/** Fehler einer Grenz-Prüfung am „+“ als Hinweis zeigen (Pro-Status unklar, Server antwortet nicht …). */
+export function zeigeGrenzFehler(e: unknown): void {
+  window.alert(e instanceof Error ? e.message : String(e));
 }
 
 /** Hinweistext an der Gratis-Grenze der Orte, z. B. „Im Gratis-Paket ist 1 aktives Lager möglich …“. */

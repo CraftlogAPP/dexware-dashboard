@@ -29,7 +29,7 @@ export function Vehicles() {
   const [inspecting, setInspecting] = useState<Vehicle | null>(null);
 
   const state = useAsync<Vehicle[]>(() => fetchVehicles(client), [client]);
-  // Gratis-Grenze wie in der App (1 Fahrzeug); Pro laut Server, im Zweifel erlaubt.
+  // Gratis-Grenze wie in der App (1 Fahrzeug); Pro laut Server; unklar → letzter sicherer Stand, sonst „gleich nochmal“.
   const [gate, setGate] = useState(false);
   const [checking, setChecking] = useState(false);
 
@@ -39,6 +39,8 @@ export function Vehicles() {
     try {
       if ((await fleetGate(client, 'vehicle', FREE_LIMITS.vehicles)).allowed) setEditing('new');
       else setGate(true);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
     } finally {
       setChecking(false);
     }

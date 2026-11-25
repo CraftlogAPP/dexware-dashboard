@@ -42,7 +42,7 @@ export interface SdBackend {
   insertCompletion(row: CompletionRow): Promise<{ fieldsDropped: boolean }>;
   /** Mitarbeiter anlegen (Name, Tätigkeit) — wie addMember in der App. */
   addMember(orgId: string, input: { name: string; taetigkeit: string | null }): Promise<void>;
-  /** Gratis-Grenze: 2 aktive Mitarbeiter ohne Pro. Im Zweifel erlaubt — nie zu Unrecht sperren. */
+  /** Gratis-Grenze: 2 aktive Mitarbeiter ohne Pro. Unklar (Zählung/Pro) → ProUnklarError („gleich nochmal“), nie still erlauben. */
   memberGate(): Promise<MemberGate>;
 }
 
@@ -66,7 +66,7 @@ function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T> {
   });
 }
 
-export function supabaseSdBackend(sb: SupabaseClient, isPro: () => Promise<boolean>): SdBackend {
+export function supabaseSdBackend(sb: SupabaseClient, proStand: () => Promise<boolean | null>): SdBackend {
   return {
     async load() {
       const [m, b, c] = await Promise.all([
@@ -95,7 +95,7 @@ export function supabaseSdBackend(sb: SupabaseClient, isPro: () => Promise<boole
       await insertMember(sb, orgId, { name: input.name, taetigkeit: input.taetigkeit, email: null, telefon: null, eintritt_am: null, aktiv: true });
     },
 
-    memberGate: () => memberGate(sb, isPro),
+    memberGate: () => memberGate(sb, proStand),
   };
 }
 

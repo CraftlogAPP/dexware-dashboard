@@ -131,8 +131,10 @@ function Formular({ deviceId }: { deviceId: string }) {
         if (!d) return setLoadError('Gerät nicht gefunden — gelöscht, ausgesondert oder aus einem anderen Betrieb?');
         setDevice(d);
         setCustomer(data.customers.find((c) => c.id === d.customer_id) ?? null);
-        // Gratis-Grenze wie in der App: ohne Pro 5 Prüfungen (wartende zählen schon mit). Im Zweifel nicht sperren.
-        const gate = data.offline ? { allowed: true } : await be.inspectionGate(pending.length).catch(() => ({ allowed: true }));
+        // Gratis-Grenze wie in der App: ohne Pro 5 Prüfungen (wartende zählen schon mit). Offline (Daten aus dem Speicher)
+        // geht es wie in der App weiter. Online: Pro unklar → letzter sicherer Stand, sonst Fehler mit „Erneut versuchen“
+        // (vorher: „im Zweifel nicht sperren“ = Grenze offen, sobald der Abo-Dienst gestört war).
+        const gate = data.offline ? { allowed: true } : await be.inspectionGate(pending.length);
         if (!alive) return;
         if (!gate.allowed) return setPhase('gate');
         if (draft) {

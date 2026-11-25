@@ -16,7 +16,7 @@ import {
 import { DefectStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, dimensionLabel, ladderNameMap } from '../labels';
 import { SiteDialog } from '../dialogs';
-import { gateText, unitGate } from '../../pruefen/pro';
+import { gateText, mitGrenzText, unitGate, zeigeGrenzFehler } from '../../pruefen/pro';
 import { LEITERDEX_VOR_ORT } from '../vorOrt';
 import {
   LADDER_CATEGORIES,
@@ -40,7 +40,7 @@ export function SiteDetail() {
   const { data: org } = useOrg();
   const [editingLadder, setEditingLadder] = useState<Ladder | 'new' | null>(null);
   const [editingSite, setEditingSite] = useState(false);
-  // Gratis-Grenze wie in der App (2 Leitern im Bestand, ausgesonderte zählen nicht); Pro laut Server, im Zweifel erlaubt.
+  // Gratis-Grenze wie in der App (2 Leitern im Bestand, ausgesonderte zählen nicht); Pro laut Server; unklar → letzter sicherer Stand, sonst „gleich nochmal“.
   const [gate, setGate] = useState(false);
   const [checking, setChecking] = useState(false);
 
@@ -50,6 +50,8 @@ export function SiteDetail() {
     try {
       if ((await unitGate(client, LEITERDEX_VOR_ORT)).allowed) setEditingLadder('new');
       else setGate(true);
+    } catch (e) {
+      zeigeGrenzFehler(e);
     } finally {
       setChecking(false);
     }
@@ -69,23 +71,29 @@ export function SiteDetail() {
     if (!org || !id) throw new Error('Kein Betrieb geladen');
     // Wieder in Betrieb nehmen zählt wie Anlegen (in der App genauso).
     const backInUse = editingLadder !== 'new' && editingLadder?.retired === true && v.retired !== true;
-    if (backInUse && !(await unitGate(client, LEITERDEX_VOR_ORT)).allowed) throw new Error(gateText(LEITERDEX_VOR_ORT));
-    await saveLadder(
-      client,
-      org.org.id,
-      {
-        site_id: id,
-        name: s(v.name),
-        category: s(v.category),
-        material: s(v.material),
-        manufacturer: orNull(v.manufacturer),
-        purchase_year: orNull(v.purchase_year),
-        length_m: orNull(v.length_m),
-        rung_count: orNull(v.rung_count),
-        notes: orNull(v.notes),
-        retired: v.retired === true,
-      },
-      editingLadder === 'new' ? undefined : (editingLadder ?? undefined),
+    // Neu anlegen zählt wie Wieder-in-Betrieb-Nehmen — beim Speichern erneut geprüft (Dialog lange offen, zweiter Tab),
+    // seit NACHTRAG-PAYWALL-2026-11-25 lehnt auch der Server ab (dann derselbe Hinweis).
+    const isNew = editingLadder === 'new' && v.retired !== true;
+    if ((isNew || backInUse) && !(await unitGate(client, LEITERDEX_VOR_ORT)).allowed) throw new Error(gateText(LEITERDEX_VOR_ORT));
+    await mitGrenzText(
+      saveLadder(
+        client,
+        org.org.id,
+        {
+          site_id: id,
+          name: s(v.name),
+          category: s(v.category),
+          material: s(v.material),
+          manufacturer: orNull(v.manufacturer),
+          purchase_year: orNull(v.purchase_year),
+          length_m: orNull(v.length_m),
+          rung_count: orNull(v.rung_count),
+          notes: orNull(v.notes),
+          retired: v.retired === true,
+        },
+        editingLadder === 'new' ? undefined : (editingLadder ?? undefined),
+      ),
+      gateText(LEITERDEX_VOR_ORT),
     );
     state.reload();
   }

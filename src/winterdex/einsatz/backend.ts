@@ -96,7 +96,7 @@ export interface EinsatzBackend {
   listRouteRuns(routeId: string, limit: number): Promise<RunMeta[]>;
   /** Fahrt anlegen; „ID gibt es schon“ (Wiederholung) zählt als Erfolg. */
   insertRun(row: RunRow, photoUrls: string[]): Promise<void>;
-  /** Pro des Betriebs laut Server (Abo, Team, Kommunal-Lizenz, Suite). Im Zweifel true — nie zu Unrecht sperren. */
+  /** Pro des Betriebs laut Server (Abo, Team, Kommunal-Lizenz, Suite) für Grenzen: unklar → letzter sicherer Stand, sonst ProUnklarError. */
   isPro(): Promise<boolean>;
   listProperties(): Promise<Property[]>;
   /** Einsätze seit lokaler Mitternacht (für „heute erledigt“). */

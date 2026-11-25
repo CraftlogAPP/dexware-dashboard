@@ -8,7 +8,7 @@ import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
 import { PruefCtx } from '../../pruefen/context';
-import { siteGate, siteGateText } from '../../pruefen/pro';
+import { siteGate, siteGateText, zeigeGrenzFehler } from '../../pruefen/pro';
 import { GERUESTDEX_VOR_ORT } from '../vorOrt';
 import {
   fetchDamages,
@@ -33,7 +33,7 @@ interface Data {
 export function Sites() {
   const { client } = useAppAuth();
   const [editing, setEditing] = useState<Site | 'new' | null>(null);
-  // Gratis-Grenze wie in der App (1 aktive Baustelle, nicht aktive zählen nicht); Pro laut Server, im Zweifel erlaubt.
+  // Gratis-Grenze wie in der App (1 aktive Baustelle, nicht aktive zählen nicht); Pro laut Server; unklar → letzter sicherer Stand, sonst „gleich nochmal“.
   const [gate, setGate] = useState(false);
   const [checking, setChecking] = useState(false);
 
@@ -43,6 +43,8 @@ export function Sites() {
     try {
       if ((await siteGate(client, GERUESTDEX_VOR_ORT)).allowed) setEditing('new');
       else setGate(true);
+    } catch (e) {
+      zeigeGrenzFehler(e);
     } finally {
       setChecking(false);
     }

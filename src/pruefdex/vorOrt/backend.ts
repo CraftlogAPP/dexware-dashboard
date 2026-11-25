@@ -30,7 +30,7 @@ export interface PdBackend {
   uploadPhoto(path: string, blob: Blob): Promise<void>;
   /** Prüfung anlegen; „ID gibt es schon“ (Wiederholung) zählt als Erfolg. */
   insertInspection(row: InspectionRow, photoUrls: string[]): Promise<InsertOutcome>;
-  /** Gratis-Grenze der Prüfungen (5 ohne Pro). Im Zweifel erlaubt — nie zu Unrecht sperren. */
+  /** Gratis-Grenze der Prüfungen (5 ohne Pro). Unklar → letzter sicherer Stand, sonst ProUnklarError („gleich nochmal“). */
   inspectionGate(waiting: number): Promise<Gate>;
 }
 

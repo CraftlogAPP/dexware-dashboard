@@ -2,7 +2,7 @@ import { useAppAuth } from '../auth/AppAuthContext';
 import { useOrg } from '../components/OrgContext';
 import { FormDialog, orNull, s, type FormValues } from '../components/form';
 import { savePlayground } from './api';
-import { siteGate, siteGateText } from '../pruefen/pro';
+import { mitGrenzText, siteGate, siteGateText } from '../pruefen/pro';
 import { SPIELDEX_VOR_ORT } from './vorOrt';
 import type { Playground } from './types';
 
@@ -21,21 +21,25 @@ export function PlaygroundDialog({
   async function onSave(v: FormValues) {
     if (!org) throw new Error('Kein Betrieb geladen');
     // Gratis-Grenze wie in der App (1 aktiver Spielplatz): Anlegen und Wieder-Aktivieren zählen — sonst ließe sich die
-    // Grenze per Stilllegen → neu anlegen → wieder aktivieren umgehen. Pro laut Server, im Zweifel erlaubt.
+    // Grenze per Stilllegen → neu anlegen → wieder aktivieren umgehen. Pro laut Server; unklar → letzter sicherer Stand, sonst „gleich nochmal“.
     const becomesActive = v.active === true && (playground === 'new' || !playground.active);
     if (becomesActive && !(await siteGate(client, SPIELDEX_VOR_ORT)).allowed) throw new Error(siteGateText(SPIELDEX_VOR_ORT));
-    await savePlayground(
-      client,
-      org.org.id,
-      {
-        name: s(v.name),
-        address: s(v.address),
-        operator_name: orNull(v.operator_name),
-        operator_contact: orNull(v.operator_contact),
-        notes: orNull(v.notes),
-        active: v.active === true,
-      },
-      playground === 'new' ? undefined : playground,
+    // Lehnt der Server ab (NACHTRAG-PAYWALL-2026-11-25, z. B. zweiter Tab), kommt derselbe Hinweis.
+    await mitGrenzText(
+      savePlayground(
+        client,
+        org.org.id,
+        {
+          name: s(v.name),
+          address: s(v.address),
+          operator_name: orNull(v.operator_name),
+          operator_contact: orNull(v.operator_contact),
+          notes: orNull(v.notes),
+          active: v.active === true,
+        },
+        playground === 'new' ? undefined : playground,
+      ),
+      siteGateText(SPIELDEX_VOR_ORT),
     );
     onSaved();
   }

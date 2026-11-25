@@ -25,7 +25,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Org } from '../lib/orgApi';
-import { fetchOrgPro } from '../pruefen/pro';
+import { orgProFuerGrenze } from '../lib/proStand';
 import {
   cap,
   cellOf,
@@ -518,7 +518,7 @@ export interface DeviceImportData {
 }
 
 export async function loadDeviceImport(sb: SupabaseClient, api: DeviceImportApi = DEVICE_IMPORT_API): Promise<DeviceImportData> {
-  const [customers, devices, gate, pro] = await Promise.all([api.fetchCustomers(sb), api.fetchDevices(sb), deviceGate(sb), fetchOrgPro(sb, true)]);
+  const [customers, devices, gate, pro] = await Promise.all([api.fetchCustomers(sb), api.fetchDevices(sb), deviceGate(sb), orgProFuerGrenze(sb, 'pruefdex')]);
   return { customers, devices, count: gate.count, pro, allowance: deviceAllowance(pro, gate.count) };
 }
 

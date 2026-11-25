@@ -56,7 +56,7 @@ export interface PruefBackend {
   insertInspection(row: InspectionRow, photoUrls: string[]): Promise<{ signatureDropped: boolean }>;
   /** Mangel anlegen; „ID gibt es schon“ (Wiederholung) zählt als Erfolg. */
   insertDefect(row: DefectRow, photoUrls: string[]): Promise<void>;
-  /** Pro des Betriebs laut Server. Im Zweifel true — nie zu Unrecht sperren. */
+  /** Pro des Betriebs laut Server — nur Anzeige: unklar → letzter sicherer Stand, sonst true. */
   isPro(): Promise<boolean>;
   /**
    * Nur Apps mit Messwerten (cfg.measure, HebeDex): Messwerte der jüngsten gültigen Prüfung dieser Einheit —
@@ -216,8 +216,8 @@ export function supabasePruefBackend(sb: SupabaseClient, cfg: PruefConfig, dueIn
       if (error && error.code !== '23505') throw error;
     },
 
-    // frisch gefragt — hier wird über das Anlegen entschieden
-    isPro: () => fetchOrgPro(sb, true),
+    // nur Anzeige (Vor Ort legt nichts Zählendes an): letzter sicherer Stand, sonst Pro
+    isPro: () => fetchOrgPro(sb, cfg.appId, true),
 
     ...(cfg.measure
       ? {

@@ -22,7 +22,8 @@ import {
 } from '../turnus';
 import { SERVICE_TEMPLATES, type OdProperty, type OdService } from '../types';
 import type { OdData } from '../data';
-import { objektGrenzeText } from '../grenze';
+import { OBJEKT_GRENZE_SERVER, objektGrenzeText } from '../grenze';
+import { istGratisGrenze } from '../../lib/proStand';
 
 export function PropertyDetail() {
   const { id = '' } = useParams();
@@ -110,7 +111,7 @@ export function PropertyDetail() {
                       void toggle(
                         async () => {
                           if (!p.active) await grenzePruefen(data);
-                          await data.setPropertyActive(p.id, !p.active);
+                          await mitGrenzText(data.setPropertyActive(p.id, !p.active));
                         },
                         p.active ? 'Objekt pausieren? Es erscheint dann nicht mehr unter „Heute“. Nachweise bleiben erhalten.' : 'Objekt wieder aktivieren?',
                       )
@@ -293,12 +294,22 @@ async function grenzePruefen(data: OdData): Promise<void> {
   if (text) throw new Error(text);
 }
 
+/** Lehnt der Server wegen der Gratis-Grenze ab (NACHTRAG-GRATIS-GRENZE-2026-11-25, z. B. zweiter Tab): derselbe Hinweis. */
+async function mitGrenzText<T>(arbeit: Promise<T>): Promise<T> {
+  try {
+    return await arbeit;
+  } catch (e) {
+    if (istGratisGrenze(e)) throw new Error(OBJEKT_GRENZE_SERVER);
+    throw e;
+  }
+}
+
 /** Objekt anlegen/bearbeiten (Inhaber) */
 export function PropertyDialog({ property, onClose, onSaved }: { property?: OdProperty; onClose: () => void; onSaved: () => void }) {
   const { data } = useOd();
   async function onSave(v: FormValues) {
     if (!property) await grenzePruefen(data);
-    await data.saveProperty({
+    await mitGrenzText(data.saveProperty({
       id: property?.id,
       name: s(v.name),
       address: s(v.address),
@@ -306,7 +317,7 @@ export function PropertyDialog({ property, onClose, onSaved }: { property?: OdPr
       customer_contact: orNull(v.customer_contact),
       contact_person: orNull(v.contact_person),
       notes: orNull(v.notes),
-    });
+    }));
     onSaved();
   }
   return (

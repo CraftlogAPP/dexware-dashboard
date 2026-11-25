@@ -13,7 +13,8 @@ import {
   updateMember,
 } from '../api';
 import { isOverdue } from '../labels';
-import { MEMBER_GATE_TEXT, fetchSchutzPro, memberGate } from '../pro';
+import { MEMBER_GATE_TEXT, memberGate, schutzProStand } from '../pro';
+import { istGratisGrenze } from '../../lib/proStand';
 import type { Assignment, Completion, Member } from '../types';
 
 interface Data {
@@ -47,14 +48,20 @@ export function Members() {
       aktiv: v.aktiv === true,
     };
     // Gratis-Grenze wie in der App: ohne Pro 2 aktive Mitarbeiter (neu anlegen oder wieder aktiv setzen).
-    // Im Zweifel (Anbieter antwortet nicht) wird nicht gesperrt.
+    // Pro unklar → letzter sicherer Stand, sonst „gleich nochmal“ (vorher: im Zweifel erlaubt; ohne Sitzung gar nicht geprüft).
     const becomesActive = input.aktiv && (editing === 'new' || (!!editing && !editing.aktiv));
-    if (becomesActive && session) {
-      const gate = await memberGate(client, () => fetchSchutzPro(app, session));
+    if (becomesActive) {
+      const gate = await memberGate(client, () => schutzProStand(app, session ?? null));
       if (!gate.allowed) throw new Error(MEMBER_GATE_TEXT);
     }
-    if (editing === 'new') await insertMember(client, org.org.id, input);
-    else if (editing) await updateMember(client, editing.id, input);
+    try {
+      if (editing === 'new') await insertMember(client, org.org.id, input);
+      else if (editing) await updateMember(client, editing.id, input);
+    } catch (e) {
+      // Lehnt der Server wegen der Gratis-Grenze ab (falls ein Nachtrag sie dort prüft): derselbe Hinweis
+      if (istGratisGrenze(e)) throw new Error(MEMBER_GATE_TEXT);
+      throw e;
+    }
     state.reload();
   }
 

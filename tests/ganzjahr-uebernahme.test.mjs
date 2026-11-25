@@ -462,12 +462,15 @@ check('Seite ohne Play-Link und ohne „rechtssicher/lückenlos“, Übernahme n
 teil('Gratis-Grenze von Hand (Formular, Wieder aktivieren, Team-Code)');
 const GR = await web('src/objektdex/grenze.ts');
 check('ohne Pro bei 2 aktiven: gesperrt mit Erklärung; bei 1 aktivem frei', /2 aktive Objekte möglich/.test(GR.objektGrenzeText(false, 2) ?? '') && GR.objektGrenzeText(false, 1) === null);
-check('Pro oder unklare Auskunft: ein einzelnes Objekt wird nie gesperrt', GR.objektGrenzeText(true, 9) === null && GR.objektGrenzeText(null, 9) === null);
+check('Pro: nie gesperrt; unter der Grenze auch ohne Pro-Auskunft frei', GR.objektGrenzeText(true, 9) === null && GR.objektGrenzeText(null, 1) === null);
+check('unklare Auskunft ÜBER der Grenze (kein letzter sicherer Stand): „gleich nochmal“ statt still erlauben (Paywall dicht 25.11.)', /noch einmal versuchen/.test(GR.objektGrenzeText(null, 9) ?? ''));
+check('Auftraggeber-Link nur mit Pro (wie ShareLinksScreen), unklar → „gleich nochmal“', GR.linkGrenzeText(true) === null && /ObjektDex Pro/.test(GR.linkGrenzeText(false) ?? '') && /noch einmal versuchen/.test(GR.linkGrenzeText(null) ?? ''));
+check('Links-Seite prüft Pro vor dem Erstellen', liesWeb('src/objektdex/pages/Links.tsx').includes('linkGrenzeText(await data.proStatus())'));
 check('Übernahme nutzt dieselben Werte (Re-Export)', U.GRATIS_OBJEKTE === GR.GRATIS_OBJEKTE && U.gratisRahmen === GR.gratisRahmen);
 const pd = liesWeb('src/objektdex/pages/PropertyDetail.tsx');
 check('„Objekt anlegen“ und „Wieder aktivieren“ prüfen die Grenze', pd.includes('if (!property) await grenzePruefen(data);') && pd.includes('if (!p.active) await grenzePruefen(data);'));
 if (existsSync(path.join(OD, 'mobile/src/screens/TeamScreen.tsx'))) {
-  check('App zeigt den Team-Code nur mit Pro — Dashboard ebenso', /if \(await isPro\(\)\) setTeamCode/.test(liesRepo(OD, 'mobile/src/screens/TeamScreen.tsx')) && /manages && pro !== false \? data\.teamCode\(false\)/.test(liesWeb('src/objektdex/pages/Team.tsx')));
+  check('App zeigt den Team-Code nur mit Pro — Dashboard ebenso', /if \(await isPro\(\)\) setTeamCode/.test(liesRepo(OD, 'mobile/src/screens/TeamScreen.tsx')) && /manages && pro === true \? data\.teamCode\(false\)/.test(liesWeb('src/objektdex/pages/Team.tsx')));
 }
 
 // ============================================================================ Ergebnis

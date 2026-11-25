@@ -3,6 +3,9 @@ import { FormDialog, num, orNull, s, type FormValues } from '../components/form'
 import { parseLocalDate, toInputDate } from '../lib/format';
 import { insertProject, updateProjectHead, type ProjectHeadInput } from './api';
 import { CATEGORY_LABELS, STATUS_LABELS, type ProjectStatus } from './types';
+import { useAppAuth } from '../auth/AppAuthContext';
+import { istGratisGrenze } from '../lib/proStand';
+import { PROJECT_GATE_TEXT, craftProStand, projectGate } from './pro';
 
 /**
  * Auftrag-Kopf-Dialog (Anlegen + Bearbeiten) — aus Projects.tsx extrahiert,
@@ -64,6 +67,7 @@ export function ProjectDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { app, session } = useAppAuth();
   async function onSave(v: FormValues) {
     const deadline = orNull(v.deadline);
     const input: ProjectHeadInput = {
@@ -78,7 +82,15 @@ export function ProjectDialog({
     };
     if (editing === 'new') {
       if (!userId) throw new Error('Nicht angemeldet');
-      await insertProject(client, userId, input);
+      // Gratis-Grenze wie in der App (2 Aufträge) — beim Speichern geprüft; Pro unklar → letzter sicherer Stand, sonst
+      // „gleich nochmal“. Bis 25.11.2026 legte das Dashboard ohne jede Grenze an.
+      if (!(await projectGate(client, () => craftProStand(app, session, client))).allowed) throw new Error(PROJECT_GATE_TEXT);
+      try {
+        await insertProject(client, userId, input);
+      } catch (e) {
+        if (istGratisGrenze(e)) throw new Error(PROJECT_GATE_TEXT);
+        throw e;
+      }
     } else {
       await updateProjectHead(client, editing.id, input);
     }

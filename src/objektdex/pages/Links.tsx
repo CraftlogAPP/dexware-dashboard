@@ -7,6 +7,8 @@ import { LoadGuard, useAsync } from '../../components/ui';
 import { useOd } from '../context';
 import { CopyButton, fmtDateTimeB } from '../parts';
 import { SHARE_BASE_URL } from '../types';
+import { linkGrenzeText } from '../grenze';
+import { istGratisGrenze } from '../../lib/proStand';
 
 export function Links() {
   const { data, role, base, demo } = useOd();
@@ -29,12 +31,16 @@ export function Links() {
     setBusy(true);
     setError(null);
     try {
+      // Auftraggeber-Links sind Pro (wie ShareLinksScreen der App) — vorher prüfte das Dashboard das nicht.
+      // Unklarer Pro-Status: letzter sicherer Stand, sonst „gleich nochmal“; der Server lehnt seit dem Nachtrag selbst ab.
+      const sperre = linkGrenzeText(await data.proStatus());
+      if (sperre) return setError(sperre);
       const token = await data.createShareLink(propertyId, label);
       setCreated({ url: SHARE_BASE_URL + token, name });
       setLabel('');
       state.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(istGratisGrenze(e) ? linkGrenzeText(false) : e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }

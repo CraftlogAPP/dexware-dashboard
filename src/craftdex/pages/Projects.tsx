@@ -4,6 +4,7 @@ import { useAppAuth } from '../../auth/AppAuthContext';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { fmtDate, fmtNum } from '../../lib/format';
 import { fetchProject, fetchProjectSummaries, softDeleteProject } from '../api';
+import { PROJECT_GATE_TEXT, craftProStand, projectGate } from '../pro';
 import { ProjectDialog, type ProjectHead } from '../dialogs';
 import { ProjectStatusBadge } from '../badges';
 import {
@@ -16,10 +17,25 @@ import {
 const eur = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 
 export function Projects() {
-  const { client, session } = useAppAuth();
+  const { app, client, session } = useAppAuth();
+  const [checking, setChecking] = useState(false);
   const [status, setStatus] = useState<'' | ProjectStatus>('');
   const [category, setCategory] = useState('');
   const [editing, setEditing] = useState<ProjectHead | 'new' | null>(null);
+
+  /** „+“ wie HomeScreen.onAdd der App: über der Gratis-Grenze gleich der Hinweis statt erst nach dem Ausfüllen. */
+  async function onAdd() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      if ((await projectGate(client, () => craftProStand(app, session, client))).allowed) setEditing('new');
+      else alert(PROJECT_GATE_TEXT);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setChecking(false);
+    }
+  }
 
   const state = useAsync<ProjectSummary[]>(
     () => fetchProjectSummaries(client),
@@ -67,7 +83,7 @@ export function Projects() {
       <div className="section-head">
         <h1 style={{ margin: 0 }}>Aufträge</h1>
         <div className="spacer" />
-        <button className="btn" onClick={() => setEditing('new')}>
+        <button className="btn" disabled={checking} onClick={() => void onAdd()}>
           ＋ Auftrag anlegen
         </button>
       </div>

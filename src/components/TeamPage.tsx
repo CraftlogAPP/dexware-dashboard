@@ -1,4 +1,5 @@
-import { PRO_HOW, fetchOrgPro } from '../winterdex/pro';
+import { PRO_HOW } from '../winterdex/pro';
+import { PRO_UNKLAR, orgProStand } from '../lib/proStand';
 import { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { useAppAuth } from '../auth/AppAuthContext';
@@ -30,15 +31,23 @@ export function TeamPage() {
 
   const state = useAsync<Member[]>(() => fetchMembers(client), [client]);
   // Team-Code (ein Code für alle, 30 Tage) + belegte Plätze — nur Inhaber; null = App kennt das noch nicht.
-  const team = useAsync<{ code: TeamCode | null; seats: { limit: number; members: number } | null; needsPro?: boolean }>(
-    async () =>
-      canTeam && app.teamNeedsPro && !(await fetchOrgPro(client, true))
-        ? { code: null, seats: null, needsPro: true }
-        : canTeam
-        ? { code: await fetchTeamCode(client), seats: await fetchSeats(client, app.teamSeats?.fallbackLimit) }
-        : { code: null, seats: null },
-    [client, canTeam, app.teamSeats?.fallbackLimit, app.teamNeedsPro],
+  // Apps mit „Team nur mit Pro“ (teamNeedsPro, wie TeamScreen der App): Code NUR bei sicherem Pro. Unklar (Abo-Dienst
+  // gestört) → letzter sicherer Stand dieses Kontos, gibt es keinen: Hinweis „gleich nochmal“ statt Code (früher: Code).
+  // Mitglieder bleiben in jedem Fall sichtbar und verwaltbar; den Beitritt prüft zusätzlich der Server.
+  const team = useAsync<{ code: TeamCode | null; seats: { limit: number; members: number } | null; needsPro?: boolean; proUnklar?: boolean }>(
+    async () => {
+      if (!canTeam) return { code: null, seats: null };
+      if (app.teamNeedsPro) {
+        const pro = await orgProStand(client, app.id, true);
+        if (pro === false) return { code: null, seats: null, needsPro: true };
+        if (pro === null) return { code: null, seats: null, proUnklar: true };
+      }
+      return { code: await fetchTeamCode(client), seats: await fetchSeats(client, app.teamSeats?.fallbackLimit) };
+    },
+    [client, canTeam, app.id, app.teamSeats?.fallbackLimit, app.teamNeedsPro],
   );
+  /** Kein Code, weil Pro fehlt oder gerade nicht prüfbar ist — dann auch keinen Einmal-Beitrittscode anbieten. */
+  const proSperre = !!team.data?.needsPro || !!team.data?.proUnklar;
   // Eigene Team-Stufen der App (Registry) — sonst der bisherige Standard-Text
   const tiers = app.teamSeats;
   const solo = !!tiers && team.data?.seats?.limit === 0;
@@ -149,8 +158,23 @@ export function TeamPage() {
             <h2>{workerLabel} einladen</h2>
           </div>
           <p className="muted" style={{ marginBottom: 0 }}>
-            Einladen ist Teil von {app.name} Pro — das Gratis-Paket ist das Solo-Paket. {PRO_HOW}
+            Einladen ist Teil von {app.name} Pro — das Gratis-Paket ist das Solo-Paket.{' '}
+            {app.id === 'winterdex' ? PRO_HOW : `Pro schließt du in der ${app.name}-App unter „Abo“ ab (mit einem Dexware-Suite-Abo ist es schon dabei).`}
           </p>
+        </div>
+      )}
+
+      {canTeam && team.data?.proUnklar && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <div className="section-head" style={{ margin: 0 }}>
+            <h2>{workerLabel} einladen</h2>
+          </div>
+          <p className="muted" style={{ marginBottom: 8 }}>
+            {PRO_UNKLAR}
+          </p>
+          <button className="btn ghost small" onClick={() => team.reload()}>
+            Erneut prüfen
+          </button>
         </div>
       )}
 
@@ -222,7 +246,7 @@ export function TeamPage() {
         </div>
       )}
 
-      {isOwner && !team.loading && !team.data?.code && (
+      {isOwner && !team.loading && !team.data?.code && !proSperre && (
         <div className="card" style={{ marginBottom: 18 }}>
           <div className="section-head" style={{ margin: 0 }}>
             <h2>Mitarbeiter einladen</h2>

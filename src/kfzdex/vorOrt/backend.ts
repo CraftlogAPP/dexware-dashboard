@@ -4,7 +4,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isNetworkError } from '../../pruefen/backend';
-import { fetchOrgPro } from '../../pruefen/pro';
+import { GRENZE_UNKLAR, ProUnklarError, fetchOrgPro, orgProFuerGrenze } from '../../lib/proStand';
 import { fetchDrivers, fetchVehicles } from '../api';
 import type { Driver, Vehicle } from '../types';
 import type { LicenseRow, UvvRow } from './rows';
@@ -27,7 +27,7 @@ export interface KfzBackend {
   insertProof(kind: 'uvv' | 'license', row: UvvRow | LicenseRow): Promise<void>;
   /** Frist nur vorziehen: schreibt nur, wenn am Server noch kein oder ein älteres Datum steht. */
   bumpDue(b: DueBump): Promise<void>;
-  /** Pro des Betriebs laut Server. Im Zweifel true — nie zu Unrecht sperren. */
+  /** Pro des Betriebs laut Server — nur Anzeige: unklar → letzter sicherer Stand, sonst true. */
   isPro(): Promise<boolean>;
 }
 
@@ -76,7 +76,8 @@ export function supabaseKfzBackend(sb: SupabaseClient): KfzBackend {
       if (error) throw error;
     },
 
-    isPro: () => fetchOrgPro(sb, true),
+    // nur Anzeige: letzter sicherer Stand, sonst Pro
+    isPro: () => fetchOrgPro(sb, 'kfzdex', true),
   };
 }
 
@@ -120,14 +121,15 @@ export interface FleetGate {
 }
 
 /**
- * Darf ein weiteres Fahrzeug bzw. ein weiterer Fahrer angelegt werden? Lässt sich die Zahl nicht ermitteln oder
- * antwortet der Server zur Pro-Frage nicht eindeutig, wird nicht gesperrt.
+ * Darf ein weiteres Fahrzeug bzw. ein weiterer Fahrer angelegt werden? Seit 25.11.2026 (Paywall dicht): Lässt sich die
+ * Zahl nicht ermitteln → ProUnklarError („gleich nochmal“, vorher: erlaubt); Pro unklar → letzter sicherer Stand dieses
+ * Kontos, sonst ebenfalls „gleich nochmal“.
  */
 export async function fleetGate(sb: SupabaseClient, table: 'vehicle' | 'driver', limit: number): Promise<FleetGate> {
   const { count, error } = await sb.from(table).select('id', { count: 'exact', head: true });
-  if (error || count === null) return { allowed: true, count: 0, limit };
+  if (error || typeof count !== 'number') throw new ProUnklarError(GRENZE_UNKLAR);
   if (count < limit) return { allowed: true, count, limit };
-  return { allowed: await fetchOrgPro(sb, true), count, limit };
+  return { allowed: await orgProFuerGrenze(sb, 'kfzdex'), count, limit };
 }
 
 export const GATE_TEXT = {

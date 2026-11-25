@@ -20,7 +20,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { todayLocalISO } from '../lib/format';
 import type { Org } from '../lib/orgApi';
-import { fetchOrgPro } from '../pruefen/pro';
+import { orgProFuerGrenze } from '../lib/proStand';
 import {
   cap,
   cellOf,
@@ -412,12 +412,12 @@ export function fleetAllowance(kind: FleetKind, pro: boolean, count: number): nu
 }
 
 export async function loadVehicleImport(sb: SupabaseClient, api: FleetImportApi = FLEET_IMPORT_API): Promise<FleetImportData<Vehicle>> {
-  const [existing, gate, pro] = await Promise.all([api.fetchVehicles(sb), fleetGate(sb, 'vehicle', LIMIT.vehicle), fetchOrgPro(sb, true)]);
+  const [existing, gate, pro] = await Promise.all([api.fetchVehicles(sb), fleetGate(sb, 'vehicle', LIMIT.vehicle), orgProFuerGrenze(sb, 'kfzdex')]);
   return { existing, count: gate.count, pro, allowance: fleetAllowance('vehicle', pro, gate.count) };
 }
 
 export async function loadDriverImport(sb: SupabaseClient, api: FleetImportApi = FLEET_IMPORT_API): Promise<FleetImportData<Driver>> {
-  const [existing, gate, pro] = await Promise.all([api.fetchDrivers(sb), fleetGate(sb, 'driver', LIMIT.driver), fetchOrgPro(sb, true)]);
+  const [existing, gate, pro] = await Promise.all([api.fetchDrivers(sb), fleetGate(sb, 'driver', LIMIT.driver), orgProFuerGrenze(sb, 'kfzdex')]);
   return { existing, count: gate.count, pro, allowance: fleetAllowance('driver', pro, gate.count) };
 }
 

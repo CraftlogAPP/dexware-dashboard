@@ -5,7 +5,7 @@ import { useMemo, useRef, type ReactNode } from 'react';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import { VOR_ORT_PATH } from '../../pruefen/Scope';
-import { fetchSchutzPro } from '../pro';
+import { schutzProStand } from '../pro';
 import { supabaseSdBackend } from './backend';
 import { SdCtx, type SdCtxValue } from './context';
 import { listPending } from './queue';
@@ -27,7 +27,8 @@ export function SdVorOrtScope({ children }: { children: ReactNode }) {
   const value = useMemo<SdCtxValue | null>(() => {
     if (!userId || !org) return null;
     return {
-      be: supabaseSdBackend(client, async () => (sessionRef.current ? fetchSchutzPro(app, sessionRef.current) : true)),
+      // Grenze: Pro-Stand true/false/null (null = unklar → „gleich nochmal“, nicht mehr „im Zweifel Pro“)
+      be: supabaseSdBackend(client, () => schutzProStand(app, sessionRef.current ?? null)),
       userId,
       orgId: org.id,
       orgName: org.name,

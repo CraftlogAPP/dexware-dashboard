@@ -3,6 +3,7 @@
 // Listen seitenweise (fetchAllRows) mit fester Sortierung, Tagesgrenzen Europe/Berlin.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '../lib/fetchAll';
+import { orgProStand } from '../lib/proStand';
 import { fail } from '../lib/orgApi';
 import { addDays, dayToUTC, type Day } from './turnus';
 import { parseRole } from './types';
@@ -46,7 +47,10 @@ export interface OdData {
   removeMember(membershipId: string): Promise<void>;
   /** Verwalter ernennen ('admin') / zurückstufen ('worker') — nur der Inhaber (Server prüft selbst) */
   setMemberRole(userId: string, role: 'admin' | 'worker'): Promise<void>;
-  /** Pro des Betriebs laut Server (org_pro_active): true/false, null = unklar (RevenueCat nicht erreichbar) */
+  /**
+   * Pro des Betriebs laut Server (org_pro_active), immer frisch gefragt: true/false; antwortet der Server nicht eindeutig,
+   * der letzte sichere Stand dieses Kontos (35 Tage, src/lib/proStand.ts) — null nur, wenn es keinen gibt.
+   */
   proStatus(): Promise<boolean | null>;
   /**
    * Übernahme/Import: Objekte, Runden (Strecken) bzw. Leistungen mit festen ids anlegen — nur der Inhaber (RLS).
@@ -246,15 +250,8 @@ export function supabaseData(sb: SupabaseClient, orgId: string): OdData {
         fail('Rolle nicht geändert', error);
       }
     },
-    async proStatus() {
-      try {
-        const { data, error } = await sb.rpc('org_pro_active');
-        if (error || data === null || data === undefined) return null;
-        return data === true;
-      } catch {
-        return null;
-      }
-    },
+    // Grenzen und PDF: frische Server-Antwort, bei Störung der letzte sichere Stand (nie pauschal „Pro“)
+    proStatus: () => orgProStand(sb, 'objektdex', true),
     createProperties: (rows) => insertRows('property', rows, 'Objekte'),
     async listRoutes() {
       const { data, error } = await fetchAllRows<OdStreckeKurz>((a, b) => sb.from('route').select('id, name').order('name').order('id').range(a, b));

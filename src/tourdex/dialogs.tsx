@@ -10,6 +10,9 @@ import {
 } from '../components/form';
 import { fmtDate, fmtTime } from '../lib/format';
 import { insertTrip, updateTripFull } from './api';
+import { useAppAuth } from '../auth/AppAuthContext';
+import { istGratisGrenze } from '../lib/proStand';
+import { TRIP_GATE_TEXT, monatVon, tourdexProStand, tripGate } from './pro';
 import { CATEGORY_LABELS, type TripCategory, type Vehicle } from './types';
 
 /**
@@ -53,6 +56,7 @@ export function TripDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { app, session } = useAppAuth();
   const categoryOptions = (Object.keys(CATEGORY_LABELS) as TripCategory[]).map((c) => ({
     value: c,
     label: CATEGORY_LABELS[c],
@@ -102,10 +106,22 @@ export function TripDialog({
       category: s(v.category) as TripCategory,
       purpose: s(v.purpose) || undefined,
     };
-    if (existing) {
-      await updateTripFull(client, existing.id, { ...input, confirmed: v.confirmed === true });
-    } else {
-      await insertTrip(client, userId, input);
+    // Gratis-Grenze wie in der App: 10 Fahrten je Monat (stornierte zählen nicht) — vorher im Dashboard gar nicht geprüft.
+    // Gezählt wird der Monat der Fahrt (wie beim Speichern einer Aufzeichnung in der App); beim Bearbeiten nur, wenn die
+    // Fahrt in einen anderen Monat wandert. Pro unklar → letzter sicherer Stand, sonst „gleich nochmal“.
+    const zaehlt = !existing || monatVon(existing.startTime).key !== monatVon(startTime).key;
+    if (zaehlt && !(await tripGate(client, () => tourdexProStand(app, session), startTime, existing?.id)).allowed) {
+      throw new Error(TRIP_GATE_TEXT);
+    }
+    try {
+      if (existing) {
+        await updateTripFull(client, existing.id, { ...input, confirmed: v.confirmed === true });
+      } else {
+        await insertTrip(client, userId, input);
+      }
+    } catch (e) {
+      if (istGratisGrenze(e)) throw new Error(TRIP_GATE_TEXT);
+      throw e;
     }
     onSaved();
   }

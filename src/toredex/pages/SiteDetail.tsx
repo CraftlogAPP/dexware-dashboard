@@ -16,7 +16,7 @@ import {
 import { DefectStatusBadge, InspectionBadge, SeverityBadge } from '../badges';
 import { checklistSummary, gateNameMap, buildLabel } from '../labels';
 import { SiteDialog } from '../dialogs';
-import { gateText, unitGate } from '../../pruefen/pro';
+import { gateText, mitGrenzText, unitGate, zeigeGrenzFehler } from '../../pruefen/pro';
 import { TOREDEX_VOR_ORT } from '../vorOrt';
 import {
   GATE_DRIVE_TYPES,
@@ -42,7 +42,7 @@ export function SiteDetail() {
     Gate | 'new' | null
   >(null);
   const [editingSite, setEditingSite] = useState(false);
-  // Gratis-Grenze wie in der App (2 Tore im Bestand, stillgelegte zählen nicht); Pro laut Server, im Zweifel erlaubt.
+  // Gratis-Grenze wie in der App (2 Tore im Bestand, stillgelegte zählen nicht); Pro laut Server; unklar → letzter sicherer Stand, sonst „gleich nochmal“.
   const [gate, setGate] = useState(false);
   const [checking, setChecking] = useState(false);
 
@@ -52,6 +52,8 @@ export function SiteDetail() {
     try {
       if ((await unitGate(client, TOREDEX_VOR_ORT)).allowed) setEditingGate('new');
       else setGate(true);
+    } catch (e) {
+      zeigeGrenzFehler(e);
     } finally {
       setChecking(false);
     }
@@ -71,23 +73,29 @@ export function SiteDetail() {
     if (!org || !id) throw new Error('Kein Betrieb geladen');
     // Wieder in Betrieb nehmen zählt wie Anlegen (in der App genauso).
     const backInUse = editingGate !== 'new' && editingGate?.retired === true && v.retired !== true;
-    if (backInUse && !(await unitGate(client, TOREDEX_VOR_ORT)).allowed) throw new Error(gateText(TOREDEX_VOR_ORT));
-    await saveGate(
-      client,
-      org.org.id,
-      {
-        site_id: id,
-        name: s(v.name),
-        category: s(v.category),
-        drive_type: s(v.drive_type),
-        manufacturer: orNull(v.manufacturer),
-        build_year: orNull(v.build_year),
-        dimensions: orNull(v.dimensions),
-        serial_no: orNull(v.serial_no),
-        notes: orNull(v.notes),
-        retired: v.retired === true,
-      },
-      editingGate === 'new' ? undefined : (editingGate ?? undefined),
+    // Neu anlegen zählt wie Wieder-in-Betrieb-Nehmen — beim Speichern erneut geprüft (Dialog lange offen, zweiter Tab),
+    // seit NACHTRAG-PAYWALL-2026-11-25 lehnt auch der Server ab (dann derselbe Hinweis).
+    const isNew = editingGate === 'new' && v.retired !== true;
+    if ((isNew || backInUse) && !(await unitGate(client, TOREDEX_VOR_ORT)).allowed) throw new Error(gateText(TOREDEX_VOR_ORT));
+    await mitGrenzText(
+      saveGate(
+        client,
+        org.org.id,
+        {
+          site_id: id,
+          name: s(v.name),
+          category: s(v.category),
+          drive_type: s(v.drive_type),
+          manufacturer: orNull(v.manufacturer),
+          build_year: orNull(v.build_year),
+          dimensions: orNull(v.dimensions),
+          serial_no: orNull(v.serial_no),
+          notes: orNull(v.notes),
+          retired: v.retired === true,
+        },
+        editingGate === 'new' ? undefined : (editingGate ?? undefined),
+      ),
+      gateText(TOREDEX_VOR_ORT),
     );
     state.reload();
   }

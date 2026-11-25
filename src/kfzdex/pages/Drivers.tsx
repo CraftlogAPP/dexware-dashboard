@@ -27,7 +27,7 @@ export function Drivers() {
   const [checking, setChecking] = useState<Driver | null>(null);
 
   const state = useAsync<Driver[]>(() => fetchDrivers(client), [client]);
-  // Gratis-Grenze wie in der App (2 Fahrer, inaktive zählen mit); Pro laut Server, im Zweifel erlaubt.
+  // Gratis-Grenze wie in der App (2 Fahrer, inaktive zählen mit); Pro laut Server; unklar → letzter sicherer Stand, sonst „gleich nochmal“.
   const [gate, setGate] = useState(false);
   const [gateBusy, setGateBusy] = useState(false);
 
@@ -37,6 +37,8 @@ export function Drivers() {
     try {
       if ((await fleetGate(client, 'driver', FREE_LIMITS.drivers)).allowed) setEditing('new');
       else setGate(true);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
     } finally {
       setGateBusy(false);
     }

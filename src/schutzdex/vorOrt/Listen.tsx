@@ -125,8 +125,14 @@ export function Mitarbeiter() {
     if (lock.current) return;
     lock.current = true;
     try {
-      // Gratis-Grenze wie in der App: ohne Pro 2 aktive Mitarbeiter. Im Zweifel nicht sperren.
-      const g = await be.memberGate().catch(() => ({ allowed: true }));
+      // Gratis-Grenze wie in der App: ohne Pro 2 aktive Mitarbeiter. Unklar (Pro/Zählung) → Hinweis „gleich nochmal“
+      // statt still zu erlauben (vorher: im Zweifel erlaubt).
+      let g: { allowed: boolean };
+      try {
+        g = await be.memberGate();
+      } catch (e) {
+        return setError(e instanceof Error ? e.message : String(e));
+      }
       if (!g.allowed) return setGate(true);
       setError(null);
       setAdding(true);
@@ -141,7 +147,7 @@ export function Mitarbeiter() {
     setBusy(true);
     setError(null);
     try {
-      const g = await be.memberGate().catch(() => ({ allowed: true }));
+      const g = await be.memberGate();
       if (!g.allowed) {
         setAdding(false);
         return setGate(true);
@@ -181,6 +187,7 @@ export function Mitarbeiter() {
           return (
             <>
               {data.offline && <div className="info-box">{OFFLINE}</div>}
+              {!adding && error && <div className="error-box">{error}</div>}
               {!adding && (
                 <button type="button" className="btn ghost ez-big" onClick={() => void startNew()} disabled={data.offline} data-testid="sd-new-member">
                   <Plus className="i" aria-hidden /> Mitarbeiter anlegen

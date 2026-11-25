@@ -46,7 +46,7 @@ import {
 } from '../lib/tableImport';
 import { downloadXlsx, type XlsxSheet } from '../lib/xlsx';
 import { isSiteMode, siteFkOf, wordsOf, type PruefConfig } from './config';
-import { fetchOrgPro, gateText, siteGate, siteGateText, unitGate } from './pro';
+import { gateText, importPro, siteGate, siteGateText, unitGate } from './pro';
 
 /** Felder, die jeder Import hat (Schlüssel in der Zuordnung); Betreiber/Kontakt/Status nur im Orts-Modus */
 export const BASE = {
@@ -641,7 +641,8 @@ export async function loadUnitImport<U, S extends ImportSite, R, I>(def: UnitImp
     def.api.fetchUnits(sb),
     unitGate(sb, cfg),
     siteGate(sb, cfg),
-    fetchOrgPro(sb, true),
+    // Pro wie an jeder Grenze: unklar → letzter sicherer Stand, sonst Fehler „gleich nochmal“ (früher: unklar = Pro = unbegrenzt)
+    importPro(sb, cfg),
   ]);
   return {
     sites,

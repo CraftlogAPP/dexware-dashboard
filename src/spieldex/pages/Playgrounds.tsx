@@ -8,7 +8,7 @@ import { LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
 import { PruefCtx } from '../../pruefen/context';
-import { siteGate, siteGateText } from '../../pruefen/pro';
+import { siteGate, siteGateText, zeigeGrenzFehler } from '../../pruefen/pro';
 import { SPIELDEX_VOR_ORT } from '../vorOrt';
 import {
   fetchDefects,
@@ -32,7 +32,7 @@ interface Data {
 export function Playgrounds() {
   const { client } = useAppAuth();
   const [editing, setEditing] = useState<Playground | 'new' | null>(null);
-  // Gratis-Grenze wie in der App (1 aktiver Spielplatz, nicht aktive zählen nicht); Pro laut Server, im Zweifel erlaubt.
+  // Gratis-Grenze wie in der App (1 aktiver Spielplatz, nicht aktive zählen nicht); Pro laut Server; unklar → letzter sicherer Stand, sonst „gleich nochmal“.
   const [gate, setGate] = useState(false);
   const [checking, setChecking] = useState(false);
 
@@ -42,6 +42,8 @@ export function Playgrounds() {
     try {
       if ((await siteGate(client, SPIELDEX_VOR_ORT)).allowed) setEditing('new');
       else setGate(true);
+    } catch (e) {
+      zeigeGrenzFehler(e);
     } finally {
       setChecking(false);
     }

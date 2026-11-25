@@ -8,6 +8,7 @@ import { LoadGuard, useAsync } from '../../components/ui';
 import { useOd } from '../context';
 import type { OdMember } from '../types';
 import { CopyButton, fmtDateTimeB, fmtDayOf } from '../parts';
+import { PRO_UNKLAR } from '../../lib/proStand';
 
 const RENEW_TEXT = 'Neuen Team-Code erzeugen? Der bisherige wird sofort ungültig. Wer schon im Team ist, bleibt drin.';
 
@@ -16,10 +17,11 @@ export function Team() {
   const owner = role === 'owner';
   const manages = owner || role === 'admin';
   const state = useAsync(async () => {
-    // Einladen ist Pro (wie die App: TeamScreen zeigt den Code nur mit Pro); unklare Auskunft sperrt nicht
+    // Einladen ist Pro (wie die App: TeamScreen zeigt den Code nur mit Pro). Unklare Auskunft: letzter sicherer Stand,
+    // gibt es keinen, kein Code, sondern „gleich nochmal“ (vorher: Code trotzdem). Mitglieder bleiben immer sichtbar.
     const pro = manages ? await data.proStatus() : null;
-    const [members, code] = await Promise.all([data.listMembers(), manages && pro !== false ? data.teamCode(false).catch(() => null) : Promise.resolve(null)]);
-    return { members, code, ohnePro: manages && pro === false };
+    const [members, code] = await Promise.all([data.listMembers(), manages && pro === true ? data.teamCode(false).catch(() => null) : Promise.resolve(null)]);
+    return { members, code, ohnePro: manages && pro === false, proUnklar: manages && pro === null };
   }, [data, manages]);
   const [busy, setBusy] = useState(false);
 
@@ -61,7 +63,7 @@ export function Team() {
         einen Platz).
       </p>
       <LoadGuard state={state}>
-        {({ members, code, ohnePro }) => {
+        {({ members, code, ohnePro, proUnklar }) => {
           const codeActive = !!code && new Date(code.expires_at).getTime() > Date.now();
           return (
             <>
@@ -69,6 +71,14 @@ export function Team() {
                 <div className="info-box">
                   Mitarbeiter einladen gehört zu ObjektDex Pro — Pro schließt du in der ObjektDex-App unter „Abo“ ab (mit einem
                   Dexware-Suite-Abo ist es schon dabei).
+                </div>
+              )}
+              {proUnklar && (
+                <div className="info-box">
+                  {PRO_UNKLAR}{" "}
+                  <button className="btn ghost small" onClick={() => state.reload()}>
+                    Erneut prüfen
+                  </button>
                 </div>
               )}
               {manages && code && (
