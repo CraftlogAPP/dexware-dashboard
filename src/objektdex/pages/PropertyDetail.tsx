@@ -288,9 +288,10 @@ function Fact({ k, v }: { k: string; v: string | null }) {
 }
 
 /** Gratis-Grenze vor einem weiteren aktiven Objekt (neu anlegen oder wieder aktivieren) — wie propertyGate der App */
-async function grenzePruefen(data: OdData): Promise<void> {
+async function grenzePruefen(data: OdData, eigeneId?: string): Promise<void> {
   const [props, pro] = await Promise.all([data.listProperties(), data.proStatus()]);
-  const text = objektGrenzeText(pro, props.filter((p) => p.active).length);
+  // eigene (schon beim ersten Versuch angekommene) Kennung nie mitzählen
+  const text = objektGrenzeText(pro, props.filter((p) => p.active && p.id !== eigeneId).length);
   if (text) throw new Error(text);
 }
 
@@ -307,10 +308,14 @@ async function mitGrenzText<T>(arbeit: Promise<T>): Promise<T> {
 /** Objekt anlegen/bearbeiten (Inhaber) */
 export function PropertyDialog({ property, onClose, onSaved }: { property?: OdProperty; onClose: () => void; onSaved: () => void }) {
   const { data } = useOd();
+  // neues Objekt: Kennung EINMAL je Dialog (nicht je Speicherversuch) — Wiederholen nach verlorener Antwort legt nichts
+  // doppelt an und scheitert nicht fälschlich an der Gratis-Grenze (Tagescheck WinterDex 26.11.2026, Regel 1)
+  const [neuId] = useState(() => crypto.randomUUID());
   async function onSave(v: FormValues) {
-    if (!property) await grenzePruefen(data);
+    if (!property) await grenzePruefen(data, neuId);
     await mitGrenzText(data.saveProperty({
       id: property?.id,
+      neu_id: property ? undefined : neuId,
       name: s(v.name),
       address: s(v.address),
       customer_name: orNull(v.customer_name),

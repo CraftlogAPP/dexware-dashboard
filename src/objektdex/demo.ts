@@ -414,12 +414,10 @@ export function createDemoStore(opts: { pro?: boolean; wdPro?: boolean } = {}): 
   const data: OdData = {
     listProperties: () => wait([...properties].sort((a, b) => a.name.localeCompare(b.name, 'de'))),
     async saveProperty(p) {
-      if (p.id) {
-        const x = properties.find((q) => q.id === p.id);
-        if (x) Object.assign(x, p);
-      } else {
-        properties.push({ ...p, id: crypto.randomUUID(), org_id: ORG, lat: null, lng: null, active: true, created_at: new Date().toISOString() });
-      }
+      const { neu_id, ...rest } = p;
+      const vorhanden = properties.find((q) => q.id === (p.id ?? neu_id));
+      if (vorhanden) Object.assign(vorhanden, rest, { id: vorhanden.id });
+      else if (!p.id) properties.push({ ...rest, id: neu_id ?? crypto.randomUUID(), org_id: ORG, lat: null, lng: null, active: true, created_at: new Date().toISOString() });
       await wait(null);
     },
     async setPropertyActive(id, active) {

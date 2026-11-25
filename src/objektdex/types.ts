@@ -119,7 +119,14 @@ export interface OdMember {
 }
 
 /** Eingaben beim Anlegen/Ändern */
-export type PropertyInput = Pick<OdProperty, 'name' | 'address' | 'customer_name' | 'customer_contact' | 'contact_person' | 'notes'> & { id?: string };
+/**
+ * id = vorhandenes Objekt ändern. neu_id = neues Objekt mit im Formular EINMAL festgelegter Kennung: Ging die Antwort des
+ * ersten Speicherns verloren, schreibt der zweite Versuch dieselbe Zeile statt ein Doppel (wie WinterDex, 26.11.2026).
+ */
+export type PropertyInput = Pick<OdProperty, 'name' | 'address' | 'customer_name' | 'customer_contact' | 'contact_person' | 'notes'> & {
+  id?: string;
+  neu_id?: string;
+};
 export type ServiceInput = Pick<OdService, 'property_id' | 'name' | 'cadence' | 'weekdays' | 'month_day' | 'start_on' | 'notes'> & {
   id?: string;
   template_key?: string | null;

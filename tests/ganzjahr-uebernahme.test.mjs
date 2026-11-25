@@ -468,7 +468,7 @@ check('Auftraggeber-Link nur mit Pro (wie ShareLinksScreen), unklar → „gleic
 check('Links-Seite prüft Pro vor dem Erstellen', liesWeb('src/objektdex/pages/Links.tsx').includes('linkGrenzeText(await data.proStatus())'));
 check('Übernahme nutzt dieselben Werte (Re-Export)', U.GRATIS_OBJEKTE === GR.GRATIS_OBJEKTE && U.gratisRahmen === GR.gratisRahmen);
 const pd = liesWeb('src/objektdex/pages/PropertyDetail.tsx');
-check('„Objekt anlegen“ und „Wieder aktivieren“ prüfen die Grenze', pd.includes('if (!property) await grenzePruefen(data);') && pd.includes('if (!p.active) await grenzePruefen(data);'));
+check('„Objekt anlegen“ und „Wieder aktivieren“ prüfen die Grenze', pd.includes('if (!property) await grenzePruefen(data, neuId);') && pd.includes('if (!p.active) await grenzePruefen(data);'));
 if (existsSync(path.join(OD, 'mobile/src/screens/TeamScreen.tsx'))) {
   check('App zeigt den Team-Code nur mit Pro — Dashboard ebenso', /if \(await isPro\(\)\) setTeamCode/.test(liesRepo(OD, 'mobile/src/screens/TeamScreen.tsx')) && /manages && pro === true \? data\.teamCode\(false\)/.test(liesWeb('src/objektdex/pages/Team.tsx')));
 }

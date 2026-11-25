@@ -22,7 +22,7 @@ import { useEinsatz } from '../einsatz/context';
 import { getPerformerName, newId, setPerformerName } from '../einsatz/data';
 import type { FormValues } from '../einsatz/store';
 import { Felder } from './Felder';
-import { PRO_HOW, istGratisGrenze } from '../pro';
+import { FREE_ROUTES, PRO_HOW, istGratisGrenze } from '../pro';
 import { GratisFehler } from '../GratisHinweise';
 import { gratisArt } from '../gratisLage';
 import { coverage, flatTrack, fmtDur, simplify, thinTrack, type Coverage } from './geo';
@@ -238,8 +238,10 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
         if (s.replaceRouteId && !existing) throw new Error('Die Strecke gibt es nicht mehr.');
         if (!existing) {
           // Gratis-Paket: 1 aktive Strecke (wie in der App). Die Aufnahme bleibt in jedem Fall gesichert.
-          const [routes, pro] = await Promise.all([be.listRoutes(), be.isPro()]);
-          if (!pro && routes.filter((r) => r.active && r.id !== s.id).length >= 1) {
+          // Erst zählen, Pro nur fragen, wenn die Grenze sonst überschritten würde: die erste Strecke speichert auch,
+          // wenn der Abo-Dienst gerade gestört ist (Tagescheck 26.11.2026, Fund 36 — wie der Server-Auslöser).
+          const routes = await be.listRoutes();
+          if (routes.filter((r) => r.active && r.id !== s.id).length >= FREE_ROUTES && !(await be.isPro())) {
             throw new Error(
               `Im Gratis-Paket ist 1 aktive Strecke möglich. Die Aufnahme bleibt gesichert — mit Pro hier unter „Strecken“ fortsetzen und speichern. ${PRO_HOW}`,
             );

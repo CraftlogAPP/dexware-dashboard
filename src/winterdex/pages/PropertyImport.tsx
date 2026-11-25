@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, Download, FileUp, Upload } from 'lucide-react';
 import { useAppAuth } from '../../auth/AppAuthContext';
@@ -25,7 +25,7 @@ import {
   type PlanRow,
   type Table,
 } from '../importObjects';
-import { FREE_PROPERTIES, GRENZE_OBJEKTE, PRO_HOW, PRO_MAILTO, fetchOrgPro, istGratisGrenze, orgProFuerGrenze } from '../pro';
+import { FREE_PROPERTIES, GRENZE_OBJEKTE, PRO_HOW, PRO_MAILTO, PRO_UNKLAR, fetchOrgPro, istGratisGrenze, orgProFuerGrenze, orgProStand } from '../pro';
 import { DUTY_DEFAULTS, DUTY_HINTS, LAND_LABELS, type DutyTimes, type Land, type Property } from '../types';
 
 // Objekte aus einer Excel-/CSV-Liste anlegen (nur Inhaber). Logik in ../importObjects.ts, hier nur die drei Schritte:
@@ -52,6 +52,23 @@ export function PropertyImport() {
     const [properties, pro] = await Promise.all([fetchProperties(client), fetchOrgPro(client, true)]);
     return { properties, pro };
   }, [client, owner]);
+  // Zurück in den Tab (z. B. nach dem Pro-Kauf in der App am Handy): Objektliste + Pro frisch holen — vorher blieb
+  // „Anlegen“ bis zum Neuladen der Seite gesperrt (Tagescheck 26.11.2026, Fund 22)
+  const refresh = state.refresh;
+  useEffect(() => {
+    let zuletzt = 0;
+    const zurueck = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - zuletzt < 2000) return;
+      zuletzt = Date.now();
+      refresh();
+    };
+    document.addEventListener('visibilitychange', zurueck);
+    window.addEventListener('focus', zurueck);
+    return () => {
+      document.removeEventListener('visibilitychange', zurueck);
+      window.removeEventListener('focus', zurueck);
+    };
+  }, [refresh]);
 
   return (
     <>
@@ -131,6 +148,8 @@ function ImportFlow({
   const [phase, setPhase] = useState<Phase | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  /** „Pro schon abgeschlossen? Neu prüfen“ — Ergebnis der frischen Abfrage (null = noch nicht geprüft) */
+  const [proPruefung, setProPruefung] = useState<null | 'prueft' | 'ja' | 'nein' | 'unklar'>(null);
   useUnsavedGuard(
     !!phase,
     'Die Objekte werden noch angelegt. Trotzdem verlassen? Schon Angelegtes bleibt — die Liste einfach noch einmal importieren, Vorhandenes wird erkannt.',
@@ -142,7 +161,9 @@ function ImportFlow({
     [table, hasHeader, mapping, land, properties],
   );
   const activeCount = properties.filter((p) => p.active).length;
-  const allowance = importAllowance(pro, activeCount);
+  // frisch bestätigtes Pro gilt sofort (der neue Stand der Seite kommt gleich hinterher)
+  const proJetzt = pro || proPruefung === 'ja';
+  const allowance = importAllowance(proJetzt, activeCount);
   const isSel = (r: PlanRow) => !!r.input && (toggled.get(r.i) ?? r.status === 'ok');
   const selectedCount = plan ? plan.rows.filter(isSel).length : 0;
   const toCreate = allowance === null ? selectedCount : Math.min(selectedCount, allowance);
@@ -236,18 +257,33 @@ function ImportFlow({
     });
   }
 
+  /** Pro frisch beim Server erfragen (nach dem Kauf in der App) — ohne die Seite neu zu laden */
+  async function proNeuPruefen() {
+    setProPruefung('prueft');
+    const stand = await orgProStand(client, true).catch(() => null);
+    setProPruefung(stand === true ? 'ja' : stand === false ? 'nein' : 'unklar');
+    if (stand === true) onSaved();
+  }
+
   async function run() {
-    if (!plan || phase || toCreate === 0) return;
+    // auch bei „0 im Gratis-Rahmen“ klickbar: ob inzwischen Pro da ist, entscheidet die frische Abfrage unten
+    if (!plan || phase || selectedCount === 0) return;
     setRunError(null);
     setResult(null);
     cancelGeo.current = false;
     let created = 0;
     try {
-      // Frisch vom Server: Objektliste (nichts doppelt anlegen) und Pro (Gratis-Grenze). Pro unklar → letzter sicherer
-      // Stand, sonst Abbruch mit „gleich nochmal“ (ProUnklarError) — nicht mehr „im Zweifel Pro“ (unbegrenzter Import).
+      // Frisch vom Server: Objektliste (nichts doppelt anlegen) und — nur wenn die Gratis-Grenze sonst überschritten
+      // würde — Pro. Erst zählen, dann fragen (Tagescheck 26.11.2026, Fund 36): Unter der Grenze bricht eine Störung des
+      // Abo-Dienstes den Import nicht mehr ohne Grund ab (wie Properties.tsx und der Server-Auslöser). Pro unklar →
+      // letzter sicherer Stand, sonst Abbruch mit „gleich nochmal“ (ProUnklarError) — nie „im Zweifel Pro“.
       setPhase({ step: 'check' });
-      const [fresh, proNow] = await Promise.all([fetchProperties(client), orgProFuerGrenze(client)]);
-      const { rows, already, overLimit } = finalRows(plan, new Set(plan.rows.filter(isSel).map((r) => r.i)), fresh, proNow);
+      const fresh = await fetchProperties(client);
+      const sel = new Set(plan.rows.filter(isSel).map((r) => r.i));
+      const ohneGrenze = finalRows(plan, sel, fresh, true).rows.length;
+      const proNow = fresh.filter((p) => p.active).length + ohneGrenze > FREE_PROPERTIES ? await orgProFuerGrenze(client) : false;
+      if (proNow) setProPruefung('ja');
+      const { rows, already, overLimit } = finalRows(plan, sel, fresh, proNow);
 
       // Standort aus der Adresse (OpenStreetMap, ≥ 1,1 s Abstand; nur mit PLZ und Ort) — abbrechbar, dann ohne Standort weiter
       const loc = new Map<number, GeoPoint>();
@@ -330,8 +366,9 @@ function ImportFlow({
   const newRows = plan ? plan.rows.filter((r) => r.status === 'ok') : [];
   const allOn = newRows.length > 0 && newRows.every(isSel);
   const hasAddressCol = mapping.address !== undefined || mapping.street !== undefined;
-  /** nach erfolgreichem Anlegen ist nichts mehr zu tun — dann kein grauer „0 Objekte anlegen“-Knopf */
-  const doneNothingLeft = !!result && result.created > 0 && toCreate === 0;
+  /** nach erfolgreichem Anlegen ist nichts mehr zu tun — dann kein Knopf. Bleiben Zeilen über der Gratis-Grenze
+   *  angehakt, bleibt der Knopf (nach dem Pro-Kauf in der App einfach noch einmal tippen). */
+  const doneNothingLeft = !!result && result.created > 0 && selectedCount === 0;
 
   return (
     <div className="wd-imp">
@@ -565,15 +602,37 @@ function ImportFlow({
                   ? ` — dein Betrieb hat schon ${activeCount}. `
                   : ` — angelegt ${allowance === 1 ? 'wird' : 'werden'} jetzt nur ${allowance === 1 ? 'das erste' : `die ersten ${allowance}`} der Auswahl. `}
                 Unbegrenzt viele gibt es mit Pro. {PRO_HOW} <a href={PRO_MAILTO}>E-Mail schreiben</a>
+                <div className="row" style={{ marginTop: 8, alignItems: 'center' }}>
+                  <button type="button" className="btn ghost small" onClick={() => void proNeuPruefen()} disabled={!!phase || proPruefung === 'prueft'}>
+                    {proPruefung === 'prueft' ? 'Wird geprüft …' : 'Pro schon abgeschlossen? Neu prüfen'}
+                  </button>
+                  {proPruefung === 'nein' && (
+                    <span className="small muted" role="status">
+                      Noch kein Pro für deinen Betrieb gefunden — nach dem Kauf in der App kann es einen Moment dauern.
+                    </span>
+                  )}
+                  {proPruefung === 'unklar' && (
+                    <span className="small muted" role="status">
+                      {PRO_UNKLAR}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            {proPruefung === 'ja' && !pro && (
+              <div className="info-box" role="status">
+                Pro ist aktiv — alle angehakten Objekte können jetzt angelegt werden.
               </div>
             )}
 
             {!doneNothingLeft && (
               <div className="row" style={{ marginTop: 16 }}>
-                <button type="button" className="btn" onClick={() => void run()} disabled={!!phase || toCreate === 0}>
-                  <Upload className="i" aria-hidden /> {plural(toCreate, 'Objekt', 'Objekte')} anlegen
+                {/* Gratis-Rahmen 0: trotzdem klickbar — run() fragt Pro frisch (Kauf in der App) und legt dann alles an */}
+                <button type="button" className="btn" onClick={() => void run()} disabled={!!phase || selectedCount === 0}>
+                  <Upload className="i" aria-hidden />{' '}
+                  {limited && allowance === 0 ? `Pro prüfen und ${plural(selectedCount, 'Objekt', 'Objekte')} anlegen` : `${plural(toCreate, 'Objekt', 'Objekte')} anlegen`}
                 </button>
-                {!phase && toCreate === 0 && !limited && !result && <span className="small muted">Nichts angehakt.</span>}
+                {!phase && selectedCount === 0 && !result && <span className="small muted">Nichts angehakt.</span>}
               </div>
             )}
 

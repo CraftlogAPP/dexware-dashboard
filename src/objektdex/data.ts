@@ -111,7 +111,12 @@ export function supabaseData(sb: SupabaseClient, orgId: string): OdData {
     },
     async saveProperty(p) {
       const row = { name: p.name.trim(), address: p.address.trim(), customer_name: p.customer_name, customer_contact: p.customer_contact, contact_person: p.contact_person, notes: p.notes };
-      const q = p.id ? sb.from('property').update(row).eq('id', p.id).select('id') : sb.from('property').insert({ ...row, org_id: orgId }).select('id');
+      // neu mit fester Kennung (Formular): Upsert — ein Wiederholen nach verlorener Antwort legt kein zweites Objekt an
+      const q = p.id
+        ? sb.from('property').update(row).eq('id', p.id).select('id')
+        : p.neu_id
+          ? sb.from('property').upsert({ ...row, org_id: orgId, id: p.neu_id }).select('id')
+          : sb.from('property').insert({ ...row, org_id: orgId }).select('id');
       const { data, error } = await q;
       if (error) fail('Objekt nicht gespeichert', error);
       if (!data?.length) throw new Error('Objekt nicht gespeichert: Objekte verwaltet nur der Inhaber.');

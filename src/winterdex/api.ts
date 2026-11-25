@@ -160,15 +160,29 @@ export interface PropertyInput {
   active: boolean;
 }
 
+/**
+ * Feste Kennung für ein NEUES Objekt — einmal je Formular festgelegt (nicht je Speicherversuch): Ging die Antwort
+ * des ersten Versuchs verloren (Funkloch, Zeitüberschreitung), schreibt der zweite dieselbe Zeile (Upsert) statt ein
+ * zweites Objekt anzulegen bzw. fälschlich an der Gratis-Grenze zu scheitern (wie App 737a926, Tagescheck 26.11.2026).
+ */
+export interface NeuesObjekt {
+  id: string;
+  created_at: string;
+}
+export function neuesObjekt(): NeuesObjekt {
+  return { id: crypto.randomUUID(), created_at: new Date().toISOString() };
+}
+
 /** Zeile der Tabelle property — EINE Stelle für Formular und Import (Format wie app-seitiges saveProperty). */
 export function propertyRow(
   orgId: string,
   input: PropertyInput,
   existing?: Property,
   location?: { lat: number; lng: number } | null,
+  neu?: NeuesObjekt,
 ): Property {
   return {
-    id: existing?.id ?? crypto.randomUUID(),
+    id: existing?.id ?? neu?.id ?? crypto.randomUUID(),
     org_id: orgId,
     name: input.name,
     address: input.address,
@@ -180,7 +194,7 @@ export function propertyRow(
     duty_times: input.duty_times,
     notes: input.notes,
     active: input.active,
-    created_at: existing?.created_at ?? new Date().toISOString(),
+    created_at: existing?.created_at ?? neu?.created_at ?? new Date().toISOString(),
   };
 }
 
@@ -192,8 +206,10 @@ export async function saveProperty(
   existing?: Property,
   /** neuer Standort (z. B. „Hier stehe ich“) — sonst bleibt der bisherige */
   location?: { lat: number; lng: number },
+  /** neues Objekt: im Formular einmal festgelegte Kennung (neuesObjekt()) — Wiederholen legt nichts doppelt an */
+  neu?: NeuesObjekt,
 ): Promise<void> {
-  const { error } = await sb.from('property').upsert(propertyRow(orgId, input, existing, location));
+  const { error } = await sb.from('property').upsert(propertyRow(orgId, input, existing, location, neu));
   if (error) fail('Objekt konnte nicht gespeichert werden', error);
 }
 

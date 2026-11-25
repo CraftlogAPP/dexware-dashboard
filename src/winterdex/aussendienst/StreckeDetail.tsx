@@ -16,10 +16,14 @@ import { useEinsatz } from '../einsatz/context';
 import { fmtDur } from './geo';
 import { FREE_ROUTES, FREE_ROUTES_TEXT } from './Strecken';
 import { ProUnklarError, istGratisGrenze } from '../pro';
+import { useOrgOptional } from '../../components/OrgContext';
+import { nachweisZone } from '../nachweisZeit';
 
 export function StreckeDetail() {
   const { id = '' } = useParams();
   const { be, base, owner } = useEinsatz();
+  // Uhrzeiten der letzten Fahrt in der Zone des Betriebs (wie Nachweis/PDF), nie in der des Geräts
+  const tz = nachweisZone(useOrgOptional()?.data?.org.land);
   const navigate = useNavigate();
   const list = `${base}/strecken`;
   const state = useAsync(async () => {
@@ -80,10 +84,12 @@ export function StreckeDetail() {
 
   const toggleActive = async (route: Route) => {
     if (!route.active) {
-      // Wieder aktivieren zählt gegen die Gratis-Grenze (wie in der App)
+      // Wieder aktivieren zählt gegen die Gratis-Grenze (wie in der App). Erst zählen, Pro nur fragen, wenn die Grenze
+      // sonst überschritten würde — sonst brach eine Störung des Abo-Dienstes das Aktivieren ohne Grund ab (Tagescheck
+      // 26.11.2026, Fund 36; wie Strecken.tsx/Properties.tsx und der Server-Auslöser).
       try {
-        const [routes, pro] = await Promise.all([be.listRoutes(), be.isPro()]);
-        if (!pro && routes.filter((r) => r.active).length >= FREE_ROUTES) return setAsk('gate');
+        const routes = await be.listRoutes();
+        if (routes.filter((r) => r.active && r.id !== route.id).length >= FREE_ROUTES && !(await be.isPro())) return setAsk('gate');
       } catch (e) {
         // ohne diese Meldung passierte beim Tippen ohne Netz einfach nichts
         return setError(
@@ -138,11 +144,13 @@ export function StreckeDetail() {
                 zeit={!!last}
                 strassen={lastStr}
                 canceled={last?.run.canceled}
-                label={`Karte der Strecke ${route.name}${last ? ` mit der letzten Fahrt vom ${fmtDateTime(last.run.started_at)}` : ''}`}
+                timeZone={tz}
+                gefahrenM={last?.run.track_length_m}
+                label={`Karte der Strecke ${route.name}${last ? ` mit der letzten Fahrt vom ${fmtDateTime(last.run.started_at, tz)}` : ''}`}
               />
               {last && (
                 <p className="small muted" style={{ marginTop: -8 }}>
-                  Grün: letzte Fahrt vom {fmtDateTime(last.run.started_at)}
+                  Grün: letzte Fahrt vom {fmtDateTime(last.run.started_at, tz)}
                   {last.run.performer_name ? ` (${last.run.performer_name})` : ''} —{' '}
                   <Link to={`${base}/strecken/fahrten/${last.run.id}`}>Nachweis mit PDF öffnen</Link>
                 </p>
@@ -190,7 +198,7 @@ export function StreckeDetail() {
                     <li key={r.id}>
                       <Link to={`${base}/strecken/fahrten/${r.id}`} className="sr-route">
                         <span className="ez-prop-text">
-                          <b>{fmtDateTime(r.started_at)}</b>
+                          <b>{fmtDateTime(r.started_at, tz)}</b>
                           <span className="muted">
                             {fmtDistance(r.track_length_m)} · {fmtDur(Date.parse(r.ended_at) - Date.parse(r.started_at))}
                             {r.coverage_pct != null ? ` · ${fmtPct(r.coverage_pct)} abgedeckt` : ''}

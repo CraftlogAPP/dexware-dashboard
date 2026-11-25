@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { useOrg } from '../components/OrgContext';
 import { FormDialog, orNull, s, type FormValues } from '../components/form';
-import { saveProperty, fetchProperties } from './api';
+import { saveProperty, fetchProperties, neuesObjekt } from './api';
 import { locateAddress } from './geo';
 import { FREE_PROPERTIES, GRENZE_OBJEKTE, istGratisGrenze, orgProFuerGrenze } from './pro';
 import type { Property } from './types';
@@ -18,6 +19,10 @@ export function PropertyDialog({
   const { client } = useAppAuth();
   const { data: org } = useOrg();
   const noLocation = property === 'new' || property.lat == null || property.lng == null;
+  // Neues Objekt: Kennung EINMAL je Dialog — „Speichern“ nach verlorener Antwort schreibt dieselbe Zeile (kein Doppel,
+  // keine falsche Gratis-Grenze; wie App 737a926 propertyGate(eigeneId), Tagescheck 26.11.2026 Fund 45)
+  const [neu] = useState(neuesObjekt);
+  const eigeneId = property === 'new' ? neu.id : property.id;
 
   async function onSave(v: FormValues) {
     if (!org) throw new Error('Kein Betrieb geladen');
@@ -25,7 +30,8 @@ export function PropertyDialog({
     // Pro-Status unklar (Abo-Dienst gestört, kein letzter Stand) → ProUnklarError mit freundlichem Text (nicht still erlauben).
     const wasActive = property !== 'new' && property.active;
     if (v.active === true && !wasActive) {
-      const others = (await fetchProperties(client)).filter((p) => p.active && (property === 'new' || p.id !== property.id)).length;
+      // eigene Kennung nie mitzählen — auch nicht, wenn der erste Versuch schon angekommen war
+      const others = (await fetchProperties(client)).filter((p) => p.active && p.id !== eigeneId).length;
       if (others >= FREE_PROPERTIES && !(await orgProFuerGrenze(client))) throw new Error(GRENZE_OBJEKTE);
     }
     // Wie die App: ohne Standort die Adresse in Koordinaten umrechnen (Wetter-Rückgriff, Glätte-Frühwarnung,
@@ -50,6 +56,7 @@ export function PropertyDialog({
         },
         property === 'new' ? undefined : property,
         location,
+        property === 'new' ? neu : undefined,
       );
     } catch (e) {
       if (istGratisGrenze(e)) throw new Error(GRENZE_OBJEKTE);

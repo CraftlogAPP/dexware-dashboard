@@ -9,6 +9,7 @@ import { Link, Route as RouterRoute, Routes, useParams } from 'react-router-dom'
 import { RunView } from '../pages/RunDetail';
 import { DEMO_FAHRTEN, demoRun, demoStrassen } from './demoFahrt';
 import { strassenStandAus } from '../strassen';
+import { ProUnklarError } from '../pro';
 import { buildRouteLogHtmlMitDetails, type FahrtenLader } from '../routeReport';
 import { openReportWindowAfter } from '../../lib/print';
 import type { AppConfig } from '../../apps/registry';
@@ -64,7 +65,8 @@ function createBackend(netz: () => Netz, log: (line: string) => void): EinsatzBa
       length_m: 420,
       source: 'recorded',
       property_ids: [],
-      active: true,
+      // ?strecke=pausiert: Strecke pausiert (Wieder-Aktivieren gegen die Gratis-Grenze testen)
+      active: new URLSearchParams(window.location.search).get('strecke') !== 'pausiert',
       created_at: '2026-11-01T06:00:00.000Z',
     },
   ];
@@ -139,6 +141,8 @@ function createBackend(netz: () => Netz, log: (line: string) => void): EinsatzBa
       log(`Fahrt ${JSON.stringify({ ...meta, track: track.map((s) => `${s.length} Punkte, erster ${JSON.stringify(s[0])}, letzter ${JSON.stringify(s[s.length - 1])}`), photo_urls: photoUrls })}`);
     },
     async isPro() {
+      // ?pro=unklar: Abo-Dienst gestört, kein letzter sicherer Stand (wie orgProFuerGrenze → ProUnklarError)
+      if (new URLSearchParams(window.location.search).get('pro') === 'unklar') throw new ProUnklarError();
       return pro();
     },
     async weather() {
@@ -211,14 +215,28 @@ function DemoFahrt() {
   const { id = '' } = useParams();
   const run = useMemo(() => demoRun(id), [id]);
   // Straßenverlauf wie aus der Datenbank (auch die kaputten Einträge der Form „kaputt“ gehen durch die Säuberung);
-  // ?strassen=ermittelt zeigt jede Fahrt im Zustand „wird ermittelt“
-  const strassen = useMemo(() => {
-    if (new URLSearchParams(window.location.search).get('strassen') === 'ermittelt') return strassenStandAus(null);
-    const s = demoStrassen(id);
+  // ?strassen=ermittelt zeigt jede Fahrt im Zustand „wird ermittelt“; ?strassen=spaeter ebenso, aber der „Server“ ist
+  // inzwischen fertig (PDF-Knopf lädt frisch); ?meter=alt = Meter wie der alte Worker (~20 % zu wenig)
+  const q = new URLSearchParams(window.location.search);
+  const art = q.get('strassen');
+  const meterAlt = q.get('meter') === 'alt';
+  const fertig = useMemo(() => {
+    const s = demoStrassen(id, { meterAlt });
     return s ? strassenStandAus(s) : null;
-  }, [id]);
+  }, [id, meterAlt]);
+  const strassen = art === 'ermittelt' || art === 'spaeter' ? strassenStandAus(null) : fertig;
   if (!run) return <div className="error-box">Unbekannte Beispiel-Fahrt „{id}“.</div>;
-  return <RunView run={run} strassen={strassen} org={DEMO_ORG} pro canCancel={!run.canceled} onCancel={async () => undefined} />;
+  return (
+    <RunView
+      run={run}
+      strassen={strassen}
+      org={DEMO_ORG}
+      pro
+      ladeStrassen={art === 'ermittelt' ? async () => strassenStandAus(null) : async () => fertig}
+      canCancel={!run.canceled}
+      onCancel={async () => undefined}
+    />
+  );
 }
 
 /**
