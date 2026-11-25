@@ -19,15 +19,18 @@ import { FahrtAnsicht } from '../FahrtAnsicht';
 import { buildRunHtmlMitKarte } from '../routeReport';
 import { fetchOrgPro, withWatermark } from '../pro';
 import { cancelRun, cleanGaps, fetchRun, fmtDistance, fmtDuration, fmtTimeSpan, type Run } from '../routes';
-import { fetchStrassen, type StrassenStand } from '../strassen';
+import { fetchStrassen, STRASSEN_PDF_HINWEIS, strassenOffen, type StrassenStand } from '../strassen';
+import { useStrassenNachladen } from '../strassenNachladen';
 
 export function RunDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
   const { data: org } = useOrg();
   const state = useAsync<Run>(() => fetchRun(client, id!), [client, id]);
-  // Straßenverlauf (route_run_strassen) getrennt laden — wirft nie; fehlt er, fehlt nur der Abschnitt
+  // Straßenverlauf (route_run_strassen) getrennt laden — wirft nie; fehlt er, fehlt nur der Abschnitt.
+  // „Wird ermittelt“ → alle 20 s selbst nachfragen (höchstens 10 min), die Tabelle erscheint ohne Neuladen.
   const strState = useAsync(() => fetchStrassen(client, id!), [client, id]);
+  const strassen = useStrassenNachladen(id, strState.data, (rid) => fetchStrassen(client, rid), state.data);
   // Pro vorab laden: das Druckfenster muss direkt beim Klick aufgehen (sonst blockt der Browser das Pop-up)
   const proState = useAsync(() => fetchOrgPro(client), [client]);
 
@@ -36,7 +39,7 @@ export function RunDetail() {
       {(run) => (
         <RunView
           run={run}
-          strassen={strState.data ?? null}
+          strassen={strassen}
           org={org?.org ?? null}
           pro={proState.data ?? true}
           canCancel={!run.canceled && org?.role === 'owner'}
@@ -247,6 +250,12 @@ export function RunView({
         <button className="btn" onClick={print} disabled={druckt} aria-busy={druckt}>
           <FileDown className="i" aria-hidden /> {druckt ? 'Bericht mit Karte wird erstellt …' : 'Nachweis als PDF'}
         </button>
+        {/* Straßenverlauf noch nicht fertig: kurzer Hinweis — das PDF entsteht trotzdem (mit Vermerk an der Stelle der Tabelle) */}
+        {strassenOffen(strassen, run) && (run.track?.length ?? 0) >= 2 && (
+          <span className="small muted" role="status">
+            {STRASSEN_PDF_HINWEIS}
+          </span>
+        )}
         {canCancel && (
           <button className="btn ghost" onClick={() => setCanceling(true)}>
             Fahrt stornieren

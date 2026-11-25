@@ -15,7 +15,8 @@ import { FahrtAnsicht } from '../FahrtAnsicht';
 import { buildRouteLogHtmlMitDetails, type FahrtenLader } from '../routeReport';
 import { fetchOrgPro, withWatermark } from '../pro';
 import { fetchRoute, fetchRun, fetchRunTracks, fetchRuns, fmtDistance, type Route, type Run } from '../routes';
-import { fetchStrassen, fetchStrassenViele, type StrassenStand } from '../strassen';
+import { fetchStrassen, fetchStrassenViele, STRASSEN_PDF_HINWEIS, strassenOffen, type StrassenStand } from '../strassen';
+import { useStrassenNachladen } from '../strassenNachladen';
 import { RunTable } from './Routes';
 
 export function RouteDetail() {
@@ -54,6 +55,8 @@ export function RouteDetail() {
 
   // Live: letzte Fahrt in der Skizze + Fahrtenliste aktuell halten.
   useLiveRefresh([state.refresh, runsState.refresh]);
+  // Straßenverlauf der letzten Fahrt „wird ermittelt“ → alle 20 s selbst nachfragen (höchstens 10 min)
+  const lastStr = useStrassenNachladen(state.data?.last?.id, state.data?.lastStrassen, (rid) => fetchStrassen(client, rid), state.data?.last);
 
   // Pro vorab laden: das Druckfenster muss direkt beim Klick aufgehen (sonst blockt der Browser das Pop-up)
   const proState = useAsync(() => fetchOrgPro(client), [client]);
@@ -89,7 +92,7 @@ export function RouteDetail() {
 
   return (
     <LoadGuard state={state}>
-      {({ route, last, lastStrassen }) => (
+      {({ route, last }) => (
         <>
           <p className="small" style={{ marginBottom: 4 }}>
             <Link to="../strecken">← Alle Strecken</Link>
@@ -112,7 +115,7 @@ export function RouteDetail() {
             startedAt={last?.started_at}
             endedAt={last?.ended_at}
             zeit={!!last}
-            strassen={lastStrassen}
+            strassen={lastStr}
             canceled={last?.canceled}
             label={`Karte der Strecke ${route.name}${last ? ` mit der letzten Fahrt vom ${fmtDateTime(last.started_at)}` : ''}`}
           />
@@ -142,6 +145,12 @@ export function RouteDetail() {
               <button className="btn" onClick={() => printLog(route)} disabled={runsState.loading || !!runsState.error}>
                 <FileDown className="i" aria-hidden /> Fahrtenbuch als PDF
               </button>
+              {/* jüngste Fahrt noch ohne Straßenverlauf → kurzer Hinweis (das PDF entsteht trotzdem, mit Vermerk je Fahrt) */}
+              {last && strassenOffen(lastStr, last) && (last.track?.length ?? 0) >= 2 && (
+                <span className="small muted" role="status" style={{ alignSelf: 'center' }}>
+                  {STRASSEN_PDF_HINWEIS}
+                </span>
+              )}
               <ExcelButton
                 onExport={() => exportExcel(route)}
                 title="Fahrten dieser Strecke im Zeitraum als Excel-Datei: Kilometer, Stunden, Abdeckung (Pro)"

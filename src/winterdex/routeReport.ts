@@ -8,7 +8,7 @@ import { gritLabel, WEATHER_SOURCE_HTML, weatherLabel } from './labels';
 import { ACTION_LABELS, LEGAL_BASIS } from './types';
 import { buildSketch, cleanGaps, fmtDistance, fmtDuration, fmtPct, fmtTimeSpan, pathLengthM, ROUTE_COLORS, sketchSvg, type Route, type Run, type RunMeta } from './routes';
 import { fahrtDaten, fmtKm, fmtUhr, waehleSchritt, zeitleiste, zeitMarken, type FahrtDaten, type ZeitMarke, type ZeitZeile } from './fahrtZeit';
-import { fmtStrecke, ortText, STRASSEN_ERMITTELT, STRASSEN_QUELLE, strassenAnzeige, strasseZu, strassenText, type StrassenAnzeige, type StrassenStand } from './strassen';
+import { fmtStrecke, ortText, STRASSEN_QUELLE, strassenAnzeige, strassenPdfNochOffen, strasseZu, strassenText, type StrassenAnzeige, type StrassenStand } from './strassen';
 import { KARTE_QUELLE, kartenBilder, kartenBilderSammel, MAX_SAMMEL_BILDER, type KartenBild, type KartenBilder } from './kartenBild';
 
 const LEER_F = fahrtDaten([], null);
@@ -64,7 +64,7 @@ const STRASSEN_FUSSNOTE = `Straßennamen: ${STRASSEN_QUELLE} (ODbL), nach der Fa
 function strassenTabelle(str: StrassenAnzeige | null, timeZone?: string, kompakt = false): string {
   if (!str) return '';
   if (str.art === 'ermittelt')
-    return `${kompakt ? '' : '<h2>Straßenverlauf</h2>'}<div class="hinweis">${esc(STRASSEN_ERMITTELT)} Den Bericht danach erneut erstellen.</div>`;
+    return `${kompakt ? '' : '<h2>Straßenverlauf</h2>'}<div class="hinweis">${esc(strassenPdfNochOffen(Date.now(), timeZone))}</div>`;
   const rows = str.zeilen
     .map((z) => {
       const von = fmtUhr(z.von, timeZone);

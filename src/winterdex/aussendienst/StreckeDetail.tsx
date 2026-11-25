@@ -7,6 +7,7 @@ import { LoadGuard, useAsync } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
 import { FahrtAnsicht } from '../FahrtAnsicht';
+import { useStrassenNachladen } from '../strassenNachladen';
 import { fmtDistance, fmtPct, type Route } from '../routes';
 import { ACTION_LABELS } from '../types';
 import { isToday } from '../einsatz/amount';
@@ -34,6 +35,8 @@ export function StreckeDetail() {
     return run ? { run, strassen } : null;
   }, [be, lastId]);
   const last = lastState.data ?? null;
+  // Straßenverlauf „wird ermittelt“ → alle 20 s selbst nachfragen (höchstens 10 min), ohne Neuladen
+  const lastStr = useStrassenNachladen(last?.run.id, last?.strassen, be.getStrassen ? (rid) => be.getStrassen!(rid) : null, last?.run);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
@@ -133,7 +136,7 @@ export function StreckeDetail() {
                 startedAt={last?.run.started_at}
                 endedAt={last?.run.ended_at}
                 zeit={!!last}
-                strassen={last?.strassen ?? null}
+                strassen={lastStr}
                 canceled={last?.run.canceled}
                 label={`Karte der Strecke ${route.name}${last ? ` mit der letzten Fahrt vom ${fmtDateTime(last.run.started_at)}` : ''}`}
               />

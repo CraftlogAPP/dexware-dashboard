@@ -152,7 +152,7 @@ try {
   await oeffne(DEMO('demo-frei'));
   check('Straßenverlauf sichtbar', await warteAuf(`!!document.querySelector('.fk-strassen tbody tr')`));
   const zeilen = await main.ev(`[...document.querySelectorAll('.fk-strassen tbody tr')].map((r) => r.innerText.replace(/\\s+/g, ' ').trim())`);
-  check(`Zeilen „06:12–06:2x Hauptstraße Musterstadt 1,5 km“ (${zeilen.length})`, zeilen.length >= 10 && /^06:12–06:2\d Hauptstraße Musterstadt 1,5 km$/.test(zeilen[0]) && zeilen.some((z) => z.includes('Musterstadt (Unterdorf)')), zeilen.slice(0, 3).join(' / '));
+  check(`Zeilen „06:12–06:2x Hauptstraße Musterstadt 1,5 km“ (${zeilen.length})`, zeilen.length >= 10 && /^06:12–06:2\d Hauptstraße Musterstadt 1,5 km$/.test(zeilen[0]) && !zeilen.some((z) => z.includes('Unterdorf')), zeilen.slice(0, 3).join(' / '));
   check('Quellenangabe „© OpenStreetMap-Mitwirkende“ mit Link', await main.ev(`!!document.querySelector('.fk-strassen-quelle a[href="https://www.openstreetmap.org/copyright"]')`));
   await main.ev(`document.querySelector('.fk-zeitleiste summary').click()`);
   const kopf = await main.ev(`[...document.querySelectorAll('.fk-zeitleiste thead th')].map((t) => t.textContent)`);
@@ -241,7 +241,7 @@ try {
     const bloecke = (html.match(/<div class="fahrt">/g) ?? []).length;
     const bilder = (html.match(/<figure class="karte klein"><img src="data:image\/jpeg/g) ?? []).length;
     const pdf = html ? await alsPdf(html, 'D-fahrtenbuch') : null;
-    check(`Fahrtenbuch in ${ms} ms: ${bloecke} Fahrten im Einzelnen, ${bilder} Kartenbilder, ${pdf?.seiten} Seiten, ${pdf?.kb} KB`, bloecke >= 6 && bilder >= 6 && html.includes('<b>Hauptstraße</b>') && html.includes('Musterstadt (Unterdorf)') && html.includes('© OpenStreetMap-Mitwirkende'), JSON.stringify({ bloecke, bilder }));
+    check(`Fahrtenbuch in ${ms} ms: ${bloecke} Fahrten im Einzelnen, ${bilder} Kartenbilder, ${pdf?.seiten} Seiten, ${pdf?.kb} KB`, bloecke >= 6 && bilder >= 6 && html.includes('<b>Hauptstraße</b>') && !html.includes('Unterdorf') && html.includes('© OpenStreetMap-Mitwirkende'), JSON.stringify({ bloecke, bilder }));
     check('… Kartenbilder kompakt (je ≤ 120 KB)', (html.match(/data:image\/jpeg;base64,[A-Za-z0-9+/=]+/g) ?? []).every((s) => s.length * 0.75 < 120 * 1024));
   }
   await oeffne(`${base}/app/winterdex/fahrten-demo?demo&buch=viele`);

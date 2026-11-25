@@ -43,8 +43,33 @@ export type StrassenAnzeige = { art: 'ermittelt' } | { art: 'tabelle'; zeilen: S
 /** Quellenangabe (ODbL) — überall, wo Straßennamen erscheinen. */
 export const STRASSEN_QUELLE = '© OpenStreetMap-Mitwirkende';
 export const STRASSEN_QUELLE_URL = 'https://www.openstreetmap.org/copyright';
-export const STRASSEN_ERMITTELT =
-  'Straßenverlauf wird ermittelt — die Straßennamen kommen wenige Minuten nach der Fahrt (bei älteren Fahrten etwas später).';
+// Seit 25.11.2026 ermittelt der Worker JEDE Minute (vorher alle 10 min) → eine neue Fahrt hat ihre Straßen nach 1–3 min.
+// Die Ansicht fragt solange selbst nach (useStrassenNachladen, alle 20 s, höchstens 10 min) — kein Neuladen nötig.
+// Dieselben Texte bekommt die App (WinterDex-App-Runde).
+export const STRASSEN_ERMITTELT = 'Straßenverlauf wird ermittelt – meist in 1–3 Minuten.';
+/** Neben dem PDF-Knopf, solange der Straßenverlauf noch fehlt (das PDF entsteht trotzdem). */
+export const STRASSEN_PDF_HINWEIS = 'Straßenverlauf kommt in wenigen Minuten – für den vollständigen Bericht kurz warten';
+/** Nachfragen, solange „wird ermittelt“: alle 20 s, höchstens 10 Minuten lang. */
+export const STRASSEN_NACHLADEN_MS = 20_000;
+export const STRASSEN_NACHLADEN_MAX_MS = 10 * 60_000;
+
+/** Wird der Straßenverlauf noch ermittelt (Status in_arbeit bzw. noch keine Zeile)? Storniert/fehlt/fertig → nein. */
+export function strassenOffen(stand: StrassenStand | null | undefined, run?: { canceled?: boolean | null } | null): boolean {
+  return !!stand && stand.status === 'in_arbeit' && !run?.canceled;
+}
+
+/** Im PDF an der Stelle der Tabelle: „Straßenverlauf wurde bei Erstellung (25.11.2026 18:05) noch ermittelt – …“ */
+export function strassenPdfNochOffen(erstelltMs: number, timeZone?: string): string {
+  const t: Record<string, string> = {};
+  try {
+    const f = new Intl.DateTimeFormat('de-DE', { timeZone, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    for (const p of f.formatToParts(new Date(erstelltMs))) t[p.type] = p.value;
+  } catch {
+    /* unbekannte Zeitzone → unten Rückfall */
+  }
+  const wann = t.year ? `${t.day}.${t.month}.${t.year} ${t.hour}:${t.minute}` : new Date(erstelltMs).toLocaleString('de-DE');
+  return `Straßenverlauf wurde bei Erstellung (${wann}) noch ermittelt – Bericht später erneut erstellen.`;
+}
 
 const FEHLT: StrassenStand = { status: 'fehlt', abschnitte: [], quelle: null };
 const STATUS = new Set<StrassenStatus>(['fertig', 'in_arbeit', 'leer', 'aufgegeben']);
@@ -114,7 +139,9 @@ export function strassenAnzeige(
       bis: startMs + a.sek_bis * 1000,
       strasse: a.strasse,
       ort: a.ort,
-      ortsteil: a.ortsteil && a.ortsteil !== a.ort ? a.ortsteil : null,
+      // Ortsteil nie anzeigen (25.11.2026): Nominatim nannte in echten Fahrten Nachbar-Katastralgemeinden
+      // („Hauptplatz, Eggenburg (Gauderndorf)“) — für einen Prüfbericht zu riskant. Nur „Straße, Ort“ (Gemeinde stimmt).
+      ortsteil: null,
       m: a.m ?? null,
     }));
     if (!zeilen.length) return null;
@@ -135,10 +162,9 @@ export function strasseZu(zeilen: readonly StrassenZeile[], ms: number): Strasse
   return undefined;
 }
 
-/** „Eggenburg“ bzw. „Eggenburg (Engelsdorf)“ */
+/** „Eggenburg“ — nur die Gemeinde, nie ein Ortsteil (siehe strassenAnzeige). */
 export function ortText(z: Pick<StrassenZeile, 'ort' | 'ortsteil'>): string {
-  if (!z.ort) return z.ortsteil ?? '';
-  return z.ortsteil ? `${z.ort} (${z.ortsteil})` : z.ort;
+  return z.ort ?? '';
 }
 
 /** „Wiener Straße, Eggenburg“ — Ort nur, wenn gewünscht (z. B. wenn die Fahrt durch mehrere Orte führt). */

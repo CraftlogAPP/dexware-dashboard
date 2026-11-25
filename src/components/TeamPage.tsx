@@ -1,4 +1,5 @@
 import { PRO_HOW } from '../winterdex/pro';
+import { GlaetteFruehwarnung } from '../winterdex/GlaetteFruehwarnung';
 import { PRO_UNKLAR, orgProStand } from '../lib/proStand';
 import { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
@@ -151,6 +152,9 @@ export function TeamPage() {
           </p>
         </div>
       )}
+
+      {/* WinterDex: Uhrzeit der Glätte-Frühwarnung (Inhaber + Verwalter ändern; unsichtbar, solange die Spalte fehlt) */}
+      {app.id === 'winterdex' && orgCtx && <GlaetteFruehwarnung client={client} orgId={orgCtx.org.id} darf={canTeam} />}
 
       {canTeam && team.data?.needsPro && (
         <div className="card" style={{ marginBottom: 18 }}>
