@@ -14,7 +14,7 @@
 // kartenPlan (reine Rechnung: Zoom, Ausschnitte, Kacheln) ist ohne Browser getestet (tests/strassen-verlauf.test.mjs),
 // das Zeichnen im Klick-Test (tests/browser/fahrt-pdf-karte.mjs).
 import { ROUTE_COLORS, type LatLng } from './routes';
-import { fmtUhr, spurStuecke, vereinfacheLinie, type FahrtDaten, type ZeitMarke } from './fahrtZeit';
+import { fmtUhr, spurStuecke, startEndeLabels, vereinfacheLinie, type FahrtDaten, type ZeitMarke } from './fahrtZeit';
 
 // gleich wie FahrtKarte / aussendienst/Karte
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -44,6 +44,8 @@ export interface KartenBild {
   buchstabe?: string;
   /** Ausschnitt: Uhrzeiten, zu denen die Fahrt dort war („06:12–06:31, 07:40–07:52“) */
   zeiten?: string;
+  /** so wurde beschriftet (Klick-Test: kein Schild über einem Rahmen-Buchstaben) — nicht im Bericht */
+  beschriftung?: BeschriftungsPlan;
 }
 export interface KartenBilder {
   uebersicht: KartenBild;
@@ -204,6 +206,188 @@ export function besuchsZeiten(F: FahrtDaten, besuche: readonly [number, number][
   return `${t.join(', ')}${besuche.length > 4 ? ' …' : ''} Uhr`;
 }
 
+// ---------------------------------------------------------------- Beschriftung (reine Rechnung, ohne Browser getestet)
+
+/** Fläche [x0, y0, x1, y1] in Anzeige-Pixeln */
+export type Box = [number, number, number, number];
+const ueber = (a: Box, b: Box) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+const SCHILD_H = 16;
+const SCHILD_FONT = '700 11px Arial, sans-serif';
+/** Buchstabenfeld der Ausschnitt-Rahmen in der Übersicht */
+const FELD = 18;
+const START_FARBE = '#166534';
+/** Start und Ende gelten als „am selben Ort“ unter so vielen Metern bzw. Bildpunkten (wie FahrtKarte: 60 m) */
+const NAH_M = 60;
+const NAH_PX = 14;
+
+export interface Schild {
+  text: string;
+  farbe: string;
+  box: Box;
+  art: 'start' | 'ende' | 'marke';
+  /** Punkt, zu dem das Schild gehört (weiter weg → Führungslinie) */
+  p: [number, number];
+}
+
+/** Nächster Punkt der Schild-Fläche zum Punkt und sein Abstand — über 9 px bekommt das Schild eine Führungslinie. */
+export function fuehrung(s: Pick<Schild, 'box' | 'p'>): { x: number; y: number; abstand: number } {
+  const x = Math.min(Math.max(s.p[0], s.box[0]), s.box[2]);
+  const y = Math.min(Math.max(s.p[1], s.box[1]), s.box[3]);
+  return { x, y, abstand: Math.hypot(x - s.p[0], y - s.p[1]) };
+}
+
+export interface BeschriftungsPlan {
+  /** Start/Ende in Anzeige-Pixeln (null = nicht im Bild) */
+  start: [number, number] | null;
+  ende: [number, number] | null;
+  /** Start und Ende (fast) am selben Ort: Ende-Punkt zuerst, Start kleiner darüber, Start-Schild darunter */
+  nah: boolean;
+  /** Zeitmarken im Bild */
+  marken: [number, number][];
+  /** Ausschnitt-Rahmen in der Übersicht mit Buchstabenfeld (in einer freien Ecke des Rahmens) */
+  rahmen: { buchstabe: string; x: number; y: number; w: number; h: number; feld: Box }[];
+  /** Buchstabe eines Ausschnitts (oben links) */
+  feld: Box | null;
+  schilder: Schild[];
+  /** Zeitmarken ohne freien Platz — nur der Punkt (Start/Ende stehen immer) */
+  ohneSchild: string[];
+}
+
+/**
+ * Wohin kommen Rahmen-Buchstaben und Beschriftungen? Reihenfolge: feste Flächen (Maßstab, Quellenangabe, Nordpfeil,
+ * Ausschnitt-Buchstabe) → Buchstabenfelder der Rahmen (in die erste Ecke, die keinen Start/Ende/Marke-Punkt trifft)
+ * → Start/Ende-Schild (Pflicht: weicht weiter aus, notfalls über einen Punkt, nie über ein Feld oder ein anderes
+ * Schild) → Zeitmarken (ohne Platz nur der Punkt). Kein Schild überdeckt danach ein Buchstabenfeld — vorher wurden
+ * Rahmen + Felder NACH den Schildern gezeichnet und deckten Uhrzeiten ab (echter Bericht: „Ende 11“ statt 11:34).
+ */
+export function beschriftungsPlan(
+  f: Pick<Fenster, 'z' | 'cx' | 'cy' | 'w' | 'h' | 'buchstabe'>,
+  F: FahrtDaten,
+  marken: readonly ZeitMarke[],
+  labels: { startLabel: string | null; endeLabel: string | null },
+  rahmen: readonly Pick<Fenster, 'z' | 'cx' | 'cy' | 'w' | 'h' | 'buchstabe'>[],
+  breite: (text: string) => number,
+  fest: readonly Box[] = [
+    [0, f.h - 30, 176, f.h],
+    [f.w - 150, f.h - 17, f.w, f.h],
+    [f.w - 30, 0, f.w, 40],
+  ],
+): BeschriftungsPlan {
+  const P = (la: number, ln: number): [number, number] => {
+    const [x, y] = weltPx(la, ln, f.z);
+    return [x - f.cx + f.w / 2, y - f.cy + f.h / 2];
+  };
+  const drin = ([x, y]: [number, number]) => x >= 0 && y >= 0 && x <= f.w && y <= f.h;
+  const s0 = F.n ? P(F.lat[0], F.lng[0]) : null;
+  const e0 = F.n > 1 ? P(F.lat[F.n - 1], F.lng[F.n - 1]) : null;
+  const start = s0 && drin(s0) ? s0 : null;
+  const ende = e0 && drin(e0) ? e0 : null;
+  const nah =
+    !!s0 && !!e0 && (Math.hypot(s0[0] - e0[0], s0[1] - e0[1]) < NAH_PX || Math.hypot(F.x[F.n - 1] - F.x[0], F.y[F.n - 1] - F.y[0]) < NAH_M);
+  const mk = marken.map((m) => ({ m, p: P(m.lat, m.lng) })).filter((x) => drin(x.p));
+
+  // „weich“ = Punkte (Start/Ende/Marken): Schilder meiden sie, Pflicht-Schilder dürfen notfalls darüber. Fremde Punkte
+  // zuerst mit Abstand (weit): ein Schild direkt neben einem fremden Punkt läse man als dessen Uhrzeit (echte Fahrt:
+  // „Ende 11:34“ 5 px neben der Marke 09:40). Der eigene Punkt zählt nie; Start und Ende am selben Ort = ein Punkt.
+  type Punkt = { box: Box; weit: Box; wer: string };
+  const pk = (p: [number, number], r: number, rw: number, wer: string): Punkt => ({
+    box: [p[0] - r, p[1] - r, p[0] + r, p[1] + r],
+    weit: [p[0] - rw, p[1] - rw, p[0] + rw, p[1] + rw],
+    wer,
+  });
+  const punkte: Punkt[] = [];
+  if (start) punkte.push(pk(start, 9, 14, nah ? 'se' : 'start'));
+  if (ende) punkte.push(pk(ende, 9, 14, nah ? 'se' : 'ende'));
+  mk.forEach(({ p }, i) => punkte.push(pk(p, 5, 11, `m${i}`)));
+  const weich: Box[] = punkte.map((q) => q.box);
+  // „hart“ = Flächen, die nie überdeckt werden dürfen
+  const hart: Box[] = [...fest];
+  const feld: Box | null = f.buchstabe ? [0, 0, 24, 24] : null;
+  if (feld) hart.push(feld);
+
+  const klemme = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+  const rahmenPlan = rahmen.map((r) => {
+    const k = 2 ** (f.z - r.z);
+    const w = r.w * k;
+    const h = r.h * k;
+    const x = r.cx * k - f.cx + f.w / 2 - w / 2;
+    const y = r.cy * k - f.cy + f.h / 2 - h / 2;
+    const ecken: [number, number][] = [
+      [x, y],
+      [x + w - FELD, y],
+      [x, y + h - FELD],
+      [x + w - FELD, y + h - FELD],
+    ];
+    const felder = ecken.map(([a, b]): Box => {
+      const fx = klemme(a, 0, f.w - FELD);
+      const fy = klemme(b, 0, f.h - FELD);
+      return [fx, fy, fx + FELD, fy + FELD];
+    });
+    const rand = (b: Box): Box => [b[0] - 2, b[1] - 2, b[2] + 2, b[3] + 2];
+    const gut = felder.find((b) => !hart.some((o) => ueber(b, o)) && !weich.some((o) => ueber(rand(b), o))) ?? felder.find((b) => !hart.some((o) => ueber(b, o))) ?? felder[0];
+    hart.push(gut);
+    return { buchstabe: r.buchstabe ?? '', x, y, w, h, feld: gut };
+  });
+
+  const schilder: Schild[] = [];
+  const ohneSchild: string[] = [];
+  /** punkte: 'weit' = fremde Punkte mit Abstand, 'knapp' = nur nicht darauf, 'egal' = Notfall (Pflicht-Schild) */
+  const frei = (b: Box, punkteMeiden: 'weit' | 'knapp' | 'egal', eigen: string) =>
+    b[0] >= 2 &&
+    b[1] >= 2 &&
+    b[2] <= f.w - 2 &&
+    b[3] <= f.h - 2 &&
+    !hart.some((o) => ueber(b, o)) &&
+    (punkteMeiden === 'egal' || !punkte.some((q) => ueber(b, punkteMeiden === 'weit' && q.wer !== eigen ? q.weit : q.box)));
+  type Lage = 'rechts' | 'links' | 'oben' | 'unten' | 'ro' | 'ru' | 'lo' | 'lu';
+  const REIHEN: Record<'rechts' | 'oben' | 'unten', Lage[]> = {
+    rechts: ['rechts', 'links', 'oben', 'unten', 'ro', 'ru', 'lo', 'lu'],
+    oben: ['oben', 'ro', 'lo', 'rechts', 'links', 'unten', 'ru', 'lu'],
+    unten: ['unten', 'ru', 'lu', 'rechts', 'links', 'oben', 'ro', 'lo'],
+  };
+  const kandidaten = (x: number, y: number, lw: number, a: number, zuerst: 'rechts' | 'oben' | 'unten'): Box[] => {
+    const lh = SCHILD_H;
+    const d = a * 0.75;
+    const k: Record<Lage, Box> = {
+      rechts: [x + a, y - lh / 2, x + a + lw, y + lh / 2],
+      links: [x - a - lw, y - lh / 2, x - a, y + lh / 2],
+      oben: [x - lw / 2, y - a - lh, x + lw / 2, y - a],
+      unten: [x - lw / 2, y + a, x + lw / 2, y + a + lh],
+      ro: [x + d, y - d - lh, x + d + lw, y - d],
+      ru: [x + d, y + d, x + d + lw, y + d + lh],
+      lo: [x - d - lw, y - d - lh, x - d, y - d],
+      lu: [x - d - lw, y + d, x - d, y + d + lh],
+    };
+    return REIHEN[zuerst].map((l) => k[l]);
+  };
+  const setze = (p: [number, number], text: string, farbe: string, art: Schild['art'], a: number, zuerst: 'rechts' | 'oben' | 'unten', pflicht: boolean, eigen: string) => {
+    const lw = breite(text) + 8;
+    const alle = (pflicht ? [a, a + 12, a + 26, a + 44] : [a, a + 9, a + 19]).flatMap((x) => kandidaten(p[0], p[1], lw, x, zuerst));
+    let b =
+      alle.find((c) => frei(c, 'weit', eigen)) ??
+      alle.find((c) => frei(c, 'knapp', eigen)) ??
+      (pflicht ? alle.find((c) => frei(c, 'egal', eigen)) : undefined);
+    if (!b && pflicht) {
+      // Notfall (sehr enges Bild): ins Bild geschoben — die Start/Ende-Uhrzeit fehlt nie
+      const c = alle[0];
+      const dx = klemme(c[0], 2, f.w - 2 - lw) - c[0];
+      const dy = klemme(c[1], 2, f.h - 2 - SCHILD_H) - c[1];
+      b = [c[0] + dx, c[1] + dy, c[2] + dx, c[3] + dy];
+    }
+    if (!b) {
+      ohneSchild.push(text);
+      return;
+    }
+    hart.push(b);
+    schilder.push({ text, farbe, box: b, art, p });
+  };
+  if (start && labels.startLabel) setze(start, labels.startLabel, START_FARBE, 'start', 10, nah ? 'unten' : 'rechts', true, nah ? 'se' : 'start');
+  if (ende && labels.endeLabel) setze(ende, labels.endeLabel, ROUTE_COLORS.end, 'ende', 10, nah ? 'oben' : 'rechts', true, nah ? 'se' : 'ende');
+  mk.forEach(({ m, p }, i) => setze(p, m.label, ROUTE_COLORS.end, 'marke', 7, 'rechts', false, `m${i}`));
+
+  return { start, ende, nah, marken: mk.map((x) => x.p), rahmen: rahmenPlan, feld, schilder, ohneSchild };
+}
+
 // ---------------------------------------------------------------- Zeichnen (Browser)
 
 interface Inhalt {
@@ -317,87 +501,42 @@ function zeichne(f: Fenster, bilder: HTMLImageElement[], inhalt: Inhalt, rahmen:
     ctx.setLineDash([]);
   }
 
-  // Beschriftungen ohne Überdeckung (wie die Skizze): rechts, links, oben, unten — sonst nur der Punkt
-  type Box = [number, number, number, number];
-  const belegt: Box[] = [
-    [0, f.h - 30, 150, f.h], // Maßstab
-    [f.w - 190, f.h - 18, f.w, f.h], // Quellenangabe
-    [f.w - 30, 0, f.w, 40], // Nordpfeil
-  ];
-  const frei = (b: Box) =>
-    b[0] >= 2 && b[1] >= 2 && b[2] <= f.w - 2 && b[3] <= f.h - 2 && !belegt.some((o) => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
-  ctx.font = '700 11px Arial, sans-serif';
-  const schild = (x: number, y: number, text: string, farbe: string, abstand: number) => {
-    const lw = ctx.measureText(text).width + 8;
-    const lh = 16;
-    const k: Box[] = [
-      [x + abstand, y - lh / 2, x + abstand + lw, y + lh / 2],
-      [x - abstand - lw, y - lh / 2, x - abstand, y + lh / 2],
-      [x - lw / 2, y - abstand - lh, x + lw / 2, y - abstand],
-      [x - lw / 2, y + abstand, x + lw / 2, y + abstand + lh],
-    ];
-    const b = k.find(frei);
-    if (!b) return;
-    belegt.push(b);
-    ctx.fillStyle = 'rgba(255,255,255,0.93)';
-    ctx.strokeStyle = 'rgba(12,27,42,0.35)';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    if (typeof ctx.roundRect === 'function') ctx.roundRect(b[0], b[1], lw, lh, 3);
-    else ctx.rect(b[0], b[1], lw, lh);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = farbe;
-    ctx.fillText(text, b[0] + 4, b[1] + 12);
-  };
-  const punkt = (x: number, y: number, r: number, farbe: string, rand: number) => {
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = farbe;
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = rand;
-    ctx.stroke();
-  };
-  const drin = ([x, y]: [number, number]) => x >= 0 && y >= 0 && x <= f.w && y <= f.h;
-  const F = inhalt.F;
-  const start = F.n ? P(F.lat[0], F.lng[0]) : null;
-  const ende = F.n > 1 ? P(F.lat[F.n - 1], F.lng[F.n - 1]) : null;
-  for (const p of [start, ende]) if (p) belegt.push([p[0] - 9, p[1] - 9, p[0] + 9, p[1] + 9]);
-  const marken = inhalt.marken.map((m) => ({ m, p: P(m.lat, m.lng) })).filter((x) => drin(x.p));
-  for (const { p } of marken) belegt.push([p[0] - 4, p[1] - 4, p[0] + 4, p[1] + 4]);
-  if (start && drin(start) && inhalt.startLabel) schild(start[0], start[1], inhalt.startLabel, '#166534', 10);
-  if (ende && drin(ende) && inhalt.endeLabel) schild(ende[0], ende[1], inhalt.endeLabel, c.end, 10);
-  for (const { m, p } of marken) {
-    punkt(p[0], p[1], 4, c.end, 1.5);
-    schild(p[0], p[1], m.label, c.end, 7);
-  }
-  if (start && drin(start)) punkt(start[0], start[1], 7, c.track, 3);
-  if (ende && drin(ende)) punkt(ende[0], ende[1], 7, c.end, 3);
-
-  // Ausschnitte in der Übersicht markieren
-  for (const r of rahmen) {
-    const k = 2 ** (f.z - r.z);
-    const x = (r.cx * k - f.cx) + f.w / 2 - (r.w * k) / 2;
-    const y = (r.cy * k - f.cy) + f.h / 2 - (r.h * k) / 2;
-    ctx.strokeStyle = RAHMEN;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    ctx.strokeRect(x, y, r.w * k, r.h * k);
-    ctx.setLineDash([]);
-    ctx.fillStyle = RAHMEN;
-    ctx.fillRect(x, y, 18, 18);
-    ctx.fillStyle = '#fff';
-    ctx.font = '700 13px Arial, sans-serif';
-    ctx.fillText(r.buchstabe ?? '', x + 4.5, y + 14);
-  }
-
-  // Maßstab, Norden, Quellenangabe
+  // Maßstab und Quellenangabe vorab messen: ihre Flächen hält die Beschriftung frei
   const mitte = f.cy;
   const latMitte = (Math.atan(Math.sinh(Math.PI * (1 - (2 * mitte) / (TILE * 2 ** f.z)))) * 180) / Math.PI;
   const mpp = meterProPx(latMitte, f.z);
   const nice = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].find((n) => n / mpp >= 60) ?? 20000;
   const px = nice / mpp;
+  ctx.font = '10px Arial, sans-serif';
+  const q = KARTE_QUELLE;
+  const qw = ctx.measureText(q).width + 8;
+  const fest: Box[] = [
+    [0, f.h - 30, px + 26, f.h], // Maßstab
+    [f.w - qw - 2, f.h - 17, f.w, f.h], // Quellenangabe
+    [f.w - 30, 0, f.w, 40], // Nordpfeil
+  ];
+  ctx.font = SCHILD_FONT;
+  const F = inhalt.F;
+  const plan = beschriftungsPlan(f, F, inhalt.marken, inhalt, rahmen, (t) => ctx.measureText(t).width, fest);
+
+  // 1) Ausschnitte in der Übersicht: gestrichelter Rahmen + Buchstabenfeld (Ecke ohne Start/Ende/Marke) — VOR den
+  //    Beschriftungen, die Felder sind dort schon als belegt eingetragen (Tagescheck 26.11.2026: „Ende 11“ statt 11:34)
+  for (const r of plan.rahmen) {
+    ctx.strokeStyle = RAHMEN;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.setLineDash([]);
+  }
+  for (const r of plan.rahmen) {
+    ctx.fillStyle = RAHMEN;
+    ctx.fillRect(r.feld[0], r.feld[1], FELD, FELD);
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 13px Arial, sans-serif';
+    ctx.fillText(r.buchstabe, r.feld[0] + 4.5, r.feld[1] + 14);
+  }
+
+  // 2) Maßstab, Norden, Quellenangabe, Buchstabe des Ausschnitts
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.fillRect(6, f.h - 28, px + 16, 22);
   ctx.strokeStyle = '#233648';
@@ -420,22 +559,62 @@ function zeichne(f: Fenster, bilder: HTMLImageElement[], inhalt: Inhalt, rahmen:
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.font = '10px Arial, sans-serif';
-  const q = KARTE_QUELLE;
-  const qw = ctx.measureText(q).width + 8;
   ctx.fillStyle = 'rgba(255,255,255,0.88)';
   ctx.fillRect(f.w - qw, f.h - 15, qw, 15);
   ctx.fillStyle = '#233648';
   ctx.fillText(q, f.w - qw + 4, f.h - 4);
-  if (f.buchstabe) {
+  if (plan.feld && f.buchstabe) {
     ctx.fillStyle = RAHMEN;
     ctx.fillRect(0, 0, 22, 22);
     ctx.fillStyle = '#fff';
     ctx.font = '700 14px Arial, sans-serif';
     ctx.fillText(f.buchstabe, 6, 16);
   }
+
+  // 3) Punkte: Zeitmarken, Ende, Start — Start zuletzt; liegen Start und Ende am selben Ort (Bauhof), Start kleiner
+  //    obendrauf (grün im dunklen Ring), sonst verdeckte der Ende-Punkt den Start (wie FahrtKarte am Bildschirm)
+  const punkt = (x: number, y: number, r: number, farbe: string, rand: number) => {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = farbe;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = rand;
+    ctx.stroke();
+  };
+  for (const p of plan.marken) punkt(p[0], p[1], 4, c.end, 1.5);
+  if (plan.ende) punkt(plan.ende[0], plan.ende[1], 7, c.end, 3);
+  if (plan.start) punkt(plan.start[0], plan.start[1], plan.nah ? 4.5 : 7, c.track, plan.nah ? 2 : 3);
+
+  // 4) Beschriftungen zuletzt — nichts liegt mehr darüber. Musste ein Schild weiter ausweichen, zeigt eine dünne
+  //    Führungslinie, zu welchem Punkt die Uhrzeit gehört (Ort und Zeit bleiben eindeutig zugeordnet).
+  for (const s of plan.schilder) {
+    const l = fuehrung(s);
+    if (l.abstand <= 9) continue;
+    ctx.beginPath();
+    ctx.moveTo(s.p[0], s.p[1]);
+    ctx.lineTo(l.x, l.y);
+    ctx.strokeStyle = 'rgba(12,27,42,0.6)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.font = SCHILD_FONT;
+  for (const s of plan.schilder) {
+    const [x0, y0, x1, y1] = s.box;
+    ctx.fillStyle = 'rgba(255,255,255,0.93)';
+    ctx.strokeStyle = 'rgba(12,27,42,0.35)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 3);
+    else ctx.rect(x0, y0, x1 - x0, y1 - y0);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = s.farbe;
+    ctx.fillText(s.text, x0 + 4, y0 + 12);
+  }
   const src = canvas.toDataURL('image/jpeg', qualitaet); // wirft bei gesperrtem Canvas (Kacheln ohne CORS)
   if (!src.startsWith('data:image/')) throw new Error('kein Bild');
-  return { src, w: f.w, h: f.h, buchstabe: f.buchstabe, zeiten: f.besuche ? besuchsZeiten(F, f.besuche, timeZone) : undefined };
+  return { src, w: f.w, h: f.h, buchstabe: f.buchstabe, zeiten: f.besuche ? besuchsZeiten(F, f.besuche, timeZone) : undefined, beschriftung: plan };
 }
 
 /**
@@ -536,7 +715,6 @@ export async function kartenBilderSammel(
     const qualitaet = f.skala === 2 ? 0.82 : 0.78;
     return fahrten.map(({ F, missed }) => {
       try {
-        const zeitAn = F.mitZeit && F.n >= 2;
         return zeichne(
           f,
           bilder,
@@ -546,8 +724,8 @@ export async function kartenBilderSammel(
             plan,
             missed: (missed ?? []).map((s) => vereinfacheLinie(s, 2)).filter((s) => s.length >= 2),
             marken: [],
-            startLabel: F.n ? (zeitAn ? `Start ${fmtUhr(F.t[0], opts.timeZone)}` : 'Start') : null,
-            endeLabel: F.n > 1 ? (zeitAn ? `Ende ${fmtUhr(F.t[F.n - 1], opts.timeZone)}` : 'Ende') : null,
+            // gleiche Regel wie Einzel-PDF und Fahrt-Detail: Uhrzeit des ersten/letzten GPS-Punkts
+            ...startEndeLabels(F, opts.timeZone),
           },
           [],
           opts.timeZone,

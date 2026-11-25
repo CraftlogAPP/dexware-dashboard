@@ -23,23 +23,37 @@ export function useStrassenNachladen(
     if (!offen || !runId) return;
     const bis = Date.now() + STRASSEN_NACHLADEN_MAX_MS;
     let aus = false;
-    const t = setInterval(() => {
-      if (Date.now() > bis) {
-        clearInterval(t);
-        return;
-      }
+    let zuletzt = 0;
+    const frage = () => {
       const f = ladenRef.current;
-      if (!f) return;
+      if (!f || Date.now() - zuletzt < 3000) return;
+      zuletzt = Date.now();
       f(runId)
         .then((s) => {
           // „fehlt“ = Lesefehler (Netz) → Anzeige lassen, weiter fragen
           if (!aus && s && s.status !== 'fehlt') setNeu({ id: runId, stand: s });
         })
         .catch(() => undefined);
+    };
+    const t = setInterval(() => {
+      if (Date.now() > bis) {
+        clearInterval(t);
+        return;
+      }
+      frage();
     }, STRASSEN_NACHLADEN_MS);
+    // Nach den 10 Minuten (Anbieter gestört → Worker versucht es 15 min bis 12 Std. später) noch einmal beim
+    // Zurückwechseln in den Tab nachfragen — sonst stünde „wird ermittelt“ bis zum Neuladen da (Tagescheck 26.11.2026)
+    const sichtbar = () => {
+      if (document.visibilityState === 'visible') frage();
+    };
+    document.addEventListener('visibilitychange', sichtbar);
+    window.addEventListener('focus', sichtbar);
     return () => {
       aus = true;
       clearInterval(t);
+      document.removeEventListener('visibilitychange', sichtbar);
+      window.removeEventListener('focus', sichtbar);
     };
   }, [offen, runId]);
 

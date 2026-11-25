@@ -17,12 +17,15 @@ import { fetchOrgPro, withWatermark } from '../pro';
 import { fetchRoute, fetchRun, fetchRunTracks, fetchRuns, fmtDistance, type Route, type Run } from '../routes';
 import { fetchStrassen, fetchStrassenViele, STRASSEN_PDF_HINWEIS, strassenOffen, type StrassenStand } from '../strassen';
 import { useStrassenNachladen } from '../strassenNachladen';
+import { nachweisZone } from '../nachweisZeit';
 import { RunTable } from './Routes';
 
 export function RouteDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAppAuth();
   const { data: org } = useOrg();
+  // Uhrzeiten der Fahrt in der Zone des Betriebs (wie Fahrt-Detail und PDF), nie in der des Geräts
+  const tz = nachweisZone(org?.org.land);
   const [from, setFrom] = useState(() => {
     const d = new Date();
     d.setDate(1);
@@ -117,12 +120,14 @@ export function RouteDetail() {
             zeit={!!last}
             strassen={lastStr}
             canceled={last?.canceled}
-            label={`Karte der Strecke ${route.name}${last ? ` mit der letzten Fahrt vom ${fmtDateTime(last.started_at)}` : ''}`}
+            timeZone={tz}
+            gefahrenM={last?.track_length_m}
+            label={`Karte der Strecke ${route.name}${last ? ` mit der letzten Fahrt vom ${fmtDateTime(last.started_at, tz)}` : ''}`}
           />
           <p className="small muted" style={{ marginTop: -8 }}>
             {last ? (
               <>
-                Grün = letzte Fahrt (<Link to={`../strecken/fahrten/${last.id}`}>{fmtDateTime(last.started_at)}</Link>), rot = dabei nicht befahren.
+                Grün = letzte Fahrt (<Link to={`../strecken/fahrten/${last.id}`}>{fmtDateTime(last.started_at, tz)}</Link>), rot = dabei nicht befahren.
               </>
             ) : (
               'Noch keine Fahrt auf dieser Strecke.'

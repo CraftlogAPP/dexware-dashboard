@@ -7,7 +7,7 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ROUTE_COLORS, type LatLng } from './routes';
-import { fmtUhr, infoZuPunkt, naechsterPunkt, type FahrtDaten, type ZeitMarke } from './fahrtZeit';
+import { fmtSpanne, infoZuPunkt, naechsterPunkt, type FahrtDaten, type ZeitMarke } from './fahrtZeit';
 
 // gleich wie aussendienst/Karte.tsx
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -34,6 +34,8 @@ export interface FahrtKarteProps {
   zeitAn: boolean;
   startLabel: string | null;
   endeLabel: string | null;
+  /** Zeitzone des Betriebs für Tooltips (Unterbrechung, Maus über der Spur) — nie die des Geräts */
+  timeZone?: string;
   cursor: KartenCursor | null;
   /** Spur angetippt/angeklickt: Index des nächsten Punkts */
   onPick: (i: number) => void;
@@ -74,7 +76,7 @@ export default function FahrtKarte(p: FahrtKarteProps) {
   // Karte + alle Linien einmal je Fahrt anlegen (die Eingaben sind in der FahrtAnsicht vorberechnet und gemerkt)
   useEffect(() => {
     if (!el.current) return;
-    const { F, plan, stuecke, missed, marken, zeitAn, startLabel, endeLabel } = props.current;
+    const { F, plan, stuecke, missed, marken, zeitAn, startLabel, endeLabel, timeZone } = props.current;
     const m = L.map(el.current, { zoomControl: true, attributionControl: true, scrollWheelZoom: false });
     map.current = m;
     // Mausrad erst nach Klick in die Karte — sonst bleibt beim Scrollen der Seite die Karte „hängen“
@@ -118,7 +120,7 @@ export default function FahrtKarte(p: FahrtKarteProps) {
 
     // Unterbrechungen: gelb gepunktete Verbindung + Pausen-Zeichen (Antippen/Maus: Uhrzeit)
     for (const u of F.unterbrechungen) {
-      const zeit = zeitAn && Number.isFinite(u.von) && Number.isFinite(u.bis) ? `${fmtUhr(u.von)}–${fmtUhr(u.bis)}` : '';
+      const zeit = zeitAn && Number.isFinite(u.von) && Number.isFinite(u.bis) ? fmtSpanne(u.von, u.bis, timeZone) : '';
       const text = `Unterbrechung${zeit ? ` ${zeit} Uhr` : ''} — Pause oder kein GPS, nicht als gefahren gewertet`;
       if (u.ab && u.an) L.polyline([u.ab, u.an], { color: PAUSE, weight: 3, dashArray: '2 7', opacity: 0.95, interactive: false }).addTo(m);
       const at = u.ab ?? u.an;
@@ -233,7 +235,7 @@ export default function FahrtKarte(p: FahrtKarteProps) {
         el.current?.classList.remove('fk-zeiger');
         return;
       }
-      const info = infoZuPunkt(F, i, zeitAn);
+      const info = infoZuPunkt(F, i, zeitAn, timeZone);
       hv.setLatLng([F.lat[i], F.lng[i]]);
       hv.setTooltipContent(tipInhalt(info.titel, info.zusatz));
       if (!m.hasLayer(hv)) hv.addTo(m);
@@ -272,7 +274,7 @@ export default function FahrtKarte(p: FahrtKarteProps) {
       hover.current = null;
       cur.current = null;
     };
-  }, [p.F, p.plan, p.stuecke, p.missed, p.marken, p.zeitAn, p.startLabel, p.endeLabel]);
+  }, [p.F, p.plan, p.stuecke, p.missed, p.marken, p.zeitAn, p.startLabel, p.endeLabel, p.timeZone]);
 
   // Punkt des Zeit-Reglers (bzw. der angetippten Stelle)
   useEffect(() => {

@@ -96,7 +96,7 @@ export interface ZeitZeile {
   t: number;
   bis?: number;
   dM: number;
-  art: 'start' | 'erste' | 'fahrt' | 'steht' | 'luecke' | 'ende';
+  art: 'start' | 'erste' | 'fahrt' | 'steht' | 'letzte' | 'luecke' | 'ende';
   text: string;
 }
 
@@ -104,18 +104,47 @@ export interface ZeitZeile {
 
 const uhrFmt = new Map<string, Intl.DateTimeFormat>();
 /**
- * „09:45“ — ohne timeZone in der Ortszeit des Geräts, wie alle übrigen Uhrzeiten im Dashboard (lib/format fmtTime);
- * Tests geben 'Europe/Vienna' fest vor.
+ * „09:45“ — Nachweise (Fahrt-Detail, Karte, PDF) geben seit 26.11.2026 die Zeitzone des Betriebs mit
+ * (nachweisZeit.ts, nie die des Geräts); ohne timeZone Ortszeit des Geräts (übriges Dashboard).
  */
 export function fmtUhr(ms: number, timeZone?: string): string {
   const k = timeZone ?? '';
   let f = uhrFmt.get(k);
   if (!f) {
-    f = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', ...(timeZone ? { timeZone } : {}) });
+    f = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', ...(timeZone ? { timeZone } : {}) });
     uhrFmt.set(k, f);
   }
   return f.format(new Date(ms));
 }
+
+/**
+ * Zeitspanne „05:10–05:14“ — EINE Formatierung für Zeitleiste, Karten-Tooltip, Regler und PDF. Beginn und Ende in
+ * derselben Minute: „05:10 (46 s)“ statt „05:10–05:10“ (sah aus wie ein Rechenfehler; Tagescheck 26.11.2026).
+ */
+export function fmtSpanne(von: number, bis: number, timeZone?: string): string {
+  const a = fmtUhr(von, timeZone);
+  const b = fmtUhr(bis, timeZone);
+  if (a !== b) return `${a}–${b}`;
+  const sek = Math.round((bis - von) / 1000);
+  return sek > 0 ? `${a} (${sek} s)` : a;
+}
+
+/**
+ * Start/Ende-Beschriftung an den Kartenpunkten: die Uhrzeit DES PUNKTS (erster/letzter GPS-Punkt) — Ort und Zeit
+ * gehören zusammen. Kopf/Kennzahl zeigen Beginn/Ende der Aufzeichnung; liegt dazwischen sichtbar Zeit, erklären das
+ * die Zeilen „Erste/Letzte genaue GPS-Position“ der Zeitleiste. EINE Regel für Fahrt-Detail (Karte), Einzel-PDF und
+ * Fahrtenbuch (Tagescheck 26.11.2026, Fund 9: vorher Detail = started_at/ended_at, PDF = Punktzeit).
+ */
+export function startEndeLabels(F: FahrtDaten, timeZone?: string, zeit = true): { startLabel: string | null; endeLabel: string | null } {
+  const zeitAn = zeit && F.mitZeit && F.n >= 2;
+  return {
+    startLabel: F.n ? (zeitAn ? `Start ${fmtUhr(F.t[0], timeZone)}` : 'Start') : null,
+    endeLabel: F.n > 1 ? (zeitAn ? `Ende ${fmtUhr(F.t[F.n - 1], timeZone)}` : 'Ende') : null,
+  };
+}
+
+/** Zwei Zeitpunkte zeigen dieselbe Minute (gilt in jeder Zone mit ganzen Minuten Versatz, also in MEZ/MESZ). */
+const gleicheMinute = (a: number, b: number) => Math.floor(a / 60000) === Math.floor(b / 60000);
 
 /** „3,2 km“ — immer eine Nachkommastelle (Zeitleiste, Tooltips). */
 export function fmtKm(m: number): string {
@@ -520,7 +549,7 @@ export function zeitMarken(F: FahrtDaten, opts: { schrittMin?: number; timeZone?
     lat: F.lat[st.i],
     lng: F.lng[st.i],
     dM: st.dM,
-    label: `${fmtUhr(st.von, tz)}–${fmtUhr(st.bis, tz)}`,
+    label: fmtSpanne(st.von, st.bis, tz),
   }));
   const out: ZeitMarke[] = [];
   for (const T of rasterZeiten(F, schritt)) {
@@ -534,7 +563,7 @@ export function zeitMarken(F: FahrtDaten, opts: { schrittMin?: number; timeZone?
     const prev = out[out.length - 1];
     if (prev && haversine(prev.lat, prev.lng, p.lat, p.lng) < 30) {
       prev.bis = Math.max(prev.bis ?? prev.t, T);
-      prev.label = `${fmtUhr(prev.t, tz)}–${fmtUhr(prev.bis, tz)}`;
+      prev.label = fmtSpanne(prev.t, prev.bis, tz);
       continue;
     }
     out.push({ t: T, lat: p.lat, lng: p.lng, dM: p.dM, label: fmtUhr(T, tz) });
@@ -545,16 +574,25 @@ export function zeitMarken(F: FahrtDaten, opts: { schrittMin?: number; timeZone?
 /**
  * Zeitleiste als Tabelle: Start, je Schritt eine Zeile (km seit Start, „+1,2 km gefahren“ bzw. „kaum bewegt“),
  * Unterbrechungen mit Von–Bis, Ende. Uhrzeiten wie die Marken.
+ * Start/Ende = Beginn/Ende der Aufzeichnung (wie Kopf und Kennzahl). An der Karte stehen dagegen die Uhrzeiten des
+ * ersten/letzten GPS-Punkts (Ort und Zeit gehören zusammen) — weichen sie sichtbar ab (andere Minute oder > 60 s),
+ * erklären die Zeilen „Erste/Letzte genaue GPS-Position“ den Unterschied (Tagescheck 26.11.2026, Fund 9).
  */
 export function zeitleiste(F: FahrtDaten, opts: { schrittMin?: number } = {}): ZeitZeile[] {
   if (!F.mitZeit || F.n === 0) return [];
   const schritt = opts.schrittMin ?? waehleSchritt(F.t[0], F.t[F.n - 1]);
   const gesamt = F.d[F.n - 1];
-  const start = Number.isFinite(F.startMs) ? Math.min(F.startMs, F.t[0]) : F.t[0];
-  const ende = Number.isFinite(F.endMs) ? Math.max(F.endMs, F.t[F.n - 1]) : F.t[F.n - 1];
+  const t0 = F.t[0];
+  const tN = F.t[F.n - 1];
+  const start = Number.isFinite(F.startMs) ? Math.min(F.startMs, t0) : t0;
+  const ende = Number.isFinite(F.endMs) ? Math.max(F.endMs, tN) : tN;
   const zeilen: ZeitZeile[] = [{ t: start, dM: 0, art: 'start', text: 'Start' }];
-  if (F.t[0] - start > 60000)
-    zeilen.push({ t: F.t[0], dM: 0, art: 'erste', text: 'Erste genaue GPS-Position' });
+  if (t0 - start > 60000 || (t0 > start && !gleicheMinute(t0, start)))
+    zeilen.push({ t: t0, dM: 0, art: 'erste', text: 'Erste genaue GPS-Position' });
+  // Ende der Aufzeichnung nach dem letzten Punkt — außer eine vermerkte Unterbrechung erklärt den Rest schon ganz
+  const restErklaert = F.unterbrechungen.some((u) => u.von >= tN - 1000 && u.bis >= ende - 60000);
+  if (!restErklaert && (ende - tN > 60000 || (ende > tN && !gleicheMinute(ende, tN))))
+    zeilen.push({ t: tN, dM: gesamt, art: 'letzte', text: 'Letzte genaue GPS-Position' });
   for (const T of rasterZeiten(F, schritt)) {
     const p = positionZu(F, T);
     if (!p || p.art !== 'fahrt') continue; // in einer Unterbrechung: steht in deren Zeile
@@ -589,7 +627,7 @@ export function zeitleiste(F: FahrtDaten, opts: { schrittMin?: number } = {}): Z
   }
   return zeilen;
 }
-const rang = (a: ZeitZeile['art']) => ['start', 'erste', 'fahrt', 'steht', 'luecke', 'ende'].indexOf(a);
+const rang = (a: ZeitZeile['art']) => ['start', 'erste', 'fahrt', 'steht', 'letzte', 'luecke', 'ende'].indexOf(a);
 
 // ---------------------------------------------------------------- Vereinfachen fürs Zeichnen
 
@@ -680,7 +718,7 @@ export function infoZuPunkt(F: FahrtDaten, i: number, mitZeit = F.mitZeit, timeZ
   const st = F.stillstaende.find((x) => i >= x.i && i <= x.j);
   if (st)
     return {
-      titel: `${fmtUhr(st.von, timeZone)}–${fmtUhr(st.bis, timeZone)} Uhr · Stillstand · ${km}`,
+      titel: `${fmtSpanne(st.von, st.bis, timeZone)} Uhr · Stillstand · ${km}`,
       zusatz: auchText(auchHier(F, F.lat[i], F.lng[i], F.t[i]).filter((t) => t < st.von - 120000 || t > st.bis + 120000), timeZone),
     };
   return { titel: `${fmtUhr(F.t[i], timeZone)} Uhr · ${km}`, zusatz: auchText(auchHier(F, F.lat[i], F.lng[i], F.t[i]), timeZone) };
@@ -698,12 +736,12 @@ export function infoZuZeit(F: FahrtDaten, ms: number, timeZone?: string): (Info 
       auchHier(F, p.lat, p.lng, ms).filter((t) => !st || t < st.von - 120000 || t > st.bis + 120000),
       timeZone,
     );
-    const still = st ? `Stillstand ${fmtUhr(st.von, timeZone)}–${fmtUhr(st.bis, timeZone)} Uhr` : '';
+    const still = st ? `Stillstand ${fmtSpanne(st.von, st.bis, timeZone)} Uhr` : '';
     return { ...ort, titel: `${uhr} · ${fmtKm(p.dM)} seit Start`, zusatz: [still, auch].filter(Boolean).join(' · ') || undefined };
   }
   if (p.art === 'luecke') {
     const u = p.luecke;
-    const span = u && Number.isFinite(u.von) && Number.isFinite(u.bis) ? `${fmtUhr(u.von, timeZone)}–${fmtUhr(u.bis, timeZone)} Uhr: ` : '';
+    const span = u && Number.isFinite(u.von) && Number.isFinite(u.bis) ? `${fmtSpanne(u.von, u.bis, timeZone)} Uhr: ` : '';
     return { ...ort, titel: `${uhr} · Unterbrechung`, zusatz: `${span}Pause oder kein GPS — nicht als gefahren gewertet` };
   }
   if (p.art === 'vorher') return { ...ort, titel: `${uhr} · noch keine genaue GPS-Position` };

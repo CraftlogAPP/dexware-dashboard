@@ -1,29 +1,37 @@
 // App-neutrale Formatierungs-Helfer (keine Domain-Imports).
 
-const dateFmt = new Intl.DateTimeFormat('de-DE', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-});
-const timeFmt = new Intl.DateTimeFormat('de-DE', {
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
-export function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  return dateFmt.format(new Date(iso));
+// Ohne timeZone: Ortszeit des Geräts (wie bisher überall im Dashboard). Nachweise (WinterDex-Fahrt, PDF) geben seit
+// 26.11.2026 die Zeitzone des Betriebs fest mit (winterdex/nachweisZeit.ts) — sonst verschöbe ein Laptop im Urlaub
+// oder ein PC auf UTC alle Uhrzeiten im Nachweis.
+const fmtCache = new Map<string, Intl.DateTimeFormat>();
+function fmtFuer(art: 'datum' | 'zeit', timeZone?: string): Intl.DateTimeFormat {
+  const k = `${art}|${timeZone ?? ''}`;
+  let f = fmtCache.get(k);
+  if (!f) {
+    const tz = timeZone ? { timeZone } : {};
+    f =
+      art === 'datum'
+        ? new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', ...tz })
+        : new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', ...tz });
+    fmtCache.set(k, f);
+  }
+  return f;
 }
 
-export function fmtDateTime(iso: string | null | undefined): string {
+export function fmtDate(iso: string | null | undefined, timeZone?: string): string {
+  if (!iso) return '—';
+  return fmtFuer('datum', timeZone).format(new Date(iso));
+}
+
+export function fmtDateTime(iso: string | null | undefined, timeZone?: string): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  return `${dateFmt.format(d)}, ${timeFmt.format(d)} Uhr`;
+  return `${fmtFuer('datum', timeZone).format(d)}, ${fmtFuer('zeit', timeZone).format(d)} Uhr`;
 }
 
-export function fmtTime(iso: string | null | undefined): string {
+export function fmtTime(iso: string | null | undefined, timeZone?: string): string {
   if (!iso) return '—';
-  return `${timeFmt.format(new Date(iso))} Uhr`;
+  return `${fmtFuer('zeit', timeZone).format(new Date(iso))} Uhr`;
 }
 
 const num = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });

@@ -19,8 +19,9 @@ import { FahrtAnsicht } from '../FahrtAnsicht';
 import { buildRunHtmlMitKarte } from '../routeReport';
 import { fetchOrgPro, withWatermark } from '../pro';
 import { cancelRun, cleanGaps, fetchRun, fmtDistance, fmtDuration, fmtTimeSpan, type Run } from '../routes';
-import { fetchStrassen, STRASSEN_PDF_HINWEIS, strassenOffen, type StrassenStand } from '../strassen';
+import { fetchStrassen, STRASSEN_PDF_HINWEIS, strassenFrisch, strassenOffen, type StrassenStand } from '../strassen';
 import { useStrassenNachladen } from '../strassenNachladen';
+import { nachweisZone } from '../nachweisZeit';
 
 export function RunDetail() {
   const { id } = useParams<{ id: string }>();
@@ -42,6 +43,7 @@ export function RunDetail() {
           strassen={strassen}
           org={org?.org ?? null}
           pro={proState.data ?? true}
+          ladeStrassen={() => fetchStrassen(client, id!)}
           canCancel={!run.canceled && org?.role === 'owner'}
           onCancel={async (reason) => {
             await cancelRun(client, id!, reason);
@@ -59,6 +61,7 @@ export function RunView({
   strassen = null,
   org,
   pro,
+  ladeStrassen,
   canCancel,
   onCancel,
 }: {
@@ -67,19 +70,38 @@ export function RunView({
   strassen?: StrassenStand | null;
   org: Org | null;
   pro: boolean;
+  /** Straßenverlauf frisch vom Server (PDF-Knopf) — ohne: nur der übergebene Stand */
+  ladeStrassen?: () => Promise<StrassenStand | null>;
   canCancel: boolean;
   onCancel: (reason: string) => Promise<void>;
 }) {
   const [canceling, setCanceling] = useState(false);
   const [printErr, setPrintErr] = useState<string | null>(null);
   const [druckt, setDruckt] = useState(false);
+  // beim PDF frisch geladener Straßenverlauf (fertig/leer/aufgegeben) — gilt dann auch für die Anzeige
+  const [frisch, setFrisch] = useState<{ id: string; stand: StrassenStand } | null>(null);
+  const strAnzeige = frisch?.id === run.id && (frisch.stand.status !== 'in_arbeit' || !strassen) ? frisch.stand : strassen;
+  // Uhrzeiten IMMER in der Zone des Betriebs (Land), nie in der des Geräts (Tagescheck 26.11.2026, Fund 31)
+  const tz = nachweisZone(org?.land);
 
-  // Fenster sofort im Klick öffnen („Bericht wird erstellt …“), dann Kartenbild (≤ 8 s, sonst Skizze) + Bericht
+  // Fenster sofort im Klick öffnen („Bericht wird erstellt …“), dann Straßenverlauf frisch (≤ 3 s, Tagescheck
+  // 26.11.2026 Fund 10: sonst blieb „wird ermittelt“ im PDF, obwohl der Server längst fertig war), Kartenbild (≤ 8 s,
+  // sonst Skizze) + Bericht
   function print() {
     setPrintErr(null);
     if (!org) return setPrintErr('Betrieb nicht geladen.');
     setDruckt(true);
-    openReportWindowAfter(async () => withWatermark(await buildRunHtmlMitKarte(org, run, strassen), pro))
+    openReportWindowAfter(async () => {
+      let str = strAnzeige ?? null;
+      if (ladeStrassen && !run.canceled) {
+        const neu = await strassenFrisch(ladeStrassen, 3000);
+        if (neu) {
+          str = neu;
+          setFrisch({ id: run.id, stand: neu });
+        }
+      }
+      return withWatermark(await buildRunHtmlMitKarte(org, run, str, { timeZone: tz }), pro);
+    })
       .then((ok) => {
         if (!ok) setPrintErr('Das Druckfenster wurde blockiert — bitte Pop-ups für dieses Dashboard erlauben.');
       })
@@ -100,17 +122,17 @@ export function RunView({
       </p>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1 style={{ marginBottom: 0 }}>
-          {name} · {fmtDateTime(run.started_at)}
+          {name} · {fmtDateTime(run.started_at, tz)}
         </h1>
         <ActionBadge action={run.action} canceled={run.canceled} />
       </div>
       <p className="muted">
-        {fmtTimeSpan(run.started_at, run.ended_at)} · dokumentiert von {run.performer_name ?? '—'}
+        {fmtTimeSpan(run.started_at, run.ended_at, tz)} · dokumentiert von {run.performer_name ?? '—'}
       </p>
 
       {run.canceled && (
         <div className="error-box">
-          Storniert am {fmtDateTime(run.canceled_at)} — Begründung: {run.cancel_reason ?? '—'}
+          Storniert am {fmtDateTime(run.canceled_at, tz)} — Begründung: {run.cancel_reason ?? '—'}
         </div>
       )}
 
@@ -123,7 +145,7 @@ export function RunView({
         <div className="kpi">
           <div className="kpi-label">Dauer</div>
           <div className="kpi-value">{fmtDuration(Date.parse(run.ended_at) - Date.parse(run.started_at))}</div>
-          <div className="kpi-sub">{fmtTimeSpan(run.started_at, run.ended_at)}</div>
+          <div className="kpi-sub">{fmtTimeSpan(run.started_at, run.ended_at, tz)}</div>
         </div>
         {hasPlan && (
           <div className="kpi">
@@ -152,9 +174,11 @@ export function RunView({
         gaps={gaps}
         startedAt={run.started_at}
         endedAt={run.ended_at}
-        label={`Karte der Fahrt ${name} vom ${fmtDateTime(run.started_at)}`}
-        strassen={strassen}
+        label={`Karte der Fahrt ${name} vom ${fmtDateTime(run.started_at, tz)}`}
+        strassen={strAnzeige}
         canceled={run.canceled}
+        timeZone={tz}
+        gefahrenM={run.track_length_m}
       />
 
       {frei && (
@@ -181,7 +205,7 @@ export function RunView({
               Unterbrechungen der Aufzeichnung (Pause oder kein GPS):{' '}
               {gaps
                 .filter((g) => Array.isArray(g))
-                .map(([a, b]) => fmtTimeSpan(a, b))
+                .map(([a, b]) => fmtTimeSpan(a, b, tz))
                 .join(', ')}{' '}
               — nicht als gefahren gewertet
             </div>
@@ -206,7 +230,7 @@ export function RunView({
           {run.entry_hash ? (
             <>
               <div className="muted small">
-                Server-Eingang {fmtDateTime(run.received_at ?? run.created_at)} · Prüfcode{' '}
+                Server-Eingang {fmtDateTime(run.received_at ?? run.created_at, tz)} · Prüfcode{' '}
                 <span className="mono">{run.entry_hash.slice(0, 12)}</span>
               </div>
               <VerifyProof id={run.id} hash={run.entry_hash} rpc="verify_route_run" />
@@ -251,7 +275,7 @@ export function RunView({
           <FileDown className="i" aria-hidden /> {druckt ? 'Bericht mit Karte wird erstellt …' : 'Nachweis als PDF'}
         </button>
         {/* Straßenverlauf noch nicht fertig: kurzer Hinweis — das PDF entsteht trotzdem (mit Vermerk an der Stelle der Tabelle) */}
-        {strassenOffen(strassen, run) && (run.track?.length ?? 0) >= 2 && (
+        {strassenOffen(strAnzeige, run) && (run.track?.length ?? 0) >= 2 && (
           <span className="small muted" role="status">
             {STRASSEN_PDF_HINWEIS}
           </span>
@@ -266,7 +290,7 @@ export function RunView({
 
       {canceling && (
         <FormDialog
-          title={`Fahrt stornieren — ${fmtDateTime(run.started_at)}`}
+          title={`Fahrt stornieren — ${fmtDateTime(run.started_at, tz)}`}
           submitLabel="Stornieren"
           onClose={() => setCanceling(false)}
           onSave={(v: FormValues) => onCancel(s(v.reason))}

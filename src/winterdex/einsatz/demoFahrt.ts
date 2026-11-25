@@ -184,7 +184,80 @@ export const DEMO_FAHRTEN: { id: string; titel: string }[] = [
   { id: 'demo-kaputt', titel: 'Kaputte Daten (leere/ungültige Teilstücke, falsche Lücken)' },
   { id: 'demo-storno', titel: 'Stornierte Fahrt' },
   { id: 'demo-sommerzeit', titel: 'Fahrt über die Zeitumstellung (25.10.2026)' },
+  {
+    id: 'demo-bauhof',
+    titel: 'Rundfahrt ab Bauhof zurück zum Bauhof (Ausschnitte A–C, erster GPS-Punkt spät, Aufzeichnung endet nach dem letzten Punkt, kurze Lücke, Straßen Verfahren 3)',
+  },
 ];
+
+/** Gefahrene Meter der Spur zwischen zwei Sekunden-Marken (wie der Server: Summe der Punktabstände je Teilstück) */
+function meterImFenster(track: Track, von: number, bis: number): number {
+  let m = 0;
+  for (const s of track)
+    for (let i = 1; i < s.length; i++) {
+      const a = s[i - 1];
+      const b = s[i];
+      const t = b[2] ?? 0;
+      if (t <= von || t > bis) continue;
+      m += Math.hypot((b[1] - a[1]) * KX, (b[0] - a[0]) * 111195);
+    }
+  return Math.round(m);
+}
+
+/**
+ * Nachgestellt (erfundene Daten) wie eine typische Gemeinde-Rundfahrt: ab Bauhof, viel Hin und Her um den Bauhof (dort liegen die Ausschnitte),
+ * eine weite Runde, zurück zum Bauhof (Ende 25 m neben dem Start). Erster GPS-Punkt 56 s nach dem Start, Aufzeichnung
+ * endet 277 s nach dem letzten Punkt, eine 46-s-Lücke innerhalb einer Minute.
+ */
+function bauhofFahrt(): { run: Run; abschnitte: DemoAbschnitt[] } {
+  const t0 = '2026-11-25T08:33:00.000Z'; // erster GPS-Punkt 09:33:00 Wien
+  const runde = (w: number, h: number, kmh: number): Schritt[] => [
+    { zu: [w, 0], kmh },
+    { zu: [w, h], kmh },
+    { zu: [0, h], kmh },
+    { zu: [0, 0], kmh },
+  ];
+  const schritte: Schritt[] = [
+    ...runde(600, 400, 10),
+    ...runde(600, 400, 10),
+    { zu: [2600, 0], kmh: 30 },
+    { zu: [2600, 1600], kmh: 30 },
+    { zu: [1200, 1600], kmh: 25 },
+    { steh: 6 * 60 },
+    { zu: [1200, 400], kmh: 25 },
+    { zu: [0, 400], kmh: 20 },
+    { zu: [0, 0], kmh: 12 },
+    ...runde(400, 250, 10),
+    { zu: [25, 5], kmh: 6 },
+  ];
+  const f = simuliere(t0, [0, 0], schritte, 17);
+  const t0Ms = Date.parse(t0);
+  // 46-s-Lücke in EINER Minute (ab hh:mm:00,8): Punkte darin fehlen, als Unterbrechung vermerkt
+  const gapVon = Math.ceil((t0Ms + 40 * 60000) / 60000) * 60000 + 800;
+  const gapBis = gapVon + 46000;
+  const inLuecke = (sek: number) => t0Ms + sek * 1000 > gapVon && t0Ms + sek * 1000 < gapBis;
+  const track: Track = f.track.map((s) => s.filter((p) => !inLuecke(p[2] ?? 0)));
+  // Start der Aufzeichnung 56 s vor dem ersten Punkt: alle Sekunden-Angaben verschieben
+  const VOR = 56;
+  const startedAt = new Date(t0Ms - VOR * 1000).toISOString();
+  const verschoben: Track = track.map((s) => s.map((p) => [p[0], p[1], (p[2] ?? 0) + VOR, p[3] ?? 6]));
+  const letzte = Math.max(...track.flat().map((p) => p[2] ?? 0));
+  const endedAt = new Date(t0Ms + (letzte + 277) * 1000).toISOString();
+  const abschnitte = f.abschnitte.map((a) => ({ ...a, sek_von: a.sek_von + VOR, sek_bis: a.sek_bis + VOR }));
+  // Meter je Abschnitt wie Verfahren 3 (Summe der Punktabstände im Zeitfenster)
+  for (const a of abschnitte) a.m = meterImFenster(verschoben, a.sek_von, a.sek_bis);
+  const run: Run = {
+    ...BASIS,
+    id: 'demo-bauhof',
+    route_name: 'Ortsgebiet Runde',
+    started_at: startedAt,
+    ended_at: endedAt,
+    track: verschoben,
+    gaps: [[new Date(gapVon).toISOString(), new Date(gapBis).toISOString()]],
+    track_length_m: laenge(verschoben),
+  };
+  return { run, abschnitte };
+}
 
 /** Straßenabschnitte je Beispiel-Fahrt (von demoRun befüllt) */
 const ABSCHNITTE = new Map<string, DemoAbschnitt[]>();
@@ -268,6 +341,11 @@ export function demoRun(id: string): Run | null {
       track_length_m: laenge(f.track),
     };
   }
+  if (id === 'demo-bauhof') {
+    const { run, abschnitte } = bauhofFahrt();
+    ABSCHNITTE.set(id, abschnitte);
+    return run;
+  }
   if (id === 'demo-sommerzeit') {
     // 25.10.2026: 03:00 Sommerzeit → 02:00 Normalzeit (Wien). Start 00:20 UTC = 02:20 MESZ, Ende ~01:30 UTC = 02:30 MEZ
     const start = '2026-10-25T00:20:00.000Z';
@@ -280,10 +358,19 @@ export function demoRun(id: string): Run | null {
 
 /**
  * Straßenverlauf der Beispiel-Fahrten (route_run_strassen, wie ihn der Worker ablegt): fertig mit Abschnitten,
- * „wird ermittelt“ (Vorlage), ohne GPS (leer), kaputte Einträge (werden gesäubert).
+ * „wird ermittelt“ (Vorlage), ohne GPS (leer), kaputte Einträge (werden gesäubert). „Rundfahrt Bauhof“ wie Verfahren 3
+ * (quelle osm-overpass, Meter = Summe der Punktabstände). opts.meterAlt: Meter wie der alte Worker (bis Verfahren 2,
+ * 20-m-Zähler: ~20 % zu wenig) — die Anzeige rechnet sie dann aus der Spur nach.
  */
-export function demoStrassen(id: string): StrassenStand | null {
+export function demoStrassen(id: string, opts: { meterAlt?: boolean } = {}): StrassenStand | null {
+  const s = demoStrassenRoh(id);
+  if (!s || !opts.meterAlt || s.status !== 'fertig') return s;
+  return { ...s, abschnitte: s.abschnitte.map((a) => ({ ...a, m: a.m == null ? a.m : Math.round(a.m * 0.8) })) };
+}
+
+function demoStrassenRoh(id: string): StrassenStand | null {
   if (!demoRun(id)) return null;
+  if (id === 'demo-bauhof') return { status: 'fertig', abschnitte: ABSCHNITTE.get(id) ?? [], quelle: 'osm-overpass' };
   if (id === 'demo-alt') return { status: 'in_arbeit', abschnitte: [], quelle: null };
   if (id === 'demo-leer' || id === 'demo-ein-punkt') return { status: 'leer', abschnitte: [], quelle: 'osm-nominatim' };
   const ab = ABSCHNITTE.get(id) ?? [];

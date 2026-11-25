@@ -8,15 +8,18 @@ import { ROUTE_COLORS, type LatLng, type Track } from './routes';
 import {
   fahrtDaten,
   fmtKm,
+  fmtSpanne,
   fmtUhr,
   infoZuPunkt,
   infoZuZeit,
   spurStuecke,
+  startEndeLabels,
   vereinfacheLinie,
   waehleSchritt,
   zeitleiste,
   zeitMarken,
 } from './fahrtZeit';
+import { STANDARD_TZ } from './nachweisZeit';
 import type { KartenCursor } from './FahrtKarte';
 import {
   fmtStrecke,
@@ -25,6 +28,8 @@ import {
   STRASSEN_QUELLE,
   STRASSEN_QUELLE_URL,
   strassenAnzeige,
+  strassenMeterHinweis,
+  strassenMethode,
   strasseZu,
   strassenText,
   type StrassenStand,
@@ -46,6 +51,13 @@ export interface FahrtAnsichtProps {
   strassen?: StrassenStand | null;
   /** stornierte Fahrten werden nie ermittelt → kein „wird ermittelt“ */
   canceled?: boolean;
+  /**
+   * Zeitzone des Betriebs (nachweisZeit.ts nachweisZone(org.land)) — alle Uhrzeiten der Ansicht darin, nie in der des
+   * Geräts. Ohne Angabe: Europe/Vienna (gleiche Regeln wie Berlin/Zürich).
+   */
+  timeZone?: string;
+  /** gefahrene Meter laut Server (route_run.track_length_m) — Summe des Straßenverlaufs wird damit verglichen */
+  gefahrenM?: number | null;
 }
 
 /** Fängt jeden Fehler der Karte/Zeitleiste ab und zeigt stattdessen die Skizze. */
@@ -86,6 +98,7 @@ function useGleich<T>(v: T): T {
 
 function Ansicht(props: FahrtAnsichtProps) {
   const { startedAt, endedAt, label, zeit = true } = props;
+  const tz = props.timeZone ?? STANDARD_TZ;
   const plan = useGleich(props.plan);
   const track = useGleich(props.track);
   const missed = useGleich(props.missed);
@@ -96,22 +109,22 @@ function Ansicht(props: FahrtAnsichtProps) {
     const schritt = zeitAn ? waehleSchritt(F.t[0], F.t[F.n - 1]) : 0;
     return {
       schritt,
-      marken: zeitAn ? zeitMarken(F, { schrittMin: schritt }) : [],
+      marken: zeitAn ? zeitMarken(F, { schrittMin: schritt, timeZone: tz }) : [],
       zeilen: zeitAn ? zeitleiste(F, { schrittMin: schritt }) : [],
       plan: vereinfacheLinie(plan),
       stuecke: spurStuecke(F),
       missed: (Array.isArray(missed) ? missed : []).map((s) => vereinfacheLinie(s)).filter((s) => s.length >= 2),
     };
-  }, [F, zeitAn, plan, missed]);
+  }, [F, zeitAn, plan, missed, tz]);
 
   const str = useMemo(() => {
     try {
-      return startedAt ? strassenAnzeige(props.strassen, { started_at: startedAt, canceled: props.canceled }, zeitAn) : null;
+      return startedAt ? strassenAnzeige(props.strassen, { started_at: startedAt, canceled: props.canceled }, zeitAn, { F, gefahrenM: props.gefahrenM }) : null;
     } catch (e) {
       console.error('Straßenverlauf ausgelassen:', e);
       return null;
     }
-  }, [props.strassen, props.canceled, startedAt, zeitAn]);
+  }, [props.strassen, props.canceled, props.gefahrenM, startedAt, zeitAn, F]);
   const strTab = str?.art === 'tabelle' ? str : null;
 
   const [ansicht, setAnsicht] = useState<'karte' | 'skizze'>(() =>
@@ -129,10 +142,10 @@ function Ansicht(props: FahrtAnsichtProps) {
   const hi = zeitAn ? Math.max(Number.isFinite(F.endMs) ? F.endMs : F.t[F.n - 1], F.t[F.n - 1]) : 0;
 
   const info = useMemo(() => {
-    if (zeitAn && t != null) return infoZuZeit(F, t);
-    if (punkt != null && punkt < F.n) return { lat: F.lat[punkt], lng: F.lng[punkt], ...infoZuPunkt(F, punkt, false) };
+    if (zeitAn && t != null) return infoZuZeit(F, t, tz);
+    if (punkt != null && punkt < F.n) return { lat: F.lat[punkt], lng: F.lng[punkt], ...infoZuPunkt(F, punkt, false, tz) };
     return null;
-  }, [F, zeitAn, t, punkt]);
+  }, [F, zeitAn, t, punkt, tz]);
   const cursor = useMemo<KartenCursor | null>(
     () => (info ? { lat: info.lat, lng: info.lng, titel: info.titel, zusatz: info.zusatz } : null),
     [info],
@@ -153,8 +166,8 @@ function Ansicht(props: FahrtAnsichtProps) {
   const hatGeo = F.n > 0 || d.plan.length > 0;
   if (!hatGeo) return <RouteSketch plan={plan} track={track} missed={missed} label={label} />;
 
-  const startLabel = zeitAn ? `Start ${fmtUhr(lo)}` : F.n > 0 ? 'Start' : null;
-  const endeLabel = zeitAn ? `Ende ${fmtUhr(hi)}` : F.n > 1 ? 'Ende' : null;
+  // an den Punkten die Uhrzeit DES PUNKTS — wie im PDF und im Fahrtenbuch (Kopf/Zeitleiste: Beginn/Ende der Aufzeichnung)
+  const { startLabel, endeLabel } = startEndeLabels(F, tz, zeit);
   const clamp = (v: number) => Math.min(hi, Math.max(lo, v));
 
   /** Pfeiltasten: ±1 Min., mit Umschalt bzw. Bild↑/↓: ±10 Min. (Pos1/Ende macht der Browser) */
@@ -199,6 +212,7 @@ function Ansicht(props: FahrtAnsichtProps) {
               zeitAn={zeitAn}
               startLabel={startLabel}
               endeLabel={endeLabel}
+              timeZone={tz}
               cursor={cursor}
               onPick={onPick}
               onKachelFehler={onKachelFehler}
@@ -254,11 +268,11 @@ function Ansicht(props: FahrtAnsichtProps) {
             value={t == null ? 0 : Math.round((t - lo) / 1000)}
             onChange={(e) => setT(clamp(lo + Number(e.target.value) * 1000))}
             onKeyDown={onKey}
-            aria-valuetext={info ? `${info.titel}${info.zusatz ? `. ${info.zusatz}` : ''}` : `${fmtUhr(lo)} Uhr, Start`}
+            aria-valuetext={info ? `${info.titel}${info.zusatz ? `. ${info.zusatz}` : ''}` : `${fmtUhr(lo, tz)} Uhr, Start`}
           />
           <div className="fk-skala small muted" aria-hidden="true">
-            <span>{fmtUhr(lo)}</span>
-            <span>{fmtUhr(hi)}</span>
+            <span>{fmtUhr(lo, tz)}</span>
+            <span>{fmtUhr(hi, tz)}</span>
           </div>
           <div className="fk-info">
             {info ? (
@@ -298,8 +312,8 @@ function Ansicht(props: FahrtAnsichtProps) {
               </thead>
               <tbody>
                 {strTab.zeilen.map((z, i) => {
-                  const von = fmtUhr(z.von);
-                  const bis = fmtUhr(z.bis);
+                  const von = fmtUhr(z.von, tz);
+                  const bis = fmtUhr(z.bis, tz);
                   const zeitText = von === bis ? von : `${von}–${bis}`;
                   return (
                     <tr key={i}>
@@ -321,6 +335,16 @@ function Ansicht(props: FahrtAnsichtProps) {
                   );
                 })}
               </tbody>
+              {strTab.summeM != null && (
+                <tfoot>
+                  <tr className="fk-summe">
+                    <td colSpan={3}>
+                      zusammen{strTab.gesamtM != null && <span className="muted"> (gefahren laut GPS: {fmtStrecke(strTab.gesamtM)})</span>}
+                    </td>
+                    <td className="fk-r">{fmtStrecke(strTab.summeM)}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
           <p className="small muted fk-strassen-quelle">
@@ -328,7 +352,7 @@ function Ansicht(props: FahrtAnsichtProps) {
             <a href={STRASSEN_QUELLE_URL} target="_blank" rel="noreferrer">
               {STRASSEN_QUELLE}
             </a>{' '}
-            — nach der Fahrt aus den GPS-Punkten ermittelt, nicht Teil des Prüfcodes.
+            — {strassenMethode(strTab.quelle)}, nicht Teil des Prüfcodes.{strassenMeterHinweis(strTab) ? ` ${strassenMeterHinweis(strTab)}` : ''}
           </p>
         </section>
       )}
@@ -351,7 +375,7 @@ function Ansicht(props: FahrtAnsichtProps) {
               </thead>
               <tbody>
                 {d.zeilen.map((z, i) => {
-                  const zeitText = `${fmtUhr(z.t)}${z.bis ? `–${fmtUhr(z.bis)}` : ''}`;
+                  const zeitText = z.bis ? fmtSpanne(z.t, z.bis, tz) : fmtUhr(z.t, tz);
                   const s = strTab && z.art !== 'luecke' ? strasseZu(strTab.zeilen, z.t) : undefined;
                   return (
                     <tr key={i} className={`fk-z-${z.art}`}>

@@ -334,7 +334,7 @@ console.log('\n[9] Quelltext');
   check('Regler mit Tastatur (±1/±10 Min.) und aria-valuetext', /ArrowRight/.test(fa) && /PageUp/.test(fa) && /aria-valuetext=/.test(fa));
   check('keine UTC-Tage (toISOString().slice) in den neuen Dateien', ![fa, fk, lies('src/winterdex/fahrtZeit.ts')].some((s) => /toISOString\(\)\.slice/.test(s)));
   check('Kundendaten nicht im Beispiel (nur Musterstadt)', !/Eggenburg/i.test(lies('src/winterdex/einsatz/demoFahrt.ts')));
-  check('PDF: Zeitleiste und Marken eingebunden, Fehler stoppen den Bericht nie', /zeitTeile\(run, timeZone\)/.test(lies('src/winterdex/routeReport.ts')) && /catch \(e\)/.test(lies('src/winterdex/routeReport.ts')));
+  check('PDF: Zeitleiste und Marken eingebunden, Fehler stoppen den Bericht nie', /zeitTeile\(run, tz\)/.test(lies('src/winterdex/routeReport.ts')) && /catch \(e\)/.test(lies('src/winterdex/routeReport.ts')));
 }
 
 console.log(`\n${fail === 0 ? 'ALLES GRÜN' : 'FEHLER'}: ${ok} ok, ${fail} Fehler`);

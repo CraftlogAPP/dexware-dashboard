@@ -208,12 +208,22 @@ export function fmtDuration(ms: number): string {
 export function fmtPct(n: number | null | undefined): string {
   return n == null ? '—' : `${n.toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
 }
-/** „16:43–17:19 Uhr“ (fmtTime hängt selbst „Uhr“ an). */
-/** Ende an einem anderen Kalendertag (Berliner Zeit) bekommt das Datum dazu: „23:40–00:20 Uhr“ wäre sonst mehrdeutig (wie App). */
-export function fmtTimeSpan(a: string, b: string): string {
-  const day = (iso: string) => new Date(iso).toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit' });
-  const end = day(a) === day(b) ? fmtTime(b) : `${day(b)}, ${fmtTime(b)}`;
-  return `${fmtTime(a).replace(/ Uhr$/, '')}–${end}`;
+/**
+ * „16:43–17:19 Uhr“ (fmtTime hängt selbst „Uhr“ an). Ende an einem anderen Kalendertag bekommt das Datum dazu:
+ * „23:40–00:20 Uhr“ wäre sonst mehrdeutig (wie App). Beginn und Ende in derselben Minute: „05:10 Uhr (46 s)“ statt
+ * „05:10–05:10 Uhr“ (Tagescheck 26.11.2026, Fund 30).
+ * timeZone: Nachweise geben die Zone des Betriebs mit (nachweisZeit.ts) — Tag und Uhrzeit dann in DERSELBEN Zone
+ * (vorher: Tag fest Berlin, Uhrzeit Gerät → auf einem UTC-PC „22:25–23.11., 23:30 Uhr“). Ohne: Ortszeit des Geräts.
+ */
+export function fmtTimeSpan(a: string, b: string, timeZone?: string): string {
+  const day = (iso: string) => new Date(iso).toLocaleDateString('de-DE', { ...(timeZone ? { timeZone } : {}), day: '2-digit', month: '2-digit' });
+  const gleicherTag = day(a) === day(b);
+  if (gleicherTag && fmtTime(a, timeZone) === fmtTime(b, timeZone)) {
+    const sek = Math.round((Date.parse(b) - Date.parse(a)) / 1000);
+    return sek > 0 ? `${fmtTime(a, timeZone)} (${sek} s)` : fmtTime(a, timeZone);
+  }
+  const end = gleicherTag ? fmtTime(b, timeZone) : `${day(b)}, ${fmtTime(b, timeZone)}`;
+  return `${fmtTime(a, timeZone).replace(/ Uhr$/, '')}–${end}`;
 }
 /** Lokales Datum (yyyy-mm-dd) — „heute gefahren" nach Ortszeit, nicht UTC. */
 export function localDay(iso: string | Date): string {

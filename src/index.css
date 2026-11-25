@@ -1841,6 +1841,14 @@ a.due-row:hover {
   text-align: right;
   white-space: nowrap;
 }
+/* Summenzeile „zusammen … (gefahren laut GPS: …)“ — Spalte „Strecke“ ergibt die gefahrenen Meter (26.11.2026) */
+.fk-strassen tr.fk-summe td {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+}
+.fk-strassen tr.fk-summe td .muted {
+  font-weight: 400;
+}
 .fk-strassen-quelle {
   margin: 4px 0 8px;
 }

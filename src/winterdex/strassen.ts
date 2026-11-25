@@ -10,6 +10,7 @@
 // Nie ein Fehler in der Anzeige: Tabelle fehlt (SQL nicht eingespielt), Netz weg, kaputte Zeilen → Abschnitt fehlt
 // bzw. „wird ermittelt“. Reine Rechnung bis auf fetchStrassen — getestet in tests/strassen-verlauf.test.mjs.
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { positionZu, type FahrtDaten } from './fahrtZeit';
 
 export interface StrassenAbschnitt {
   sek_von: number;
@@ -38,11 +39,77 @@ export interface StrassenZeile {
   m: number | null;
 }
 
-export type StrassenAnzeige = { art: 'ermittelt' } | { art: 'tabelle'; zeilen: StrassenZeile[]; mehrereOrte: boolean };
+export interface StrassenTabelle {
+  art: 'tabelle';
+  zeilen: StrassenZeile[];
+  mehrereOrte: boolean;
+  /** Anbieter-Code aus route_run_strassen.quelle ('osm-nominatim' Verfahren 1/2, 'osm-overpass' ab Verfahren 3) */
+  quelle: string | null;
+  /** Summe der Spalte „Strecke“ (null = Meter fehlen) und gefahrene Meter der Fahrt (Kennzahl „gefahren (GPS)“) */
+  summeM: number | null;
+  gesamtM: number | null;
+  /** Meter je Zeile aus der GPS-Spur im Zeitfenster der Zeile nachgerechnet (Server-Meter wichen > 2 % ab) */
+  mAusSpur: boolean;
+  /** Summe weicht auch danach noch > 2 % von den gefahrenen Metern ab (z. B. Wegstücke ohne Straßenzuordnung) */
+  abweichung: boolean;
+}
+export type StrassenAnzeige = { art: 'ermittelt' } | StrassenTabelle;
 
-/** Quellenangabe (ODbL) — überall, wo Straßennamen erscheinen. */
+/** Quellenangabe (ODbL) — überall, wo Straßennamen erscheinen; gleich für jedes OSM-Verfahren (Nominatim, Overpass). */
 export const STRASSEN_QUELLE = '© OpenStreetMap-Mitwirkende';
 export const STRASSEN_QUELLE_URL = 'https://www.openstreetmap.org/copyright';
+
+/**
+ * Wie die Straßennamen ermittelt wurden — für die Fußnote im Bericht, je Verfahren (route_run_strassen.quelle):
+ * Overpass (ab Verfahren 3): jeder GPS-Punkt der nächsten Straße aus den OSM-Straßendaten zugeordnet;
+ * Nominatim (Verfahren 1/2): Stichproben entlang der Spur. Unbekannt → neutral.
+ */
+export function strassenMethode(quelle: string | null | undefined): string {
+  if (quelle && /overpass/i.test(quelle)) return 'nach der Fahrt jedem GPS-Punkt die nächstgelegene Straße aus den OpenStreetMap-Straßendaten zugeordnet';
+  if (quelle && /nominatim/i.test(quelle)) return 'nach der Fahrt an Stichproben entlang der GPS-Spur ermittelt (sehr kurze Straßenstücke können fehlen)';
+  return 'nach der Fahrt aus den GPS-Punkten ermittelt';
+}
+
+/** Weichen zwei Meter-Angaben sichtbar voneinander ab? (> 2 % und mehr als 10 m — Rundung der Anzeige zählt nicht) */
+export function meterWeichenAb(a: number, b: number): boolean {
+  return Math.abs(a - b) > Math.max(0.02 * Math.abs(b), 10);
+}
+
+/** Gefahrene Meter der Spur zwischen zwei Uhrzeiten (ms) — gleiche Rechnung wie „km seit Start“ in der Zeitleiste. */
+export function spurMeter(F: FahrtDaten, vonMs: number, bisMs: number): number | null {
+  const a = positionZu(F, vonMs);
+  const b = positionZu(F, bisMs);
+  if (!a || !b) return null;
+  return Math.max(0, b.dM - a.dM);
+}
+
+/** Zusatz zur Fußnote: woher die Meter kommen bzw. warum die Summe nicht die gefahrenen Meter ergibt. */
+export function strassenMeterHinweis(t: Pick<StrassenTabelle, 'mAusSpur' | 'abweichung' | 'summeM' | 'gesamtM'>): string {
+  const teile: string[] = [];
+  if (t.mAusSpur) teile.push('Strecke je Zeile aus der GPS-Spur im Zeitraum der Zeile berechnet (wie „km seit Start“).');
+  if (t.abweichung && t.summeM != null && t.gesamtM != null)
+    teile.push(
+      `Die Zeilen ergeben zusammen ${fmtStrecke(t.summeM)} von ${fmtStrecke(t.gesamtM)} gefahrenen — der Rest liegt auf Wegstücken ohne Straßenzuordnung (z. B. Hof, Parkplatz).`,
+    );
+  return teile.join(' ');
+}
+
+/** Straßenverlauf frisch laden mit Frist (PDF-Knopf: nicht ewig warten); Fehler/Frist → null (dann gilt der bisherige Stand). */
+export function strassenFrisch(laden: () => Promise<StrassenStand | null>, ms = 3000): Promise<StrassenStand | null> {
+  return new Promise((ok) => {
+    const t = setTimeout(() => ok(null), ms);
+    laden().then(
+      (s) => {
+        clearTimeout(t);
+        ok(s && s.status !== 'fehlt' ? s : null);
+      },
+      () => {
+        clearTimeout(t);
+        ok(null);
+      },
+    );
+  });
+}
 // Seit 25.11.2026 ermittelt der Worker JEDE Minute (vorher alle 10 min) → eine neue Fahrt hat ihre Straßen nach 1–3 min.
 // Die Ansicht fragt solange selbst nach (useStrassenNachladen, alle 20 s, höchstens 10 min) — kein Neuladen nötig.
 // Dieselben Texte bekommt die App (WinterDex-App-Runde).
@@ -124,17 +191,24 @@ export async function fetchStrassen(sb: SupabaseClient, runId: string): Promise<
 /**
  * Was zeigen? null = nichts (Tabelle fehlt, Fahrt ohne Punkt-Zeiten, ohne GPS, storniert und nie ermittelt, Anbieter
  * aufgegeben), „ermittelt“ = Hinweis, „tabelle“ = Zeilen mit Uhrzeiten (started_at + sek).
+ *
+ * Meter je Zeile (Tagescheck 26.11.2026, Fund 11): Der Worker bis Verfahren 2 zählte erst ab 20 m Abstand weiter —
+ * die Spalte „Strecke“ ergab zusammen bis 27 % weniger als „gefahren (GPS)“ im selben Bericht. Mit der Spur (opts.F)
+ * wird deshalb geprüft: Weicht die Summe der Server-Meter > 2 % von den gefahrenen Metern ab, rechnet die Anzeige die
+ * Meter je Zeile aus der GPS-Spur im Zeitfenster nach (gleiche Rechnung wie „km seit Start“) — und sagt das in der
+ * Fußnote. Ab Verfahren 3 (osm-overpass) stimmen die Server-Meter, dann bleiben sie unverändert.
  */
 export function strassenAnzeige(
   stand: StrassenStand | null | undefined,
   run: { started_at: string; canceled?: boolean | null },
   mitZeit: boolean,
+  opts: { F?: FahrtDaten | null; gefahrenM?: number | null } = {},
 ): StrassenAnzeige | null {
   if (!stand || !mitZeit) return null;
   const startMs = Date.parse(run.started_at);
   if (!Number.isFinite(startMs)) return null;
   if (stand.status === 'fertig') {
-    const zeilen = stand.abschnitte.map((a) => ({
+    const zeilen: StrassenZeile[] = stand.abschnitte.map((a) => ({
       von: startMs + a.sek_von * 1000,
       bis: startMs + a.sek_bis * 1000,
       strasse: a.strasse,
@@ -146,7 +220,35 @@ export function strassenAnzeige(
     }));
     if (!zeilen.length) return null;
     const orte = new Set(zeilen.map((z) => z.ort).filter(Boolean));
-    return { art: 'tabelle', zeilen, mehrereOrte: orte.size > 1 };
+    const F = opts.F && opts.F.mitZeit && opts.F.n >= 2 ? opts.F : null;
+    const spurGesamt = F ? F.d[F.n - 1] : null;
+    const gesamtM = opts.gefahrenM != null && Number.isFinite(opts.gefahrenM) && opts.gefahrenM > 0 ? opts.gefahrenM : spurGesamt;
+    const summe = (ms: readonly (number | null)[]) => (ms.every((m) => m != null && Number.isFinite(m)) ? (ms as number[]).reduce((a, b) => a + b, 0) : null);
+    const serverSumme = summe(zeilen.map((z) => z.m));
+    // Verfahren 1/2 (Nominatim) zählte mit 20-m-Schwelle: einzelne Zeilen bis −32 %, auch wenn die Summe knapp passt
+    // (echte Fahrt 25.11.: Σ −2,0 %) → dann immer aus der Spur. Ab Verfahren 3 (Overpass) nur bei > 2 % Abweichung.
+    const altesVerfahren = !stand.quelle || /nominatim/i.test(stand.quelle);
+    let mAusSpur = false;
+    if (F && gesamtM != null && (altesVerfahren || serverSumme == null || meterWeichenAb(serverSumme, gesamtM))) {
+      const neu = zeilen.map((z) => spurMeter(F, z.von, z.bis));
+      const neuSumme = summe(neu);
+      // Verfahren 3: nur übernehmen, wenn die Spur-Rechnung wirklich näher an den gefahrenen Metern liegt
+      if (neuSumme != null && (altesVerfahren || serverSumme == null || Math.abs(neuSumme - gesamtM) < Math.abs(serverSumme - gesamtM))) {
+        zeilen.forEach((z, i) => (z.m = neu[i]));
+        mAusSpur = true;
+      }
+    }
+    const summeM = summe(zeilen.map((z) => z.m));
+    return {
+      art: 'tabelle',
+      zeilen,
+      mehrereOrte: orte.size > 1,
+      quelle: stand.quelle,
+      summeM,
+      gesamtM,
+      mAusSpur,
+      abweichung: summeM != null && gesamtM != null && meterWeichenAb(summeM, gesamtM),
+    };
   }
   if (stand.status === 'in_arbeit') return run.canceled ? null : { art: 'ermittelt' };
   return null;

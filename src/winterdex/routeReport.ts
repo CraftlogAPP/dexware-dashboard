@@ -7,8 +7,33 @@ import { isSafeImgSrc } from '../lib/imgSrc';
 import { gritLabel, WEATHER_SOURCE_HTML, weatherLabel } from './labels';
 import { ACTION_LABELS, LEGAL_BASIS } from './types';
 import { buildSketch, cleanGaps, fmtDistance, fmtDuration, fmtPct, fmtTimeSpan, pathLengthM, ROUTE_COLORS, sketchSvg, type Route, type Run, type RunMeta } from './routes';
-import { fahrtDaten, fmtKm, fmtUhr, waehleSchritt, zeitleiste, zeitMarken, type FahrtDaten, type ZeitMarke, type ZeitZeile } from './fahrtZeit';
-import { fmtStrecke, ortText, STRASSEN_QUELLE, strassenAnzeige, strassenPdfNochOffen, strasseZu, strassenText, type StrassenAnzeige, type StrassenStand } from './strassen';
+import {
+  fahrtDaten,
+  fmtKm,
+  fmtSpanne,
+  fmtUhr,
+  startEndeLabels,
+  waehleSchritt,
+  zeitleiste,
+  zeitMarken,
+  type FahrtDaten,
+  type ZeitMarke,
+  type ZeitZeile,
+} from './fahrtZeit';
+import {
+  fmtStrecke,
+  ortText,
+  STRASSEN_QUELLE,
+  strassenAnzeige,
+  strassenMeterHinweis,
+  strassenMethode,
+  strassenPdfNochOffen,
+  strasseZu,
+  strassenText,
+  type StrassenAnzeige,
+  type StrassenStand,
+} from './strassen';
+import { nachweisZone, zonenHinweis } from './nachweisZeit';
 import { KARTE_QUELLE, kartenBilder, kartenBilderSammel, MAX_SAMMEL_BILDER, type KartenBild, type KartenBilder } from './kartenBild';
 
 const LEER_F = fahrtDaten([], null);
@@ -43,7 +68,7 @@ function zeitTabelle(zeilen: ZeitZeile[], schritt: number, timeZone?: string, st
     return `<td>${s ? esc(strassenText(s, st.mehrereOrte)) : '—'}</td>`;
   };
   const row = (z: ZeitZeile) =>
-    `<tr class="${z.art === 'luecke' ? 'warn' : ''}"><td>${fmtUhr(z.t, timeZone)}${z.bis ? `–${fmtUhr(z.bis, timeZone)}` : ''}</td><td>${fmtKm(z.dM)}</td>${
+    `<tr class="${z.art === 'luecke' ? 'warn' : ''}"><td>${z.bis ? fmtSpanne(z.t, z.bis, timeZone) : fmtUhr(z.t, timeZone)}</td><td>${fmtKm(z.dM)}</td>${
       st && z.art === 'luecke' ? '<td>—</td>' : strasse(z)
     }<td>${esc(z.art === 'luecke' ? 'Unterbrechung (Pause/kein GPS), nicht gewertet' : z.text)}</td></tr>`;
   const table = (zs: ZeitZeile[]) =>
@@ -54,8 +79,14 @@ function zeitTabelle(zeilen: ZeitZeile[], schritt: number, timeZone?: string, st
   <div class="small muted" style="margin:4px 0 12px">Uhrzeiten aus den GPS-Punkten der Fahrt (Zeit je Punkt vom Gerät), km = gefahrene Strecke seit Start. Die Zeitmarken stehen auch in der Karte.${st ? ` Straßennamen: ${STRASSEN_QUELLE}.` : ''}</div>`;
 }
 
-/** Straßenverlauf: „06:12–06:19 · Hauptstraße · Musterstadt · 1,5 km“ — bzw. Hinweis „wird ermittelt“. */
-const STRASSEN_FUSSNOTE = `Straßennamen: ${STRASSEN_QUELLE} (ODbL), nach der Fahrt aus den GPS-Punkten ermittelt (Abtastung etwa alle 200 m und an jeder Abbiegung; Wechsel auf gerader Strecke auf ±15 m eingegrenzt). Uhrzeiten aus den GPS-Punkten (Zeit je Punkt vom Gerät). Nicht Teil des Prüfcodes — der Nachweis selbst ist die GPS-Spur.`;
+/**
+ * Fußnote zum Straßenverlauf („06:12–06:19 · Hauptstraße · Musterstadt · 1,5 km“): Quellenangabe immer
+ * „© OpenStreetMap-Mitwirkende“ (ODbL), das Verfahren je Anbieter (Nominatim bis Verfahren 2, Overpass ab Verfahren 3).
+ */
+function strassenFussnote(quellen: readonly (string | null)[]): string {
+  const methoden = [...new Set((quellen.length ? quellen : [null]).map((q) => strassenMethode(q)))];
+  return `Straßennamen: ${STRASSEN_QUELLE} (ODbL), ${methoden.join(' bzw. ')}. Uhrzeiten aus den GPS-Punkten (Zeit je Punkt vom Gerät). Nicht Teil des Prüfcodes — der Nachweis selbst ist die GPS-Spur.`;
+}
 
 /**
  * Straßenverlauf als Tabelle „Uhrzeit · Straße · Ort · Strecke“ — EINE Darstellung für Einzel- und Sammel-Nachweis.
@@ -72,9 +103,21 @@ function strassenTabelle(str: StrassenAnzeige | null, timeZone?: string, kompakt
       return `<tr><td>${von === bis ? von : `${von}–${bis}`}</td><td><b>${esc(z.strasse)}</b></td><td>${esc(ortText(z))}</td><td class="r">${fmtStrecke(z.m)}</td></tr>`;
     })
     .join('');
+  // Summenzeile: jeder Prüfer sieht, dass die Spalte die gefahrenen Meter ergibt (bzw. warum nicht — Hinweis darunter)
+  const fuss =
+    str.summeM != null
+      ? `<tfoot><tr class="summe"><td colspan="3">zusammen${str.gesamtM != null ? ` (gefahren laut GPS: ${fmtStrecke(str.gesamtM)})` : ''}</td><td class="r">${fmtStrecke(str.summeM)}</td></tr></tfoot>`
+      : '';
+  const meter = strassenMeterHinweis(str);
   return `${kompakt ? '' : '<h2>Straßenverlauf — wann auf welcher Straße</h2>'}
-  <table class="sv"><thead><tr><th>Uhrzeit</th><th>Straße</th><th>Ort</th><th class="r">Strecke</th></tr></thead><tbody>${rows}</tbody></table>
-  ${kompakt ? '' : `<div class="small muted" style="margin:4px 0 12px">${STRASSEN_FUSSNOTE}</div>`}`;
+  <table class="sv"><thead><tr><th>Uhrzeit</th><th>Straße</th><th>Ort</th><th class="r">Strecke</th></tr></thead><tbody>${rows}</tbody>${fuss}</table>
+  ${
+    kompakt
+      ? meter
+        ? `<div class="small muted">${esc(meter)}</div>`
+        : ''
+      : `<div class="small muted" style="margin:4px 0 12px">${strassenFussnote([str.quelle])}${meter ? ` ${esc(meter)}` : ''}</div>`
+  }`;
 }
 
 /** Karte: echtes Kartenbild (Übersicht + Ausschnitte) oder — Rückfall — die Skizze. */
@@ -121,8 +164,11 @@ function legend(plan: boolean, track: boolean, missed: boolean, marks = false, k
     .join(' &nbsp; ')}</div>`;
 }
 
-/** weather: Bericht zeigt Wetterdaten → Namensnennung Open-Meteo (CC BY 4.0) in der Fußzeile. osm: Karte/Straßennamen aus OSM. */
-function page(title: string, body: string, weather: boolean, osm = false): string {
+/**
+ * weather: Bericht zeigt Wetterdaten → Namensnennung Open-Meteo (CC BY 4.0) in der Fußzeile. osm: Karte/Straßennamen aus OSM.
+ * timeZone: Zone des Betriebs (auch für „Erstellt am“).
+ */
+function page(title: string, body: string, weather: boolean, osm = false, timeZone?: string): string {
   return `<!doctype html>
 <html lang="de">
 <head>
@@ -166,6 +212,10 @@ function page(title: string, body: string, weather: boolean, osm = false): strin
   table.sv { margin-bottom: 4px; }
   table.sv th, table.sv td { padding: 3px 6px; font-size: 10.5px; }
   table.sv td:first-child { white-space: nowrap; }
+  table.sv tfoot { display: table-row-group; }
+  table.sv tr.summe td { font-weight: 700; background: #f6f9fc; }
+  table.sv tr.summe td:first-child { white-space: normal; }
+  .zone { color: #51606f; font-size: 10.5px; margin-bottom: 4px; }
   td.r, th.r { text-align: right; white-space: nowrap; }
   .hinweis { margin: 0 0 12px; padding: 8px 12px; border: 1.5px dashed #AFC1D2; border-radius: 8px; color: #51606f; }
   h3 { font-size: 12px; margin: 14px 0 6px; }
@@ -183,7 +233,7 @@ function page(title: string, body: string, weather: boolean, osm = false): strin
 <body>${body}
   <div class="footer">
     <span>Erstellt mit WinterDex — winterdex.dexware.app${weather ? ` · ${WEATHER_SOURCE_HTML}` : ''}${osm ? ` · Karte und Straßennamen: <a href="https://www.openstreetmap.org/copyright">${KARTE_QUELLE}</a>` : ''}</span>
-    <span>Erstellt am ${fmtDateTime(new Date().toISOString())}</span>
+    <span>Erstellt am ${fmtDateTime(new Date().toISOString(), timeZone)}</span>
   </div>
 </body>
 </html>`;
@@ -207,7 +257,7 @@ export interface RunBerichtExtra {
 /** Straßenverlauf-Anzeige für den Bericht (nie ein Fehler) */
 function strassenFuer(run: Run, F: FahrtDaten, stand: StrassenStand | null | undefined): StrassenAnzeige | null {
   try {
-    return strassenAnzeige(stand, run, F.mitZeit && F.n >= 2);
+    return strassenAnzeige(stand, run, F.mitZeit && F.n >= 2, { F, gefahrenM: run.track_length_m });
   } catch (e) {
     console.error('Straßenverlauf im Bericht ausgelassen:', e);
     return null;
@@ -216,31 +266,34 @@ function strassenFuer(run: Run, F: FahrtDaten, stand: StrassenStand | null | und
 
 /**
  * Einzel-Nachweis einer Fahrt (A4 hoch): Kopf + Kennzahlen, Karte (echtes Kartenbild oder Skizze), Straßenverlauf,
- * Ausschnitte, Zeitleiste, Angaben, Fotos, Prüfcode. timeZone nur für Tests (sonst Ortszeit des Geräts).
+ * Ausschnitte, Zeitleiste, Angaben, Fotos, Prüfcode. Alle Uhrzeiten in der Zone des Betriebs (Land → nachweisZeit.ts),
+ * nie in der des Geräts; timeZone überschreibt das (Tests).
  */
 export function buildRunHtml(org: Org, run: Run, timeZone?: string, extra: RunBerichtExtra = {}): string {
+  const tz = timeZone ?? nachweisZone(org.land);
   const plan = run.planned_path && run.planned_path.length >= 2 ? run.planned_path : null;
   const missed = run.missed ?? [];
   const dur = Date.parse(run.ended_at) - Date.parse(run.started_at);
   const name = run.route_name ?? 'Freie Fahrt';
-  const zt = zeitTeile(run, timeZone);
+  const zt = zeitTeile(run, tz);
   const str = strassenFuer(run, zt.F, extra.strassen);
   const karte = extra.karte ?? null;
   const hatSpur = (Array.isArray(run.track) ? run.track : []).some((s) => Array.isArray(s) && s.length >= 2);
   const body = `
   <h1>Strecken-Nachweis Winterdienst</h1>
   <div class="meta"><b>${esc(org.name)}</b>${org.address ? ` · ${esc(org.address)}` : ''}</div>
-  <div class="meta">Strecke: <b>${esc(name)}</b> · ${fmtDate(run.started_at)}, ${fmtTimeSpan(run.started_at, run.ended_at)}</div>
+  <div class="meta">Strecke: <b>${esc(name)}</b> · ${fmtDate(run.started_at, tz)}, ${fmtTimeSpan(run.started_at, run.ended_at, tz)}</div>
+  <div class="zone">${esc(zonenHinweis(tz, org.land, [Date.parse(run.started_at), Date.parse(run.ended_at)]))}</div>
   <div class="kpis">
     <div class="kpi"><b>${fmtDistance(run.track_length_m)}</b><span>gefahren (GPS)</span></div>
-    <div class="kpi"><b>${fmtDuration(dur)}</b><span>${fmtTimeSpan(run.started_at, run.ended_at)}</span></div>
+    <div class="kpi"><b>${fmtDuration(dur)}</b><span>${fmtTimeSpan(run.started_at, run.ended_at, tz)}</span></div>
     ${plan ? `<div class="kpi"><b>${fmtPct(run.coverage_pct)}</b><span>der Strecke abgedeckt</span></div>` : ''}
   </div>
   ${karteHtml(karte, sketchSvg(buildSketch(plan, run.track, missed, 640, 360, zt.marken)))}
   ${legend(!!plan, hatSpur, missed.some((s) => Array.isArray(s) && s.length >= 2), zt.marken.length > 0, !!karte, !!karte?.ausschnitte.length)}
-  ${strassenTabelle(str, timeZone)}
+  ${strassenTabelle(str, tz)}
   ${ausschnitteHtml(karte)}
-  ${zeitTabelle(zt.zeilen, zt.schritt, timeZone, str)}
+  ${zeitTabelle(zt.zeilen, zt.schritt, tz, str)}
   <div class="box">
     <div><b>Strecke:</b> ${esc(run.route_name ?? 'freie Fahrt (ohne Vorlage)')}${plan ? ` (Vorlage ${fmtDistance(pathLengthM(plan))})` : ''}</div>
     <div><b>Maßnahme:</b> ${esc(ACTION_LABELS[run.action])} · Streumittel: ${esc(gritLabel(run.grit_material, run.grit_amount))}</div>
@@ -248,47 +301,46 @@ export function buildRunHtml(org: Org, run: Run, timeZone?: string, extra: RunBe
     <div><b>Dokumentiert von:</b> ${esc(run.performer_name ?? '—')}</div>
     ${run.notes ? `<div><b>Notiz:</b> ${esc(run.notes)}</div>` : ''}
     ${missed.length ? `<div class="warn">Nicht befahren: ${missed.length} ${missed.length === 1 ? 'Abschnitt' : 'Abschnitte'}, zusammen ${fmtDistance(run.missed_m ?? 0)} (rot in der Skizze)</div>` : ''}
-    ${cleanGaps(run.gaps).length ? `<div class="warn">Unterbrechungen der Aufzeichnung (Pause oder kein GPS): ${cleanGaps(run.gaps).map(([a, b]) => fmtTimeSpan(a, b)).join(', ')}</div>` : ''}
+    ${cleanGaps(run.gaps).length ? `<div class="warn">Unterbrechungen der Aufzeichnung (Pause oder kein GPS): ${cleanGaps(run.gaps).map(([a, b]) => fmtTimeSpan(a, b, tz)).join(', ')}</div>` : ''}
     ${run.gps_mocked ? '<div class="warn">Achtung: Das Gerät hat Fake-GPS gemeldet (Android).</div>' : ''}
     ${run.nachgetragen ? '<div class="warn">Nachgemeldet: ohne Fahrtpunkte und erst mehr als 15 Minuten nach dem Ende beim Server eingegangen (Kennzeichen vom Server, nicht änderbar).</div>' : ''}
-    ${run.canceled ? `<div class="storno">STORNIERT am ${fmtDateTime(run.canceled_at)}: ${esc(run.cancel_reason ?? '')}</div>` : ''}
+    ${run.canceled ? `<div class="storno">STORNIERT am ${fmtDateTime(run.canceled_at, tz)}: ${esc(run.cancel_reason ?? '')}</div>` : ''}
   </div>
   <div class="legal">${esc(LEGAL_BASIS[org.land])}</div>
   ${run.photo_urls.some(isSafeImgSrc) ? `<h2>Beweisfotos</h2><div class="photos">${run.photo_urls.filter(isSafeImgSrc).map((src, i) => `<img src="${esc(src)}" alt="Beweisfoto ${i + 1}">`).join('')}</div>` : ''}
   ${photoNote(run)}
   ${PROOF_NOTE}
-  ${run.entry_hash ? `<p class="small"><b>Prüfcode:</b> <span class="mono">${esc(run.entry_hash)}</span><br><b>Server-Eingang:</b> ${fmtDateTime(run.received_at ?? run.created_at)}</p>` : ''}`;
-  return page(`Strecken-Nachweis — ${name}`, body, !!run.weather, !!karte || str?.art === 'tabelle');
+  ${run.entry_hash ? `<p class="small"><b>Prüfcode:</b> <span class="mono">${esc(run.entry_hash)}</span><br><b>Server-Eingang:</b> ${fmtDateTime(run.received_at ?? run.created_at, tz)}</p>` : ''}`;
+  return page(`Strecken-Nachweis — ${name}`, body, !!run.weather, !!karte || str?.art === 'tabelle', tz);
 }
 
 /**
  * Bericht mit echtem Kartenbild (Browser): Kacheln laden + zeichnen (höchstens ~8 s), sonst Skizze. Wirft nie wegen
- * der Karte — das PDF entsteht immer.
+ * der Karte — das PDF entsteht immer. Uhrzeiten in der Zone des Betriebs (opts.timeZone überschreibt).
  */
-export async function buildRunHtmlMitKarte(org: Org, run: Run, strassen: StrassenStand | null | undefined, opts: { zeitlimitMs?: number } = {}): Promise<string> {
+export async function buildRunHtmlMitKarte(
+  org: Org,
+  run: Run,
+  strassen: StrassenStand | null | undefined,
+  opts: { zeitlimitMs?: number; timeZone?: string } = {},
+): Promise<string> {
+  const tz = opts.timeZone ?? nachweisZone(org.land);
   let karte: KartenBilder | null = null;
   try {
-    const zt = zeitTeile(run);
+    const zt = zeitTeile(run, tz);
     const F = zt.F;
     if (F.n > 0 || (run.planned_path?.length ?? 0) >= 2) {
-      const zeitAn = F.mitZeit && F.n >= 2;
       karte = await kartenBilder(
         F,
-        {
-          plan: run.planned_path,
-          missed: run.missed,
-          marken: zt.marken,
-          startLabel: F.n ? (zeitAn ? `Start ${fmtUhr(F.t[0])}` : 'Start') : null,
-          endeLabel: F.n > 1 ? (zeitAn ? `Ende ${fmtUhr(F.t[F.n - 1])}` : 'Ende') : null,
-        },
-        { zeitlimitMs: opts.zeitlimitMs },
+        { plan: run.planned_path, missed: run.missed, marken: zt.marken, ...startEndeLabels(F, tz) },
+        { zeitlimitMs: opts.zeitlimitMs, timeZone: tz },
       );
     }
   } catch (e) {
     console.warn('Kartenbild ausgelassen:', e);
     karte = null;
   }
-  return buildRunHtml(org, run, undefined, { strassen, karte });
+  return buildRunHtml(org, run, tz, { strassen, karte });
 }
 
 /** Fahrtenbuch einer Strecke für einen Zeitraum. */
@@ -306,7 +358,7 @@ function fahrtenImEinzelnen(runs: RunMeta[], details: Map<string, FahrtDetail>, 
       const d = details.get(r.id);
       if (!d || (!d.str && !d.bild)) return '';
       const dur = Date.parse(r.ended_at) - Date.parse(r.started_at);
-      const kopf = `${fmtDate(r.started_at)} · ${fmtTimeSpan(r.started_at, r.ended_at)} (${fmtDuration(dur)}) · ${fmtDistance(r.track_length_m)}${
+      const kopf = `${fmtDate(r.started_at, timeZone)} · ${fmtTimeSpan(r.started_at, r.ended_at, timeZone)} (${fmtDuration(dur)}) · ${fmtDistance(r.track_length_m)}${
         r.coverage_pct != null ? ` · ${fmtPct(r.coverage_pct)} abgedeckt` : ''
       } · ${esc(r.performer_name ?? '—')}`;
       return `<div class="fahrt"><h3>${kopf}</h3><div class="fahrt-inhalt">${
@@ -315,10 +367,11 @@ function fahrtenImEinzelnen(runs: RunMeta[], details: Map<string, FahrtDetail>, 
     })
     .filter(Boolean);
   if (!bloecke.length && !hinweis) return '';
+  const quellen = runs.map((r) => details.get(r.id)?.str).flatMap((s) => (s?.art === 'tabelle' ? [s.quelle] : []));
   return `<h2>Die Fahrten im Einzelnen — Karte und Straßenverlauf</h2>
   ${hinweis ? `<div class="hinweis">${esc(hinweis)}</div>` : ''}
   ${bloecke.join('')}
-  <div class="small muted" style="margin:4px 0 12px">${STRASSEN_FUSSNOTE} Kartenbilder: ${KARTE_QUELLE}; die genaue Karte mit Ausschnitten steht im Einzelnachweis jeder Fahrt.</div>`;
+  <div class="small muted" style="margin:4px 0 12px">${strassenFussnote(quellen)} Kartenbilder: ${KARTE_QUELLE}; die genaue Karte mit Ausschnitten steht im Einzelnachweis jeder Fahrt.</div>`;
 }
 
 export function buildRouteLogHtml(
@@ -328,12 +381,13 @@ export function buildRouteLogHtml(
   periodLabel: string,
   extra: { details?: Map<string, FahrtDetail>; hinweis?: string | null; timeZone?: string } = {},
 ): string {
+  const tz = extra.timeZone ?? nachweisZone(org.land);
   const active = runs.filter((r) => !r.canceled);
   const rows = runs
     .map((r) => {
       const dur = Date.parse(r.ended_at) - Date.parse(r.started_at);
       return `<tr class="${r.canceled ? 'canceled' : ''}">
-        <td>${fmtDate(r.started_at)}<br>${fmtTimeSpan(r.started_at, r.ended_at)} · ${fmtDuration(dur)}</td>
+        <td>${fmtDate(r.started_at, tz)}<br>${fmtTimeSpan(r.started_at, r.ended_at, tz)} · ${fmtDuration(dur)}</td>
         <td>${fmtDistance(r.track_length_m)}</td>
         <td>${fmtPct(r.coverage_pct)}${r.missed_m ? `<br><span class="small warn">${fmtDistance(r.missed_m)} nicht befahren</span>` : ''}</td>
         <td>${esc(ACTION_LABELS[r.action])}<br><span class="small">${esc(gritLabel(r.grit_material, r.grit_amount))}</span></td>
@@ -349,16 +403,17 @@ export function buildRouteLogHtml(
   <div class="meta"><b>${esc(org.name)}</b>${org.address ? ` · ${esc(org.address)}` : ''}</div>
   <div class="meta">Strecke: <b>${esc(route.name)}</b> · ${fmtDistance(route.length_m)}</div>
   <div class="meta">Zeitraum: ${esc(periodLabel)} · Fahrten: ${active.length}${runs.length > active.length ? ` (zzgl. ${runs.length - active.length} stornierte, gekennzeichnet)` : ''}</div>
+  <div class="zone">${esc(zonenHinweis(tz, org.land, runs.flatMap((r) => [Date.parse(r.started_at), Date.parse(r.ended_at)])))}</div>
   ${plan ? sketchSvg(buildSketch(plan, null, null)) + legend(true, false, false) : ''}
   <div class="legal">${esc(LEGAL_BASIS[org.land])}</div>
   <table>
     <thead><tr><th>Datum / Zeit</th><th>Gefahren</th><th>Abdeckung</th><th>Maßnahme</th><th>Wetter</th><th>Dokumentiert von</th><th>Prüfcode</th></tr></thead>
     <tbody>${rows || '<tr><td colspan="7">Keine Fahrten im Zeitraum.</td></tr>'}</tbody>
   </table>
-  ${extra.details ? fahrtenImEinzelnen(runs, extra.details, extra.hinweis ?? null, extra.timeZone) : ''}
+  ${extra.details ? fahrtenImEinzelnen(runs, extra.details, extra.hinweis ?? null, tz) : ''}
   ${PROOF_NOTE}`;
   const osm = !!extra.details && [...extra.details.values()].some((d) => d.bild || d.str?.art === 'tabelle');
-  return page(`Fahrtenbuch — ${route.name}`, body, runs.some((r) => !!r.weather), osm);
+  return page(`Fahrtenbuch — ${route.name}`, body, runs.some((r) => !!r.weather), osm, tz);
 }
 
 /** Datenquelle für die Details im Fahrtenbuch (Dashboard: Supabase, Beispielseite: erfundene Fahrten). */
@@ -398,6 +453,7 @@ export async function buildRouteLogHtmlMitDetails(
   lader: FahrtenLader,
   opts: { timeZone?: string; zeitlimitMs?: number } = {},
 ): Promise<string> {
+  const tz = opts.timeZone ?? nachweisZone(org.land);
   const aktiv = runs.filter((r) => !r.canceled);
   const ids = aktiv.map((r) => r.id);
   const hinweise: string[] = [];
@@ -419,7 +475,7 @@ export async function buildRouteLogHtmlMitDetails(
     const bilder = mitSpur.length
       ? await kartenBilderSammel(
           mitSpur.map((r) => ({ F: F.get(r.id)!, missed: spuren.get(r.id)?.missed })),
-          { plan: route.path ?? null, zeitlimitMs: opts.zeitlimitMs, timeZone: opts.timeZone },
+          { plan: route.path ?? null, zeitlimitMs: opts.zeitlimitMs, timeZone: tz },
         )
       : [];
     if (mitSpur.length && bilder.every((b) => !b)) hinweise.push('Kartenbilder ließen sich gerade nicht laden (kein Internet?) — Straßenverlauf und Fahrtenliste sind vollständig.');
@@ -429,12 +485,12 @@ export async function buildRouteLogHtmlMitDetails(
       // ohne geladene Spur: Punkt-Zeiten unbekannt → nach dem Straßenverlauf entscheiden
       const mitZeit = f ? f.mitZeit && f.n >= 2 : (r.track_length_m ?? 0) > 0;
       const stand = strMap ? (strMap.get(r.id) ?? { status: 'in_arbeit' as const, abschnitte: [], quelle: null }) : null;
-      details.set(r.id, { str: strassenAnzeige(stand, r, mitZeit), bild: bildVon.get(r.id) ?? null });
+      details.set(r.id, { str: strassenAnzeige(stand, r, mitZeit, { F: f, gefahrenM: r.track_length_m }), bild: bildVon.get(r.id) ?? null });
     }
   } catch (e) {
     console.error('Fahrten im Einzelnen ausgelassen:', e);
     hinweise.push('Die Fahrten im Einzelnen ließen sich gerade nicht zusammenstellen — die Fahrtenliste oben ist vollständig.');
   }
-  return buildRouteLogHtml(org, route, runs, periodLabel, { details, hinweis: hinweise.join(' ') || null, timeZone: opts.timeZone });
+  return buildRouteLogHtml(org, route, runs, periodLabel, { details, hinweis: hinweise.join(' ') || null, timeZone: tz });
 }
 
