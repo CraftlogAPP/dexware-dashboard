@@ -6,7 +6,7 @@ import { ArrowLeft, Check, Play } from 'lucide-react';
 import { LoadGuard, useAsync } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDateTime } from '../../lib/format';
-import { RouteSketch } from '../RouteSketch';
+import { FahrtAnsicht } from '../FahrtAnsicht';
 import { fmtDistance, fmtPct, type Route } from '../routes';
 import { ACTION_LABELS } from '../types';
 import { isToday } from '../einsatz/amount';
@@ -114,9 +114,8 @@ export function StreckeDetail() {
               </p>
               {route.notes && <p>{route.notes}</p>}
 
-              <div className="sr-map">
-                <RouteSketch plan={route.path} label={`Strecke ${route.name}`} />
-              </div>
+              {/* echte Karte der Vorlage (Skizze als Rückfall ohne Netz) */}
+              <FahrtAnsicht plan={route.path} label={`Karte der Strecke ${route.name}`} zeit={false} />
 
               {route.active && (
                 <Link to={`${list}/${route.id}/fahren`} className="btn ez-save">

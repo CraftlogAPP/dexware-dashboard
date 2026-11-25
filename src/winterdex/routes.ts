@@ -165,7 +165,8 @@ export async function fetchRun(sb: SupabaseClient, id: string): Promise<Run> {
   if (!data) throw new Error('Diese Fahrt wurde nicht gefunden.');
   const photo_total = Array.isArray(data.photo_urls) ? data.photo_urls.length : 0;
   const run = (await signPhotos(sb, data)) as Run;
-  return { ...run, track: run.track ?? [], gaps: run.gaps ?? [], photo_urls: run.photo_urls ?? [], photo_total };
+  // Spur/Unterbrechungen einmal säubern (alte/kaputte Zeilen): Karte, Skizze und PDF dürfen nie daran scheitern
+  return { ...run, track: cleanTrack(run.track), gaps: cleanGaps(run.gaps), photo_urls: run.photo_urls ?? [], photo_total };
 }
 
 export async function cancelRun(sb: SupabaseClient, id: string, reason: string): Promise<void> {
@@ -218,6 +219,15 @@ export function pathLengthM(p: readonly LatLng[]): number {
 // ---------------------------------------------------------------- Kartenskizze
 // Abstandstreue lokale Projektion, ohne Kartendienst (kein Fremd-Server, druckt sauber).
 
+export interface SketchMark {
+  x: number;
+  y: number;
+  label: string;
+  /** Beschriftung (links oben) — null = kein Platz, nur der Punkt */
+  lx: number | null;
+  ly: number;
+}
+
 export interface Sketch {
   w: number;
   h: number;
@@ -227,17 +237,45 @@ export interface Sketch {
   start: [number, number] | null;
   end: [number, number] | null;
   scale: { px: number; label: string; x: number; y: number };
+  /** Zeitmarken „09:45“ (seit 25.11.2026) */
+  marks: SketchMark[];
 }
 
+const okPt = (p: unknown): p is number[] =>
+  Array.isArray(p) && typeof p[0] === 'number' && typeof p[1] === 'number' && Number.isFinite(p[0]) && Number.isFinite(p[1]);
+/** Kaputte Teilstücke/Punkte aus der Datenbank weglassen — die Skizze ist der Rückfall und darf nie abstürzen. */
+export function cleanTrack(track: unknown): Track {
+  if (!Array.isArray(track)) return [];
+  return track.filter((s) => Array.isArray(s)).map((s: unknown[]) => s.filter(okPt));
+}
+/** Nur Unterbrechungen [von_iso, bis_iso] mit lesbaren Zeiten — eine ungültige Zeit ließe die Uhrzeit-Anzeige abstürzen. */
+export function cleanGaps(g: unknown): [string, string][] {
+  if (!Array.isArray(g)) return [];
+  return g.filter(
+    (x): x is [string, string] =>
+      Array.isArray(x) && typeof x[0] === 'string' && typeof x[1] === 'string' && Number.isFinite(Date.parse(x[0])) && Number.isFinite(Date.parse(x[1])),
+  );
+}
+function cleanLine(p: unknown): LatLng[] {
+  return Array.isArray(p) ? p.filter(okPt).map((q) => [q[0], q[1]] as LatLng) : [];
+}
+
+/** Breite einer Zeitmarken-Beschriftung (Arial 11 px fett, Ziffern ≈ 6,3 px) */
+const markW = (label: string) => label.length * 6.3 + 6;
+
 export function buildSketch(
-  plan: LatLng[] | null | undefined,
-  track: Track | null | undefined,
-  missed: LatLng[][] | null | undefined,
+  planIn: LatLng[] | null | undefined,
+  trackIn: Track | null | undefined,
+  missedIn: LatLng[][] | null | undefined,
   w = 640,
   h = 360,
+  marksIn: readonly { lat: number; lng: number; label: string }[] = [],
 ): Sketch | null {
+  const plan = planIn == null ? planIn : cleanLine(planIn);
+  const track = cleanTrack(trackIn);
+  const missed = Array.isArray(missedIn) ? missedIn.map(cleanLine) : [];
   const pts: LatLng[] = [...(plan ?? [])];
-  for (const seg of track ?? []) for (const p of seg) pts.push([p[0], p[1]]);
+  for (const seg of track) for (const p of seg) pts.push([p[0], p[1]]);
   if (pts.length < 2) return null;
   let minLat = pts[0][0], maxLat = minLat, minLng = pts[0][1], maxLng = minLng;
   for (const [la, ln] of pts) {
@@ -263,30 +301,88 @@ export function buildSketch(
   const target = (w / 4) * metersPerPx;
   const nice = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000].find((n) => n >= target * 0.6) ?? 10000;
 
-  const firstSeg = (track ?? []).find((s) => s.length);
-  const lastSeg = [...(track ?? [])].reverse().find((s) => s.length);
+  const firstSeg = track.find((s) => s.length);
+  const lastSeg = [...track].reverse().find((s) => s.length);
   const first = firstSeg?.[0] ?? plan?.[0];
   const last = lastSeg?.[lastSeg.length - 1] ?? (plan && plan.length >= 2 ? plan[plan.length - 1] : undefined);
+  const start: [number, number] | null = first ? [X(first[1]), Y(first[0])] : null;
+  const end: [number, number] | null = last ? [X(last[1]), Y(last[0])] : null;
+
+  // Zeitmarken: Beschriftung rechts, sonst links, oben, unten neben den Punkt — wo sie nichts überdeckt
+  // (andere Beschriftungen, Start/Ende, Maßstab, Nordpfeil). Kein Platz → nur der Punkt; die Zeit steht in der Tabelle.
+  type Box = [number, number, number, number];
+  const belegt: Box[] = [
+    [s0(start, 0), s0(start, 1), 0, 0],
+    [s0(end, 0), s0(end, 1), 0, 0],
+  ].map(([x, y]) => [x - 9, y - 9, x + 9, y + 9] as Box);
+  belegt.push([0, h - 34, w / 4 + 40, h], [w - 34, 0, w, 52]);
+  const frei = (b: Box) =>
+    b[0] >= 2 && b[1] >= 2 && b[2] <= w - 2 && b[3] <= h - 2 && !belegt.some((o) => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
+  const marks: SketchMark[] = [];
+  for (const m of marksIn) {
+    if (!Number.isFinite(m.lat) || !Number.isFinite(m.lng)) continue;
+    const x = X(m.lng);
+    const y = Y(m.lat);
+    const lw = markW(m.label);
+    const lh = 15;
+    const kandidaten: Box[] = [
+      [x + 6, y - lh / 2, x + 6 + lw, y + lh / 2],
+      [x - 6 - lw, y - lh / 2, x - 6, y + lh / 2],
+      [x - lw / 2, y - 7 - lh, x + lw / 2, y - 7],
+      [x - lw / 2, y + 7, x + lw / 2, y + 7 + lh],
+    ];
+    const b = kandidaten.find(frei);
+    belegt.push([x - 4, y - 4, x + 4, y + 4]);
+    if (b) belegt.push(b);
+    marks.push({ x, y, label: m.label, lx: b ? b[0] : null, ly: b ? b[1] : 0 });
+  }
   return {
     w,
     h,
     plan: plan && plan.length >= 2 ? line(plan) : null,
-    track: (track ?? []).filter((s) => s.length >= 2).map(line),
-    missed: (missed ?? []).filter((s) => s.length >= 2).map(line),
-    start: first ? [X(first[1]), Y(first[0])] : null,
-    end: last ? [X(last[1]), Y(last[0])] : null,
+    track: track.filter((s) => s.length >= 2).map(line),
+    missed: missed.filter((s) => s.length >= 2).map(line),
+    start,
+    end,
     scale: { px: nice / metersPerPx, label: nice >= 1000 ? `${nice / 1000} km` : `${nice} m`, x: padL, y: h - 14 },
+    marks,
   };
+}
+/** Koordinate eines Punkts oder weit außerhalb (belegt dann nichts) */
+function s0(p: [number, number] | null, k: 0 | 1): number {
+  return p ? p[k] : -1000;
 }
 
 /** Erster bekannter Punkt (für „Auf Karte zeigen"). */
 export function firstPoint(plan: LatLng[] | null | undefined, track: Track | null | undefined): LatLng | null {
-  const t = (track ?? []).find((s) => s.length)?.[0];
+  const t = cleanTrack(track).find((s) => s.length)?.[0];
   if (t) return [t[0], t[1]];
-  return plan && plan.length ? plan[0] : null;
+  const p = cleanLine(plan);
+  return p.length ? p[0] : null;
 }
 
-export const ROUTE_COLORS = { plan: '#94A3B8', track: '#16A34A', missed: '#DC2626', end: '#0C1B2A' };
+/** Breite des weißen Schilds hinter einer Zeitmarke (wie die Platzrechnung in buildSketch) */
+export const sketchMarkW = markW;
+
+/**
+ * Zeitmarken der Skizze als SVG: Punkt + Beschriftung auf weißem Schild (lesbar über Linien). Bewusst kein
+ * Text-Rand (stroke): der würde im PDF jede Ziffer doppelt in den Text legen (Kopieren/Suchen „0066::5500“).
+ */
+export function sketchMarksSvg(s: Sketch): string {
+  return s.marks
+    .map(
+      (m) =>
+        `<circle cx="${m.x.toFixed(1)}" cy="${m.y.toFixed(1)}" r="4" fill="${ROUTE_COLORS.end}" stroke="#fff" stroke-width="1.5"/>` +
+        (m.lx == null
+          ? ''
+          : `<rect x="${m.lx.toFixed(1)}" y="${m.ly.toFixed(1)}" width="${markW(m.label).toFixed(1)}" height="15" rx="3" fill="#fff" fill-opacity="0.92" stroke="${ROUTE_COLORS.end}" stroke-opacity="0.35" stroke-width="0.8"/>` +
+            `<text x="${(m.lx + 3).toFixed(1)}" y="${(m.ly + 11.5).toFixed(1)}" font-family="Arial" font-size="11" font-weight="700" fill="${ROUTE_COLORS.end}">${m.label.replace(/[<>&"]/g, '')}</text>`),
+    )
+    .join('');
+}
+
+/** planMap: Vorlage auf der echten Karte (Grau ginge zwischen den Straßen unter) */
+export const ROUTE_COLORS = { plan: '#94A3B8', planMap: '#475569', track: '#16A34A', missed: '#DC2626', end: '#0C1B2A' };
 
 /** Skizze als SVG-Text (für den Druck/PDF). */
 export function sketchSvg(s: Sketch | null): string {
@@ -298,6 +394,7 @@ export function sketchSvg(s: Sketch | null): string {
     ${s.missed.map((p) => `<polyline points="${p}" fill="none" stroke="${c.missed}" stroke-width="5" stroke-dasharray="8 6"/>`).join('')}
     ${s.start ? `<circle cx="${s.start[0].toFixed(1)}" cy="${s.start[1].toFixed(1)}" r="7" fill="${c.track}" stroke="#fff" stroke-width="3"/>` : ''}
     ${s.end ? `<circle cx="${s.end[0].toFixed(1)}" cy="${s.end[1].toFixed(1)}" r="7" fill="${c.end}" stroke="#fff" stroke-width="3"/>` : ''}
+    ${sketchMarksSvg(s)}
     <g font-family="Arial" font-size="12" fill="#233648">
       <line x1="${s.scale.x}" y1="${s.scale.y}" x2="${(s.scale.x + s.scale.px).toFixed(1)}" y2="${s.scale.y}" stroke="#233648" stroke-width="3"/>
       <text x="${s.scale.x}" y="${s.scale.y - 6}">${s.scale.label}</text>

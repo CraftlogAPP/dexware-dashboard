@@ -6,7 +6,37 @@ import type { Org } from '../lib/orgApi';
 import { isSafeImgSrc } from '../lib/imgSrc';
 import { gritLabel, WEATHER_SOURCE_HTML, weatherLabel } from './labels';
 import { ACTION_LABELS, LEGAL_BASIS } from './types';
-import { buildSketch, fmtDistance, fmtDuration, fmtPct, fmtTimeSpan, pathLengthM, ROUTE_COLORS, sketchSvg, type Route, type Run, type RunMeta } from './routes';
+import { buildSketch, cleanGaps, fmtDistance, fmtDuration, fmtPct, fmtTimeSpan, pathLengthM, ROUTE_COLORS, sketchSvg, type Route, type Run, type RunMeta } from './routes';
+import { fahrtDaten, fmtKm, fmtUhr, waehleSchritt, zeitleiste, zeitMarken, type ZeitMarke, type ZeitZeile } from './fahrtZeit';
+
+/**
+ * „Wann war er wo“ fürs PDF (seit 25.11.2026): Zeitmarken für die Skizze + kurze Zeit-Tabelle aus den Punkt-Zeiten.
+ * Alte/kaputte Fahrten ohne Zeiten → nichts davon, der Bericht entsteht wie bisher. Fehler hier stoppen nie den Bericht.
+ */
+function zeitTeile(run: Run, timeZone?: string): { marken: ZeitMarke[]; zeilen: ZeitZeile[]; schritt: number } {
+  try {
+    const F = fahrtDaten(run.track, run.started_at, run.ended_at, run.gaps);
+    if (!F.mitZeit || F.n < 2) return { marken: [], zeilen: [], schritt: 0 };
+    const schritt = waehleSchritt(F.t[0], F.t[F.n - 1]);
+    return { marken: zeitMarken(F, { schrittMin: schritt, timeZone }), zeilen: zeitleiste(F, { schrittMin: schritt }), schritt };
+  } catch (e) {
+    console.error('Zeitleiste im Bericht ausgelassen:', e);
+    return { marken: [], zeilen: [], schritt: 0 };
+  }
+}
+
+/** Zeit-Tabelle: ab 9 Zeilen zweispaltig nebeneinander, damit sie auf die erste Seite passt. */
+function zeitTabelle(zeilen: ZeitZeile[], schritt: number, timeZone?: string): string {
+  if (!zeilen.length) return '';
+  const row = (z: ZeitZeile) =>
+    `<tr class="${z.art === 'luecke' ? 'warn' : ''}"><td>${fmtUhr(z.t, timeZone)}${z.bis ? `–${fmtUhr(z.bis, timeZone)}` : ''}</td><td>${fmtKm(z.dM)}</td><td>${esc(z.art === 'luecke' ? 'Unterbrechung (Pause/kein GPS), nicht gewertet' : z.text)}</td></tr>`;
+  const table = (zs: ZeitZeile[]) =>
+    `<table class="zt"><thead><tr><th>Uhrzeit</th><th>km seit Start</th><th>Abschnitt</th></tr></thead><tbody>${zs.map(row).join('')}</tbody></table>`;
+  const half = Math.ceil(zeilen.length / 2);
+  const body = zeilen.length >= 9 ? `<div class="zt-2">${table(zeilen.slice(0, half))}${table(zeilen.slice(half))}</div>` : table(zeilen);
+  return `<h2>Zeitleiste — wann war das Fahrzeug wo (alle ${schritt} Min.)</h2>${body}
+  <div class="small muted" style="margin:4px 0 12px">Uhrzeiten aus den GPS-Punkten der Fahrt (Zeit je Punkt vom Gerät), km = gefahrene Strecke seit Start. Die Zeitmarken stehen auch in der Skizze.</div>`;
+}
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -20,13 +50,14 @@ const PROOF_NOTE = `<div class="proof"><b>Prüffester Strecken-Nachweis.</b> Die
   als 45 Sekunden keine brauchbare Position) werden mit Uhrzeit vermerkt und nicht als gefahren gewertet. Jede Fahrt erhält beim Eingang einen Prüfcode (SHA-256 über alle Nachweisfelder); eine spätere Änderung ist
   technisch gesperrt.</div>`;
 
-function legend(plan: boolean, track: boolean, missed: boolean): string {
+function legend(plan: boolean, track: boolean, missed: boolean, marks = false): string {
   const c = ROUTE_COLORS;
   return `<div class="legend">${[
     plan ? `<span style="color:${c.plan}">■</span> Strecken-Vorlage` : '',
     track ? `<span style="color:${c.track}">■</span> gefahrene Strecke (GPS)` : '',
     missed ? `<span style="color:${c.missed}">■</span> nicht befahren` : '',
     '● Start (grün) / Ende (dunkel)',
+    marks ? '● 09:45 = Uhrzeit an dieser Stelle' : '',
   ]
     .filter(Boolean)
     .join(' &nbsp; ')}</div>`;
@@ -63,6 +94,12 @@ function page(title: string, body: string, weather: boolean): string {
   .photos { display: flex; flex-wrap: wrap; gap: 8px; }
   .photos img { width: 180px; border: 1.5px solid #9CA5AD; border-radius: 4px; }
   svg { page-break-inside: avoid; }
+  .zt-2 { display: flex; gap: 10px; align-items: flex-start; }
+  .zt-2 .zt { flex: 1; }
+  table.zt { margin-bottom: 4px; }
+  table.zt th, table.zt td { padding: 3px 6px; font-size: 10.5px; }
+  table.zt tr.warn td { color: #B91C1C; }
+  table.zt td:first-child { white-space: nowrap; }
   .footer { margin-top: 26px; padding-top: 10px; border-top: 1.5px solid #9CA5AD; color: #51606f; font-size: 10.5px; display: flex; justify-content: space-between; }
   @media print { body { margin: 12mm; } }
 </style>
@@ -84,12 +121,13 @@ function photoNote(run: Run): string {
   return `<div class="warn small">${gesamt} Foto${gesamt === 1 ? '' : 's'} zu dieser Fahrt gespeichert, davon ${drin} in diesem Bericht — die übrigen sind weiterhin bei der Fahrt gespeichert (App/Dashboard).</div>`;
 }
 
-/** Einzel-Nachweis einer Fahrt. */
-export function buildRunHtml(org: Org, run: Run): string {
+/** Einzel-Nachweis einer Fahrt. timeZone nur für Tests (sonst Ortszeit des Geräts wie alle Uhrzeiten). */
+export function buildRunHtml(org: Org, run: Run, timeZone?: string): string {
   const plan = run.planned_path && run.planned_path.length >= 2 ? run.planned_path : null;
   const missed = run.missed ?? [];
   const dur = Date.parse(run.ended_at) - Date.parse(run.started_at);
   const name = run.route_name ?? 'Freie Fahrt';
+  const zt = zeitTeile(run, timeZone);
   const body = `
   <h1>Strecken-Nachweis Winterdienst</h1>
   <div class="meta"><b>${esc(org.name)}</b>${org.address ? ` · ${esc(org.address)}` : ''}</div>
@@ -99,8 +137,9 @@ export function buildRunHtml(org: Org, run: Run): string {
     <div class="kpi"><b>${fmtDuration(dur)}</b><span>${fmtTimeSpan(run.started_at, run.ended_at)}</span></div>
     ${plan ? `<div class="kpi"><b>${fmtPct(run.coverage_pct)}</b><span>der Strecke abgedeckt</span></div>` : ''}
   </div>
-  ${sketchSvg(buildSketch(plan, run.track, missed))}
-  ${legend(!!plan, run.track.some((s) => s.length >= 2), missed.some((s) => s.length >= 2))}
+  ${sketchSvg(buildSketch(plan, run.track, missed, 640, 360, zt.marken))}
+  ${legend(!!plan, (Array.isArray(run.track) ? run.track : []).some((s) => Array.isArray(s) && s.length >= 2), missed.some((s) => Array.isArray(s) && s.length >= 2), zt.marken.length > 0)}
+  ${zeitTabelle(zt.zeilen, zt.schritt, timeZone)}
   <div class="box">
     <div><b>Strecke:</b> ${esc(run.route_name ?? 'freie Fahrt (ohne Vorlage)')}${plan ? ` (Vorlage ${fmtDistance(pathLengthM(plan))})` : ''}</div>
     <div><b>Maßnahme:</b> ${esc(ACTION_LABELS[run.action])} · Streumittel: ${esc(gritLabel(run.grit_material, run.grit_amount))}</div>
@@ -108,7 +147,7 @@ export function buildRunHtml(org: Org, run: Run): string {
     <div><b>Dokumentiert von:</b> ${esc(run.performer_name ?? '—')}</div>
     ${run.notes ? `<div><b>Notiz:</b> ${esc(run.notes)}</div>` : ''}
     ${missed.length ? `<div class="warn">Nicht befahren: ${missed.length} ${missed.length === 1 ? 'Abschnitt' : 'Abschnitte'}, zusammen ${fmtDistance(run.missed_m ?? 0)} (rot in der Skizze)</div>` : ''}
-    ${run.gaps.length ? `<div class="warn">Unterbrechungen der Aufzeichnung (Pause oder kein GPS): ${run.gaps.map(([a, b]) => fmtTimeSpan(a, b)).join(', ')}</div>` : ''}
+    ${cleanGaps(run.gaps).length ? `<div class="warn">Unterbrechungen der Aufzeichnung (Pause oder kein GPS): ${cleanGaps(run.gaps).map(([a, b]) => fmtTimeSpan(a, b)).join(', ')}</div>` : ''}
     ${run.gps_mocked ? '<div class="warn">Achtung: Das Gerät hat Fake-GPS gemeldet (Android).</div>' : ''}
     ${run.nachgetragen ? '<div class="warn">Nachgemeldet: ohne Fahrtpunkte und erst mehr als 15 Minuten nach dem Ende beim Server eingegangen (Kennzeichen vom Server, nicht änderbar).</div>' : ''}
     ${run.canceled ? `<div class="storno">STORNIERT am ${fmtDateTime(run.canceled_at)}: ${esc(run.cancel_reason ?? '')}</div>` : ''}

@@ -5,7 +5,9 @@
 //   ?demo&netz=nein  Server lehnt ab → „vom Server nicht angenommen“
 // Der Schalter lässt sich im Banner oben umstellen (Nachsenden testen).
 import { useMemo, useState } from 'react';
-import { Link, Route as RouterRoute, Routes } from 'react-router-dom';
+import { Link, Route as RouterRoute, Routes, useParams } from 'react-router-dom';
+import { RunView } from '../pages/RunDetail';
+import { DEMO_FAHRTEN, demoRun } from './demoFahrt';
 import type { AppConfig } from '../../apps/registry';
 import type { Property } from '../types';
 import type { EinsatzBackend, OperationRow, RouteRow, RunRow, TodayOp } from './backend';
@@ -173,6 +175,10 @@ export function EinsatzDemoArea({ app }: { app: AppConfig }) {
       </header>
       <EinsatzCtx.Provider value={value}>
         <Routes>
+          {/* Fahrt-Ansicht (Karte + Zeitleiste) mit erfundenen Fahrten: Handy-Rahmen bzw. Dashboard-Rahmen */}
+          <RouterRoute path="aussendienst/strecken/fahrten/:id" element={<div className="ad"><main className="ad-main"><DemoFahrt /></main></div>} />
+          <RouterRoute path="fahrten-demo" element={<DemoFahrtenListe base={base} />} />
+          <RouterRoute path="fahrten-demo/:id" element={<div className="app-shell"><main className="app-main"><DemoFahrt /></main></div>} />
           <RouterRoute path="aussendienst/*" element={<Aussendienst />} />
           <RouterRoute path="*" element={<div className="page"><Link className="btn" to={`${base}/aussendienst`}>Zum Außendienst (Beispieldaten)</Link></div>} />
         </Routes>
@@ -180,6 +186,32 @@ export function EinsatzDemoArea({ app }: { app: AppConfig }) {
       <pre data-testid="demo-log" style={{ margin: 16, fontSize: 11, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', color: 'var(--muted)' }}>
         {log.join('\n')}
       </pre>
+    </div>
+  );
+}
+
+const DEMO_ORG = { id: ORG, name: 'Bauhof Musterstadt (Beispiel)', land: 'AT' as const, address: 'Hauptplatz 1, 8010 Musterstadt', created_at: '2026-11-01T06:00:00.000Z' };
+
+/** Eine erfundene Fahrt in der echten Fahrt-Ansicht (Karte, Regler, Zeitleiste, PDF) — /…/fahrten-demo/<id> */
+function DemoFahrt() {
+  const { id = '' } = useParams();
+  const run = useMemo(() => demoRun(id), [id]);
+  if (!run) return <div className="error-box">Unbekannte Beispiel-Fahrt „{id}“.</div>;
+  return <RunView run={run} org={DEMO_ORG} pro canCancel={!run.canceled} onCancel={async () => undefined} />;
+}
+
+function DemoFahrtenListe({ base }: { base: string }) {
+  return (
+    <div className="page">
+      <h1>Beispiel-Fahrten</h1>
+      <ul>
+        {DEMO_FAHRTEN.map((f) => (
+          <li key={f.id}>
+            {f.titel}: <Link to={`${base}/fahrten-demo/${f.id}`}>Dashboard</Link> ·{' '}
+            <Link to={`${base}/aussendienst/strecken/fahrten/${f.id}`}>Außendienst</Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

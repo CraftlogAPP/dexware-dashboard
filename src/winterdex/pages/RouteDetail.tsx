@@ -11,7 +11,7 @@ import { checkPeriod, requirePro, saveSheets } from '../exportActions';
 import { periodLabel, runSheets } from '../exportLists';
 import { fmtDate, fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
 import { openReportWindow } from '../../lib/print';
-import { RouteSketch } from '../RouteSketch';
+import { FahrtAnsicht } from '../FahrtAnsicht';
 import { buildRouteLogHtml } from '../routeReport';
 import { fetchOrgPro, withWatermark } from '../pro';
 import { fetchRoute, fetchRun, fetchRuns, fmtDistance, type Route, type Run } from '../routes';
@@ -96,11 +96,16 @@ export function RouteDetail() {
             {route.notes ? ` · ${route.notes}` : ''}
           </p>
 
-          <RouteSketch
+          {/* echte Karte: Vorlage + letzte Fahrt (Uhrzeiten je Stelle zeigt die Fahrt selbst); Skizze als Rückfall */}
+          <FahrtAnsicht
             plan={route.path}
             track={last?.track}
             missed={last?.missed}
-            label={`Kartenskizze der Strecke ${route.name}${last ? ` mit der letzten Fahrt vom ${fmtDateTime(last.started_at)}` : ''}`}
+            gaps={last?.gaps}
+            startedAt={last?.started_at}
+            endedAt={last?.ended_at}
+            zeit={false}
+            label={`Karte der Strecke ${route.name}${last ? ` mit der letzten Fahrt vom ${fmtDateTime(last.started_at)}` : ''}`}
           />
           <p className="small muted" style={{ marginTop: -8 }}>
             {last ? (

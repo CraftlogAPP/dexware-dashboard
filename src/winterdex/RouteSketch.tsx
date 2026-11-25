@@ -1,8 +1,9 @@
 // Kartenskizze im Dashboard: gleiche Geometrie und Farben wie im PDF (routes.ts → buildSketch).
 // Bewusst ohne Kartendienst — kein Fremd-Server, lädt sofort, sieht im Druck genauso aus.
+// Seit 25.11.2026 Rückfall der echten Karte (FahrtAnsicht): ohne Netz, Kacheln gestört oder „Als Skizze“.
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { buildSketch, firstPoint, ROUTE_COLORS, type LatLng, type Track } from './routes';
+import { buildSketch, firstPoint, ROUTE_COLORS, sketchMarkW, type LatLng, type Track } from './routes';
 
 // Am Handy (≤560 px wie die Detail-Karten) schmaleres Format — sonst wird die 640er-Skizze auf
 // ~360 px gestaucht und Maßstab, Nordpfeil und Linien werden winzig.
@@ -24,6 +25,8 @@ export function RouteSketch({
   missed,
   label,
   mapLink = true,
+  marks,
+  extra,
 }: {
   plan?: LatLng[] | null;
   track?: Track | null;
@@ -31,9 +34,13 @@ export function RouteSketch({
   label: string;
   /** „Auf Karte zeigen ↗“ — während einer Aufzeichnung im Browser aus: der neue Tab verdeckt die Seite = Pause im Nachweis */
   mapLink?: boolean;
+  /** Zeitmarken „09:45“ entlang der Spur (wie im PDF) */
+  marks?: readonly { lat: number; lng: number; label: string }[];
+  /** zusätzlicher Eintrag rechts in der Legende (z. B. „Als Karte“) */
+  extra?: ReactNode;
 }) {
   const narrow = useNarrow();
-  const s = buildSketch(plan, track, missed, narrow ? 360 : 640, narrow ? 300 : 360);
+  const s = buildSketch(plan, track, missed, narrow ? 360 : 640, narrow ? 300 : 360, marks);
   if (!s) return <div className="card empty">Keine Kartenskizze — es wurden keine Positionen aufgezeichnet.</div>;
   const c = ROUTE_COLORS;
   const p = firstPoint(plan, track);
@@ -41,6 +48,7 @@ export function RouteSketch({
   if (s.plan) items.push(<span key="p"><i style={{ background: c.plan }} /> Strecken-Vorlage</span>);
   if (s.track.length) items.push(<span key="t"><i style={{ background: c.track }} /> gefahren (GPS)</span>);
   if (s.missed.length) items.push(<span key="m"><i style={{ background: c.missed }} /> nicht befahren</span>);
+  if (s.marks.length) items.push(<span key="z">● 09:45 = Uhrzeit dort</span>);
   return (
     <figure className="route-sketch">
       <svg viewBox={`0 0 ${s.w} ${s.h}`} role="img" aria-label={label}>
@@ -53,6 +61,19 @@ export function RouteSketch({
         ))}
         {s.start && <circle cx={s.start[0]} cy={s.start[1]} r={7} fill={c.track} stroke="#fff" strokeWidth={3} />}
         {s.end && <circle cx={s.end[0]} cy={s.end[1]} r={7} fill={c.end} stroke="#fff" strokeWidth={3} />}
+        {s.marks.map((m, i) => (
+          <g key={`z${i}`}>
+            <circle cx={m.x} cy={m.y} r={4} fill={c.end} stroke="#fff" strokeWidth={1.5} />
+            {m.lx != null && (
+              <>
+                <rect x={m.lx} y={m.ly} width={sketchMarkW(m.label)} height={15} rx={3} fill="#fff" fillOpacity={0.92} stroke={c.end} strokeOpacity={0.35} strokeWidth={0.8} />
+                <text x={m.lx + 3} y={m.ly + 11.5} fontFamily="Arial" fontSize={11} fontWeight={700} fill={c.end}>
+                  {m.label}
+                </text>
+              </>
+            )}
+          </g>
+        ))}
         <g fontFamily="Arial" fontSize={12} fill="#233648">
           <line x1={s.scale.x} y1={s.scale.y} x2={s.scale.x + s.scale.px} y2={s.scale.y} stroke="#233648" strokeWidth={3} />
           <text x={s.scale.x} y={s.scale.y - 6}>{s.scale.label}</text>
@@ -63,7 +84,8 @@ export function RouteSketch({
       <figcaption className="route-legend small muted">
         {items}
         <span>● Start grün · Ende dunkel</span>
-        {p && mapLink && (
+        {extra}
+        {!extra && p && mapLink && (
           <a href={`https://www.openstreetmap.org/?mlat=${p[0]}&mlon=${p[1]}#map=17/${p[0]}/${p[1]}`} target="_blank" rel="noreferrer">
             Auf Karte zeigen ↗
           </a>
