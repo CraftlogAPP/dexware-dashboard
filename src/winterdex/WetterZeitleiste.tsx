@@ -1,7 +1,8 @@
 // Abschnitt „Wetterverlauf“ im Einsatz- und Fahrt-Detail (Wetter-Guide P3, Bauplan 5.5): Kurzsatz nach G13 groß, Kernsatz,
 // amtliche Warnungen wörtlich, Zeitleiste (SVG wie im PDF), Vermerke grau, Archivvermerk mit Prüfcode + „Prüfcode prüfen“,
 // eingeklappt „Werte anzeigen“ mit Stundenwerten, Quellen und Fußzeile. Nie eine Bewertung; Text nur vom Server.
-// Ohne Beleg der Stand-Text („wird ermittelt“, „mit WinterDex Pro“ …) — nie leer; „aus“ → nichts.
+// Ohne Beleg der Stand-Text („wird ermittelt“, „mit WinterDex Pro“ …) — nie leer; „aus“ → nichts. Der Pro-Hinweis steht NUR
+// hier (Detailseite), nie in PDF oder Excel (standTextBericht).
 // Nachfragen bei „wird ermittelt“: wetterNachladen.ts.
 import { VerifyProof } from '../components/VerifyProof';
 import { uhrzeit } from './heuteNachtDaten';

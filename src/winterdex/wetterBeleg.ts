@@ -5,12 +5,18 @@
 //     05:50“) und Kernsatz (5.5). Hier wird nichts umformuliert und nichts bewertet — die Datenbank lehnt Bewertungs-
 //     Wörter ohnehin ab.
 //   · Paywall (D1, 2a): Belege entstehen nur serverseitig für Pro/Probe; Free bekommt den Stand „nur_pro“ → „Wetterverlauf
-//     im Nachweis: mit WinterDex Pro.“ Vorhandene Belege bleiben nach Pro-Ende sichtbar (Stand „da“ geht vor).
+//     im Nachweis: mit WinterDex Pro.“ NUR auf der Detailseite — PDFs und Excel bleiben für Free genau wie bisher (keine
+//     Werbung in einem Nachweis, der an Auftraggeber/Gerichte geht). Vorhandene Belege bleiben nach Pro-Ende sichtbar.
+//   · Ohne Beleg (wird ermittelt, Quelle fehlt, …) zeigen PDF-Zeilen IMMER den bisherigen Schnappschuss, den Stand nur klein
+//     und grau darunter (Bauplan P3: der Modell-Momentwert bleibt) — eine Lücke im Nachholen leert nie einen Nachweis.
+//   · Nachträglich aus Stundenwerten ermittelte Belege (stufe „nachtrag“) sind in jeder Zeile als solche gekennzeichnet.
 //   · „aus“ (Schalter aus/noch nicht freigegeben, storniert ohne Beleg, vor dem 01.10.2026) → keine Zeile.
 //   · Fehlt der Nachtrag (RPC fehlt) → alles wie bisher; Fehler beim Laden stoppen nie ein PDF.
 // Getestet in tests/wetter-dashboard.test.mjs (Fixtures = echte Belege aus WinterDex backend/test/wetter-beleg.test).
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { rpcFehlt, uhrzeit, wochentag } from './heuteNachtDaten';
+import { weatherLabel } from './labels';
+import type { WeatherSnapshot } from './types';
 
 export type Bezug = 'operation' | 'run';
 export type BelegStandArt = 'da' | 'wird_ermittelt' | 'quelle_fehlt' | 'nicht_verfuegbar' | 'ohne_standort' | 'nur_pro' | 'aus';
@@ -106,6 +112,29 @@ export function standText(stand: BelegStandArt, bezug: Bezug): string | null {
       return null;
   }
 }
+
+/**
+ * Stand in PDF und Excel (klein, grau, unter dem Schnappschuss): ein Bericht ist ein Abzug zum Zeitpunkt X — darum ohne
+ * Zeitversprechen („ca. 1–3 Std.“ stimmt beim rückwirkenden Nachholen ab 01.10. nicht) und ohne „Versuch läuft“.
+ * „nur_pro“ → null: im Nachweis keine Pro-Werbung (die steht nur auf der Detailseite).
+ */
+export function standTextBericht(stand: BelegStandArt, bezug: Bezug): string | null {
+  switch (stand) {
+    case 'wird_ermittelt':
+      return 'Wetterverlauf wird noch ermittelt.';
+    case 'quelle_fehlt':
+      return 'Wetterverlauf noch nicht verfügbar.';
+    case 'nicht_verfuegbar':
+      return 'Wetterverlauf nicht verfügbar.';
+    case 'ohne_standort':
+      return standText(stand, bezug);
+    default:
+      return null;
+  }
+}
+
+/** Zählt der Stand im Bericht (Spalten/Überschrift)? Nicht bei „aus“ und nicht bei „nur_pro“ (Free = wie bisher). */
+export const wetterImBericht = (i: WetterInfo | null | undefined): i is WetterInfo => !!i && i.stand !== 'aus' && i.stand !== 'nur_pro';
 
 /** Prüfcode wie überall: die ersten 12 Zeichen des SHA-256 */
 export const pruefcode = (hash: string | null | undefined): string => (hash ? hash.slice(0, 12) : '');
@@ -203,8 +232,18 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const fmtDatum = (ms: number, tz: string) =>
+const fmtDatum = (ms: number, tz?: string) =>
   new Intl.DateTimeFormat('de-DE', { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(ms));
+
+/**
+ * Kurzvermerk je Zeile für nachträglich ermittelte Belege (stufe „nachtrag“ = nur Stundenwerte, zum Zeitpunkt des
+ * Nachweises nicht gespeichert): „Aus Stundenwerten nachträglich ermittelt am 10.12.2026“. Sonst null.
+ */
+export function nachtragKurz(b: WetterBeleg, tz?: string): string | null {
+  if (b.stufe !== 'nachtrag') return null;
+  const ms = Date.parse(b.erstellt_at);
+  return `Aus Stundenwerten nachträglich ermittelt${Number.isFinite(ms) ? ` am ${fmtDatum(ms, tz)}` : ''}`;
+}
 
 /** „Wetterverlauf gespeichert am 26.11.2026, 07:42 · Prüfcode 3fa9c1d2e8b0“ (5.5) */
 export function archivVermerk(b: WetterBeleg, tz: string): string {
@@ -266,29 +305,37 @@ export function momentwert(w: { temp_c?: number | null } | null | undefined): st
 // ---------------------------------------------------------------------------------------------- PDF-Bausteine (HTML)
 
 /**
- * Zelle „Wetter“ im Einsatz-Nachweis: Zeile 1 Kurzsatz (G13), klein grau der Modell-Momentwert, amtliche Stufe als Wort,
- * Prüfcode. Storniert: Wetter mit Durchstrich. Ohne Beleg der Stand-Text (nie leer); ohne Wetter-Daten (Nachtrag fehlt,
- * Fehler) null → der Aufrufer zeigt den bisherigen Schnappschuss.
+ * Zelle „Wetter“ im Einsatz-Nachweis bzw. Fahrtenbuch. Mit Beleg: Zeile 1 Kurzsatz (G13), klein grau amtliche Stufe als
+ * Wort, Modell-Momentwert, bei „nachtrag“ der Vermerk „Aus Stundenwerten nachträglich ermittelt am …“, Prüfcode; storniert
+ * mit Durchstrich. Ohne Beleg: IMMER der bisherige Schnappschuss, der Stand nur klein und grau darunter (Bauplan P3).
+ * null (ohne Wetter-Daten, „aus“, „nur_pro“) → der Aufrufer zeigt den Schnappschuss genau wie bisher.
  */
 export function wetterZelleHtml(
   info: WetterInfo | null | undefined,
   bezug: Bezug,
-  w: { temp_c?: number | null } | null | undefined,
-  canceled = false,
-  /** Fahrtenbuch: nur der Kurzsatz (Bauplan P3) */
-  kompakt = false,
+  w: WeatherSnapshot | null | undefined,
+  opts: {
+    canceled?: boolean;
+    /** Fahrtenbuch: nur der Kurzsatz (Bauplan P3) */
+    kompakt?: boolean;
+    /** Zone des Betriebs (Datum im Nachtrag-Vermerk) */
+    tz?: string;
+  } = {},
 ): string | null {
-  if (!info || info.stand === 'aus') return null;
+  if (!wetterImBericht(info)) return null;
+  const { canceled = false, kompakt = false, tz } = opts;
   if (info.stand !== 'da' || !info.beleg) {
-    const t = standText(info.stand, bezug);
-    return t ? `<span class="wv-stand">${esc(t)}</span>` : null;
+    const t = standTextBericht(info.stand, bezug);
+    return `${esc(weatherLabel(w))}${t ? `<div class="wv-klein wv-stand">${esc(t)}</div>` : ''}`;
   }
   const b = info.beleg;
   const kurz = canceled ? `<s>${esc(b.kurz)}</s>` : esc(b.kurz);
-  if (kompakt) return `<span class="wv-kurz">${kurz}</span>`;
+  const nt = nachtragKurz(b, tz);
+  const nachtrag = nt ? `<div class="wv-klein">${esc(nt)}</div>` : '';
+  if (kompakt) return `<span class="wv-kurz">${kurz}</span>${nachtrag}`;
   const m = momentwert(w);
   const am = amtlichKurz(b);
-  return `<b class="wv-kurz">${kurz}</b>${am ? `<div class="wv-klein">${esc(am)}</div>` : ''}${m ? `<div class="wv-klein">${esc(m)}</div>` : ''}<div class="wv-klein mono">Wetter-Prüfcode ${esc(pruefcode(b.entry_hash))}</div>`;
+  return `<b class="wv-kurz">${kurz}</b>${am ? `<div class="wv-klein">${esc(am)}</div>` : ''}${m ? `<div class="wv-klein">${esc(m)}</div>` : ''}${nachtrag}<div class="wv-klein mono">Wetter-Prüfcode ${esc(pruefcode(b.entry_hash))}</div>`;
 }
 
 /** Styles für die Wetter-Bausteine im Druck (einmal je Bericht in <style>) */
@@ -304,11 +351,15 @@ export const WETTER_PDF_STYLE = `
   .wv-anhang p { margin: 3px 0; }
 `;
 
-/** Kasten „Wetterverlauf“ unter dem Kopf des Fahrt-Nachweises (Kurzsatz, Kernsatz, kleine Zeitleiste, Vermerke, Prüfcode). */
+/**
+ * Kasten „Wetterverlauf“ unter dem Kopf des Fahrt-Nachweises (Kurzsatz, Kernsatz, kleine Zeitleiste, Vermerke, Prüfcode).
+ * Ohne Beleg nur der kurze Stand (der Schnappschuss steht weiter unten unter „Wetterlage (archiviert)“); „aus“ und
+ * „nur_pro“ → kein Kasten (Free: Nachweis wie bisher, ohne Pro-Werbung).
+ */
 export function wetterKastenHtml(info: WetterInfo | null | undefined, bezug: Bezug, tz: string, canceled = false): string {
-  if (!info || info.stand === 'aus') return '';
+  if (!wetterImBericht(info)) return '';
   if (info.stand !== 'da' || !info.beleg) {
-    const t = standText(info.stand, bezug);
+    const t = standTextBericht(info.stand, bezug);
     return t ? `<div class="wv-kasten"><h2>Wetterverlauf</h2><p class="wv-stand">${esc(t)}</p></div>` : '';
   }
   const b = info.beleg;
@@ -324,12 +375,29 @@ export function wetterKastenHtml(info: WetterInfo | null | undefined, bezug: Bez
   </div>`;
 }
 
-/** Schluss-Absatz im Bericht: Quellen (nur die enthaltenen) + Fußzeile AT/neutral + was der Wetter-Prüfcode ist. */
+/**
+ * Woher die Zeiten stammen — nach den tatsächlich enthaltenen Stufen: „verlauf“ = zum Zeitpunkt des Nachweises gespeicherte
+ * 15-Min.-Analyse (Uhrzeiten auf 15 Min. gerundet), „nachtrag“ = nachträglich abgerufene Stundenwerte (stundengenau).
+ */
+export function herkunftText(belege: Iterable<WetterBeleg>): string {
+  let verlauf = false;
+  let nachtrag = false;
+  for (const b of belege) {
+    if (b.stufe === 'nachtrag') nachtrag = true;
+    else verlauf = true;
+  }
+  const ana = 'aus der zum Zeitpunkt des Nachweises gespeicherten 15-Minuten-Analyse ermittelt (Uhrzeiten auf 15 Minuten gerundet)';
+  const std = 'nachträglich aus Stundenwerten ermittelt, die zum Zeitpunkt des Nachweises nicht gespeichert waren (Zeiten auf die Stunde genau)';
+  if (verlauf && nachtrag) return `Je Nachweis einmal ${ana} – bei Einträgen mit dem Vermerk „Aus Stundenwerten nachträglich ermittelt“ ${std}.`;
+  return `Je Nachweis einmal ${nachtrag ? std : ana}.`;
+}
+
+/** Schluss-Absatz im Bericht: Herkunft (nach Stufen) + Quellen (nur die enthaltenen) + Fußzeile AT/neutral + Prüfcode. */
 export function wetterAnhangHtml(belege: WetterBeleg[]): string {
   if (!belege.length) return '';
-  return `<div class="wv-anhang"><p><b>Wetterverlauf (archiviert).</b> Je Nachweis einmal aus der gespeicherten Analyse ermittelt und mit eigenem
-    Prüfcode (SHA-256) versiegelt, verknüpft mit dem Prüfcode des Nachweises; spätere Änderungen sind technisch gesperrt.
-    Uhrzeiten auf 15 Minuten gerundet, Schneemengen geschätzt.</p>
+  return `<div class="wv-anhang"><p><b>Wetterverlauf (archiviert).</b> ${esc(herkunftText(belege))} Jeder Wetterverlauf ist mit
+    eigenem Prüfcode (SHA-256) versiegelt, verknüpft mit dem Prüfcode des Nachweises; spätere Änderungen sind technisch
+    gesperrt. Schneemengen geschätzt.</p>
     ${quellenTexte(belege).map((q) => `<p>${esc(q)}</p>`).join('')}
     ${fusszeilen(belege).map((f) => `<p>${esc(f)}</p>`).join('')}</div>`;
 }
@@ -455,9 +523,13 @@ export function zeitleisteSvg(b: WetterBeleg, tz: string, opts: { breite?: numbe
 
 // ---------------------------------------------------------------------------------------------- Excel
 
-/** Zwei Spalten „Wetter (Kurzsatz)“, „Wetter-Prüfcode“ (nur wenn Wetter-Daten geladen wurden) */
+/**
+ * Zwei Spalten „Wetter (Kurzsatz)“, „Wetter-Prüfcode“ (nur wenn Wetter-Daten geladen wurden). Nachtrag gekennzeichnet;
+ * ohne Beleg der kurze Stand; „nur_pro“/„aus“ leer (keine Pro-Werbung je Zeile, der Schnappschuss steht in „Wetter (archiviert)“).
+ */
 export function excelWetter(info: WetterInfo | null | undefined, bezug: Bezug): [string | null, string | null] {
-  if (!info || info.stand === 'aus') return [null, null];
-  if (info.stand === 'da' && info.beleg) return [info.beleg.kurz, pruefcode(info.beleg.entry_hash)];
-  return [standText(info.stand, bezug), null];
+  if (!wetterImBericht(info)) return [null, null];
+  if (info.stand === 'da' && info.beleg)
+    return [info.beleg.stufe === 'nachtrag' ? `${info.beleg.kurz} (aus Stundenwerten nachträglich ermittelt)` : info.beleg.kurz, pruefcode(info.beleg.entry_hash)];
+  return [standTextBericht(info.stand, bezug), null];
 }

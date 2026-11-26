@@ -4,11 +4,13 @@
 //   [1] heute_nacht lesen + laden (Vertrag v1, RPC fehlt → aus, Fehler → letzter Stand, Paywall „ereignisse“)
 //   [2] Sichtbarkeit (nur karte_live vom Server, Saison, nie ohne Warn-Ort), Titel, Ampel (nie grün aus „unbekannt“)
 //   [3] Streifen 12 / 6 Spalten (Gefahr wird nie weggemittelt), Mengen
-//   [4] Morgen-Satz (voraussichtlich ja/nein/knapp, gesendet, Stand > 3 Std., nach der Weckzeit nur Pro)
+//   [4] Morgen-Satz (voraussichtlich ja/nein/knapp, gesendet, Stand > 3 Std., danach nur die Tatsache bis 10:00, Free
+//       neutral „Glätte bis 10:00“), Kopf: Frühwarnung „ja“ → Ampel nie grün und Karte offen, Handy-Hinweis
 //   [5] Betroffen / erledigt (nur Zahlen), Fußzeile, amtlich (Stufe als Wort), Deutschland nicht angebunden
 //   [6] Wetterverlauf: Stand-Texte (nie leer), Laden (500er-Blöcke, RPC fehlt → aus), Archivvermerk, Quellen, Zeitleiste
-//   [7] PDFs: Einsatz-Nachweis (Kurzsatz G13 + Wetter-Prüfcode, Free „mit Pro“, Storno durchgestrichen), Fahrt-PDF-Kasten,
-//       Fahrtenbuch nur Kurzsatz, ohne Wetter-Daten unverändert
+//   [7] PDFs: Einsatz-Nachweis (Kurzsatz G13 + Wetter-Prüfcode, Storno durchgestrichen), Fahrt-PDF-Kasten, Fahrtenbuch nur
+//       Kurzsatz, ohne Wetter-Daten unverändert; ohne Beleg IMMER der Schnappschuss (Stand klein), Free ohne Pro-Werbung,
+//       Nachtrag-Belege gekennzeichnet, Anhang nach Stufen
 //   [8] Excel: zwei Spalten nur mit Wetter-Daten
 //   [9] Team-Karte: Geräte nur Inhaber/Verwalter, nur freigegebene Spalten, Mitarbeiter-Info
 //   [10] Quelltext-Wächter (kein set_push_arten im Browser, kein select('*'), keine Bewertungs-Wörter, Dateinamen)
@@ -166,6 +168,8 @@ console.log('\n[2] Sichtbarkeit, Titel, Ampel');
   const sommer = Date.parse('2026-07-15T20:00:00Z');
   const gruen = { ...kopie(d), ampel_gesamt: 0, amtlich: [] };
   check('Sommer: grün → unsichtbar; ab gelb sichtbar', !HN.hnSichtbar(gruen, sommer, TZ, true) && HN.hnSichtbar({ ...gruen, ampel_gesamt: 1 }, sommer, TZ, true));
+  const sommerStand = { ...gruen, stand_at: new Date(sommer - 5 * 60_000).toISOString() };
+  check('… Sommer, 12 Std. grün, aber Frühwarnung bis 10:00 „ja“ → sichtbar (Karte gelb)', HN.hnSichtbar({ ...sommerStand, morgen: { ...sommerStand.morgen, erwartet: 'ja' } }, sommer, TZ, true) && !HN.hnSichtbar({ ...sommerStand, morgen: { ...sommerStand.morgen, erwartet: 'nein' } }, sommer, TZ, true));
   const ohne = { ...kopie(d), gebiet: { ...d.gebiet, zellen: 0 }, ohne_standort_n: 3 };
   check('nur Objekte ohne Standort: Inhaber/Verwalter sehen den Hinweis, Mitarbeiter nichts', HN.hnSichtbar(ohne, ABEND, TZ, true) && !HN.hnSichtbar(ohne, ABEND, TZ, false));
   check('kein Warn-Ort und nichts ohne Standort → unsichtbar', !HN.hnSichtbar({ ...ohne, ohne_standort_n: 0 }, ABEND, TZ, true));
@@ -204,22 +208,57 @@ console.log('\n[3] Streifen');
 console.log('\n[4] Morgen-Satz');
 {
   const d = kopie(probe);
-  const mit = (m, extra = {}) => ({ ...d, ...extra, morgen: { ...d.morgen, ...m } });
-  check('voraussichtlich ja (+ Grund)', HN.morgenSatz(mit({ erwartet: 'ja', grund: 'Eisregen' }), ABEND, TZ)?.satz === 'Frühwarnung 02:45: voraussichtlich ja' && HN.morgenSatz(mit({ erwartet: 'ja', grund: 'Eisregen' }), ABEND, TZ).grund === 'Eisregen');
-  check('voraussichtlich nein / knapp – kann kommen', HN.morgenSatz(mit({ erwartet: 'nein' }), ABEND, TZ)?.satz === 'Frühwarnung 02:45: voraussichtlich nein' && HN.morgenSatz(mit({ erwartet: 'knapp' }), ABEND, TZ)?.satz === 'Frühwarnung 02:45: knapp – kann kommen');
+  // Pro (Frühwarnung kommt aufs Handy) bzw. Free (Probe: pro = false)
+  const mit = (m, extra = {}) => ({ ...d, ...extra, morgen: { ...d.morgen, pro: true, ...m } });
+  const free = (m, extra = {}) => mit({ ...m, pro: false }, extra);
+  check('Pro: voraussichtlich ja (+ Grund)', HN.morgenSatz(mit({ erwartet: 'ja', grund: 'Eisregen' }), ABEND, TZ)?.satz === 'Frühwarnung 02:45: voraussichtlich ja' && HN.morgenSatz(mit({ erwartet: 'ja', grund: 'Eisregen' }), ABEND, TZ).grund === 'Eisregen');
+  check('Pro: voraussichtlich nein / knapp – kann kommen', HN.morgenSatz(mit({ erwartet: 'nein' }), ABEND, TZ)?.satz === 'Frühwarnung 02:45: voraussichtlich nein' && HN.morgenSatz(mit({ erwartet: 'knapp' }), ABEND, TZ)?.satz === 'Frühwarnung 02:45: knapp – kann kommen');
+  check('Free: keine Ankündigung einer Frühwarnung, die nie kommt → „Glätte bis 10:00: voraussichtlich ja / knapp – kann kommen / voraussichtlich nein“',
+    HN.morgenSatz(free({ erwartet: 'ja' }), ABEND, TZ)?.satz === 'Glätte bis 10:00: voraussichtlich ja' && HN.morgenSatz(free({ erwartet: 'knapp' }), ABEND, TZ)?.satz === 'Glätte bis 10:00: knapp – kann kommen' &&
+      HN.morgenSatz(free({ erwartet: 'nein' }), ABEND, TZ)?.satz === 'Glätte bis 10:00: voraussichtlich nein' && !/Frühwarnung/.test(HN.vorleseSatz(free({ erwartet: 'ja' }), ABEND, TZ)));
+  check('Hinweis „kommt nur über die WinterDex-App aufs Handy“: nur Pro und nur bei ja/knapp',
+    HN.morgenHandyHinweis(mit({ erwartet: 'ja' }), HN.morgenSatz(mit({ erwartet: 'ja' }), ABEND, TZ)) === 'kommt nur über die WinterDex-App aufs Handy' &&
+      !!HN.morgenHandyHinweis(mit({ erwartet: 'knapp' }), HN.morgenSatz(mit({ erwartet: 'knapp' }), ABEND, TZ)) &&
+      HN.morgenHandyHinweis(mit({ erwartet: 'nein' }), HN.morgenSatz(mit({ erwartet: 'nein' }), ABEND, TZ)) === null &&
+      HN.morgenHandyHinweis(free({ erwartet: 'ja' }), HN.morgenSatz(free({ erwartet: 'ja' }), ABEND, TZ)) === null);
   check('ohne Entscheidung (erwartet null, z. B. k12_quelle ≠ geosphere) → kein Satz', HN.morgenSatz(mit({ erwartet: null }), ABEND, TZ) === null);
   check('Stand älter als 3 Std. → kein Satz', HN.morgenSatz(mit({ erwartet: 'ja' }), ABEND + 3 * 3_600_000 + 60_000, TZ) === null);
   check('im Funkloch gezeigter Stand (abgerufen vor > 3 Std.) → kein Satz', HN.morgenSatz(mit({ erwartet: 'ja' }), ABEND + 60_000, TZ, ABEND - 3 * 3_600_000 - 60_000) === null);
   check('gesendet → „Frühwarnung 02:45 gesendet ✓“ (Tatsache, auch bei altem Stand)', HN.morgenSatz(mit({ gesendet_at: '2026-11-26T01:45:00Z' }), ABEND + 6 * 3_600_000, TZ)?.satz === 'Frühwarnung 02:45 gesendet ✓');
   const frueh = Date.parse('2026-11-26T03:10:00Z'); // 04:10 Wien, nach 02:45 + 75 min
-  const nachher = mit({ erwartet: 'nein', pro: true }, { stand_at: '2026-11-26T03:00:00Z' });
-  check('nach der Weckzeit, Pro, Entscheidung „nein“ → „Um 02:45 keine Warnung – keine Glättegefahr erkannt. Nächste Prüfung: 19:00.“', HN.morgenSatz(nachher, frueh, TZ)?.satz === 'Um 02:45 keine Warnung – keine Glättegefahr erkannt. Nächste Prüfung: 19:00.');
-  check('… ohne Pro nie (es wurde ja nichts gesendet — kein falsches „keine Gefahr“)', HN.morgenSatz({ ...nachher, morgen: { ...nachher.morgen, pro: false } }, frueh, TZ) === null);
+  const nachher = mit({ erwartet: 'nein' }, { stand_at: '2026-11-26T03:00:00Z' });
+  check('nach der Weckzeit, Pro, nichts gesendet → nur die Tatsache „Um 02:45 keine Frühwarnung gesendet.“ (keine Begründung)', HN.morgenSatz(nachher, frueh, TZ)?.satz === 'Um 02:45 keine Frühwarnung gesendet.' && !/Glättegefahr|erkannt/.test(HN.morgenSatz(nachher, frueh, TZ).satz));
+  check('… unabhängig von der JETZT-Entscheidung (auch bei „ja“/null — sie sagt nichts über den Lauf um 02:45)',
+    HN.morgenSatz({ ...nachher, morgen: { ...nachher.morgen, erwartet: 'ja' } }, frueh, TZ)?.satz === 'Um 02:45 keine Frühwarnung gesendet.' && HN.morgenSatz({ ...nachher, morgen: { ...nachher.morgen, erwartet: null } }, frueh, TZ)?.satz === 'Um 02:45 keine Frühwarnung gesendet.');
+  check('… ohne Pro nie (es wurde ja nichts gesendet)', HN.morgenSatz({ ...nachher, morgen: { ...nachher.morgen, pro: false } }, frueh, TZ) === null);
+  const um0959 = Date.parse('2026-11-26T08:59:00Z');
+  const um1000 = Date.parse('2026-11-26T09:00:00Z');
+  const vormittag = (zeit, erwartet) => mit({ erwartet }, { stand_at: new Date(zeit - 5 * 60_000).toISOString() });
+  check('Fenster „danach“ endet um 10:00 (09:59 noch die Tatsache, 10:00 nicht mehr)', HN.morgenSatz(vormittag(um0959, 'nein'), um0959, TZ)?.ton === 'keine' && HN.morgenSatz(vormittag(um1000, 'nein'), um1000, TZ)?.ton !== 'keine');
+  check('… ab 10:00 gilt die Entscheidung für MORGEN → wieder „voraussichtlich …“', HN.morgenSatz(vormittag(um1000, 'ja'), um1000, TZ)?.satz === 'Frühwarnung 02:45: voraussichtlich ja' && HN.morgenSatz(vormittag(Date.parse('2026-11-26T10:30:00Z'), 'nein'), Date.parse('2026-11-26T10:30:00Z'), TZ)?.satz === 'Frühwarnung 02:45: voraussichtlich nein');
   check('während der Prüfung (02:45–04:00) kein Satz', HN.morgenSatz(mit({ erwartet: 'ja' }, { stand_at: '2026-11-26T01:50:00Z' }), Date.parse('2026-11-26T02:00:00Z'), TZ) === null);
   const eigene = mit({ erwartet: 'ja', zeit: '03:30' });
   check('eigene Weckzeit des Betriebs (03:30) steht im Satz', HN.morgenSatz(eigene, ABEND, TZ)?.satz === 'Frühwarnung 03:30: voraussichtlich ja');
   const satz = HN.vorleseSatz(mit({ erwartet: 'ja' }), ABEND, TZ);
   check('Bildschirmleser: ein Satz mit Titel, Lage, Tiefstwert, Ampel und Morgen-Satz', /^Heute Nacht: Achtung: gefrierender Regen/.test(satz) && /Tiefste Temperatur minus 1 Grad\./.test(satz) && /Eisregen-Gefahr\./.test(satz) && /Frühwarnung 02:45: voraussichtlich ja\./.test(satz), satz);
+
+  // Kopf: 17:00, jetzt + 12 Std. grün, Frühwarnung (bis 10:00, Schnee ab 06:00) „ja“ → nie „✓ Glätte unwahrscheinlich“
+  const um17 = Date.parse('2026-11-26T16:00:00Z');
+  const gruen12 = mit({ erwartet: 'ja', grund: 'Schneefall ab ca. 06:00' }, {
+    stand_at: new Date(um17 - 5 * 60_000).toISOString(),
+    ampel_gesamt: 0,
+    amtlich: [],
+    stunden: d.stunden.map((s, i) => (i < 12 ? { ...s, ampel: 0, art: 'trocken', mm: 0, schnee_cm: null } : s)),
+  });
+  const kopf = HN.kartenKopf(gruen12, um17, TZ);
+  check('17:00, Stunden 0–11 grün, Frühwarnung „ja“ → Ampel mindestens gelb „Glätte möglich“ (kein ✓), Karte aufgeklappt',
+    kopf.m?.ton === 'ja' && kopf.amp.wort === 'Glätte möglich' && kopf.amp.zeichen !== '✓' && kopf.amp.klasse === 'hn-a1' && kopf.gefahr === true, kopf);
+  check('… ebenso „knapp“ und Free; unbekannt (null) wird bei „ja“ auch gelb', HN.kartenKopf({ ...gruen12, morgen: { ...gruen12.morgen, erwartet: 'knapp' } }, um17, TZ).amp.wort === 'Glätte möglich' &&
+    HN.kartenKopf({ ...gruen12, morgen: { ...gruen12.morgen, pro: false } }, um17, TZ).gefahr && HN.kartenKopf({ ...gruen12, ampel_gesamt: null }, um17, TZ).amp.wort === 'Glätte möglich');
+  check('… „nein“ → bleibt grün und eingeklappt; Orange/Rot wird nie herabgesetzt', HN.kartenKopf({ ...gruen12, morgen: { ...gruen12.morgen, erwartet: 'nein' } }, um17, TZ).amp.wort === 'Glätte unwahrscheinlich' &&
+    !HN.kartenKopf({ ...gruen12, morgen: { ...gruen12.morgen, erwartet: 'nein' } }, um17, TZ).gefahr && HN.kartenKopf({ ...gruen12, ampel_gesamt: 2 }, um17, TZ).amp.wort === 'Glätte wahrscheinlich');
+  check('… alter Stand (> 3 Std., kein Morgen-Satz) → keine Anhebung aus der Frühwarnung', HN.kartenKopf(gruen12, um17 + 3 * 3_600_000 + 60_000, TZ).amp.wort === 'Glätte unwahrscheinlich');
+  check('… Bildschirmleser liest dieselbe Ampel', /Glätte möglich\./.test(HN.vorleseSatz(gruen12, um17, TZ)) && !/unwahrscheinlich/.test(HN.vorleseSatz(gruen12, um17, TZ)));
 }
 
 // ---------------------------------------------------------------------------------------------------------------- [5]
@@ -314,7 +353,15 @@ const nachtrag = belege.find((b) => b.stufe === 'nachtrag');
   check('… kaputter Zeitraum → leer, kein Absturz', WB.zeitleisteSvg({ ...einsatz, fakten: { zeitraum: { von: 5, bis: 1 } } }, TZ) === '');
   const boese = { ...einsatz, kurz: '<img src=x onerror=alert(1)>' };
   check('… Texte escaped (kein HTML aus Daten)', !/<img/.test(WB.zeitleisteSvg(boese, TZ)) && !/<img/.test(WB.wetterKastenHtml({ stand: 'da', beleg: boese }, 'run', TZ)) && !/<img/.test(WB.wetterZelleHtml({ stand: 'da', beleg: boese }, 'operation', null)));
-  const alle = [...belege.flatMap((b) => [b.kurz, b.satz, WB.archivVermerk(b, TZ), WB.belegVermerk(b) ?? '', ...WB.amtlicheSaetze(b)]), ...['wird_ermittelt', 'quelle_fehlt', 'nicht_verfuegbar', 'ohne_standort', 'nur_pro'].map((s) => WB.standText(s, 'run'))];
+  const alle = [
+    ...belege.flatMap((b) => [b.kurz, b.satz, WB.archivVermerk(b, TZ), WB.belegVermerk(b) ?? '', WB.nachtragKurz(b, TZ) ?? '', ...WB.amtlicheSaetze(b)]),
+    ...['wird_ermittelt', 'quelle_fehlt', 'nicht_verfuegbar', 'ohne_standort', 'nur_pro'].flatMap((s) => [WB.standText(s, 'run'), WB.standTextBericht(s, 'run') ?? '', WB.standTextBericht(s, 'operation') ?? '']),
+    WB.herkunftText(belege),
+    WB.herkunftText([einsatz]),
+    WB.herkunftText([nachtrag]),
+  ];
+  check('Stand im Bericht: kurz, „nur_pro“/„aus“/„da“ → nichts (keine Pro-Werbung im Nachweis)', WB.standTextBericht('nur_pro', 'operation') === null && WB.standTextBericht('aus', 'run') === null && WB.standTextBericht('da', 'run') === null &&
+    ['wird_ermittelt', 'quelle_fehlt', 'nicht_verfuegbar', 'ohne_standort'].every((s) => !!WB.standTextBericht(s, 'operation')));
   check('keine Bewertungs-Wörter (5.5) in allem, was der Wetterverlauf zeigt', alle.every((t) => !VERBOTEN.test(t)), alle.find((t) => VERBOTEN.test(t)));
 }
 
@@ -338,7 +385,7 @@ const op = (id, extra = {}) => ({
   const html = REP.buildReportHtml(orgAT, prop, ops, '01.11.2026 – 26.11.2026', wetter);
   check('Einsatz-PDF: Spalte „Wetter“, Kurzsatz G13 genau + Wetter-Prüfcode', html.includes('<th>Wetter</th>') && html.includes('<b class="wv-kurz">Schneefall endete ca. 05:30 · Einsatz ab 05:50</b>') && html.includes(`Wetter-Prüfcode ${einsatz.entry_hash.slice(0, 12)}`));
   check('… klein: Modell-Momentwert und amtliche Stufe als Wort', html.includes('Modell-Momentwert bei Beginn: −2 °C (Open-Meteo)') && html.includes('Amtlich: Gelbe Glatteiswarnung'));
-  check('… Free: „Wetterverlauf im Nachweis: mit WinterDex Pro.“', html.includes('Wetterverlauf im Nachweis: mit WinterDex Pro.'));
+  check('… Free-Zeile („nur_pro“): Schnappschuss wie bisher, KEINE Pro-Werbung im Nachweis', !html.includes('mit WinterDex Pro') && (html.match(/<td>-2,2 °C<\/td>/g) ?? []).length >= 2);
   check('… storniert: Wetter durchgestrichen', html.includes(`<s>${raeum.kurz}</s>`));
   check('… „aus“ → bisheriger Schnappschuss (−2,2 °C)', /<td>−?-?2,2 °C<\/td>/.test(html) || html.includes('-2,2 °C') || html.includes('−2,2 °C'));
   check('… Anhang: Quellen (GeoSphere) + Fußzeile AT, einmal', (html.match(/§ 93 StVO legt keine feste Wartezeit/g) ?? []).length === 1 && html.includes('Wetterdaten: GeoSphere Austria – data.hub.geosphere.at'));
@@ -358,16 +405,62 @@ const op = (id, extra = {}) => ({
   check('… Excel: keine Wetter-Spalten', XL.operationSheets({ org: orgAT, properties: [prop], ops, period: { from: '2026-11-01', to: '2026-11-26' }, propertyId: null, wetter: allesAus })[0].columns.every((c) => !/Wetter \(Kurzsatz\)|Wetter-Prüfcode/.test(c.header)));
   check('… Detailseite/Kasten: „aus“ ergibt nichts', WB.wetterKastenHtml({ stand: 'aus', beleg: null }, 'operation', TZ) === '' && WB.wetterZelleHtml({ stand: 'aus', beleg: null }, 'operation', null) === null && /if \(!info \|\| info\.stand === 'aus'\) return null;/.test(lies('src/winterdex/WetterZeitleiste.tsx')));
 
-  const run = {
+  const runBasis = {
     id: 'f1', org_id: 'o', route_id: 'r1', route_name: 'Runde Nord', started_at: '2026-11-26T04:50:00Z', ended_at: '2026-11-26T05:40:00Z', track: [], gaps: [], planned_path: null, missed: [],
     track_length_m: 12000, coverage_pct: null, missed_m: null, action: 'cleared', grit_material: null, grit_amount: null, weather: null, notes: null, performer_name: 'Fahrer 1',
     canceled: false, cancel_reason: null, canceled_at: null, created_at: '2026-11-26T05:41:00Z', entry_hash: 'b'.repeat(64), photo_urls: [], gps_mocked: false, nachgetragen: false,
   };
+
+  // Nachprüfung 26.11. (Blocker): ohne Beleg bleibt der bisherige Schnappschuss IMMER stehen, der Stand nur klein darunter
+  const schnapp = { temp_c: -2.2, snowfall_cm: 1.4, wind_kmh: 25 };
+  const SCHNAPP = '-2,2 °C · Schneefall 1,4 cm · Wind 25 km/h';
+  const opsS = [op('s1', { weather: schnapp }), op('s2', { weather: schnapp, started_at: '2026-11-26T05:30:00Z' }), op('s3', { weather: schnapp, started_at: '2026-11-26T06:30:00Z' })];
+  const nurPro = REP.buildReportHtml(orgAT, prop, opsS, 'x', new Map(opsS.map((o) => [o.id, { stand: 'nur_pro', beleg: null }])));
+  const ohneW = REP.buildReportHtml(orgAT, prop, opsS, 'x');
+  check('Free (alle „nur_pro“): Einsatz-PDF genau wie ohne Wetter-Daten — Schnappschuss je Zeile, kein „mit WinterDex Pro“, kein Anhang',
+    ohneZeit(nurPro) === ohneZeit(ohneW) && (nurPro.match(new RegExp(`<td>${SCHNAPP}</td>`, 'g')) ?? []).length === 3 && !nurPro.includes('mit WinterDex Pro') && nurPro.includes('<th>Wetterlage (archiviert)</th>'));
+  const ermittelt = REP.buildReportHtml(orgAT, prop, opsS, 'x', new Map([['s1', { stand: 'wird_ermittelt', beleg: null }], ['s2', { stand: 'quelle_fehlt', beleg: null }], ['s3', { stand: 'ohne_standort', beleg: null }]]));
+  check('Pro ohne Beleg (wird ermittelt / Quelle fehlt / ohne Standort): Schnappschuss bleibt, Stand klein und grau darunter',
+    (ermittelt.match(new RegExp(`<td>${SCHNAPP}<div class="wv-klein wv-stand">`, 'g')) ?? []).length === 3 && ermittelt.includes('Wetterverlauf wird noch ermittelt.') &&
+      ermittelt.includes('Wetterverlauf noch nicht verfügbar.') && ermittelt.includes('Kein Wetterverlauf: Objekt ohne Standort und Einsatz ohne GPS.'), ermittelt.slice(ermittelt.indexOf('<tbody>'), ermittelt.indexOf('<tbody>') + 900));
+  check('… im Bericht kein Zeitversprechen („ca. 1–3 Std.“ stimmt beim Nachholen ab 01.10. nicht) und kein „Versuch läuft“', !/ca\. 1–3 Std\.|Versuch läuft/.test(ermittelt));
+  const mitBeleg = REP.buildReportHtml(orgAT, prop, [...opsS, op('s4', { started_at: '2026-11-26T07:00:00Z' })], 'x', new Map([['s1', { stand: 'wird_ermittelt', beleg: null }], ['s2', { stand: 'nur_pro', beleg: null }], ['s4', { stand: 'da', beleg: einsatz }]]));
+  check('gemischt (Pro-Ende): Beleg-Zeile mit Kurzsatz, übrige Zeilen mit Schnappschuss; nie Pro-Werbung in Tabellenzeilen',
+    mitBeleg.includes(`<b class="wv-kurz">${einsatz.kurz}</b>`) && (mitBeleg.match(new RegExp(`<td>${SCHNAPP}`, 'g')) ?? []).length === 3 && !mitBeleg.includes('mit WinterDex Pro'));
+  check('Fahrt-PDF Free („nur_pro“): kein Kasten, kein Pro-Hinweis, Wetterlage (archiviert) wie bisher', (() => {
+    const r = RR.buildRunHtml(orgAT, { ...runBasis, weather: schnapp }, TZ, { wetter: { stand: 'nur_pro', beleg: null } });
+    return !r.includes('class="wv-kasten"') && !r.includes('mit WinterDex Pro') && r.includes(`<b>Wetterlage (archiviert):</b> ${SCHNAPP}`);
+  })());
+  const buchS = RR.buildRouteLogHtml(orgAT, { id: 'r1', name: 'Runde Nord', path: null, length_m: 12000 }, [{ ...runBasis, weather: schnapp }, { ...runBasis, id: 'f2', weather: schnapp }],
+    'Nov', { wetter: new Map([['f1', { stand: 'nur_pro', beleg: null }], ['f2', { stand: 'wird_ermittelt', beleg: null }]]), timeZone: TZ });
+  check('Fahrtenbuch: „nur_pro“ = Schnappschuss wie bisher, „wird ermittelt“ = Schnappschuss + Stand klein; kein „mit WinterDex Pro“',
+    buchS.includes(`<td class="small">${SCHNAPP}</td>`) && buchS.includes(`<td class="small">${SCHNAPP}<div class="wv-klein wv-stand">Wetterverlauf wird noch ermittelt.</div></td>`) && !buchS.includes('mit WinterDex Pro'));
+
+  // Nachtrag-Belege (stufe „nachtrag“, nur Stundenwerte, Tage später): in jeder Zeile gekennzeichnet, Anhang nach Stufen
+  const opsN = [op('n1'), op('n2', { started_at: '2026-11-26T05:30:00Z' })];
+  const nur = REP.buildReportHtml(orgAT, prop, opsN, 'x', new Map([['n1', { stand: 'da', beleg: nachtrag }]]));
+  // Datum = Speicherzeitpunkt des Belegs (erstellt_at, Serverzeit; in der Probe 10.12.2026), in der Ortszeit des Betriebs
+  check('Einsatz-PDF mit Nachtrag-Beleg: Zeile trägt „Aus Stundenwerten nachträglich ermittelt am 10.12.2026“', nur.includes('<div class="wv-klein">Aus Stundenwerten nachträglich ermittelt am 10.12.2026</div>'));
+  check('… Anhang nur Nachtrag: „nachträglich aus Stundenwerten … (Zeiten auf die Stunde genau)“, nicht „15 Minuten gerundet“',
+    /nachträglich aus Stundenwerten ermittelt, die zum Zeitpunkt des Nachweises nicht gespeichert waren \(Zeiten auf die Stunde genau\)/.test(nur) && !/15 Minuten gerundet/.test(nur.slice(nur.indexOf('class="wv-anhang"'))));
+  const beide = REP.buildReportHtml(orgAT, prop, opsN, 'x', new Map([['n1', { stand: 'da', beleg: nachtrag }], ['n2', { stand: 'da', beleg: einsatz }]]));
+  const anh = beide.slice(beide.indexOf('class="wv-anhang"'));
+  check('… gemischt: Anhang nennt beides (15-Min.-Analyse gerundet + Stundenwerte nachträglich), nur die Analyse-Zeile ohne Vermerk',
+    /15-Minuten-Analyse ermittelt \(Uhrzeiten auf 15 Minuten gerundet\)/.test(anh) && /Vermerk „Aus Stundenwerten nachträglich ermittelt“ nachträglich aus Stundenwerten/.test(anh) && (beide.match(/Aus Stundenwerten nachträglich ermittelt am/g) ?? []).length === 1);
+  const nurAna = REP.buildReportHtml(orgAT, prop, opsN, 'x', new Map([['n2', { stand: 'da', beleg: einsatz }]]));
+  const anhAna = nurAna.indexOf('class="wv-anhang"') >= 0 ? nurAna.slice(nurAna.indexOf('class="wv-anhang"')) : null;
+  check('… nur Analyse: Anhang „15 Minuten gerundet“, ohne Nachtrag-Satz', !!anhAna && /Uhrzeiten auf 15 Minuten gerundet/.test(anhAna) && !/nachträglich/.test(anhAna));
+  const buchN = RR.buildRouteLogHtml(orgAT, { id: 'r1', name: 'Runde Nord', path: null, length_m: 12000 }, [runBasis], 'Nov', { wetter: new Map([['f1', { stand: 'da', beleg: { ...fahrt, stufe: 'nachtrag' } }]]), timeZone: TZ });
+  check('Fahrtenbuch mit Nachtrag-Beleg: Kurzsatz + „nachträglich ermittelt am …“ klein', new RegExp(`<span class="wv-kurz">${fahrt.kurz}</span><div class="wv-klein">Aus Stundenwerten nachträglich ermittelt am \\d{2}\\.\\d{2}\\.\\d{4}</div>`).test(buchN));
+  check('Fahrt-PDF mit Nachtrag-Beleg: Server-Vermerk wörtlich im Kasten', RR.buildRunHtml(orgAT, runBasis, TZ, { wetter: { stand: 'da', beleg: { ...fahrt, stufe: 'nachtrag', fakten: { ...fahrt.fakten, vermerk: nachtrag.fakten.vermerk } } } }).includes(nachtrag.fakten.vermerk));
+  check('Nachtrag-Vermerk-Datum in der Ortszeit (Beleg kurz vor Mitternacht UTC = nächster Tag in Wien)', WB.nachtragKurz({ ...nachtrag, erstellt_at: '2026-12-09T23:30:00Z' }, TZ) === 'Aus Stundenwerten nachträglich ermittelt am 10.12.2026' && WB.nachtragKurz(einsatz, TZ) === null);
+
+  const run = runBasis;
   const rh = RR.buildRunHtml(orgAT, run, TZ, { wetter: { stand: 'da', beleg: fahrt } });
   check('Fahrt-PDF: Kasten „Wetterverlauf“ unter dem Kopf mit Kurzsatz, Kernsatz, Zeitleiste, Archivvermerk', rh.includes('<div class="wv-kasten"><h2>Wetterverlauf</h2>') && rh.includes(fahrt.kurz) && rh.includes(fahrt.satz) && rh.includes('<svg') && rh.includes(WB.archivVermerk(fahrt, TZ)) && rh.indexOf('wv-kasten') < rh.indexOf('class="legend"'));
   check('… Quellen + Fußzeile am Ende', rh.includes('class="wv-anhang"') && rh.includes('§ 93 StVO'));
   const rw = RR.buildRunHtml(orgAT, run, TZ, { wetter: { stand: 'wird_ermittelt', beleg: null } });
-  check('… „wird ermittelt“: „(ca. 1–3 Std. nach Fahrtende)“, nie leer', rw.includes('Wetterverlauf wird ermittelt (ca. 1–3 Std. nach Fahrtende).'));
+  check('… „wird ermittelt“: kurzer Stand im Kasten (ohne Zeitversprechen), nie leer', rw.includes('<p class="wv-stand">Wetterverlauf wird noch ermittelt.</p>') && !rw.includes('ca. 1–3 Std.'));
   const r0 = RR.buildRunHtml(orgAT, run, TZ, {});
   check('… ohne Wetter-Daten kein Kasten', !r0.includes('class="wv-kasten"') && !r0.includes('class="wv-anhang"'));
   const ra = RR.buildRunHtml(orgAT, run, TZ, { wetter: { stand: 'aus', beleg: null } });
@@ -376,7 +469,7 @@ const op = (id, extra = {}) => ({
   check('… Fahrtenbuch mit „aus“: Schnappschuss wie bisher, kein Pro-Hinweis', !buchAus.includes('mit WinterDex Pro') && !buchAus.includes('class="wv-kurz"'));
   const route = { id: 'r1', name: 'Runde Nord', path: null, length_m: 12000 };
   const buch = RR.buildRouteLogHtml(orgAT, route, [run, { ...run, id: 'f2' }], 'Nov', { wetter: new Map([['f1', { stand: 'da', beleg: fahrt }], ['f2', { stand: 'nur_pro', beleg: null }]]), timeZone: TZ });
-  check('Fahrtenbuch: nur der Kurzsatz in der Spalte Wetter (kein Kernsatz, keine Zeitleiste)', buch.includes(`<span class="wv-kurz">${fahrt.kurz}</span>`) && !buch.includes(fahrt.satz) && !buch.includes('<svg xmlns') && buch.includes('mit WinterDex Pro'));
+  check('Fahrtenbuch: nur der Kurzsatz in der Spalte Wetter (kein Kernsatz, keine Zeitleiste), Free-Zeile ohne Pro-Werbung', buch.includes(`<span class="wv-kurz">${fahrt.kurz}</span>`) && !buch.includes(fahrt.satz) && !buch.includes('<svg xmlns') && !buch.includes('mit WinterDex Pro'));
 }
 
 // ---------------------------------------------------------------------------------------------------------------- [8]
@@ -392,11 +485,18 @@ console.log('\n[8] Excel');
   check('mit: „Wetter (Kurzsatz)“, „Wetter-Prüfcode“ am Ende', k1.at(-2) === 'Wetter (Kurzsatz)' && k1.at(-1) === 'Wetter-Prüfcode');
   const z1 = mit[0].rows[0];
   const z2 = mit[0].rows[1];
-  check('… Werte: Kurzsatz + 12er-Prüfcode; Free: Stand-Text, kein Prüfcode', z1.at(-2) === einsatz.kurz && z1.at(-1) === einsatz.entry_hash.slice(0, 12) && z2.at(-2) === 'Wetterverlauf im Nachweis: mit WinterDex Pro.' && z2.at(-1) === null);
-  const info = mit.find((s) => s.name === 'Info').rows.map((r) => r.map((c) => (c && typeof c === 'object' ? c.v : c)).join(' | ')).join('\n');
-  check('… Info-Blatt: Wetterverlauf erklärt + Quellen der enthaltenen Belege', /Wetterverlauf \| Kurzsatz aus dem versiegelten Wetterverlauf/.test(info) && /GeoSphere Austria/.test(info));
+  check('… Werte: Kurzsatz + 12er-Prüfcode; Free-Zeile leer (keine Pro-Werbung je Zeile), kein Prüfcode', z1.at(-2) === einsatz.kurz && z1.at(-1) === einsatz.entry_hash.slice(0, 12) && z2.at(-2) === null && z2.at(-1) === null);
+  const infoText = (sheets) => sheets.find((s) => s.name === 'Info').rows.map((r) => r.map((c) => (c && typeof c === 'object' ? c.v : c)).join(' | ')).join('\n');
+  const info = infoText(mit);
+  check('… Info-Blatt: Wetterverlauf erklärt + Herkunft „15-Minuten-Analyse … gerundet“ + Quellen der enthaltenen Belege', /Wetterverlauf \| Kurzsatz aus dem versiegelten Wetterverlauf/.test(info) && /Uhrzeiten auf 15 Minuten gerundet/.test(info) && !/nachträglich/.test(info) && /GeoSphere Austria/.test(info));
   const nurAus = XL.operationSheets({ ...base, wetter: new Map([['e1', { stand: 'aus', beleg: null }]]) });
   check('… nur „aus“ → keine Spalten (nichts freigegeben)', nurAus[0].columns.length === k0.length);
+  const nurFree = XL.operationSheets({ ...base, wetter: new Map([['e1', { stand: 'nur_pro', beleg: null }], ['e2', { stand: 'nur_pro', beleg: null }]]) });
+  check('… Free (alle „nur_pro“) → Liste genau wie bisher (keine Spalten, kein Wetterverlauf im Info-Blatt)', nurFree[0].columns.length === k0.length && !/Wetterverlauf \|/.test(infoText(nurFree)));
+  const mitN = XL.operationSheets({ ...base, wetter: new Map([['e1', { stand: 'da', beleg: nachtrag }], ['e2', { stand: 'wird_ermittelt', beleg: null }]]) });
+  check('… Nachtrag: Kurzsatz gekennzeichnet „(aus Stundenwerten nachträglich ermittelt)“, Info-Blatt „Zeiten auf die Stunde genau“, nicht „15 Min.“',
+    mitN[0].rows[0].at(-2) === `${nachtrag.kurz} (aus Stundenwerten nachträglich ermittelt)` && /Zeiten auf die Stunde genau/.test(infoText(mitN)) && !/15 Min/.test(infoText(mitN)));
+  check('… ohne Beleg: kurzer Stand ohne Zeitversprechen', mitN[0].rows[1].at(-2) === 'Wetterverlauf wird noch ermittelt.' && mitN[0].rows[1].at(-1) === null);
   const runs = [{ id: 'f1', route_id: 'r1', route_name: 'Runde Nord', started_at: '2026-11-26T04:50:00Z', ended_at: '2026-11-26T05:40:00Z', track_length_m: 12000, coverage_pct: null, missed_m: null, action: 'cleared', grit_material: null, grit_amount: null, performer_name: 'x', weather: null, notes: null, canceled: false, gaps: [], entry_hash: 'b'.repeat(64) }];
   const rs = XL.runSheets({ org: orgAT, runs, period: { from: '2026-11-01', to: '2026-11-26' }, filterLabel: 'Alle', wetter: new Map([['f1', { stand: 'da', beleg: fahrt }]]) });
   check('Fahrtenliste ebenso', rs[0].columns.at(-2).header === 'Wetter (Kurzsatz)' && rs[0].rows[0].at(-2) === fahrt.kurz);
@@ -467,7 +567,11 @@ console.log('\n[10] Quelltext-Wächter');
   check('keine Dateinamen, die sich nur in Groß/Klein unterscheiden (Windows/Vite)', doppelt.length === 0, doppelt);
   const karte = lies('src/winterdex/HeuteNacht.tsx');
   check('Karte: Ereignisse nur, wenn der Server sie schickt (Pro)', /d\.ereignisse && d\.ereignisse\.length > 0/.test(karte));
-  check('Karte: Sichtbarkeit nur über hnSichtbar (karte_live vom Server)', /if \(!hnSichtbar\(d, jetzt, tz, darf\)\) return null;/.test(karte));
+  check('Karte: Sichtbarkeit nur über hnSichtbar (karte_live vom Server)', /if \(!hnSichtbar\(d, jetzt, tz, darf, offline \?\? jetzt\)\) return null;/.test(karte));
+  check('Karte: Ampel, Aufklappen und Morgen-Satz aus EINER Rechnung (kartenKopf) — kein eigenes ampel_gesamt im Kopf',
+    /const \{ m, amp, gefahr \} = kartenKopf\(d, jetzt, tz, offlineSeit \?\? jetzt\);/.test(karte) && /const auf = offen \?\? \(gefahr && !eingeklappt\);/.test(karte) && !/ampelAnzeige\(d\.ampel_gesamt/.test(karte));
+  check('Karte: Handy-Hinweis am Morgen-Satz, solange die Geräte-Zeile ihn nicht zeigt (eingeklappt/Außendienst)',
+    /const handyHinweis = geraeteZeileSichtbar \? null : morgenHandyHinweis\(d, m\);/.test(karte) && /\{handyHinweis && <span className="muted"> · \{handyHinweis\}<\/span>\}/.test(karte));
   check('Übersicht bindet die Karte über den Kennzahlen ein', /<HeuteNacht[\s\S]*?\/>[\s\S]*<LoadGuard/.test(lies('src/winterdex/pages/Overview.tsx')));
   check('Einsatz-PDF, Fahrt-PDF, Fahrtenbuch und Excel laden den Wetterverlauf mit Frist', /ladeWetterMitFrist\(client, 'operation'/.test(lies('src/winterdex/pages/Report.tsx')) && /wetter }/.test(lies('src/winterdex/pages/RunDetail.tsx')) &&
     /ladeWetterMitFrist\(client, 'run'/.test(lies('src/winterdex/pages/RouteDetail.tsx')) && /ladeWetterMitFrist\(client, 'operation'/.test(lies('src/winterdex/pages/Operations.tsx')) && /ladeWetterMitFrist\(client, 'run'/.test(lies('src/winterdex/pages/Routes.tsx')));

@@ -14,7 +14,7 @@ import { fmtDateTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
 import { GPS_WEAK_M } from './einsatz/gps';
 import { WEATHER_SOURCE, weatherLabel } from './labels';
-import { excelWetter, quellenTexte, type WetterBeleg, type WetterInfo } from './wetterBeleg';
+import { excelWetter, herkunftText, quellenTexte, wetterImBericht, type WetterBeleg, type WetterInfo } from './wetterBeleg';
 import type { RunMeta } from './routes';
 import { ACTION_LABELS, type Operation, type OperationAction, type Property } from './types';
 
@@ -63,15 +63,17 @@ function gpsCell(op: Operation): string {
 
 const proofCode = (hash: string | null | undefined) => (hash ? hash.slice(0, 12) : null);
 
-// Wetterverlauf (Bauplan P3): zwei Spalten, aber nur wenn für mindestens einen Eintrag ein Stand ≠ „aus“ geladen wurde
-const hatWetter = (w: Map<string, WetterInfo> | null | undefined, xs: Array<{ id: string }>) => !!w && xs.some((x) => { const i = w.get(x.id); return !!i && i.stand !== 'aus'; });
+// Wetterverlauf (Bauplan P3): zwei Spalten, aber nur wenn für mindestens einen Eintrag ein Stand außer „aus“/„nur_pro“
+// geladen wurde (Free bekommt die Liste genau wie bisher)
+const hatWetter = (w: Map<string, WetterInfo> | null | undefined, xs: Array<{ id: string }>) => !!w && xs.some((x) => wetterImBericht(w.get(x.id)));
 const WETTER_SPALTEN = (an: boolean) => (an ? [{ header: 'Wetter (Kurzsatz)', width: 48 }, { header: 'Wetter-Prüfcode' }] : []);
-/** Info-Blatt: Quellen nur der tatsächlich enthaltenen Belege */
+/** Info-Blatt: Herkunft nach den enthaltenen Stufen (Analyse 15 Min. / Stundenwerte nachträglich), Quellen nur der enthaltenen Belege */
 function wetterInfo(w: Map<string, WetterInfo> | null | undefined, xs: Array<{ id: string }>): [string, XlsxValue][] {
   if (!hatWetter(w, xs)) return [];
   const belege = xs.map((x) => w?.get(x.id)?.beleg).filter((b): b is WetterBeleg => !!b);
   const q = quellenTexte(belege);
-  return [['Wetterverlauf', 'Kurzsatz aus dem versiegelten Wetterverlauf je Nachweis (Wetter-Prüfcode = erste 12 Zeichen des SHA-256). Zeiten auf 15 Min. gerundet, keine Bewertung.'], ...q.map((t, i): [string, XlsxValue] => [i === 0 ? 'Wetterdaten' : '', t])];
+  const herkunft = belege.length ? ` ${herkunftText(belege)}` : '';
+  return [['Wetterverlauf', `Kurzsatz aus dem versiegelten Wetterverlauf je Nachweis (Wetter-Prüfcode = erste 12 Zeichen des SHA-256).${herkunft} Keine Bewertung.`], ...q.map((t, i): [string, XlsxValue] => [i === 0 ? 'Wetterdaten' : '', t])];
 }
 const byStart = <T extends { started_at: string; id: string }>(a: T, b: T) =>
   a.started_at < b.started_at ? -1 : a.started_at > b.started_at ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;

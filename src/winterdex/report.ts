@@ -77,11 +77,12 @@ function fotoZelle(op: OperationWithPhotos, ohneAnhang = false): string {
  * GPS-Stempel, Person, Fotos) — auch für den Ganzjahres-Nachweis im ObjektDex-Bereich. Klassen: canceled, small, mono.
  * `ohneFotoAnhang`: Fotos werden nur gezählt, nicht angehängt. `timeZone`: Ortszeit des Betriebs (nachweisZone) — ohne Angabe
  * die Zeitzone des Geräts (wie bisher, z. B. Ganzjahres-Nachweis). `wetter`: Wetterverlauf je Einsatz (wetter_beleg, Bauplan
- * P3) — Spalte „Wetter“ mit Kurzsatz (G13) + Wetter-Prüfcode bzw. Stand-Text; ohne (null) wie bisher der Schnappschuss.
+ * P3) — mit Beleg Kurzsatz (G13) + Wetter-Prüfcode, ohne Beleg der bisherige Schnappschuss (Stand klein darunter); ohne
+ * Wetter-Daten (null), „aus“ und „nur_pro“ (Free) genau wie bisher.
  */
 export function einsatzTabelle(ops: OperationWithPhotos[], ohneFotoAnhang = false, timeZone?: string, wetter: Map<string, WetterInfo> | null = null): string {
-  // Überschrift „Wetter“ nur, wenn mindestens ein Einsatz einen Wetterverlauf-Stand hat (sonst bleibt alles wie bisher)
-  const mitWetter = !!wetter && ops.some((o) => { const i = wetter.get(o.id); return !!i && i.stand !== 'aus'; });
+  // Überschrift „Wetter“ nur, wenn mindestens ein Einsatz einen Wetterverlauf hat (sonst bleibt „Wetterlage (archiviert)“)
+  const mitWetter = !!wetter && ops.some((o) => !!wetter.get(o.id)?.beleg);
   const rows = ops
     .map((op) => {
       const action = op.canceled
@@ -101,7 +102,7 @@ export function einsatzTabelle(ops: OperationWithPhotos[], ohneFotoAnhang = fals
         <td>${time}${proof}</td>
         <td>${action}${op.notes?.trim() ? `<div style="font-size:10px">Notiz: ${esc(op.notes.trim())}</div>` : ''}</td>
         <td>${grit}</td>
-        <td>${wetterZelleHtml(wetter?.get(op.id), 'operation', op.weather, op.canceled) ?? esc(weatherLabel(op.weather))}</td>
+        <td>${wetterZelleHtml(wetter?.get(op.id), 'operation', op.weather, { canceled: op.canceled, tz: timeZone }) ?? esc(weatherLabel(op.weather))}</td>
         <td class="small">${gpsProofCell(op, timeZone)}</td>
         <td>${esc(op.performer_name ?? '—')}</td>
         <td>${fotoZelle(op, ohneFotoAnhang)}</td>

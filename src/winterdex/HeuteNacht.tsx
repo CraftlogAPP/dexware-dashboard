@@ -9,24 +9,22 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ChevronDown, ChevronUp, CloudHail, CloudRain, CloudSnow, Minus, Snowflake } from 'lucide-react';
 import { useAsync, useLiveRefresh } from '../components/ui';
 import {
-  ampelAnzeige,
   amtlichArt,
   amtlichHinweis,
   amtlichZeile,
   ART_WORT,
   betroffenZeile,
-  eisregenInSicht,
   ereignisZeile,
   erledigtHeute,
   fussZeile,
-  glaetteJetzt,
   gradText,
   hnSichtbar,
   hnTitel,
   hnZustand,
+  kartenKopf,
   ladeHeuteNacht,
   mengeText,
-  morgenSatz,
+  morgenHandyHinweis,
   standText,
   streifen,
   uhrzeit,
@@ -89,7 +87,7 @@ export function HeuteNacht({
   }
   if (!d) return null;
   const offline = ladung.art === 'fehler' && ladung.alt ? ladung.alt.abgerufen : null;
-  if (!hnSichtbar(d, jetzt, tz, darf)) return null;
+  if (!hnSichtbar(d, jetzt, tz, darf, offline ?? jetzt)) return null;
   return (
     <HeuteNachtKarte
       d={d}
@@ -161,15 +159,17 @@ export function HeuteNachtKarte({
 }) {
   const darf = rolle === 'owner' || rolle === 'admin';
   const zustand = hnZustand(d);
-  const amp = ampelAnzeige(d.ampel_gesamt, { eisregen: eisregenInSicht(d), jetztLage: glaetteJetzt(d, jetzt, tz) });
-  const gefahr = (d.ampel_gesamt ?? 0) >= 1;
+  // Ampel + Morgen-Satz aus einer Rechnung: erwartet die Frühwarnung (bis 10:00) „ja“/„knapp“, nie grün und aufgeklappt
+  const { m, amp, gefahr } = kartenKopf(d, jetzt, tz, offlineSeit ?? jetzt);
   // Grün/unbekannt eingeklappt, ab gelb offen; der Knopf merkt sich die Wahl nur bis zum Neuladen
   const [offen, setOffen] = useState<boolean | null>(null);
   const auf = offen ?? (gefahr && !eingeklappt);
   const breit = useMemo(() => streifen(d.stunden, 12), [d.stunden]);
   const schmal = useMemo(() => streifen(d.stunden, 6), [d.stunden]);
   const titel = hnTitel(jetzt, tz);
-  const m = morgenSatz(d, jetzt, tz, offlineSeit ?? jetzt);
+  // „kommt nur über die App aufs Handy“, solange die Geräte-Zeile es nicht schon sagt (eingeklappt, Außendienst, Mitarbeiter)
+  const geraeteZeileSichtbar = auf && darf && !!geraete && geraete.gesamt > 0;
+  const handyHinweis = geraeteZeileSichtbar ? null : morgenHandyHinweis(d, m);
   const betr = betroffenZeile(d, erledigt);
   const hinweisAmtlich = amtlichHinweis(d, land);
   const weck = d.morgen.zeit;
@@ -242,6 +242,7 @@ export function HeuteNachtKarte({
             <p className={`hn-morgen hn-m-${m.ton}`}>
               <b>{m.satz}</b>
               {m.grund && auf && <span className="muted"> – {m.grund}</span>}
+              {handyHinweis && <span className="muted"> · {handyHinweis}</span>}
             </p>
           )}
           {auf && betr && <p className="hn-zeile">{betr}</p>}

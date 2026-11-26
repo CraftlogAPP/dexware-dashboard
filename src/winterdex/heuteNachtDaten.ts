@@ -373,12 +373,24 @@ const minuten = (hhmm: string): number | null => {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 };
 
+/** Ende des K2-Fensters 10:00 Ortszeit (risiko.ts REGELN.k2.endeMin): ab dann gilt morgen.erwartet schon für MORGEN. */
+export const K2_ENDE_MIN = 10 * 60;
+
+export type MorgenTon = 'ja' | 'nein' | 'knapp' | 'gesendet' | 'keine';
+export interface MorgenSatz {
+  satz: string;
+  grund: string | null;
+  ton: MorgenTon;
+}
+
 /**
- * Morgen-Satz (5.3): „Frühwarnung 02:45: voraussichtlich ja / voraussichtlich nein / knapp – kann kommen“; danach
- * „Frühwarnung 02:45 gesendet ✓“ bzw. (nur Pro, Entscheidung „nein“) „Um 02:45 keine Warnung – keine Glättegefahr
- * erkannt. Nächste Prüfung: 19:00.“ Ohne Daten oder Stand > 3 Std.: kein Satz (null).
+ * Morgen-Satz (5.3). Pro: „Frühwarnung 02:45: voraussichtlich ja / voraussichtlich nein / knapp – kann kommen“; danach
+ * „Frühwarnung 02:45 gesendet ✓“ bzw. „Um 02:45 keine Frühwarnung gesendet.“ — nur die Tatsache aus glaette_versand, ohne
+ * Begründung (ob um 02:45 überhaupt gewertet wurde, weiß die Karte nicht) und nur bis 10:00 (danach ist morgen.erwartet
+ * schon die Prognose für den nächsten Morgen). Ohne Pro kommt keine Frühwarnung → neutral „Glätte bis 10:00:
+ * voraussichtlich ja …“ (nie eine Ankündigung, die nicht aufs Handy kommt). Ohne Daten oder Stand > 3 Std.: null.
  */
-export function morgenSatz(d: HeuteNacht, jetzt: number, tz: string, abgerufen = jetzt): { satz: string; grund: string | null; ton: 'ja' | 'nein' | 'knapp' | 'gesendet' } | null {
+export function morgenSatz(d: HeuteNacht, jetzt: number, tz: string, abgerufen = jetzt): MorgenSatz | null {
   const z = d.morgen.zeit;
   if (d.morgen.gesendet_at) return { satz: `Frühwarnung ${z} gesendet ✓`, grund: null, ton: 'gesendet' };
   const stand = d.stand_at ? Date.parse(d.stand_at) : NaN;
@@ -387,17 +399,41 @@ export function morgenSatz(d: HeuteNacht, jetzt: number, tz: string, abgerufen =
   const { h, mi } = ortsTeile(jetzt, tz);
   const jetztMin = h * 60 + mi;
   const weck = minuten(z) ?? 165;
-  // nach der Weckzeit (+ Wiederholungen 30/60 min) bis Mittag: die Prüfung ist gelaufen
-  const danach = jetztMin >= weck + 75 && jetztMin < 12 * 60;
-  if (danach) {
-    if (d.morgen.pro && d.morgen.erwartet === 'nein') return { satz: `Um ${z} keine Warnung – keine Glättegefahr erkannt. Nächste Prüfung: 19:00.`, grund: null, ton: 'nein' };
-    return null;
-  }
+  // nach der Weckzeit (+ Wiederholungen 30/60 min) bis 10:00: die Prüfung ist gelaufen
+  if (jetztMin >= weck + 75 && jetztMin < K2_ENDE_MIN) return d.morgen.pro ? { satz: `Um ${z} keine Frühwarnung gesendet.`, grund: null, ton: 'keine' } : null;
   if (jetztMin >= weck && jetztMin < weck + 75) return null; // läuft gerade
-  if (d.morgen.erwartet === 'ja') return { satz: `Frühwarnung ${z}: voraussichtlich ja`, grund: d.morgen.grund, ton: 'ja' };
-  if (d.morgen.erwartet === 'knapp') return { satz: `Frühwarnung ${z}: knapp – kann kommen`, grund: d.morgen.grund, ton: 'knapp' };
-  if (d.morgen.erwartet === 'nein') return { satz: `Frühwarnung ${z}: voraussichtlich nein`, grund: null, ton: 'nein' };
+  const vor = d.morgen.pro ? `Frühwarnung ${z}:` : 'Glätte bis 10:00:';
+  if (d.morgen.erwartet === 'ja') return { satz: `${vor} voraussichtlich ja`, grund: d.morgen.grund, ton: 'ja' };
+  if (d.morgen.erwartet === 'knapp') return { satz: `${vor} knapp – kann kommen`, grund: d.morgen.grund, ton: 'knapp' };
+  if (d.morgen.erwartet === 'nein') return { satz: `${vor} voraussichtlich nein`, grund: null, ton: 'nein' };
   return null;
+}
+
+const warnt = (m: MorgenSatz | null): boolean => !!m && (m.ton === 'ja' || m.ton === 'knapp');
+
+/**
+ * Ampel der Karte. ampel_gesamt umfasst nur jetzt + 12 Std., die Frühwarnung aber bis 10:00 (abends also mehr). Erwartet
+ * der Server dort „ja“/„knapp“, ist die Karte nie grün/unbekannt, sondern mindestens gelb („Glätte möglich“) — sonst stünde
+ * „✓ Glätte unwahrscheinlich“ über „Frühwarnung 02:45: voraussichtlich ja“.
+ */
+export function kartenAmpel(d: HeuteNacht, m: MorgenSatz | null): Ampel | null {
+  const a = d.ampel_gesamt;
+  return warnt(m) && (a === null || a < 1) ? 1 : a;
+}
+
+/** Kopf der Karte aus EINER Rechnung (Karte, Bildschirmleser): Morgen-Satz, Ampel-Anzeige, aufgeklappt ab gelb. */
+export function kartenKopf(d: HeuteNacht, jetzt: number, tz: string, abgerufen = jetzt): { m: MorgenSatz | null; amp: AmpelAnzeige; gefahr: boolean } {
+  const m = morgenSatz(d, jetzt, tz, abgerufen);
+  const a = kartenAmpel(d, m);
+  return { m, amp: ampelAnzeige(a, { eisregen: eisregenInSicht(d), jetztLage: glaetteJetzt(d, jetzt, tz) }), gefahr: (a ?? 0) >= 1 };
+}
+
+/**
+ * Zusatz zum Morgen-Satz, wenn die Geräte-Zeile nicht zu sehen ist (eingeklappt, Außendienst im Browser, Mitarbeiter):
+ * die Frühwarnung kommt nur über die App aufs Handy, nie in den Browser. Nur Pro und nur bei „ja“/„knapp“.
+ */
+export function morgenHandyHinweis(d: HeuteNacht, m: MorgenSatz | null): string | null {
+  return d.morgen.pro && warnt(m) ? 'kommt nur über die WinterDex-App aufs Handy' : null;
 }
 
 const STUFE_WORT: Record<number, string> = { 1: 'Gelbe', 2: 'Orange', 3: 'Rote' };
@@ -474,10 +510,10 @@ export function hnZustand(d: HeuteNacht): HnZustand {
  * Sichtbar? (5.3) Nur wenn der Server es freigibt (karte_live), 1.10.–30.4. immer, sonst erst ab gelb; nie ohne Warn-Ort —
  * Ausnahme: nur Objekte ohne Standort → Hinweis, aber nur für Inhaber/Verwalter (die den Standort eintragen können).
  */
-export function hnSichtbar(d: HeuteNacht, jetzt: number, tz: string, darfObjekte: boolean): boolean {
+export function hnSichtbar(d: HeuteNacht, jetzt: number, tz: string, darfObjekte: boolean, abgerufen = jetzt): boolean {
   if (!d.karte_live) return false;
   if (d.gebiet.zellen === 0) return darfObjekte && d.ohne_standort_n > 0 && inSaison(jetzt, tz);
-  return inSaison(jetzt, tz) || (d.ampel_gesamt ?? 0) >= 1 || (d.amtlich?.length ?? 0) > 0;
+  return inSaison(jetzt, tz) || kartenKopf(d, jetzt, tz, abgerufen).gefahr || (d.amtlich?.length ?? 0) > 0;
 }
 
 /** Eisregen in den nächsten 12 Std.? (rot heißt dann „Eisregen-Gefahr“) */
@@ -494,10 +530,9 @@ export function glaetteJetzt(d: HeuteNacht, jetzt: number, tz: string): boolean 
 /** Ein Satz für Bildschirmleser (5.3): Titel, Lage, Tiefstwert, Ampel, Morgen-Satz */
 export function vorleseSatz(d: HeuteNacht, jetzt: number, tz: string, abgerufen = jetzt): string {
   const titel = hnTitel(jetzt, tz);
-  const amp = ampelAnzeige(d.ampel_gesamt, { eisregen: eisregenInSicht(d), jetztLage: glaetteJetzt(d, jetzt, tz) });
+  const { m, amp } = kartenKopf(d, jetzt, tz, abgerufen);
   const ts = d.stunden.slice(0, 12).map((s) => s.t).filter((t): t is number => t !== null);
   const tmin = ts.length ? Math.round(Math.min(...ts)) : null;
-  const m = morgenSatz(d, jetzt, tz, abgerufen);
   const teile = [
     `${titel}: ${d.lage.satz ? d.lage.satz.replace(/\.$/, '') : 'Wetterlage'}.`,
     tmin !== null ? `Tiefste Temperatur ${tmin < 0 ? 'minus ' : ''}${Math.abs(tmin)} Grad.` : '',

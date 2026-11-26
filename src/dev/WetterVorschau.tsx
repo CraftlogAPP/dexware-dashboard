@@ -85,6 +85,18 @@ function hnFuer(zustand: string): { d: HeuteNacht; jetzt: number; offline: numbe
       d.morgen = { ...d.morgen, gesendet_at: '2026-11-26T01:45:00Z' };
       jetzt = Date.parse('2026-11-26T02:10:00Z');
       break;
+    case 'abend-gruen':
+      // 17:00: die nächsten 12 Std. trocken (grün), Frühwarnung bis 10:00 erwartet „ja“ (Schnee ab 06:00) → nie „✓“, gelb + offen
+      jetzt = Date.parse('2026-11-26T16:00:00Z');
+      d.stand_at = '2026-11-26T15:57:00Z';
+      d.stunden = d.stunden.map((s, i) => (i < 12 ? { ...s, ampel: 0, art: 'trocken', mm: 0, schnee_cm: null } : s));
+      d.ampel_gesamt = 0;
+      d.lage = { satz: 'Trocken, Tiefstwert ca. −1 °C gegen 04:00.', betroffen_orte: '0 von 3' };
+      d.je_ort = d.je_ort.map((o) => ({ ...o, ampel: 0 }));
+      d.amtlich = [];
+      d.morgen = { ...d.morgen, erwartet: 'ja', grund: 'Schneefall ab ca. 06:00, bis 10:00 ca. 1–3 cm' };
+      d.ereignisse = [];
+      break;
     case 'tag':
       jetzt = VORMITTAG;
       d.stand_at = '2026-11-26T08:27:00Z';
@@ -164,7 +176,8 @@ export function WetterVorschau({ params }: { params: URLSearchParams }) {
             <p className="muted" style={{ marginTop: -6 }}>
               Vorschau Wetter-Guide · Zustand „{zustand}“ · Rolle {rolle}
             </p>
-            <HeuteNachtKarte d={d} jetzt={jetzt} tz={TZ} land={zustand === 'de' ? 'DE' : 'AT'} rolle={rolle} erledigt={erledigt} offlineSeit={offline} geraete={GUIDE_DEMO.geraete} links={links} />
+            {/* eingeklappt=1: wie im Außendienst (Karte startet immer eingeklappt) */}
+            <HeuteNachtKarte d={d} jetzt={jetzt} tz={TZ} land={zustand === 'de' ? 'DE' : 'AT'} rolle={rolle} erledigt={erledigt} offlineSeit={offline} geraete={GUIDE_DEMO.geraete} links={links} eingeklappt={params.get('eingeklappt') === '1'} />
             <div className="kpi-grid">
               <div className="kpi">
                 <div className="kpi-label">Aktive Objekte</div>

@@ -414,7 +414,7 @@ export function buildRouteLogHtml(
         <td>${fmtDistance(r.track_length_m)}</td>
         <td>${fmtPct(r.coverage_pct)}${r.missed_m ? `<br><span class="small warn">${fmtDistance(r.missed_m)} nicht befahren</span>` : ''}</td>
         <td>${esc(ACTION_LABELS[r.action])}<br><span class="small">${esc(gritLabel(r.grit_material, r.grit_amount))}</span></td>
-        <td class="small">${wetterZelleHtml(extra.wetter?.get(r.id), 'run', r.weather, r.canceled, true) ?? esc(weatherLabel(r.weather))}</td>
+        <td class="small">${wetterZelleHtml(extra.wetter?.get(r.id), 'run', r.weather, { canceled: r.canceled, kompakt: true, tz }) ?? esc(weatherLabel(r.weather))}</td>
         <td>${esc(r.performer_name ?? '—')}${r.gaps?.length ? `<br><span class="small warn">${r.gaps.length}× Unterbrechung</span>` : ''}${r.gps_mocked ? '<br><span class="small warn">Fake-GPS gemeldet</span>' : ''}${r.nachgetragen ? '<br><span class="small warn">nachgemeldet ohne Fahrtpunkte</span>' : ''}</td>
         <td class="mono">${r.entry_hash ? esc(r.entry_hash.slice(0, 12)) : '—'}${r.canceled ? `<br><span class="storno">Storno: ${esc(r.cancel_reason ?? '')}</span>` : ''}</td>
       </tr>`;
