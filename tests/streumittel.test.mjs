@@ -175,9 +175,18 @@ console.log('\n[9] Gegenprobe mit dem SQL-Nachtrag der Server-Runde');
   if (!sql.length) console.log('  –     noch kein Nachtrag mit set_streumittel_aus gefunden — Gegenprobe übersprungen (Rückfall im Dashboard getestet)');
   for (const [f, t] of sql) {
     const name = path.basename(f);
-    check(`${name}: Spalte streumittel_aus text[]`, /streumittel_aus\s+text\[\]/i.test(t));
-    check(`${name}: alle Schlüssel bekannt`, S.STREUMITTEL.every((m) => t.includes(`'${m}'`)), S.STREUMITTEL.filter((m) => !t.includes(`'${m}'`)));
-    check(`${name}: Absagen keine_rechte / unbekannt / alle_aus`, ['keine_rechte', 'unbekannt', 'alle_aus'].every((x) => t.includes(x)));
+    // nur der SQL-Code zählt (Kommentare nennen „Sonstiges“ und Beispiele)
+    const code = t.replace(/--[^\n]*/g, '');
+    check(`${name}: Spalte streumittel_aus text[] not null default '{}'`, /streumittel_aus\s+text\[\]\s+not\s+null\s+default\s+'\{\}'/i.test(code));
+    check(`${name}: RPC set_streumittel_aus(p_org uuid, p_aus text[]) → jsonb`, /set_streumittel_aus\s*\(\s*p_org\s+uuid\s*,\s*p_aus\s+text\[\]\s*\)\s*returns\s+jsonb/i.test(code));
+    // Regel wie im Dashboard: ausblendbar sind GENAU die vier echten Schlüssel (Reihenfolge wie die Auswahl), „Sonstiges“ nie —
+    // das Dashboard schickt es nie in p_aus. Jede Schlüssel-Liste im Code (Prüfregel, Funktion, Kontrolle) muss das sein.
+    const listen = [...code.matchAll(/array\s*\[([^\]]*)\]/gi)].map((m) => [...m[1].matchAll(/'([^']*)'/g)].map((x) => x[1])).filter((l) => l.length > 1);
+    check(`${name}: ausblendbar genau ${S.AUSBLENDBAR.join(', ')} (Schlüssel wie Dashboard und App)`, listen.length > 0 && listen.every((l) => gleich(l, [...S.AUSBLENDBAR])), listen);
+    check(`${name}: „Sonstiges“ nie ausblendbar (kein Schlüssel im Code)`, !/'Sonstiges'/.test(code));
+    check(`${name}: Absagen keine_rechte / unbekannt / alle_aus, Antwort {ok, aus}`,
+      ['keine_rechte', 'unbekannt', 'alle_aus'].every((x) => code.includes(`'${x}'`)) && /'ok',\s*true,\s*'aus'/.test(code));
+    check(`${name}: ändern nur Inhaber und Verwalter (role 'owner' / 'admin')`, /role\s+in\s*\(\s*'owner',\s*'admin'\s*\)/.test(code));
   }
 }
 
