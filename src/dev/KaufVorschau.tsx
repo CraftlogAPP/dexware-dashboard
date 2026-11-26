@@ -18,8 +18,8 @@ const TEST = 'https://pay.rev.cat/beispiel';
 const BEISPIEL: RcAngebot = {
   identifier: 'web_pro_live',
   availablePackages: [
-    { identifier: '$rc_monthly', product: { identifier: 'pri_monat', price: { amountMicros: 9_990_000, currency: 'EUR' }, period: { number: 1, unit: 'month' } } },
-    { identifier: '$rc_annual', product: { identifier: 'pri_jahr', price: { amountMicros: 49_990_000, currency: 'EUR' }, period: { number: 1, unit: 'year' } } },
+    { identifier: '$rc_monthly', product: { identifier: 'pri_monat', price: { amountMicros: 19_990_000, currency: 'EUR' }, period: { number: 1, unit: 'month' } } },
+    { identifier: '$rc_annual', product: { identifier: 'pri_jahr', price: { amountMicros: 69_990_000, currency: 'EUR' }, period: { number: 1, unit: 'year' } } },
   ],
 };
 
@@ -68,7 +68,7 @@ function KasseVorschau({ fall }: { fall: string }) {
     const q = new URLSearchParams(location.search);
     const st = q.get('status');
     return {
-      info: { paket: { pkg: '$rc_annual', titel: 'Saison', preis: '49,99 €', per: 'pro Jahr' }, proBestaetigt: true, sandbox: q.has('sandbox') },
+      info: { paket: { pkg: '$rc_annual', titel: 'Saison', preis: '69,99 €', per: 'pro Jahr' }, proBestaetigt: true, sandbox: q.has('sandbox') },
       status: st === 'pruefe' || st === 'spaeter' ? st : 'ok',
     };
   });
@@ -124,8 +124,8 @@ export default function KaufVorschau() {
             offer: {
               link: TEST,
               plans: [
-                { pkg: '$rc_annual', title: 'Saison', price: '49,99 €', per: 'pro Jahr', note: 'deckt die ganze Wintersaison', best: true, tag: 'Meist gewählt' },
-                { pkg: '$rc_monthly', title: 'Monatlich', price: '9,99 €', per: 'pro Monat', note: 'monatlich kündbar' },
+                { pkg: '$rc_annual', title: 'Saison', price: '69,99 €', per: 'pro Jahr', note: 'deckt die ganze Wintersaison', best: true, tag: 'Meist gewählt' },
+                { pkg: '$rc_monthly', title: 'Monatlich', price: '19,99 €', per: 'pro Monat', note: 'monatlich kündbar' },
               ],
             },
           },
