@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Ticket } from 'lucide-react';
 import { useAppAuth } from '../auth/AppAuthContext';
 import {
@@ -14,6 +15,10 @@ import { WEB_OFFERS } from '../apps/webOffers';
 import { inSuite } from '../apps/registry';
 import { aboAnzeige, fmtAboDatum as fmtDate, suiteLead } from '../lib/aboAnzeige';
 import { useOrgOptional } from './OrgContext';
+import { KaufDanke, PaddleKasse, type GekauftInfo } from './PaddleKasse';
+import { darfKaufen, kasseKonfig, warteAufPro, type KasseKonfig } from '../lib/paddleKasse';
+import { orgProStand } from '../lib/proStand';
+import { meldeGratisAenderung } from '../winterdex/gratisLage';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -42,10 +47,58 @@ async function fetchOrgProStrict(sb: SupabaseClient): Promise<boolean | null> {
  * verkauft dort keine Suite und wirbt dort nicht mit ihr.
  */
 export function AboPage({ embedded = false }: { embedded?: boolean } = {}) {
-  const { app, session } = useAppAuth();
+  const { app, session, client } = useAppAuth();
+  const orgCtx = useOrgOptional()?.data;
   const state = useAsync(
     () => loadAboInfo(app, session!),
     [app.id, session?.user.id],
+  );
+  // Kauf direkt hier (Paddle-Kasse, src/lib/paddleKasse.ts): null = Schalter aus → Seite wie bisher. Sandbox nur mit
+  // ?kasse=sandbox und eigenem Sandbox-Schlüssel.
+  const { search } = useLocation();
+  const kasse = embedded ? null : kasseKonfig(app.paddleKasse, { env: import.meta.env, search });
+  const [kauf, setKauf] = useState<{ info: GekauftInfo; status: 'pruefe' | 'ok' | 'spaeter' } | null>(null);
+  const [kaufNr, setKaufNr] = useState(0);
+  const { refresh } = state;
+  const lebt = useRef(true);
+  useEffect(
+    () => () => {
+      lebt.current = false;
+    },
+    [],
+  );
+
+  // Nach checkout.completed: Abo-Anzeige still neu laden (RevenueCat kennt den Kauf schon) und warten, bis die
+  // vorhandene Pro-Prüfung des Betriebs (Server org_pro_active, gemerkt in proStand) Pro meldet — vorher frischt
+  // pro_status_auffrischen() den Server-Speicher auf (fehlt die Funktion noch, schadet der Aufruf nicht).
+  const gekauft = useCallback(
+    (info: GekauftInfo) => {
+      setKauf({ info, status: 'pruefe' });
+      setKaufNr((n) => n + 1);
+      refresh();
+      void (async () => {
+        const ok = await warteAufPro(
+          async () => {
+            try {
+              await client.rpc('pro_status_auffrischen');
+            } catch {
+              /* Funktion fehlt/gestört: die Prüfung unten fragt trotzdem */
+            }
+            if (orgCtx) return orgProStand(client, app.id, true);
+            return (await loadAboInfo(app, session!)).pro?.active ?? null;
+          },
+          { versuche: 8, pauseMs: 5000 },
+        );
+        // Auch wenn die Abo-Seite schon verlassen wurde („Zur Übersicht“): Der frische Stand steckt jetzt im Pro-Speicher,
+        // Banner und Listen im WinterDex-Bereich fragen auf das Ereignis hin neu.
+        meldeGratisAenderung();
+        if (!lebt.current) return;
+        setKauf((k) => (k ? { ...k, status: ok ? 'ok' : 'spaeter' } : k));
+        setKaufNr((n) => n + 1);
+        refresh();
+      })();
+    },
+    [app, client, orgCtx, refresh, session],
   );
 
   return (
@@ -54,12 +107,32 @@ export function AboPage({ embedded = false }: { embedded?: boolean } = {}) {
         {/* embedded: unter dem Betriebs-Tarif (InstallateurDex) — hier nur das eigene Store-Abo */}
         <h2>{embedded ? 'Dein Store-Abo' : <>Abo &amp; Tarif</>}</h2>
       </div>
-      <LoadGuard state={state}>{(info) => <AboContent info={info} />}</LoadGuard>
+      {kauf && session?.user.email && (
+        <KaufDanke appName={app.name} info={kauf.info} email={session.user.email} status={kauf.status} weiter={`/app/${app.id}`} />
+      )}
+      <LoadGuard state={state}>
+        {(info) => <AboContent info={info} kasse={kasse} kaufNr={kaufNr} kaufFertig={!!kauf} onGekauft={gekauft} />}
+      </LoadGuard>
     </>
   );
 }
 
-function AboContent({ info }: { info: AboInfo }) {
+function AboContent({
+  info,
+  kasse = null,
+  kaufNr = 0,
+  kaufFertig = false,
+  onGekauft,
+}: {
+  info: AboInfo;
+  /** Paddle-Kasse eingeschaltet (sonst null → Kacheln wie bisher) */
+  kasse?: KasseKonfig | null;
+  /** Zähler nach einem Kauf → Pro des Betriebs neu fragen */
+  kaufNr?: number;
+  /** Gerade hier gekauft (Danke-Ansicht oben) → keine Kauf-Karte mehr, auch bevor die Anzeige nachgeladen ist */
+  kaufFertig?: boolean;
+  onGekauft?: (info: GekauftInfo) => void;
+}) {
   const { app, session } = useAppAuth();
   // Kauf im Browser (nur wenn für die App eingerichtet): Adressen vorab bauen, damit der Knopf ein echter Link ist.
   const email = session?.user.email;
@@ -70,7 +143,7 @@ function AboContent({ info }: { info: AboInfo }) {
   const notOwner = !!role && role !== 'owner';
   const { client } = useAppAuth();
   // Ein Betrieb mit Pro auf Rechnung/Kommunal-Lizenz/Bonus sah hier bisher „Free“ und Kauf-Kacheln (21.11.2026).
-  const orgPro = useAsync(async () => (orgCtx ? fetchOrgProStrict(client) : null), [client, orgCtx?.org.id]).data === true;
+  const orgPro = useAsync(async () => (orgCtx ? fetchOrgProStrict(client) : null), [client, orgCtx?.org.id, kaufNr]).data === true;
   const bonusUntil = (orgCtx?.org as { pro_bonus_until?: string | null } | undefined)?.pro_bonus_until ?? null;
   const dexId = useAsync(async () => (email ? dexwareId(email) : null), [email]).data;
   const groups: WebBuyGroup[] = [];
@@ -116,9 +189,25 @@ function AboContent({ info }: { info: AboInfo }) {
         </div>
       )}
 
-      {!notOwner && !suiteActive && !proActive && !viaOrg && !suiteUnklarText && dexId && email && (
-        <WebBuy groups={groups} dexId={dexId} email={email} />
-      )}
+      {/* Kauf-Karte: dieselbe Regel wie bisher (darfKaufen) — bestehende Tarife sehen nie eine. Kasse an → Paddle-Fenster
+          direkt hier (nur das Pro der App; Preise aus RevenueCat), sonst die Kacheln wie bisher. */}
+      {!kaufFertig &&
+        darfKaufen({ notOwner, suiteActive, proActive, viaOrg, suiteUnklar: !!suiteUnklarText, dexId, email }) &&
+        dexId &&
+        email &&
+        (kasse && proOffer && onGekauft ? (
+          <PaddleKasse
+            appName={app.name}
+            lead={groups[0]?.lead ?? 'Alle Pro-Funktionen dieser App'}
+            plaene={proOffer.plans}
+            konf={kasse}
+            dexId={dexId}
+            email={email}
+            onGekauft={onGekauft}
+          />
+        ) : (
+          <WebBuy groups={groups} dexId={dexId} email={email} />
+        ))}
 
       {current && <EntitlementDetails info={current} />}
 

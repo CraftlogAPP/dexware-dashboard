@@ -3321,6 +3321,55 @@ tr.fk-z-luecke td.wrap {
   color: var(--green);
 }
 
+/* Paddle-Kasse direkt auf der Abo-Seite (components/PaddleKasse.tsx): Tarif-Kacheln als Knöpfe, Danke-Ansicht */
+button.kasse-plan {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.kasse-plan:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button.kasse-plan:disabled {
+  cursor: progress;
+  opacity: 0.75;
+  transform: none;
+}
+.kasse-laden {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 96px;
+  margin: 0;
+}
+.kasse-abbruch {
+  margin: 12px 0 0;
+}
+.kasse-spin {
+  animation: kasse-dreh 0.9s linear infinite;
+}
+@keyframes kasse-dreh {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kasse-spin {
+    animation: none;
+  }
+}
+.kasse-danke {
+  border-color: rgba(34, 197, 94, 0.55);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.25);
+}
+.kasse-danke-i {
+  width: 24px;
+  height: 24px;
+  color: var(--green);
+}
+
 /* Checkliste am schmalen Handy: Tasten etwas schmaler, damit lange Prüfpunkte seltener umbrechen (Tipphöhe bleibt 48 px). */
 @media (max-width: 420px) {
   .pv-check {

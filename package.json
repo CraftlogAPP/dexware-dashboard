@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@revenuecat/purchases-js": "1.74.0",
     "@supabase/supabase-js": "^2.110.1",
     "leaflet": "1.9.4",
     "lucide-react": "^0.577.0",

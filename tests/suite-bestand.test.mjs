@@ -294,7 +294,9 @@ check('kein Hinweis „nicht prüfen“, wenn ein Tarif aktiv ist oder die App n
   anz('winterdex', { suiteBackendUnknown: true }, { orgPro: true, bonusUntil: null }).suiteUnklarText === null &&
   anz('installateurdex', { suiteBackendUnknown: true }).suiteUnklarText === null &&
   anz('winterdex', {}).suiteUnklarText === null);
-check('Abo-Seite: keine Kauf-Kacheln, solange der Suite-Stand unklar ist', /!suiteUnklarText && dexId && email/.test(liesWeb('src/components/AboPage.tsx')));
+// seit 26.11.2026 (Paddle-Kasse) entscheidet darfKaufen() in src/lib/paddleKasse.ts für Kacheln UND Kasse — geprüft auch in tests/paddle-kasse.test.mjs
+check('Abo-Seite: keine Kauf-Kacheln, solange der Suite-Stand unklar ist', /darfKaufen\(\{[^}]*suiteUnklar: !!suiteUnklarText/.test(liesWeb('src/components/AboPage.tsx')) &&
+  /!s\.suiteUnklar/.test(liesWeb('src/lib/paddleKasse.ts')));
 check('Web-Kauf-Zeile der Suite nennt die Anzahl aus der registry', ANZ.suiteLead() === `Pro in allen ${R.SUITE_APPS.length} Apps der Dexware Suite mit einem Abo`, ANZ.suiteLead());
 
 // ============================================================================ [7] Quelltext

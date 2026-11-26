@@ -3,6 +3,8 @@
 // haben ein eigenes Abo (notInSuite bzw. suiteNurBestand). Eine neue App im Dashboard = ein Eintrag hier (plus ggf. ein
 // Dashboard-Modul).
 
+import type { PaddleKasseEinstellung } from '../lib/paddleKasse';
+
 export type AppStatus = 'dashboard' | 'external' | 'soon';
 
 /** Farben wie auf der App-Landing (dexware-suite/landing-system/apps/<app>.js). */
@@ -77,6 +79,13 @@ export interface AppConfig {
   webCheckout?: { pro?: WebOffer; suite?: WebOffer };
   /** Eine Zeile unter „<App> Pro“ im Web-Kauf (was Pro bringt). */
   webCheckoutLead?: string;
+  /**
+   * Kauf direkt auf der Abo-Seite (RevenueCat Web SDK + Paddle-Fenster über der Seite, seit 26.11.2026 — Weg A ohne
+   * pay.rev.cat). Live- und Sandbox-Eintrag getrennt: je öffentlicher RevenueCat-Schlüssel des Paddle-Eintrags (pdl_…) und
+   * das Angebot. Schlüssel leer = Kasse AUS, die Abo-Seite zeigt dann die Kacheln aus webCheckout wie bisher. Sandbox nur
+   * per Adresse …/abo?kasse=sandbox. Entscheidung: src/lib/paddleKasse.ts, Anleitung: docs/paddle-kasse.md
+   */
+  paddleKasse?: PaddleKasseEinstellung;
   /** Emoji als Kachel-Icon */
   emoji: string;
   /**
@@ -250,6 +259,14 @@ export const APPS: AppConfig[] = [
     // Web-Kauf (Paddle über RevenueCat-Kauf-Link). link leer = Kacheln bleiben unsichtbar. Erst den LIVE-Link eintragen
     // (nie den Test-Link) — Anleitung: dexware-suite/vertrieb/web-checkout/README.md
     webCheckoutLead: 'Unbegrenzt Objekte und Strecken, PDF ohne Wasserzeichen, Team bis 20 Mitarbeiter',
+    // Kauf direkt im Dashboard (Weg A, 26.11.2026): rcKey leer = AUS (Kacheln oben bleiben ausgegraut wie bisher).
+    // live: öffentlicher RevenueCat-Schlüssel (pdl_…) von „winterdex (Paddle Live)“ appfab6fe9468, Angebot web_pro_live.
+    // sandbox: Schlüssel von „winterdex (Paddle)“ app545843109b (Test), Angebot web_pro — nur …/abo?kasse=sandbox; für den
+    // Probekauf am besten NICHT hier, sondern lokal in .env.local (VITE_RC_PADDLE_SANDBOX_KEY). Preise kommen aus dem Angebot.
+    paddleKasse: {
+      live: { rcKey: '', offering: 'web_pro_live' },
+      sandbox: { rcKey: '', offering: 'web_pro' },
+    },
     webCheckout: {
       pro: {
         link: '',

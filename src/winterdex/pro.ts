@@ -20,6 +20,8 @@ import {
   orgProFuerGrenze as orgProFuerGrenzeApp,
   orgProStand as orgProStandApp,
 } from '../lib/proStand.ts';
+import { getApp } from '../apps/registry.ts';
+import { kasseKonfig } from '../lib/paddleKasse.ts';
 
 // Gemeinsamer Baustein aller App-Bereiche (src/lib/proStand.ts) — gleicher Speicher-Schlüssel wie bisher
 // („winterdex.orgPro.<Nutzer>“), gleiche Texte, gleiches Verhalten.
@@ -28,9 +30,19 @@ export { PRO_UNKLAR, ProUnklarError, istGratisGrenze } from '../lib/proStand.ts'
 export const FREE_PROPERTIES = 2;
 export const FREE_ROUTES = 1;
 
-/** Text für alle Stellen, an denen eine Gratis-Grenze greift (Abo nur über Google Play — ohne Android: auf Rechnung). */
-export const PRO_HOW =
-  'Pro schließt du in der WinterDex-App (Android) unter „Abo“ ab. Kein Android-Gerät? Wir schalten Pro auch auf Rechnung frei (49,99 € pro Jahr) — schreib uns an support@dexware.app.';
+/**
+ * Text für alle Stellen, an denen eine Gratis-Grenze greift. Ohne Paddle-Kasse: Abo nur über Google Play (ohne Android: auf
+ * Rechnung). Ist die Kasse eingeschaltet (registry paddleKasse.live mit pdl_-Schlüssel, src/lib/paddleKasse.ts), nennt
+ * der Text zuerst den Kauf hier im Dashboard — die Live-Schaltung braucht so nur den Schlüssel.
+ */
+export function proHowText(kasseAn: boolean): string {
+  return kasseAn
+    ? 'Pro kaufst du direkt hier im Dashboard unter „Abo“ (Zahlung über Paddle, auch am iPhone) oder in der WinterDex-App (Android) unter „Abo“. Auf Rechnung geht es auch (49,99 € pro Jahr) — schreib uns an support@dexware.app.'
+    : 'Pro schließt du in der WinterDex-App (Android) unter „Abo“ ab. Kein Android-Gerät? Wir schalten Pro auch auf Rechnung frei (49,99 € pro Jahr) — schreib uns an support@dexware.app.';
+}
+// Nur der Live-Schlüssel zählt (Sandbox nie in Texten). In Node-Tests gibt es kein import.meta.env → wie ohne Bau-Variable.
+const viteEnv = (import.meta as { env?: Record<string, unknown> }).env ?? {};
+export const PRO_HOW = proHowText(kasseKonfig(getApp('winterdex')?.paddleKasse, { env: viteEnv }) !== null);
 export const PRO_MAILTO = 'mailto:support@dexware.app?subject=WinterDex%20Pro%20auf%20Rechnung';
 
 const APP = 'winterdex';

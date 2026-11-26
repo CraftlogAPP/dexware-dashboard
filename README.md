@@ -45,6 +45,11 @@ Kachel pro App, dahinter pro App ein Dashboard auf das jeweilige Supabase-Projek
   Mitteilungen, Haftung, Vorlage Mitarbeiter-Info; Mitteilungsarten nur je Handy in der App). Ohne die SQL-Nachträge
   bleibt alles wie vorher. Beispieldaten: `/vorschau?app=winterdex&seite=wetter[&zustand=…][&teil=karte|verlauf|team][&eingeklappt=1]`,
   Tests `tests/wetter-dashboard.test.mjs`.
+- **Kauf im Browser (WinterDex Pro, Paddle-Kasse)** seit 26.11.2026: Karte „Direkt hier kaufen“ auf der Abo-Seite,
+  Paddle-Fenster über der Seite (RevenueCat Web SDK, nur dort nachgeladen), Preise aus dem RevenueCat-Angebot, Kennung =
+  Dexware-ID. Ohne `pdl_`-Schlüssel in `registry.ts` (`paddleKasse`) ist sie aus und die Seite wie bisher. Sandbox nur mit
+  `?kasse=sandbox`. Anleitung (Schlüssel, Probekauf, Live, Rückweg, Recht): `docs/paddle-kasse.md`,
+  Test `tests/paddle-kasse.test.mjs`, Vorschau `/vorschau-kauf?kasse=erfolg`.
 - **SpielDex** (`src/spieldex/`): zweiter Dashboard-Bereich nach dem WinterDex-
   Muster — Übersicht mit Fälligkeits-Ampel (visuell 7 T / operativ 90 T /
   Hauptinspektion 365 T), Spielplätze mit Geräte-Inventar, Kontrollen mit
