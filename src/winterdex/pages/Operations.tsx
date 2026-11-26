@@ -10,6 +10,7 @@ import { ExcelButton } from '../../components/ExcelButton';
 import { ExportNotice } from '../../lib/xlsx';
 import { checkPeriod, requirePro, saveSheets } from '../exportActions';
 import { operationSheets, periodLabel } from '../exportLists';
+import { ladeWetterMitFrist, wetterMap } from '../wetterBeleg';
 import { ActionBadge, LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import {
   FormDialog,
@@ -100,10 +101,12 @@ export function Operations() {
     ]);
     if (ops.length === 0) throw new ExportNotice('Im gewählten Zeitraum gibt es keine Einsätze.');
     const one = propertyId ? properties.find((p) => p.id === propertyId)?.name : undefined;
+    // Wetterverlauf je Einsatz (Kurzsatz + Wetter-Prüfcode), höchstens 20 s — die Liste entsteht immer
+    const wetter = wetterMap(await ladeWetterMitFrist(client, 'operation', ops.map((o) => o.id), 20000));
     await saveSheets(
       `WinterDex_Einsaetze_${one ? `${one}_` : ''}${period.from}_bis_${period.to}`,
       `WinterDex Einsatzliste ${periodLabel(period)}`,
-      operationSheets({ org: org.org, properties, ops, period, propertyId: propertyId || null }),
+      operationSheets({ org: org.org, properties, ops, period, propertyId: propertyId || null, wetter }),
     );
   }
 

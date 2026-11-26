@@ -8,6 +8,7 @@ import { ExportNotice } from '../../lib/xlsx';
 import { ActionBadge, LoadGuard, useAsync, useLiveRefresh } from '../../components/ui';
 import { checkPeriod, requirePro, saveSheets } from '../exportActions';
 import { periodLabel, runSheets } from '../exportLists';
+import { ladeWetterMitFrist, wetterMap } from '../wetterBeleg';
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
 import { CoverageBadge } from '../RouteSketch';
 import { fetchRecentRuns, fetchRoutes, fetchRuns, fmtDistance, RUNS_LIST_LIMIT, fmtPct, localDay, ROUTES_MISSING, type Route, type RunMeta } from '../routes';
@@ -62,10 +63,11 @@ export function Routes() {
     if (runs.length === 0) throw new ExportNotice('Im gewählten Zeitraum gibt es keine Fahrten.');
     const one = routeId && routeId !== FREE ? routes.find((r) => r.id === routeId)?.name : undefined;
     const filterLabel = routeId === FREE ? 'Nur freie Fahrten (ohne Vorlage)' : (one ?? 'Alle Fahrten');
+    const wetter = wetterMap(await ladeWetterMitFrist(client, 'run', runs.map((r) => r.id), 20000));
     await saveSheets(
       `WinterDex_Fahrten_${one ? `${one}_` : routeId === FREE ? 'frei_' : ''}${period.from}_bis_${period.to}`,
       `WinterDex Fahrtenliste ${periodLabel(period)}`,
-      runSheets({ org: org.org, runs, period, filterLabel }),
+      runSheets({ org: org.org, runs, period, filterLabel, wetter }),
     );
   }
 

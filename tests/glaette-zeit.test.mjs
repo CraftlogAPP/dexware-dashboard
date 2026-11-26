@@ -72,7 +72,7 @@ console.log('\n[3] Quelltext');
   const team = lies('src/components/TeamPage.tsx');
   const karte = lies('src/winterdex/GlaetteFruehwarnung.tsx');
   check('Team-Seite: Karte nur bei WinterDex, Inhaber + Verwalter (canTeam) dürfen ändern', /app\.id === 'winterdex' && orgCtx && <GlaetteFruehwarnung client=\{client\} orgId=\{orgCtx\.org\.id\} darf=\{canTeam\} \/>/.test(team));
-  check('Karte unsichtbar, solange kein Wert (Spalte fehlt / lädt)', /if \(wert == null\) return null;/.test(karte));
+  check('Karte unsichtbar, solange kein Wert (Spalte fehlt / lädt) und kein Wetter-Guide (Nachtrag fehlt)', /if \(wert == null && !live\) return null;/.test(karte));
   check('Beschriftung „Glätte-Frühwarnung morgens um …“ + Erklärsatz', karte.includes('Glätte-Frühwarnung morgens um …') && karte.includes('{GLAETTE_ERKLAERUNG}') && /nur, wenn wirklich Glätte droht/.test(G.GLAETTE_ERKLAERUNG) && /19:00/.test(G.GLAETTE_ERKLAERUNG));
   check('Mitarbeiter sehen die Uhrzeit nur (ohne Auswahl)', /\{darf \? \(/.test(karte) && karte.includes('ändern können Inhaber oder Verwalter'));
 }

@@ -12,6 +12,8 @@ import { ErsteSchritte } from '../../components/ErsteSchritte';
 import type { ErsteSchritteAdapter } from '../../lib/ersteSchritte';
 import { fmtDateTime } from '../../lib/format';
 import { lastOpByProperty, propertyNameMap, WEATHER_SOURCE, weatherLabel } from '../labels';
+import { HeuteNacht } from '../HeuteNacht';
+import { nachweisZone } from '../nachweisZeit';
 import type { Operation, Property } from '../types';
 
 interface OverviewData {
@@ -56,6 +58,18 @@ export function Overview() {
         <p className="muted" style={{ marginTop: -6 }}>
           {orgCtx.org.name} · Saison im Blick — live aus der WinterDex-App.
         </p>
+      )}
+      {/* Wetter-Guide: Karte „Heute Nacht“ über den Kennzahlen — nur wenn der Server sie für den Betrieb freigibt */}
+      {orgCtx && (
+        <HeuteNacht
+          client={client}
+          orgId={orgCtx.org.id}
+          land={orgCtx.org.land}
+          rolle={orgCtx.role}
+          tz={nachweisZone(orgCtx.org.land)}
+          ops={state.data?.meta}
+          links={{ objekte: 'objekte', team: 'team', abo: 'abo' }}
+        />
       )}
 
       <LoadGuard state={state}>

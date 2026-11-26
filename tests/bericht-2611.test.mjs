@@ -239,7 +239,7 @@ console.log('\n[31] Uhrzeiten in der Zone des Betriebs (Gerät hier auf UTC)');
   const buch = RR.buildRouteLogHtml({ ...orgAT, land: 'DE' }, { id: 'r', name: 'Runde', path: null, length_m: 1000 }, [D.demoRun('demo-frei')], 'Nov.');
   check('Fahrtenbuch: Zone des Betriebs (DE → Berlin) + Hinweis', buch.includes('24.11.2026<br>06:12–') && buch.includes('Ortszeit Deutschland (Europe/Berlin'));
   const rd = lies('src/winterdex/pages/RunDetail.tsx');
-  check('Fahrt-Detail: Zone an Karte, Kopf, Warnkasten, PDF', /const tz = nachweisZone\(org\?\.land\)/.test(rd) && /timeZone=\{tz\}/.test(rd) && /fmtTimeSpan\(a, b, tz\)/.test(rd) && /buildRunHtmlMitKarte\(org, run, str, \{ timeZone: tz \}\)/.test(rd));
+  check('Fahrt-Detail: Zone an Karte, Kopf, Warnkasten, PDF', /const tz = nachweisZone\(org\?\.land\)/.test(rd) && /timeZone=\{tz\}/.test(rd) && /fmtTimeSpan\(a, b, tz\)/.test(rd) && /buildRunHtmlMitKarte\(org, run, str, \{ timeZone: tz(, wetter)? \}\)/.test(rd));
   for (const f of ['src/winterdex/pages/RouteDetail.tsx', 'src/winterdex/aussendienst/StreckeDetail.tsx'])
     check(`${path.basename(f)}: Karte mit Zone des Betriebs`, /timeZone=\{tz\}/.test(lies(f)) && /nachweisZone\(/.test(lies(f)));
   const fk = lies('src/winterdex/FahrtKarte.tsx');

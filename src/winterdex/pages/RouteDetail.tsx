@@ -18,6 +18,7 @@ import { fetchRoute, fetchRun, fetchRunTracks, fetchRuns, fmtDistance, type Rout
 import { fetchStrassen, fetchStrassenViele, STRASSEN_PDF_HINWEIS, strassenOffen, type StrassenStand } from '../strassen';
 import { useStrassenNachladen } from '../strassenNachladen';
 import { nachweisZone } from '../nachweisZeit';
+import { ladeWetterMitFrist, wetterMap } from '../wetterBeleg';
 import { RunTable } from './Routes';
 
 export function RouteDetail() {
@@ -72,7 +73,11 @@ export function RouteDetail() {
     const runs = [...(runsState.data ?? [])].reverse(); // chronologisch
     const period = `${fmtDate(parseLocalDate(from).toISOString())} – ${fmtDate(parseLocalDate(to).toISOString())}`;
     const lader: FahrtenLader = { spuren: (ids) => fetchRunTracks(client, ids), strassen: (ids) => fetchStrassenViele(client, ids) };
-    openReportWindowAfter(async () => withWatermark(await buildRouteLogHtmlMitDetails(org.org, route, runs, period, lader), proState.data ?? true))
+    openReportWindowAfter(async () => {
+      // Wetterverlauf je Fahrt (Kurzsatz, nur Pro — der Server entscheidet); höchstens 15 s, das PDF entsteht immer
+      const wetter = wetterMap(await ladeWetterMitFrist(client, 'run', runs.map((r) => r.id)));
+      return withWatermark(await buildRouteLogHtmlMitDetails(org.org, route, runs, period, lader, { wetter }), proState.data ?? true);
+    })
       .then((ok) => {
         if (!ok) setPrintErr('Das Druckfenster wurde blockiert — bitte Pop-ups für dieses Dashboard erlauben.');
       })
@@ -86,10 +91,11 @@ export function RouteDetail() {
     await requirePro(client);
     const runs = await fetchRuns(client, { all: true, routeId: route.id, from: parseLocalDate(from), to: parseLocalDate(to) });
     if (runs.length === 0) throw new ExportNotice('Im gewählten Zeitraum gibt es keine Fahrten auf dieser Strecke.');
+    const wetter = wetterMap(await ladeWetterMitFrist(client, 'run', runs.map((r) => r.id), 20000));
     await saveSheets(
       `WinterDex_Fahrten_${route.name}_${period.from}_bis_${period.to}`,
       `WinterDex Fahrtenliste ${route.name} ${periodLabel(period)}`,
-      runSheets({ org: org.org, runs, period, filterLabel: route.name }),
+      runSheets({ org: org.org, runs, period, filterLabel: route.name, wetter }),
     );
   }
 

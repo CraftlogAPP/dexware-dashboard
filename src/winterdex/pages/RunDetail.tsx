@@ -23,6 +23,9 @@ import { cancelRun, fetchRun, fmtDistance, fmtDuration, fmtTimeSpan, type Run } 
 import { fetchStrassen, STRASSEN_PDF_HINWEIS, strassenFrisch, strassenOffen, type StrassenStand } from '../strassen';
 import { useStrassenNachladen } from '../strassenNachladen';
 import { nachweisZone } from '../nachweisZeit';
+import { WetterVerlauf } from '../WetterZeitleiste';
+import { useWetterNachladen } from '../wetterNachladen';
+import type { WetterInfo } from '../wetterBeleg';
 
 export function RunDetail() {
   const { id } = useParams<{ id: string }>();
@@ -35,12 +38,16 @@ export function RunDetail() {
   const strassen = useStrassenNachladen(id, strState.data, (rid) => fetchStrassen(client, rid), state.data);
   // Pro vorab laden: das Druckfenster muss direkt beim Klick aufgehen (sonst blockt der Browser das Pop-up)
   const proState = useAsync(() => fetchOrgPro(client), [client]);
+  // Wetterverlauf (wetter_beleg, nur Pro — der Server entscheidet); „wird ermittelt“ → fragt selbst nach
+  const wetter = useWetterNachladen(client, 'run', id);
 
   return (
     <LoadGuard state={state}>
       {(run) => (
         <RunView
           run={run}
+          wetter={wetter.info}
+          wetterFehler={wetter.fehler}
           strassen={strassen}
           org={org?.org ?? null}
           pro={proState.data ?? true}
@@ -59,6 +66,8 @@ export function RunDetail() {
 /** Anzeige einer geladenen Fahrt — ohne eigenen Server-Zugriff (auch für die Beispieldaten im Dev-Server). */
 export function RunView({
   run,
+  wetter = null,
+  wetterFehler = false,
   strassen = null,
   org,
   pro,
@@ -67,6 +76,9 @@ export function RunView({
   onCancel,
 }: {
   run: Run;
+  /** Wetterverlauf (wetter_beleg) — null = keiner/Nachtrag fehlt/noch nicht geladen */
+  wetter?: WetterInfo | null;
+  wetterFehler?: boolean;
   /** Straßenverlauf (seit 25.11.2026) — null = keiner/noch nicht geladen */
   strassen?: StrassenStand | null;
   org: Org | null;
@@ -111,7 +123,7 @@ export function RunView({
           setFrisch({ id: run.id, stand: neu });
         }
       }
-      return withWatermark(await buildRunHtmlMitKarte(org, run, str, { timeZone: tz }), pro);
+      return withWatermark(await buildRunHtmlMitKarte(org, run, str, { timeZone: tz, wetter }), pro);
     })
       .then((ok) => {
         if (!ok) setPrintErr('Das Druckfenster wurde blockiert — bitte Pop-ups für dieses Dashboard erlauben.');
@@ -227,6 +239,8 @@ export function RunView({
           )}
         </div>
       )}
+
+      <WetterVerlauf info={wetter} fehler={wetterFehler} bezug="run" tz={tz} canceled={run.canceled} />
 
       <div className="kpi-grid">
         <div className="card">

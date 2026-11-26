@@ -32,6 +32,14 @@ Kachel pro App, dahinter pro App ein Dashboard auf das jeweilige Supabase-Projek
   und eingeschaltetem Bildschirm (Wake Lock); Verlassen/Sperren wird als Pause im Nachweis vermerkt.
   Ohne Konto testen: Dev-Server → `/app/winterdex/aussendienst?demo` (`&netz=aus`, `&netz=nein`, `&pro=0`, `&rolle=mitarbeiter`).
   Die alte Adresse `/app/winterdex/einsatz` leitet weiter.
+  **Wetter-Guide** (seit 26.11.2026, Bauplan `dexware-suite/docs/wetter-guide-bauplan-2026-11-26.md`): Karte „Heute Nacht“
+  auf der Übersicht und eingeklappt im Außendienst (`HeuteNacht.tsx`, Daten `heuteNachtDaten.ts`, RPC `heute_nacht` —
+  sichtbar nur, wenn der Server `karte_live` meldet), Wetterverlauf je Einsatz/Fahrt aus `wetter_beleg` im Detail, im
+  Einsatz-/Fahrt-PDF, im Fahrtenbuch und in Excel (`wetterBeleg.ts`, `WetterZeitleiste.tsx`; Kurzsatz + Prüfcode, nur Pro,
+  Text nur vom Server), Team-Karte „Wetter-Guide“ (`GlaetteFruehwarnung.tsx`: Uhrzeit, „Aktiv auf X von Y Handys“, letzte
+  Mitteilungen, Haftung, Vorlage Mitarbeiter-Info; Mitteilungsarten nur je Handy in der App). Ohne die SQL-Nachträge
+  bleibt alles wie vorher. Beispieldaten: `/vorschau?app=winterdex&seite=wetter[&zustand=…][&teil=karte|verlauf|team]`,
+  Tests `tests/wetter-dashboard.test.mjs`.
 - **SpielDex** (`src/spieldex/`): zweiter Dashboard-Bereich nach dem WinterDex-
   Muster — Übersicht mit Fälligkeits-Ampel (visuell 7 T / operativ 90 T /
   Hauptinspektion 365 T), Spielplätze mit Geräte-Inventar, Kontrollen mit

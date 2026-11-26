@@ -36,6 +36,7 @@ import {
 } from './strassen';
 import { nachweisZone, zonenHinweis } from './nachweisZeit';
 import { KARTE_QUELLE, kartenBilder, kartenBilderSammel, MAX_SAMMEL_BILDER, type KartenBild, type KartenBilder } from './kartenBild';
+import { WETTER_PDF_STYLE, wetterAnhangHtml, wetterKastenHtml, wetterZelleHtml, type WetterBeleg, type WetterInfo } from './wetterBeleg';
 
 const LEER_F = fahrtDaten([], null);
 
@@ -236,6 +237,7 @@ function page(title: string, body: string, weather: boolean, osm = false, timeZo
   td.r, th.r { text-align: right; white-space: nowrap; }
   .hinweis { margin: 0 0 12px; padding: 8px 12px; border: 1.5px dashed #AFC1D2; border-radius: 8px; color: #51606f; }
   h3 { font-size: 12px; margin: 14px 0 6px; }
+${WETTER_PDF_STYLE}
   .fahrt { margin: 0 0 12px; padding-top: 6px; border-top: 1px solid #dbe4ec; }
   .fahrt h3 { break-after: avoid; page-break-after: avoid; }
   .fahrt-inhalt { display: flex; gap: 10px; align-items: flex-start; }
@@ -269,6 +271,8 @@ export interface RunBerichtExtra {
   strassen?: StrassenStand | null;
   /** echtes Kartenbild (kartenBild.ts); null = Skizze */
   karte?: KartenBilder | null;
+  /** Wetterverlauf (wetter_beleg, Bauplan P3) — Kasten unter dem Kopf; null/undefiniert = keiner (wie bisher) */
+  wetter?: WetterInfo | null;
 }
 
 /** Straßenverlauf-Anzeige für den Bericht (nie ein Fehler) */
@@ -306,6 +310,7 @@ export function buildRunHtml(org: Org, run: Run, timeZone?: string, extra: RunBe
     <div class="kpi"><b>${fmtDuration(dur)}</b><span>${fmtTimeSpan(run.started_at, run.ended_at, tz)}</span></div>
     ${plan ? `<div class="kpi"><b>${fmtPct(run.coverage_pct)}</b><span>der Strecke abgedeckt</span></div>` : ''}
   </div>
+  ${wetterKastenHtml(extra.wetter, 'run', tz, run.canceled)}
   ${karteHtml(karte, sketchSvg(buildSketch(plan, run.track, missed, 640, 360, zt.marken)))}
   ${legend(!!plan, hatSpur, missed.some((s) => Array.isArray(s) && s.length >= 2), zt.marken.length > 0, !!karte, !!karte?.ausschnitte.length)}
   ${strassenTabelle(str, tz)}
@@ -327,6 +332,7 @@ export function buildRunHtml(org: Org, run: Run, timeZone?: string, extra: RunBe
   ${run.photo_urls.some(isSafeImgSrc) ? `<h2>Beweisfotos</h2><div class="photos">${run.photo_urls.filter(isSafeImgSrc).map((src, i) => `<img src="${esc(src)}" alt="Beweisfoto ${i + 1}">`).join('')}</div>` : ''}
   ${photoNote(run)}
   ${PROOF_NOTE}
+  ${wetterAnhangHtml(extra.wetter?.beleg ? [extra.wetter.beleg] : [])}
   ${run.entry_hash ? `<p class="small"><b>Prüfcode:</b> <span class="mono">${esc(run.entry_hash)}</span><br><b>Server-Eingang:</b> ${fmtDateTime(run.received_at ?? run.created_at, tz)}</p>` : ''}`;
   return page(`Strecken-Nachweis — ${name}`, body, !!run.weather, !!karte || str?.art === 'tabelle', tz);
 }
@@ -339,7 +345,7 @@ export async function buildRunHtmlMitKarte(
   org: Org,
   run: Run,
   strassen: StrassenStand | null | undefined,
-  opts: { zeitlimitMs?: number; timeZone?: string } = {},
+  opts: { zeitlimitMs?: number; timeZone?: string; wetter?: WetterInfo | null } = {},
 ): Promise<string> {
   const tz = opts.timeZone ?? nachweisZone(org.land);
   let karte: KartenBilder | null = null;
@@ -357,7 +363,7 @@ export async function buildRunHtmlMitKarte(
     console.warn('Kartenbild ausgelassen:', e);
     karte = null;
   }
-  return buildRunHtml(org, run, tz, { strassen, karte });
+  return buildRunHtml(org, run, tz, { strassen, karte, wetter: opts.wetter ?? null });
 }
 
 /** Fahrtenbuch einer Strecke für einen Zeitraum. */
@@ -396,7 +402,7 @@ export function buildRouteLogHtml(
   route: Route,
   runs: RunMeta[],
   periodLabel: string,
-  extra: { details?: Map<string, FahrtDetail>; hinweis?: string | null; timeZone?: string } = {},
+  extra: { details?: Map<string, FahrtDetail>; hinweis?: string | null; timeZone?: string; wetter?: Map<string, WetterInfo> | null } = {},
 ): string {
   const tz = extra.timeZone ?? nachweisZone(org.land);
   const active = runs.filter((r) => !r.canceled);
@@ -408,7 +414,7 @@ export function buildRouteLogHtml(
         <td>${fmtDistance(r.track_length_m)}</td>
         <td>${fmtPct(r.coverage_pct)}${r.missed_m ? `<br><span class="small warn">${fmtDistance(r.missed_m)} nicht befahren</span>` : ''}</td>
         <td>${esc(ACTION_LABELS[r.action])}<br><span class="small">${esc(gritLabel(r.grit_material, r.grit_amount))}</span></td>
-        <td class="small">${esc(weatherLabel(r.weather))}</td>
+        <td class="small">${wetterZelleHtml(extra.wetter?.get(r.id), 'run', r.weather, r.canceled, true) ?? esc(weatherLabel(r.weather))}</td>
         <td>${esc(r.performer_name ?? '—')}${r.gaps?.length ? `<br><span class="small warn">${r.gaps.length}× Unterbrechung</span>` : ''}${r.gps_mocked ? '<br><span class="small warn">Fake-GPS gemeldet</span>' : ''}${r.nachgetragen ? '<br><span class="small warn">nachgemeldet ohne Fahrtpunkte</span>' : ''}</td>
         <td class="mono">${r.entry_hash ? esc(r.entry_hash.slice(0, 12)) : '—'}${r.canceled ? `<br><span class="storno">Storno: ${esc(r.cancel_reason ?? '')}</span>` : ''}</td>
       </tr>`;
@@ -428,7 +434,8 @@ export function buildRouteLogHtml(
     <tbody>${rows || '<tr><td colspan="7">Keine Fahrten im Zeitraum.</td></tr>'}</tbody>
   </table>
   ${extra.details ? fahrtenImEinzelnen(runs, extra.details, extra.hinweis ?? null, tz) : ''}
-  ${PROOF_NOTE}`;
+  ${PROOF_NOTE}
+  ${wetterAnhangHtml(runs.map((r) => extra.wetter?.get(r.id)?.beleg).filter((b): b is WetterBeleg => !!b))}`;
   const osm = !!extra.details && [...extra.details.values()].some((d) => d.bild || d.str?.art === 'tabelle');
   return page(`Fahrtenbuch — ${route.name}`, body, runs.some((r) => !!r.weather), osm, tz);
 }
@@ -468,7 +475,7 @@ export async function buildRouteLogHtmlMitDetails(
   runs: RunMeta[],
   periodLabel: string,
   lader: FahrtenLader,
-  opts: { timeZone?: string; zeitlimitMs?: number } = {},
+  opts: { timeZone?: string; zeitlimitMs?: number; wetter?: Map<string, WetterInfo> | null } = {},
 ): Promise<string> {
   const tz = opts.timeZone ?? nachweisZone(org.land);
   const aktiv = runs.filter((r) => !r.canceled);
@@ -508,6 +515,6 @@ export async function buildRouteLogHtmlMitDetails(
     console.error('Fahrten im Einzelnen ausgelassen:', e);
     hinweise.push('Die Fahrten im Einzelnen ließen sich gerade nicht zusammenstellen — die Fahrtenliste oben ist vollständig.');
   }
-  return buildRouteLogHtml(org, route, runs, periodLabel, { details, hinweis: hinweise.join(' ') || null, timeZone: tz });
+  return buildRouteLogHtml(org, route, runs, periodLabel, { details, hinweis: hinweise.join(' ') || null, timeZone: tz, wetter: opts.wetter ?? null });
 }
 

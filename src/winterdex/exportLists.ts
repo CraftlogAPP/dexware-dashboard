@@ -14,6 +14,7 @@ import { fmtDateTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
 import { GPS_WEAK_M } from './einsatz/gps';
 import { WEATHER_SOURCE, weatherLabel } from './labels';
+import { excelWetter, quellenTexte, type WetterBeleg, type WetterInfo } from './wetterBeleg';
 import type { RunMeta } from './routes';
 import { ACTION_LABELS, type Operation, type OperationAction, type Property } from './types';
 
@@ -61,6 +62,17 @@ function gpsCell(op: Operation): string {
 }
 
 const proofCode = (hash: string | null | undefined) => (hash ? hash.slice(0, 12) : null);
+
+// Wetterverlauf (Bauplan P3): zwei Spalten, aber nur wenn für mindestens einen Eintrag ein Stand ≠ „aus“ geladen wurde
+const hatWetter = (w: Map<string, WetterInfo> | null | undefined, xs: Array<{ id: string }>) => !!w && xs.some((x) => { const i = w.get(x.id); return !!i && i.stand !== 'aus'; });
+const WETTER_SPALTEN = (an: boolean) => (an ? [{ header: 'Wetter (Kurzsatz)', width: 48 }, { header: 'Wetter-Prüfcode' }] : []);
+/** Info-Blatt: Quellen nur der tatsächlich enthaltenen Belege */
+function wetterInfo(w: Map<string, WetterInfo> | null | undefined, xs: Array<{ id: string }>): [string, XlsxValue][] {
+  if (!hatWetter(w, xs)) return [];
+  const belege = xs.map((x) => w?.get(x.id)?.beleg).filter((b): b is WetterBeleg => !!b);
+  const q = quellenTexte(belege);
+  return [['Wetterverlauf', 'Kurzsatz aus dem versiegelten Wetterverlauf je Nachweis (Wetter-Prüfcode = erste 12 Zeichen des SHA-256). Zeiten auf 15 Min. gerundet, keine Bewertung.'], ...q.map((t, i): [string, XlsxValue] => [i === 0 ? 'Wetterdaten' : '', t])];
+}
 const byStart = <T extends { started_at: string; id: string }>(a: T, b: T) =>
   a.started_at < b.started_at ? -1 : a.started_at > b.started_at ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 const cmpText = (a: string, b: string) => a.localeCompare(b, 'de', { sensitivity: 'base', numeric: true });
@@ -87,6 +99,8 @@ export interface OperationExportInput {
   period: ExportPeriod;
   /** gewähltes Objekt (null = alle) */
   propertyId: string | null;
+  /** Wetterverlauf je Einsatz (wetter_beleg) — mit Daten kommen die Spalten „Wetter (Kurzsatz)“, „Wetter-Prüfcode“ dazu */
+  wetter?: Map<string, WetterInfo> | null;
 }
 
 export function operationSheets(input: OperationExportInput): XlsxSheet[] {
@@ -95,6 +109,7 @@ export function operationSheets(input: OperationExportInput): XlsxSheet[] {
   const valid = ops.filter((o) => !o.canceled);
   const canceled = ops.filter((o) => o.canceled);
   const gone = '(Objekt nicht mehr vorhanden)';
+  const mitWetter = hatWetter(input.wetter, valid);
 
   const rows = valid.map((op) => {
     const p = props.get(op.property_id);
@@ -114,6 +129,7 @@ export function operationSheets(input: OperationExportInput): XlsxSheet[] {
       gpsCell(op),
       op.notes,
       proofCode(op.entry_hash),
+      ...(mitWetter ? excelWetter(input.wetter?.get(op.id), 'operation') : []),
     ];
   });
 
@@ -198,6 +214,7 @@ export function operationSheets(input: OperationExportInput): XlsxSheet[] {
         { header: 'GPS-Stempel' },
         { header: 'Notiz' },
         { header: 'Prüfcode' },
+        ...WETTER_SPALTEN(mitWetter),
       ],
       rows,
     },
@@ -259,6 +276,7 @@ export function operationSheets(input: OperationExportInput): XlsxSheet[] {
       ['Hinweis', EXPORT_NOTE],
       ['Zeiten', TIME_NOTE],
       ['Wetter', WEATHER_SOURCE],
+      ...wetterInfo(input.wetter, valid),
     ]),
   );
   return sheets;
@@ -273,6 +291,8 @@ export interface RunExportInput {
   period: ExportPeriod;
   /** Beschreibung des Filters, z. B. „Alle Fahrten“ oder der Streckenname */
   filterLabel: string;
+  /** Wetterverlauf je Fahrt (wetter_beleg) — mit Daten zwei Spalten mehr */
+  wetter?: Map<string, WetterInfo> | null;
 }
 
 const FREE_RUN = 'Freie Fahrt (ohne Vorlage)';
@@ -291,6 +311,7 @@ export function runSheets(input: RunExportInput): XlsxSheet[] {
   const valid = runs.filter((r) => !r.canceled);
   const canceled = runs.filter((r) => r.canceled);
   const routeName = (r: RunMeta) => r.route_name ?? FREE_RUN;
+  const mitWetter = hatWetter(input.wetter, valid);
 
   const rows = valid.map((r) => [
     r.started_at,
@@ -309,6 +330,7 @@ export function runSheets(input: RunExportInput): XlsxSheet[] {
     runFlags(r),
     r.notes,
     proofCode(r.entry_hash),
+    ...(mitWetter ? excelWetter(input.wetter?.get(r.id), 'run') : []),
   ]);
 
   interface Sum {
@@ -380,6 +402,7 @@ export function runSheets(input: RunExportInput): XlsxSheet[] {
         { header: 'Auffälligkeiten' },
         { header: 'Notiz' },
         { header: 'Prüfcode' },
+        ...WETTER_SPALTEN(mitWetter),
       ],
       rows,
     },
@@ -431,6 +454,7 @@ export function runSheets(input: RunExportInput): XlsxSheet[] {
       ['Zeiten', TIME_NOTE],
       ['Abdeckung', 'Vom Server beim Eingang berechnet, nur bei Fahrten auf einer Strecke mit Vorlage.'],
       ['Wetter', WEATHER_SOURCE],
+      ...wetterInfo(input.wetter, valid),
     ]),
   );
   return sheets;

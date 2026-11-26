@@ -30,6 +30,13 @@ export function Vorschau() {
   if (params.get('app') === 'objektdex') return <Navigate to={`/app/objektdex?demo${params.has('sauber') ? '&sauber' : ''}`} replace />;
   // WinterDex „Nach dem Winter weitermachen“ (im Bereich erst sichtbar mit OBJEKTDEX_OEFFENTLICH): …&seite=nach-dem-winter&typ=gemeinde|galabau|hausbetreuung
   if (params.get('app') === 'winterdex' && params.get('seite') === 'nach-dem-winter') return <NachDemWinterVorschau typ={params.get('typ') ?? ''} />;
+  // WinterDex Wetter-Guide (Karte „Heute Nacht“, Wetterverlauf, Team-Karte): …&seite=wetter[&zustand=…][&rolle=…][&teil=karte|verlauf|team]
+  if (params.get('app') === 'winterdex' && params.get('seite') === 'wetter')
+    return (
+      <Suspense fallback={null}>
+        <WetterVorschau params={params} />
+      </Suspense>
+    );
   // Laufzettel (intern pinndex) hat einen eigenen Beispieldaten-Bereich (Pinnwand live, alle Seiten bedienbar)
   if (params.get('app') === 'pinndex' || params.get('app') === 'laufzettel') {
     const rolle = params.get('rolle');
@@ -39,6 +46,7 @@ export function Vorschau() {
 }
 
 const NachDemWinterInhalt = lazy(() => import('../winterdex/pages/NachDemWinter').then((m) => ({ default: m.NachDemWinterInhalt })));
+const WetterVorschau = lazy(() => import('./WetterVorschau').then((m) => ({ default: m.WetterVorschau })));
 const TYP_BEISPIEL: Record<string, { name: string; email: string }> = {
   gemeinde: { name: 'Marktgemeinde Musterdorf', email: 'bauhof@musterdorf.gv.at' },
   galabau: { name: 'Huber Garten- und Landschaftsbau', email: 'office@huber-garten.example' },

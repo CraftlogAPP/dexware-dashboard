@@ -9,6 +9,8 @@ import { nachweisZone } from '../nachweisZeit';
 import { isSafeImgSrc } from '../../lib/imgSrc';
 import { gritLabel, WEATHER_SOURCE } from '../labels';
 import type { OperationWithPhotos, Property } from '../types';
+import { WetterVerlauf } from '../WetterZeitleiste';
+import { useWetterNachladen } from '../wetterNachladen';
 
 interface Data {
   op: OperationWithPhotos;
@@ -27,6 +29,8 @@ export function OperationDetail() {
     const property = await fetchProperty(client, op.property_id);
     return { op, property };
   }, [client, id]);
+  // Wetterverlauf (wetter_beleg, nur Pro — der Server entscheidet); „wird ermittelt“ → fragt selbst nach
+  const wetter = useWetterNachladen(client, 'operation', id);
 
   return (
     <LoadGuard state={state}>
@@ -127,6 +131,8 @@ export function OperationDetail() {
                 <div>{op.performer_name ?? '—'}</div>
               </div>
             </div>
+
+            <WetterVerlauf info={wetter.info} fehler={wetter.fehler} bezug="operation" tz={tz} canceled={op.canceled} />
 
             <div className="section-head">
               <h2>Wetterlage (archiviert bei Einsatzbeginn)</h2>

@@ -18,6 +18,10 @@ import { RunDetail } from '../pages/RunDetail';
 import { Mehr } from './Mehr';
 import { FeedbackForm } from '../../components/FeedbackForm';
 import { GratisBanner } from '../GratisHinweise';
+import { useAppAuthOptional } from '../../auth/AppAuthContext';
+import { useOrgOptional } from '../../components/OrgContext';
+import { HeuteNacht } from '../HeuteNacht';
+import { nachweisZone } from '../nachweisZeit';
 
 // Karte mit Leaflet: eigener Chunk, erst beim Öffnen des Reiters geladen — aber nach dem Start im Leerlauf schon
 // vorgeladen (solange Netz da ist): dann öffnet der Reiter später auch im Funkloch, selbst ohne Service Worker.
@@ -59,6 +63,8 @@ export function Aussendienst() {
       <main className="ad-main">
         {/* Gratis nach Ablauf von Pro (nicht während einer Aufzeichnung — dort zählt nur die Fahrt) */}
         {!recording && <GratisBanner aboUrl={`${base}/abo`} />}
+        {/* Wetter-Guide: Karte „Heute Nacht“ eingeklappt oben auf der Objektliste (iPhone-Kollegen, Bauplan P4) */}
+        {!recording && tab === 'objekte' && (rest === '' || rest === '/') && <AussendienstWetter base={base} />}
         {!recording && fieldPage && (
           <div className="info-box ad-pc-hint">
             Der Außendienst ist fürs Handy gedacht. Am PC ist der Standort meist ungenau (Ortung über WLAN statt GPS) —
@@ -118,6 +124,24 @@ export function Aussendienst() {
         </nav>
       )}
     </div>
+  );
+}
+
+/** Karte „Heute Nacht“ im Außendienst — nur mit Anmeldung (Beispieldaten ohne Server: keine Karte). */
+function AussendienstWetter({ base }: { base: string }) {
+  const auth = useAppAuthOptional();
+  const org = useOrgOptional()?.data ?? null;
+  if (!auth || !org) return null;
+  return (
+    <HeuteNacht
+      client={auth.client}
+      orgId={org.org.id}
+      land={org.org.land}
+      rolle={org.role}
+      tz={nachweisZone(org.org.land)}
+      links={{ objekte: `${base}/objekte`, team: `${base}/team`, abo: `${base}/abo` }}
+      eingeklappt
+    />
   );
 }
 

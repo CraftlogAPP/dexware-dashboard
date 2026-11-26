@@ -6,6 +6,7 @@ import type { Org } from '../lib/orgApi';
 import { isSafeImgSrc } from '../lib/imgSrc';
 import { gritLabel, WEATHER_SOURCE_HTML, weatherLabel } from './labels';
 import { nachweisZone, zonenHinweis } from './nachweisZeit';
+import { WETTER_PDF_STYLE, wetterAnhangHtml, wetterZelleHtml, type WetterBeleg, type WetterInfo } from './wetterBeleg';
 import {
   ACTION_LABELS,
   LEGAL_BASIS,
@@ -75,9 +76,12 @@ function fotoZelle(op: OperationWithPhotos, ohneAnhang = false): string {
  * Einsatz-Tabelle des Nachweises (Datum/Uhrzeit mit Server-Eingang + Prüfcode, Maßnahme, Streumittel, Wetterlage,
  * GPS-Stempel, Person, Fotos) — auch für den Ganzjahres-Nachweis im ObjektDex-Bereich. Klassen: canceled, small, mono.
  * `ohneFotoAnhang`: Fotos werden nur gezählt, nicht angehängt. `timeZone`: Ortszeit des Betriebs (nachweisZone) — ohne Angabe
- * die Zeitzone des Geräts (wie bisher, z. B. Ganzjahres-Nachweis).
+ * die Zeitzone des Geräts (wie bisher, z. B. Ganzjahres-Nachweis). `wetter`: Wetterverlauf je Einsatz (wetter_beleg, Bauplan
+ * P3) — Spalte „Wetter“ mit Kurzsatz (G13) + Wetter-Prüfcode bzw. Stand-Text; ohne (null) wie bisher der Schnappschuss.
  */
-export function einsatzTabelle(ops: OperationWithPhotos[], ohneFotoAnhang = false, timeZone?: string): string {
+export function einsatzTabelle(ops: OperationWithPhotos[], ohneFotoAnhang = false, timeZone?: string, wetter: Map<string, WetterInfo> | null = null): string {
+  // Überschrift „Wetter“ nur, wenn mindestens ein Einsatz einen Wetterverlauf-Stand hat (sonst bleibt alles wie bisher)
+  const mitWetter = !!wetter && ops.some((o) => { const i = wetter.get(o.id); return !!i && i.stand !== 'aus'; });
   const rows = ops
     .map((op) => {
       const action = op.canceled
@@ -97,7 +101,7 @@ export function einsatzTabelle(ops: OperationWithPhotos[], ohneFotoAnhang = fals
         <td>${time}${proof}</td>
         <td>${action}${op.notes?.trim() ? `<div style="font-size:10px">Notiz: ${esc(op.notes.trim())}</div>` : ''}</td>
         <td>${grit}</td>
-        <td>${esc(weatherLabel(op.weather))}</td>
+        <td>${wetterZelleHtml(wetter?.get(op.id), 'operation', op.weather, op.canceled) ?? esc(weatherLabel(op.weather))}</td>
         <td class="small">${gpsProofCell(op, timeZone)}</td>
         <td>${esc(op.performer_name ?? '—')}</td>
         <td>${fotoZelle(op, ohneFotoAnhang)}</td>
@@ -110,7 +114,7 @@ export function einsatzTabelle(ops: OperationWithPhotos[], ohneFotoAnhang = fals
         <th>Datum / Uhrzeit</th>
         <th>Maßnahme</th>
         <th>Streumittel</th>
-        <th>Wetterlage (archiviert)</th>
+        <th>${mitWetter ? 'Wetter' : 'Wetterlage (archiviert)'}</th>
         <th>GPS-Stempel</th>
         <th>Dokumentiert von</th>
         <th>Fotos</th>
@@ -142,11 +146,14 @@ export function buildReportHtml(
   property: Property,
   ops: OperationWithPhotos[],
   periodLabel: string,
+  /** Wetterverlauf je Einsatz (ladeWetter … wetterMap) — null: Nachtrag fehlt/Fehler → wie bisher */
+  wetter: Map<string, WetterInfo> | null = null,
 ): string {
   const hasProof = ops.some((o) => !!o.entry_hash);
   // Uhrzeiten IMMER in der Ortszeit des Betriebs, nie in der des Geräts — wie der Fahrt-Nachweis (Regel 1 zu Fund 31)
   const tz = nachweisZone(org.land);
   const photoBlocks = fotoAnhang(ops, tz);
+  const belege = ops.map((o) => wetter?.get(o.id)?.beleg).filter((b): b is WetterBeleg => !!b);
 
   return `<!doctype html>
 <html lang="de">
@@ -170,6 +177,7 @@ export function buildReportHtml(
   .photo-group { break-inside: avoid; }
   .footer { margin-top: 26px; padding-top: 10px; border-top: 1.5px solid #9CA5AD; color: #51606f; font-size: 10.5px; display: flex; justify-content: space-between; }
   @media print { body { margin: 12mm; } }
+${WETTER_PDF_STYLE}
 </style>
 </head>
 <body>
@@ -187,11 +195,12 @@ export function buildReportHtml(
   <div class="meta">${esc(zonenHinweis(tz, org.land, ops.map((o) => Date.parse(o.started_at))))}</div>
   <div class="legal">${esc(LEGAL_BASIS[org.land])}</div>
 
-  ${einsatzTabelle(ops, false, tz)}
+  ${einsatzTabelle(ops, false, tz, wetter)}
 
   ${photoBlocks ? `<h2>Foto-Anhang</h2>${photoBlocks}` : ''}
   ${hasProof ? PROOF_NOTE : ''}
   ${ops.some((o) => o.nachgetragen) ? NACHTRAG_NOTE : ''}
+  ${wetterAnhangHtml(belege)}
 
   <div class="footer">
     <span>Erstellt mit WinterDex — winterdex.dexware.app${ops.some((o) => o.weather) ? ` · ${WEATHER_SOURCE_HTML}` : ''}</span>

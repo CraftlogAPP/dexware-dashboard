@@ -9,6 +9,7 @@ import { addMonthsLocalISO, fmtDate, parseLocalDate, todayLocalISO, toInputDate 
 import { openReportWindowAfter, pdfSaveHint } from '../../lib/print';
 import { buildReportHtml } from '../report';
 import { fetchOrgPro, withWatermark } from '../pro';
+import { ladeWetterMitFrist, wetterMap } from '../wetterBeleg';
 import type { Property } from '../types';
 
 /** Schnellwahl fürs Handy: dieser Monat, Vormonat, ganze Saison (ab 1. Oktober). Kalendertage, lokale Zeit. */
@@ -56,8 +57,10 @@ export function Report() {
           fetchOperationsForReport(client, propertyId, fromDate, toDate),
           fetchOrgPro(client),
         ]);
+        // Wetterverlauf je Einsatz (nur Pro — der Server entscheidet je Einsatz); höchstens 15 s, das PDF entsteht immer
+        const wetter = wetterMap(await ladeWetterMitFrist(client, 'operation', ops.map((o) => o.id)));
         const periodLabel = `${fmtDate(fromDate.toISOString())} – ${fmtDate(toDate.toISOString())}`;
-        return withWatermark(buildReportHtml(orgCtx.org, property, ops, periodLabel), pro);
+        return withWatermark(buildReportHtml(orgCtx.org, property, ops, periodLabel, wetter), pro);
       });
       if (!opened) {
         setError(
