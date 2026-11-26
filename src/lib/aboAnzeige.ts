@@ -21,6 +21,11 @@ export interface AboAnzeige {
   text: string;
   /** Hinweis, wenn ein Suite-Abo besteht, hier aber nicht gilt — sonst null */
   suiteNichtHierText: string | null;
+  /**
+   * Hinweis, wenn kein Tarif erkannt wurde, der Suite-Server aber nicht geantwortet hat — „Free“ ist dann nur geraten
+   * (ein Bestandskunde soll nicht glauben, er müsse neu kaufen). Die Abo-Seite zeigt dann keine Kauf-Kacheln. Sonst null.
+   */
+  suiteUnklarText: string | null;
 }
 
 /** Datum wie überall auf der Abo-Seite: TT.MM.JJJJ */
@@ -78,5 +83,14 @@ export function aboAnzeige(
       ? `Du hast ein Dexware-Suite-Abo — es gilt aber nicht für ${app.name}: Seit dem ${SUITE_STICHTAG} gehört ${app.name} nicht mehr zum Suite-Abo und hat ein eigenes Abo. Suite-Abos, die am ${SUITE_STICHTAG} schon bestanden, gelten hier weiter, solange sie ohne Unterbrechung laufen. Dein Suite-Abo umfasst ${suiteAppNamen()}. Fragen dazu? Schreib uns an support@dexware.app.`
       : null;
 
-  return { suiteActive, proActive, viaOrg, bestand, current, planName, text, suiteNichtHierText };
+  const suiteUnklarText =
+    !suiteActive && !proActive && !viaOrg && info.suiteBackendUnknown && !app.notInSuite
+      ? `Ob an deinem Konto ein Dexware-Suite-Abo hängt, konnten wir gerade nicht prüfen (Suite-Server nicht erreichbar).${
+          app.suiteNurBestand
+            ? ` Ein Suite-Abo, das am ${SUITE_STICHTAG} schon bestand, gilt in ${app.name} weiter, solange es ohne Unterbrechung läuft.`
+            : ''
+        } Bitte lade die Seite später neu, bevor du ein Abo abschließt.`
+      : null;
+
+  return { suiteActive, proActive, viaOrg, bestand, current, planName, text, suiteNichtHierText, suiteUnklarText };
 }

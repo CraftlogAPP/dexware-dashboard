@@ -211,8 +211,10 @@ export function suiteStand(r: SuiteStatusAntwort | null | undefined, mitApp: boo
       : r.bonus === true || r.gutschein === true
         ? 'gutschein'
         : null;
-  // active nur wegen Pro dieser App/Gutschein? Dann zählt die Suite nur, wenn der Server den Bestand ausdrücklich meldet.
-  const aktiv = active && (r.bestand === true || !appPro);
+  // active nur wegen Pro dieser App/Gutschein? Dann zählt die Suite nur, wenn der Server den Bestand ausdrücklich meldet —
+  // oder der heutige Server (noch ohne Feld `bestand`) eine Suite meldet: der zählt sie in diesen Apps noch überall mit.
+  const alterServer = r.bestand === undefined;
+  const aktiv = active && (r.bestand === true || (alterServer && r.suite === true) || !appPro);
   return {
     aktiv,
     ablauf: aktiv ? ablauf : null,
@@ -278,10 +280,13 @@ export async function loadAboInfo(app: AppConfig, session: Session): Promise<Abo
 
   // Suite aus dem RevenueCat-Projekt DIESER App. Bei suiteNurBestand zählt sie nur als Bestand: gekauft bis Ende des
   // Stichtags — oder der Suite-Server bestätigt die Suite für diese App ohnehin (dann gilt auch die Kauf-Angabe hier).
+  // Antwortet der Suite-Server nicht, zählt sie ebenfalls: Er könnte den Bestand bestätigen (z. B. Kauf zwischen Stichtag
+  // und Abschalten der Play-Tarife, der noch in suite_bestand steht) — Lesefehler → Suite zählen, nie aussperren.
   const rcSuites = suiteCounts
     ? [byUid ? toInfo(byUid, ENTITLEMENT_SUITE) : null, byDexId ? toInfo(byDexId, ENTITLEMENT_SUITE) : null]
     : [];
-  const zaehlt = (i: EntitlementInfo | null) => (i && (!app.suiteNurBestand || st.aktiv || suiteImBestand(i)) ? i : null);
+  const zaehlt = (i: EntitlementInfo | null) =>
+    i && (!app.suiteNurBestand || st.aktiv || suiteRes.unknown || suiteImBestand(i)) ? i : null;
   const suite = suiteCounts ? better(zaehlt(rcSuites[0] ?? null), zaehlt(rcSuites[1] ?? null)) : null;
   const rcSuiteNeu = rcSuites.some((i) => !!i?.active && !zaehlt(i));
 

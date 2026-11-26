@@ -96,6 +96,9 @@ r = st({ active: true, expires_at: ZUK, suite: true, bestand: false, app_pro: tr
 check('&app, neue Suite + Pro aus der Sammel-App: Pro ja, Suite nein, Hinweis „gilt hier nicht“', r.aktiv === false && r.appPro === 'sammelapp' && r.nichtHier === true, r);
 r = st({ active: true, expires_at: ZUK, suite: true, bestand: true, app_pro: true }, true);
 check('&app, Bestand + Pro aus der Sammel-App: Suite zählt (Bestand gemeldet)', r.aktiv === true && r.appPro === 'sammelapp' && !r.nichtHier, r);
+r = st({ active: true, expires_at: ZUK, suite: true, app_pro: true, bonus: false, gutschein: false }, true);
+check('&app, heutiger Server (ohne Feld bestand): Suite + Pro aus der Sammel-App → Suite zählt (Server zählt sie dort noch), Ablauf = Suite',
+  r.aktiv === true && r.ablauf === ZUK && r.appPro === 'sammelapp' && r.appProAblauf === null && !r.nichtHier, r);
 r = st({ active: false, suite: false, app_pro: false }, true);
 check('&app, gar nichts: alles nein', !r.aktiv && !r.appPro && !r.nichtHier, r);
 // Server-Fassung zur Umstellung (dexware-suite suite-status, 26.11.2026): bei den 8 Apps meldet `suite`, ob die Suite HIER
@@ -188,7 +191,10 @@ check('KfzDex, Suite in KfzDex NACH dem Stichtag gekauft: zählt nicht, Hinweis 
 
 server({ rc: mitSuite('2026-12-01T09:00:00Z'), suite: 'netz' });
 i = await ABO.loadAboInfo(app('kfzdex'), session());
-check('… dasselbe bei gestörtem Server: zählt nicht, Auskunft als unsicher markiert, KEIN Hinweis „gilt hier nicht“ (Server könnte den Bestand bestätigen)', i.suite === null && i.suiteBackendUnknown === true && i.suiteNichtHier === false, i);
+check('… dasselbe bei gestörtem Server: zählt (Lesefehler → Suite zählen, der Server könnte den Bestand bestätigen), KEIN Hinweis „gilt hier nicht“', i.suite?.active === true && i.suiteBackendUnknown === true && i.suiteNichtHier === false, i);
+server({ rc: mitSuite('2026-12-01T09:00:00Z'), suite: 503 });
+i = await ABO.loadAboInfo(app('winterdex'), session());
+check('WinterDex, Suite-Server antwortet 503, Suite aus WinterDex mit späterem Kaufdatum: zählt (nie aussperren)', i.suite?.active === true && i.suiteBackendUnknown === true, i);
 
 server({ rc: mitSuite('2026-12-01T09:00:00Z'), suite: { active: true, expires_at: ZUK, suite: true, bestand: true } });
 i = await ABO.loadAboInfo(app('kfzdex'), session());
@@ -234,6 +240,10 @@ server({ rc: mitSuite('2026-11-20T10:00:00Z'), suite: { active: false, suite: tr
 check('TourDex: Suite in TourDex vor dem Stichtag gekauft, Server kennt sie nicht als Bestand → trotzdem Pro (nie aussperren)', (await pro('tourdex', { appParam: 'tourdex' })) === true);
 server({ rc: mitSuite('2026-12-05T10:00:00Z'), suite: { active: false, suite: true, bestand: false } });
 check('TourDex: Suite in TourDex nach dem Stichtag gekauft → kein Pro', (await pro('tourdex', { appParam: 'tourdex' })) === false);
+server({ rc: mitSuite('2026-12-05T10:00:00Z'), suite: 'netz' });
+check('TourDex: Suite in TourDex mit späterem Kaufdatum, Suite-Server gestört → Pro (Lesefehler → Suite zählen)', (await pro('tourdex', { appParam: 'tourdex' })) === true);
+server({ rc: mitSuite('2026-12-05T10:00:00Z'), suite: { active: false, suite: false, bestand: false } });
+check('CraftDex: Suite in CraftDex nach dem Stichtag, Server (neue Fassung) sagt sicher „kein Bestand“ → kein Pro', (await pro('craftdex', { appParam: 'craftdex' })) === false);
 
 server({ suite: (u) => (u.includes('&app=') ? { active: false } : { active: true }) });
 check('SchutzDex (bleibt in der Suite): Suite-Abo zählt wie bisher', (await pro('schutzdex', { appParam: 'schutzdex', metaPro: true })) === true && suiteFragen().length === 1 && !suiteFragen()[0].includes('&app='), suiteFragen());
@@ -274,6 +284,17 @@ a = anz('kfzdex', { pro: proAbo, appProBackend: 'sammelapp' });
 check('KfzDex mit eigenem Pro-Abo (und Sammel-App-Pro): eigenes Abo hat Vorrang, Details sichtbar', a.text === 'Dein Pro-Abo für KfzDex ist aktiv.' && a.current === proAbo, a);
 a = anz('winterdex', {}, { orgPro: true, bonusUntil: null });
 check('WinterDex über den Betrieb (Rechnung/Kommunal-Lizenz): unverändert „für deinen Betrieb“', a.viaOrg && a.planName === 'WinterDex Pro (für deinen Betrieb)', a);
+a = anz('winterdex', { suiteBackendUnknown: true });
+check('WinterDex, Suite-Server gestört, kein Tarif erkannt: Hinweis „nicht prüfen“ mit Bestandsschutz-Satz (keine Kauf-Kacheln)',
+  !!a.suiteUnklarText && a.suiteUnklarText.includes('nicht prüfen') && a.suiteUnklarText.includes('26.11.2026') && a.suiteUnklarText.includes('ohne Unterbrechung') && a.suiteNichtHierText === null, a);
+a = anz('gurtdex', { suiteBackendUnknown: true });
+check('GurtDex, Suite-Server gestört: Hinweis ohne Bestandsschutz-Satz', !!a.suiteUnklarText && !a.suiteUnklarText.includes('26.11.2026'), a);
+check('kein Hinweis „nicht prüfen“, wenn ein Tarif aktiv ist oder die App nicht zur Suite gehört',
+  anz('winterdex', { suiteBackendUnknown: true, pro: proAbo }).suiteUnklarText === null &&
+  anz('winterdex', { suiteBackendUnknown: true }, { orgPro: true, bonusUntil: null }).suiteUnklarText === null &&
+  anz('installateurdex', { suiteBackendUnknown: true }).suiteUnklarText === null &&
+  anz('winterdex', {}).suiteUnklarText === null);
+check('Abo-Seite: keine Kauf-Kacheln, solange der Suite-Stand unklar ist', /!suiteUnklarText && dexId && email/.test(liesWeb('src/components/AboPage.tsx')));
 check('Web-Kauf-Zeile der Suite nennt die Anzahl aus der registry', ANZ.suiteLead() === `Pro in allen ${R.SUITE_APPS.length} Apps der Dexware Suite mit einem Abo`, ANZ.suiteLead());
 
 // ============================================================================ [7] Quelltext

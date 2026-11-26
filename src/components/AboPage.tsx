@@ -81,7 +81,10 @@ function AboContent({ info }: { info: AboInfo }) {
   // Die Suite wird nur in Apps des Suite-Abos angeboten (nicht bei notInSuite/suiteNurBestand).
   if (app.webCheckout?.suite && inSuite(app)) groups.push({ title: 'Dexware Suite', lead: suiteLead(), offer: app.webCheckout.suite });
   // Tarif, Text und Suite-Hinweis (Entscheidung in src/lib/aboAnzeige.ts, geprüft in tests/suite-bestand.test.mjs)
-  const { suiteActive, proActive, viaOrg, current, planName, text, suiteNichtHierText } = aboAnzeige(app, info, { orgPro, bonusUntil });
+  const { suiteActive, proActive, viaOrg, current, planName, text, suiteNichtHierText, suiteUnklarText } = aboAnzeige(app, info, {
+    orgPro,
+    bonusUntil,
+  });
 
   return (
     <div className="abo-stack">
@@ -102,6 +105,9 @@ function AboContent({ info }: { info: AboInfo }) {
 
       {suiteNichtHierText && <div className="info-box">{suiteNichtHierText}</div>}
 
+      {/* Suite-Server gestört: „Free“ ist nur geraten — Hinweis statt Kauf-Kacheln (Bestandskunden nicht zum Neukauf drängen) */}
+      {suiteUnklarText && <div className="info-box">{suiteUnklarText}</div>}
+
       {notOwner && groups.length > 0 && !viaOrg && (
         <div className="info-box">
           Der Tarif gehört zum Betrieb und läuft über das Konto des <b>Inhabers</b>. Als Teammitglied arbeitest du unter
@@ -110,7 +116,9 @@ function AboContent({ info }: { info: AboInfo }) {
         </div>
       )}
 
-      {!notOwner && !suiteActive && !proActive && !viaOrg && dexId && email && <WebBuy groups={groups} dexId={dexId} email={email} />}
+      {!notOwner && !suiteActive && !proActive && !viaOrg && !suiteUnklarText && dexId && email && (
+        <WebBuy groups={groups} dexId={dexId} email={email} />
+      )}
 
       {current && <EntitlementDetails info={current} />}
 
