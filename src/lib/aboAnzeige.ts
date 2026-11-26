@@ -4,6 +4,10 @@
 // Suite-Umstellung 26.11.2026 (Alex): Das Suite-Abo umfasst nur noch die Apps aus SUITE_APPS (registry). In Apps mit
 // suiteNurBestand gilt eine Suite nur noch als Bestand (Abo vom Stichtag, ohne Unterbrechung) — die Seite sagt das so,
 // verkauft dort keine Suite und wirbt dort nicht mit ihr. Apps mit notInSuite erwähnen die Suite nur als „nicht Teil“.
+//
+// Paddle-Kasse live (WinterDex, 26.11.2026): Kann der Nutzer hier im Browser kaufen (kasseAn), sagt der Free-Text das und
+// der Block „Abo verwalten oder kündigen“ behauptet nicht mehr „Abos laufen über Google Play“ (verwalten = 'neutral').
+// Ohne Kasse: Texte wie bisher. Geprüft in tests/paddle-kasse.test.mjs [7c].
 import { inSuite, SUITE_APPS, SUITE_STICHTAG, suiteAppNamen, type AppConfig } from '../apps/registry';
 import type { AboInfo, EntitlementInfo } from './abo';
 
@@ -26,6 +30,11 @@ export interface AboAnzeige {
    * (ein Bestandskunde soll nicht glauben, er müsse neu kaufen). Die Abo-Seite zeigt dann keine Kauf-Kacheln. Sonst null.
    */
   suiteUnklarText: string | null;
+  /**
+   * Inhalt des Blocks „Abo verwalten oder kündigen“: 'paddle' = im Browser gekauftes Abo (Paddle), 'neutral' = Free ohne
+   * Tarif bei eingeschalteter Kasse (kein „Abos laufen über Google Play“ neben „Direkt hier kaufen“), sonst 'play' wie bisher.
+   */
+  verwalten: 'paddle' | 'play' | 'neutral';
 }
 
 /** Datum wie überall auf der Abo-Seite: TT.MM.JJJJ */
@@ -41,7 +50,12 @@ export function suiteLead(): string {
 export function aboAnzeige(
   app: Pick<AppConfig, 'name' | 'notInSuite' | 'suiteNurBestand'>,
   info: AboInfo,
-  org: { orgPro: boolean; bonusUntil: string | null },
+  org: {
+    orgPro: boolean;
+    bonusUntil: string | null;
+    /** Paddle-Kasse an UND dieses Konto darf dort kaufen (Inhaber bzw. Konto ohne Betrieb) — dann „hier im Browser“ */
+    kasseAn?: boolean;
+  },
   jetzt: number = Date.now(),
 ): AboAnzeige {
   const suiteActive = !!info.suite?.active || info.suiteBackendActive;
@@ -75,8 +89,14 @@ export function aboAnzeige(
           ? `${app.name} Pro ist für dein Konto freigeschaltet — ${appProServer === 'gutschein' ? 'mit einem eingelösten Dankeschön-Code' : 'über die Dexware-App'}${info.appProBackendExpires ? ` (bis ${fmtAboDatum(info.appProBackendExpires)})` : ''}.`
           : `Dein Pro-Abo für ${app.name} ist aktiv.`
         : !inSuite(app)
-          ? `Du nutzt ${app.name} im Free-Tarif. Pro schließt du in der ${app.name}-App am Handy ab (Google Play). ${app.name} ist nicht Teil des Dexware-Suite-Abos – ${app.name} hat ein eigenes Abo.`
-          : `Du nutzt ${app.name} im Free-Tarif. Pro oder das Suite-Abo schließt du in der ${app.name}-App am Handy ab (Google Play).`;
+          ? org.kasseAn
+            ? `Du nutzt ${app.name} im Free-Tarif. Pro schließt du hier im Browser oder in der ${app.name}-App (Android) ab. ${app.name} ist nicht Teil des Dexware-Suite-Abos – ${app.name} hat ein eigenes Abo.`
+            : `Du nutzt ${app.name} im Free-Tarif. Pro schließt du in der ${app.name}-App am Handy ab (Google Play). ${app.name} ist nicht Teil des Dexware-Suite-Abos – ${app.name} hat ein eigenes Abo.`
+          : org.kasseAn
+            ? `Du nutzt ${app.name} im Free-Tarif. Pro schließt du hier im Browser oder in der ${app.name}-App (Android) ab, das Suite-Abo in der ${app.name}-App am Handy (Google Play).`
+            : `Du nutzt ${app.name} im Free-Tarif. Pro oder das Suite-Abo schließt du in der ${app.name}-App am Handy ab (Google Play).`;
+  const free = !suiteActive && !proActive && !viaOrg;
+  const verwalten: AboAnzeige['verwalten'] = current?.store === 'paddle' ? 'paddle' : free && org.kasseAn ? 'neutral' : 'play';
 
   const suiteNichtHierText =
     !suiteActive && info.suiteNichtHier
@@ -92,5 +112,5 @@ export function aboAnzeige(
         } Bitte lade die Seite später neu, bevor du ein Abo abschließt.`
       : null;
 
-  return { suiteActive, proActive, viaOrg, bestand, current, planName, text, suiteNichtHierText, suiteUnklarText };
+  return { suiteActive, proActive, viaOrg, bestand, current, planName, text, suiteNichtHierText, suiteUnklarText, verwalten };
 }

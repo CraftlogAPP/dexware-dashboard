@@ -3,13 +3,31 @@
 // /vorschau-kauf?kasse=<fall> zeigt die Paddle-Kasse von WinterDex mit einem NACHGEBAUTEN SDK (kein Netz, kein Paddle):
 //   fall = erfolg | abbruch | spaet (Fenster nach Zahlung geschlossen) | fehler | netz | ladefehler | leer | sandbox
 //   /vorschau-kauf?kasse=danke&status=pruefe|ok|spaeter[&sandbox] zeigt nur die Danke-Ansicht.
+//   Darüber/darunter wie auf der echten Abo-Seite (Free, Kasse an): Tarif-Karte mit dem Text aus aboAnzeige (kasseAn) und
+//   der neutrale Verwalten-Hinweis.
 import { useState } from 'react';
 import { WebBuy } from '../components/WebBuy';
 import { KaufDanke, PaddleKasse, type GekauftInfo } from '../components/PaddleKasse';
 import type { KasseKonfig, RcAngebot, RcLader, RcPurchases } from '../lib/paddleKasse';
 import { WEB_OFFERS } from '../apps/webOffers';
 import { APPS } from '../apps/registry';
-import { suiteLead } from '../lib/aboAnzeige';
+import { aboAnzeige, suiteLead } from '../lib/aboAnzeige';
+import type { AboInfo } from '../lib/abo';
+import { VerwaltenNeutral } from '../components/AboPage';
+
+/** Konto ohne Tarif (Free) — für Tarif-Karte und Verwalten-Hinweis der Vorschau */
+const FREE: AboInfo = {
+  pro: null,
+  suite: null,
+  suiteBackendActive: false,
+  suiteBackendExpires: null,
+  suiteBackendUnknown: false,
+  appProBackend: null,
+  appProBackendExpires: null,
+  suiteNichtHier: false,
+  suiteAppParam: null,
+  managementUrl: null,
+};
 
 // Kein echter Kauf-Link im öffentlichen Repo (auch kein Test-Link): Platzhalter, die Kacheln sind nur zum Ansehen.
 const TEST = 'https://pay.rev.cat/beispiel';
@@ -72,9 +90,21 @@ function KasseVorschau({ fall }: { fall: string }) {
       status: st === 'pruefe' || st === 'spaeter' ? st : 'ok',
     };
   });
+  const anz = aboAnzeige(app, FREE, { orgPro: false, bonusUntil: null, kasseAn: true });
   return (
     <div className="app-scope" style={style}>
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px', display: 'grid', gap: 16 }}>
+        {!kauf && (
+          <div className="card">
+            <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+              <h3 style={{ margin: 0 }}>{anz.planName}</h3>
+              <span className="badge">kostenlose Version</span>
+            </div>
+            <p className="muted" style={{ marginBottom: 0 }}>
+              {anz.text}
+            </p>
+          </div>
+        )}
         {kauf ? (
           <KaufDanke appName={app.name} info={kauf.info} email="beispiel@betrieb.at" status={kauf.status} weiter="/vorschau-kauf?kasse=erfolg" />
         ) : (
@@ -92,6 +122,7 @@ function KasseVorschau({ fall }: { fall: string }) {
             }}
           />
         )}
+        {!kauf && anz.verwalten === 'neutral' && <VerwaltenNeutral appName={app.name} />}
       </div>
     </div>
   );

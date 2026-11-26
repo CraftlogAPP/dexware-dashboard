@@ -259,12 +259,13 @@ export const APPS: AppConfig[] = [
     // Web-Kauf (Paddle über RevenueCat-Kauf-Link). link leer = Kacheln bleiben unsichtbar. Erst den LIVE-Link eintragen
     // (nie den Test-Link) — Anleitung: dexware-suite/vertrieb/web-checkout/README.md
     webCheckoutLead: 'Unbegrenzt Objekte und Strecken, PDF ohne Wasserzeichen, Team bis 20 Mitarbeiter',
-    // Kauf direkt im Dashboard (Weg A, 26.11.2026): rcKey leer = AUS (Kacheln oben bleiben ausgegraut wie bisher).
-    // live: öffentlicher RevenueCat-Schlüssel (pdl_…) von „winterdex (Paddle Live)“ appfab6fe9468, Angebot web_pro_live.
+    // Kauf direkt im Dashboard (Weg A): LIVE seit 26.11.2026 (Alex-Go). rcKey leer = AUS (Kacheln oben ausgegraut wie früher;
+    // Rückweg: docs/paddle-kasse.md). live: öffentlicher RevenueCat-Schlüssel (pdl_…) von „winterdex (Paddle Live)“
+    // appfab6fe9468, Angebot web_pro_live (Neukundenpreise 19,99 € / Monat, 69,99 € / Jahr).
     // sandbox: Schlüssel von „winterdex (Paddle)“ app545843109b (Test), Angebot web_pro — nur …/abo?kasse=sandbox; für den
     // Probekauf am besten NICHT hier, sondern lokal in .env.local (VITE_RC_PADDLE_SANDBOX_KEY). Preise kommen aus dem Angebot.
     paddleKasse: {
-      live: { rcKey: '', offering: 'web_pro_live' },
+      live: { rcKey: 'pdl_LqRQjzmmVdwVmLcGUcYpTvZkcDdL', offering: 'web_pro_live' },
       sandbox: { rcKey: '', offering: 'web_pro' }, // Sandbox-Probekauf 26.11.2026 bestanden; Schlüssel für weitere Tests: docs/paddle-kasse.md
     },
     webCheckout: {
@@ -272,8 +273,9 @@ export const APPS: AppConfig[] = [
         link: '',
         plans: [
           // Neukundenpreise seit 26.11.2026 (Alex): 69,99 € / Jahr, 19,99 € / Monat (25.11.: 49,99 € / 9,99 €, Paddle
-          // pri_01m8a558fgmh4sjwsm33e96wy4). Paddle-Preise + RevenueCat-Angebot web_pro_live ($rc_annual, $rc_monthly) stellt die
-          // Hauptsitzung im Browser um. Kauf-Link für web_pro_live erst nach Paddle-Freigabe von pay.rev.cat.
+          // pri_01m8a558fgmh4sjwsm33e96wy4). Paddle-Preise und RevenueCat-Angebot web_pro_live ($rc_annual, $rc_monthly) sind
+          // umgestellt. Bei eingeschalteter Kasse kommen die Preise aus web_pro_live (hier nur Titel, Hinweis, Reihenfolge);
+          // die Preise unten zeigen nur die ausgegrauten Kacheln bei Kasse AUS. Kauf-Link (link) bleibt leer.
           { pkg: '$rc_annual', title: 'Saison', price: '69,99 €', per: 'pro Jahr', note: 'deckt die ganze Wintersaison', best: true, tag: 'Meist gewählt' },
           { pkg: '$rc_monthly', title: 'Monatlich', price: '19,99 €', per: 'pro Monat', note: 'monatlich kündbar' },
         ],

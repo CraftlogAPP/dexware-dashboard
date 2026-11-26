@@ -1,5 +1,16 @@
 # Paddle-Kasse im Dashboard (WinterDex Pro)
 
+> **Live-Status 26.11.2026:** Kasse **LIVE** (Alex-Go „Alle 3 sachen go“). `registry.ts` → WinterDex →
+> `paddleKasse.live.rcKey` = öffentlicher RevenueCat-Schlüssel von „winterdex (Paddle Live)“ (`pdl_LqRQ…`), Angebot
+> `web_pro_live` mit den Neukundenpreisen **19,99 € / Monat** und **69,99 € / Jahr** (Paddle-Preise und RevenueCat-Angebot
+> umgestellt). **Sandbox-Probekauf am 26.11.2026 bestanden** (Kauf, Danke-Ansicht, Pro für den Betrieb, Kasse danach weg;
+> Sandbox-Schlüssel danach wieder aus der registry entfernt). Offen nach dem Veröffentlichen: Echtkauf-Probe
+> (Live-Schaltung, Schritt 6) und Landing-Knopf (Schritt 7). Abo-Seite bei Free mit Kasse: „Pro schließt du hier im Browser
+> oder in der WinterDex-App (Android) ab“, statt „Abos laufen über Google Play“ ein neutraler Verwalten-Hinweis
+> (`aboAnzeige` → `verwalten`, Test `tests/paddle-kasse.test.mjs` [7c]).
+>
+> **Reihenfolge beim Veröffentlichen:** zuerst Datenschutz-Absatz 7a (Schritt 4) auf dexware.app live, dann dieses Dashboard.
+
 Stand: 26.11.2026 · Code: `src/lib/paddleKasse.ts` (Entscheidungen, ohne Laufzeit-Imports), `src/components/PaddleKasse.tsx`
 (Kauf-Karte + Danke-Ansicht), `src/components/AboPage.tsx` (Einbau), `src/apps/registry.ts` (`paddleKasse` bei WinterDex),
 `src/winterdex/pro.ts` (`PRO_HOW`), Test `tests/paddle-kasse.test.mjs`, Vorschau im Dev-Server `/vorschau-kauf?kasse=erfolg`.
@@ -35,8 +46,8 @@ nicht bei gestörter Antwort (dann der Hinweis „bitte später neu laden, bevor
 
 | Zustand | Wirkung |
 |---|---|
-| kein Schlüssel (Stand im Repo) | Kasse **aus** — Abo-Seite wie bisher (ausgegraute Kacheln „In Kürze“), `PRO_HOW` wie bisher |
-| `paddleKasse.live.rcKey` = `pdl_…` (oder Bau-Variable `VITE_RC_PADDLE_KEY`) | Kasse **live** mit Angebot `web_pro_live`; `PRO_HOW` nennt den Kauf im Dashboard |
+| kein Schlüssel (Stand im Repo bis 26.11.2026) | Kasse **aus** — Abo-Seite wie bisher (ausgegraute Kacheln „In Kürze“), `PRO_HOW` wie bisher |
+| `paddleKasse.live.rcKey` = `pdl_…` (oder Bau-Variable `VITE_RC_PADDLE_KEY`) — **Stand im Repo seit 26.11.2026** | Kasse **live** mit Angebot `web_pro_live`; `PRO_HOW` nennt den Kauf im Dashboard; Free-Text der Abo-Seite nennt „hier im Browser“, Verwalten-Block neutral |
 | Adresse `…/abo?kasse=sandbox` **und** Sandbox-Schlüssel (`VITE_RC_PADDLE_SANDBOX_KEY` oder `paddleKasse.sandbox.rcKey`) | Kasse im **Sandbox-Modus** (Angebot `web_pro`, Hinweis „Sandbox · Testkauf“) |
 | `?kasse=sandbox` ohne Sandbox-Schlüssel | Kasse **aus** — nie stillschweigend Live |
 
@@ -88,13 +99,14 @@ Danke-Ansicht: `/vorschau-kauf?kasse=danke&status=pruefe|ok|spaeter[&sandbox]`.
 
 ## Live-Schaltung
 
-1. Sandbox-Probekauf (oben) bestanden.
+1. Sandbox-Probekauf (oben) bestanden. ✅ 26.11.2026
 2. **Standard-Zahlungslink bei Paddle prüfen** (Paddle Live → Checkout → Checkout settings → Default payment link). Dort steht
    noch `https://pay.rev.cat`, und diese Domain ist bei Paddle nicht freigegeben. Ob RevenueCat die Live-Transaktion damit
    anlegen kann, zeigt erst der Echtkauf (Schritt 6). Scheitert er beim Öffnen der Kasse („Der Kauf im Browser ist gerade nicht
    verfügbar“), braucht es eine Seite auf einer freigegebenen Domain, die Paddle.js mit einem Client-Token lädt
    (`?_ptxn=…`), und den Standard-Link dorthin — siehe „Offene Punkte“.
-3. Live-Schlüssel eintragen: `src/apps/registry.ts` → WinterDex → `paddleKasse.live.rcKey: 'pdl_…'`.
+3. Live-Schlüssel eintragen: `src/apps/registry.ts` → WinterDex → `paddleKasse.live.rcKey: 'pdl_…'`. ✅ 26.11.2026
+   (`pdl_LqRQjzmmVdwVmLcGUcYpTvZkcDdL`, „winterdex (Paddle Live)“)
    (Alternativ Bau-Variable `VITE_RC_PADDLE_KEY` — dann muss `.github/workflows/pages.yml` sie beim Schritt `npm run build`
    aus einer Repo-Variable setzen; der Eintrag in `registry.ts` ist einfacher.)
 4. **Vorher** Datenschutz-Absatz 7a ersetzen (Text unten unter „Rechtliches“) und den Hub veröffentlichen: Sobald das
@@ -102,7 +114,7 @@ Danke-Ansicht: `/vorschau-kauf?kasse=danke&status=pruefe|ok|spaeter[&sandbox]`.
    Kennung“) stimmt dann nicht mehr.
 5. `node tests/paddle-kasse.test.mjs` (prüft auch den eingetragenen Schlüssel), alle Tests, `npm run build`; dann auf `master`
    übernehmen und veröffentlichen.
-6. Echtkauf mit dem eigenen Konto: Monatstarif (19,99 € für Neukunden seit 26.11.2026; solange Paddle noch nicht umgestellt ist: 9,99 €), Ablauf wie im Sandbox-Test prüfen. Danach in Paddle Live →
+6. Echtkauf mit dem eigenen Konto: Monatstarif (19,99 €, Neukundenpreis seit 26.11.2026), Ablauf wie im Sandbox-Test prüfen. Danach in Paddle Live →
    Transactions → die Transaktion → **Refund** (voll). Prüfen, dass RevenueCat die Erstattung übernimmt und Pro endet.
 7. Danach: Landing (`landing-system/iphone.js`, `BROWSER.winterdex.buyLive`) auf die Abo-Seite des Dashboards zeigen lassen,
    Landings bauen und veröffentlichen.
@@ -162,5 +174,6 @@ Paddle-Ziele laut Paddle-Doku) sowie `style-src 'unsafe-inline'` für die Stile 
   denselben Link laufen die Paddle-Mails „Zahlungsart ändern“.
 - RevenueCat „Paddle Live“: automatische Kauferfassung erfasst laut RevenueCat alle Käufe des Paddle-Kontos — BaumDex-Käufe
   können dort anonym auftauchen (schalten nichts frei). In den Einstellungen des Eintrags prüfen.
-- `PRO_HOW` (Texte an den Gratis-Grenzen) schaltet mit dem Live-Schlüssel automatisch um; weitere Texte, die nur
-  „Android-App“ nennen (Landing, Store-Texte), bei der Live-Schaltung mitziehen.
+- `PRO_HOW` (Texte an den Gratis-Grenzen, auch Team-Seite) schaltet mit dem Live-Schlüssel automatisch um, ebenso Free-Text
+  und Verwalten-Block der Abo-Seite (26.11.2026); weitere Texte, die nur „Android-App“ nennen (Landing, Store-Texte), bei der
+  Live-Schaltung mitziehen.

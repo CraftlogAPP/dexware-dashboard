@@ -39,8 +39,9 @@ async function fetchOrgProStrict(sb: SupabaseClient): Promise<boolean | null> {
 /**
  * Abo-Verwaltung (generisch für alle App-Bereiche): aktueller Tarif
  * (Free / Pro / Suite), Ablauf-/Verlängerungsdatum und der Weg zur
- * Kündigung. Käufe & Kündigungen laufen über Google Play — das Dashboard
- * zeigt an und verlinkt dorthin.
+ * Kündigung. Store-Abos laufen über Google Play — das Dashboard zeigt an und
+ * verlinkt dorthin. WinterDex (seit 26.11.2026): Kauf auch direkt hier über die
+ * Paddle-Kasse; solche Abos verwaltet der Kunde bei Paddle.
  *
  * Suite-Umstellung 26.11.2026: Das Suite-Abo umfasst nur noch die Apps aus SUITE_APPS (registry). In Apps mit
  * suiteNurBestand gilt eine Suite nur noch als Bestand (Abo vom Stichtag, ohne Unterbrechung) — die Seite sagt das so,
@@ -158,10 +159,13 @@ function AboContent({
   if (proOffer) groups.push({ title: `${app.name} Pro`, lead: app.webCheckoutLead ?? prepared?.lead ?? 'Alle Pro-Funktionen dieser App', offer: proOffer });
   // Die Suite wird nur in Apps des Suite-Abos angeboten (nicht bei notInSuite/suiteNurBestand).
   if (app.webCheckout?.suite && inSuite(app)) groups.push({ title: 'Dexware Suite', lead: suiteLead(), offer: app.webCheckout.suite });
-  // Tarif, Text und Suite-Hinweis (Entscheidung in src/lib/aboAnzeige.ts, geprüft in tests/suite-bestand.test.mjs)
-  const { suiteActive, proActive, viaOrg, current, planName, text, suiteNichtHierText, suiteUnklarText } = aboAnzeige(app, info, {
+  // Tarif, Text und Suite-Hinweis (Entscheidung in src/lib/aboAnzeige.ts, geprüft in tests/suite-bestand.test.mjs und
+  // tests/paddle-kasse.test.mjs). kasseAn: Kasse eingeschaltet und dieses Konto darf dort kaufen (nicht als Teammitglied) —
+  // dann nennt der Free-Text den Kauf hier im Browser und der Verwalten-Block bleibt neutral.
+  const { suiteActive, proActive, viaOrg, current, planName, text, suiteNichtHierText, suiteUnklarText, verwalten } = aboAnzeige(app, info, {
     orgPro,
     bonusUntil,
+    kasseAn: !!kasse && !!proOffer && !notOwner,
   });
 
   return (
@@ -238,7 +242,7 @@ function AboContent({
         </div>
       )}
 
-      {current?.store === 'paddle' ? (
+      {verwalten === 'paddle' ? (
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Abo verwalten oder kündigen</h3>
           <p className="muted">
@@ -256,6 +260,8 @@ function AboContent({
             <a href="https://dexware.app/agb.html" target="_blank" rel="noreferrer">AGB</a>
           </p>
         </div>
+      ) : verwalten === 'neutral' ? (
+        <VerwaltenNeutral appName={app.name} />
       ) : (
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Abo verwalten oder kündigen</h3>
@@ -288,6 +294,23 @@ function AboContent({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Verwalten-Hinweis für Free bei eingeschalteter Kasse (aboAnzeige → verwalten 'neutral'): kein „Abos laufen über Google
+ * Play“ direkt unter „Direkt hier kaufen“. Auch in der Dev-Vorschau /vorschau-kauf zu sehen.
+ */
+export function VerwaltenNeutral({ appName }: { appName: string }) {
+  return (
+    <p className="muted small" style={{ margin: 0 }}>
+      Ein hier im Browser gekauftes Abo verwaltest und kündigst du später auf dieser Seite, ein Abo aus der{' '}
+      {`${appName}-App`} in deinem{' '}
+      <a href={PLAY_SUBSCRIPTIONS_URL} target="_blank" rel="noreferrer">
+        Google-Play-Konto ↗
+      </a>
+      .
+    </p>
   );
 }
 

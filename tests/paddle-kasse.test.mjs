@@ -9,6 +9,8 @@
 //   • Kauf: Dexware-ID, E-Mail vorausgefüllt, deutsch, ohne RevenueCat-Erfolgsseite; Abbruch/Fehler ruhig, und wer
 //     schon bezahlt hat, sieht nie „abgebrochen“
 //   • das SDK wird nur nachgeladen (eigene Datei, nicht in der Offline-Hülle)
+//   • Live seit 26.11.2026: eingetragener Live-Schlüssel schaltet die Kasse ein; die Abo-Seite sagt bei Free „hier im
+//     Browser“ und behauptet nicht mehr „Abos laufen über Google Play“ (aboAnzeige → verwalten 'neutral')
 //
 //   Aufruf:  node tests/paddle-kasse.test.mjs        (Node ab 22.18, liest die .ts-Dateien direkt)
 import { registerHooks } from 'node:module';
@@ -75,7 +77,7 @@ check('Sandbox-Schlüssel allein schaltet ohne ?kasse=sandbox NICHTS ein', K.kas
 check('gleicher Schlüssel als Live und Sandbox (Verwechslung) → aus', K.kasseKonfig(einst(LIVE, LIVE)) === null);
 check('Live-Eintrag ohne Angebot → aus', K.kasseKonfig({ live: { rcKey: LIVE, offering: '' } }) === null);
 
-teil('1b registry: nur WinterDex, Angebote getrennt, im Repo ohne Schlüssel = aus');
+teil('1b registry: nur WinterDex, Angebote getrennt, Schlüssel leer (= aus) oder gültig (= live)');
 check('WinterDex hat paddleKasse', !!wd?.paddleKasse);
 check('Live-Angebot web_pro_live, Sandbox-Angebot web_pro (getrennt)', wd?.paddleKasse?.live?.offering === 'web_pro_live' && wd?.paddleKasse?.sandbox?.offering === 'web_pro');
 check('keine andere App hat eine Paddle-Kasse (Suite wird im Web nicht verkauft)', R.APPS.filter((a) => a.paddleKasse).map((a) => a.id).join() === 'winterdex');
@@ -288,6 +290,42 @@ const WDPRO = await import(pathToFileURL(path.join(root, 'src/winterdex/pro.ts')
 check('Kasse aus → Text wie bisher (Android-App oder Rechnung)', WDPRO.proHowText(false).startsWith('Pro schließt du in der WinterDex-App (Android)') && !/Dashboard/.test(WDPRO.proHowText(false)));
 check('Kasse an → nennt zuerst den Kauf hier im Dashboard unter „Abo“ (Paddle)', /direkt hier im Dashboard unter „Abo“/.test(WDPRO.proHowText(true)) && /Paddle/.test(WDPRO.proHowText(true)));
 check('im Repo ohne Schlüssel: PRO_HOW = Text wie bisher', regLive !== '' || WDPRO.PRO_HOW === WDPRO.proHowText(false));
+check('mit Live-Schlüssel in der registry: PRO_HOW nennt den Kauf im Dashboard', regLive === '' || WDPRO.PRO_HOW === WDPRO.proHowText(true));
+check('Neukundenpreis auf Rechnung 69,99 € (Kasse an und aus), nirgends mehr 49,99 €',
+  [true, false].every((an) => /\(69,99 € pro Jahr\)/.test(WDPRO.proHowText(an)) && !/49,99/.test(WDPRO.proHowText(an))));
+
+// ============================================================================ [7c] Abo-Seite bei Free
+teil('7c Abo-Seite bei Free: Text und Verwalten-Block passen zur Kasse');
+const ANZ = await import(pathToFileURL(path.join(root, 'src/lib/aboAnzeige.ts')).href);
+const leer = { pro: null, suite: null, suiteBackendActive: false, suiteBackendExpires: null, suiteBackendUnknown: false, appProBackend: null, appProBackendExpires: null, suiteNichtHier: false, suiteAppParam: null, managementUrl: null };
+const morgen = new Date(Date.now() + 86_400_000).toISOString();
+const storeAbo = (store) => ({ active: true, expiresDate: morgen, willRenew: true, unsubscribed: false, periodType: 'normal', store, productId: 'p', sandbox: false, originalPurchaseDate: null });
+const anz = (x = {}, org = {}) => ANZ.aboAnzeige(wd, { ...leer, ...x }, { orgPro: false, bonusUntil: null, ...org });
+let a = anz({}, { kasseAn: true });
+check('Kasse an, Free: „Pro schließt du hier im Browser oder in der WinterDex-App (Android) ab“, kein „am Handy ab (Google Play)“',
+  a.planName === 'Free' && a.text.includes('Pro schließt du hier im Browser oder in der WinterDex-App (Android) ab') && !a.text.includes('Google Play'), a.text);
+check('Kasse an, Free: Suite-Satz bleibt („nicht Teil des Dexware-Suite-Abos“)', a.text.includes('nicht Teil des Dexware-Suite-Abos'), a.text);
+check('Kasse an, Free: Verwalten-Block neutral (nicht „Abos laufen über Google Play“)', a.verwalten === 'neutral', a.verwalten);
+a = anz({});
+check('Kasse aus, Free: Text und Verwalten-Block wie bisher (Google Play)', a.text.includes('am Handy ab (Google Play)') && !a.text.includes('Browser') && a.verwalten === 'play', a);
+a = anz({}, { kasseAn: false });
+check('kasseAn false (z. B. Teammitglied) = wie Kasse aus', a.text.includes('am Handy ab (Google Play)') && a.verwalten === 'play', a);
+check('eigenes Play-Abo aktiv: Verwalten über Google Play, auch bei Kasse an', anz({ pro: storeAbo('play_store') }, { kasseAn: true }).verwalten === 'play');
+check('im Browser gekauft (Paddle): Verwalten bei Paddle, Kasse an oder aus',
+  anz({ pro: storeAbo('paddle') }, { kasseAn: true }).verwalten === 'paddle' && anz({ pro: storeAbo('paddle') }).verwalten === 'paddle');
+a = anz({}, { orgPro: true, kasseAn: true });
+check('Pro über den Betrieb: Text „für deinen Betrieb“, Verwalten wie bisher', a.viaOrg && a.text.includes('Ein eigenes Abo ist nicht nötig') && a.verwalten === 'play', a);
+a = anz({ suiteBackendActive: true }, { kasseAn: true });
+check('Suite-Bestand: Bestandsschutz-Text unverändert, kein Verkaufstext', a.planName === 'Dexware Suite (Bestandsschutz)' && !a.text.includes('Browser') && a.verwalten === 'play', a);
+const gurt = R.getApp('gurtdex');
+a = ANZ.aboAnzeige(gurt, leer, { orgPro: false, bonusUntil: null });
+check('Suite-App ohne Kasse (GurtDex): Text wie bisher', a.text.includes('Pro oder das Suite-Abo schließt du in der GurtDex-App am Handy ab (Google Play)') && a.verwalten === 'play', a.text);
+const seite = lies('src/components/AboPage.tsx');
+check('Abo-Seite: kasseAn nur mit Kasse, Pro-Angebot und nicht als Teammitglied', /kasseAn: !!kasse && !!proOffer && !notOwner/.test(seite));
+check('Abo-Seite: Verwalten-Block folgt aboAnzeige (paddle / neutral / Google Play)',
+  /verwalten === 'paddle' \?/.test(seite) && /verwalten === 'neutral' \?\s*\(\s*<VerwaltenNeutral/.test(seite) && /Abos bei Google Play öffnen/.test(seite));
+const neutral = /export function VerwaltenNeutral[\s\S]*?\n}\n/.exec(seite.replace(/\r\n/g, '\n'))?.[0] ?? '';
+check('neutraler Hinweis: kein „Abos laufen über“, nennt Kauf hier und Google-Play-Konto', !!neutral && !/Abos laufen über/.test(neutral) && /hier im Browser gekauftes Abo/.test(neutral) && /Google-Play-Konto/.test(neutral), neutral);
 
 // ============================================================================ [8] Build (optional)
 teil('8 Build: SDK in eigener Datei, nicht in der Offline-Hülle (optional, nach npm run build)');
