@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AlarmClock, Bell, CloudSnow, CloudSun, FlaskConical, Landmark, Moon, RefreshCw, Sunrise, TriangleAlert } from 'lucide-react';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { useOrg } from '../components/OrgContext';
@@ -109,7 +109,6 @@ function Glocke({ st }: { st: MtStand }) {
   const [vorher, setVorher] = useState<number | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const knopfRef = useRef<HTMLButtonElement>(null);
-  const navigate = useNavigate();
   const { alsGesehen } = st;
 
   const zu = useCallback(
@@ -144,10 +143,6 @@ function Glocke({ st }: { st: MtStand }) {
     setOffen(true);
     alsGesehen();
   }
-  function oeffne(ziel: string) {
-    zu();
-    navigate(ziel);
-  }
 
   const jetzt = st.abgerufen ?? Date.now();
   const zahl = zaehlerText(st.neu);
@@ -181,9 +176,12 @@ function Glocke({ st }: { st: MtStand }) {
                 <div className="mt-gruppe" key={g.gruppe}>
                   <div className="mt-gruppe-kopf">{g.gruppe}</div>
                   {g.eintraege.map((m) => (
-                    <button type="button" key={m.id} className={`mt-eintrag${m.kritisch ? ' mt-kritisch' : ''}`} onClick={() => oeffne(st.pfad(m.id))}>
+                    // Link statt navigate(): die Rückfrage „Aufzeichnung läuft / Einsatz nicht gespeichert“
+                    // (useUnsavedGuard fängt nur Klicks auf Links ab) greift auch hier — sonst verließe ein Klick
+                    // in der Glocke den Außendienst ohne Nachfrage.
+                    <Link key={m.id} to={st.pfad(m.id)} className={`mt-eintrag${m.kritisch ? ' mt-kritisch' : ''}`} onClick={() => zu()}>
                       <EintragInhalt m={m} jetzt={jetzt} tz={st.tz} neu={istNeu(m, vorher, jetzt)} />
-                    </button>
+                    </Link>
                   ))}
                 </div>
               ))}

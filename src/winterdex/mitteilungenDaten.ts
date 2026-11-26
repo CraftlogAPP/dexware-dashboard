@@ -5,8 +5,9 @@
 //     letzten 30 Tage an den Betrieb bzw. an mich — dieselben wie am Handy. Der Browser filtert nichts weg.
 //   · „Gelesen“ gibt es am Server bewusst NICHT (Versprechen AVV § 4a / Datenschutz f). Der Stand „zuletzt geöffnet“
 //     liegt nur in diesem Browser (localStorage je Betrieb) und wird nie gesendet — die RPC bekommt nur p_org.
-//   · RPC fehlt (Nachtrag nicht eingespielt), kein Mitglied oder unbekannte Fassung → keine Glocke. Netzfehler → der
-//     letzte Stand bleibt stehen (siehe mitteilungenKontext.ts).
+//   · RPC fehlt (Nachtrag nicht eingespielt), kein Mitglied ({v:1, fehler:'kein_mitglied'}, null oder 42501) oder
+//     unbekannte Fassung → keine Glocke. Netzfehler bzw. andere Absage (z. B. 'nicht_angemeldet') → der letzte Stand
+//     bleibt stehen (siehe mitteilungenKontext.ts).
 //   · Tage und Uhrzeiten in der Ortszeit des Betriebs (nachweisZone, Europe/Vienna), nie per toISOString (Datums-Regeln).
 //   · Am Handy kommt nur der kurze Text („kurz“, ≤ 110 Zeichen); hier steht immer der VOLLE Text („text“).
 // Getestet in tests/mitteilungen.test.mjs.
@@ -47,7 +48,7 @@ export function artName(kart: string, vomServer?: string | null): string {
 
 /** Antwort des Servers → Liste (neueste zuerst, ohne Doppel); unbekannte Fassung oder kaputte Antwort → null. */
 export function mitteilungenLesen(x: unknown): Mitteilung[] | null {
-  if (!istObj(x) || x.v !== 1) return null;
+  if (!istObj(x) || x.v !== 1 || absageVon(x) !== null) return null;
   const roh = Array.isArray(x.mitteilungen) ? x.mitteilungen : [];
   const gesehen = new Set<string>();
   const out: Mitteilung[] = [];
@@ -97,6 +98,16 @@ export type MtLadung =
 const keinRecht = (e: { code?: string } | null | undefined) => !!e && e.code === '42501';
 
 /**
+ * Absage des Servers im Vertrag v1 (NACHTRAG-MITTEILUNGEN): {v:1, fehler:'kein_mitglied'|'nicht_angemeldet', mitteilungen:[]}.
+ * Das ist KEINE leere Liste — sonst stünde eine Glocke „Keine Mitteilungen“ da, obwohl der Server gar nichts zeigen darf.
+ * Rückgabe: Fehlerwort oder null (keine Absage).
+ */
+export function absageVon(x: unknown): string | null {
+  if (!istObj(x) || x.fehler === undefined || x.fehler === null || x.fehler === false) return null;
+  return typeof x.fehler === 'string' && x.fehler.trim() !== '' ? x.fehler.trim() : 'unbekannt';
+}
+
+/**
  * meine_mitteilungen(p_org) per POST (supabase.rpc). Wirft nie. Schickt NUR p_org — nie einen Gelesen-Stand, nie
  * Geräte- oder Personendaten (p_seit bleibt beim Standard des Servers: 30 Tage).
  */
@@ -107,6 +118,11 @@ export async function ladeMitteilungen(sb: SupabaseClient, orgId: string, jetzt 
       if (rpcFehlt({ ...error, status }) || keinRecht(error)) return { art: 'aus' };
       return { art: 'fehler' };
     }
+    // Absage im Vertrag: kein Mitglied → keine Glocke; sonst (z. B. Anmeldung gerade abgelaufen) wie eine Störung —
+    // der letzte Stand bleibt, beim nächsten Abruf geht es weiter
+    const absage = absageVon(data);
+    if (absage === 'kein_mitglied') return { art: 'aus' };
+    if (absage) return { art: 'fehler' };
     const liste = mitteilungenLesen(data);
     if (!liste) return { art: 'aus' };
     return { art: 'ok', orgId, liste, abgerufen: jetzt() };

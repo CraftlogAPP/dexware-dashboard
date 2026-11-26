@@ -2,7 +2,8 @@
 // Netz; Antworten im Format des Vertrags v1 von meine_mitteilungen (NACHTRAG-MITTEILUNGEN-2026-11-26.sql), keine
 // Kundendaten (Texte wie aus Alex' Feldtest 26.11., Orte erfunden bzw. nur Gemeinde).
 //   [1] meine_mitteilungen lesen (v1, Fallbacks, kaputte Einträge, Doppel, Reihenfolge, voller Text bleibt voll)
-//   [2] laden (RPC fehlt → aus, kein Mitglied → aus, Netzfehler → fehler, wirft nie, schickt NUR p_org)
+//   [2] laden (RPC fehlt → aus, kein Mitglied → aus – auch die Absage {v:1, fehler:'kein_mitglied'} –, Netzfehler
+//       und andere Absagen → fehler, wirft nie, schickt NUR p_org)
 //   [3] Gruppen Heute / Gestern / Älter nach dem Kalendertag in Wien (Gerät auf UTC, Sommerzeit-Wechsel)
 //   [4] Uhrzeit-Texte (Liste, Detail)
 //   [5] Zähler „neu seit zuletzt geöffnet“ (nur localStorage je Betrieb, nie rückwärts, erster Besuch 24 Std.,
@@ -134,6 +135,13 @@ console.log('\n[2] laden');
   check('kein Mitglied (Server antwortet null) → „aus“', l.art === 'aus');
   l = await MT.ladeMitteilungen(attrappe({ meine_mitteilungen: { data: null, error: { code: '42501', message: 'kein Mitglied' }, status: 403 } }), 'o-1');
   check('kein Mitglied (Server verweigert, 42501) → „aus“', l.art === 'aus');
+  l = await MT.ladeMitteilungen(attrappe({ meine_mitteilungen: { data: { v: 1, fehler: 'kein_mitglied', mitteilungen: [] }, error: null } }), 'o-1');
+  check('kein Mitglied (Vertrag: {v:1, fehler:\'kein_mitglied\', mitteilungen:[]}) → „aus“, KEINE leere Glocke', l.art === 'aus', l);
+  l = await MT.ladeMitteilungen(attrappe({ meine_mitteilungen: { data: { v: 1, fehler: 'nicht_angemeldet', mitteilungen: [] }, error: null } }), 'o-1');
+  check('Anmeldung abgelaufen ({v:1, fehler:\'nicht_angemeldet\'}) → „fehler“ (letzter Stand bleibt, keine leere Liste)', l.art === 'fehler', l);
+  l = await MT.ladeMitteilungen(attrappe({ meine_mitteilungen: { data: { v: 1, fehler: 42, mitteilungen: [] }, error: null } }), 'o-1');
+  check('unbekannte Absage → „fehler“, nie eine leere Liste', l.art === 'fehler', l);
+  check('mitteilungenLesen: Antwort mit fehler → null (nie „Keine Mitteilungen“)', MT.mitteilungenLesen({ v: 1, fehler: 'kein_mitglied', mitteilungen: [] }) === null && MT.absageVon({ v: 1, fehler: 'kein_mitglied' }) === 'kein_mitglied' && MT.absageVon({ v: 1, fehler: null, mitteilungen: [] }) === null && MT.absageVon(kopie(ANTWORT)) === null);
   l = await MT.ladeMitteilungen(attrappe({ meine_mitteilungen: { data: { v: 2 }, error: null } }), 'o-1');
   check('unbekannte Fassung → „aus“', l.art === 'aus');
   l = await MT.ladeMitteilungen(attrappe({ meine_mitteilungen: { data: null, error: { message: 'Failed to fetch' }, status: 0 } }), 'o-1');
@@ -256,6 +264,13 @@ console.log('\n[7] Quelltext-Wächter');
   check('Liste und Detail zeigen den VOLLEN Text (m.text), nie nur den kurzen Handy-Text', /<span className="mt-text">\{m\.text\}<\/span>/.test(center) && /<p className="mt-detail-text">\{m\.text\}<\/p>/.test(center) && !/m\.kurz/.test(center + seiten));
   check('Detail: Karte „Heute Nacht“ darunter (mit festen Links, nicht relativ zur Detail-Adresse)', /<HeuteNacht[\s\S]*links=\{\{ objekte: `\$\{base\}\/objekte`, team: `\$\{base\}\/team`, abo: `\$\{base\}\/abo` \}\}/.test(seiten));
   check('Glocke unsichtbar, solange der Server nichts anbietet (da = false)', /if \(!st \|\| !st\.da \|\| !platz\) return null;/.test(center));
+  // useUnsavedGuard (Aufzeichnung läuft / Einsatz nicht gespeichert) fängt nur Klicks auf Links ab — ein navigate()
+  // aus der Glocke verließe den Außendienst ohne Rückfrage
+  const ohneKommentar = center.replace(/^\s*\/\/.*$/gm, '');
+  check('Einträge im Glockenfenster sind Links (Rückfrage „Aufzeichnung läuft“ greift), kein navigate() aus der Glocke',
+    /<Link key=\{m\.id\} to=\{st\.pfad\(m\.id\)\} className=\{`mt-eintrag/.test(center) && !/useNavigate|navigate\(/.test(ohneKommentar) && !/<button[^>]*mt-eintrag/.test(center));
+  const schutz = lies('src/components/ui.tsx');
+  check('… die Rückfrage fängt wirklich nur a[href] ab (sonst wäre der Wächter oben unnötig)', /closest\?\.\('a\[href\]'\)/.test(schutz));
   check('ein Abruf je Betrieb (Kontext), alle 2 Min. still neu', /useLiveRefresh\(\[laden\], 2 \* 60_000\)/.test(lies('src/winterdex/mitteilungenKontext.ts')));
   const neueDateien = ['src/winterdex/mitteilungenDaten.ts', 'src/winterdex/mitteilungenKontext.ts', 'src/winterdex/MitteilungsCenter.tsx', 'src/winterdex/pages/Mitteilungen.tsx'].map(lies).join('\n');
   check('keine Datums-Falle (toISOString().slice) in den neuen Dateien', !/toISOString\(\)\.slice/.test(neueDateien));
@@ -276,6 +291,11 @@ console.log('\n[8] Gegenprobe SQL-Nachtrag');
   if (sql) {
     check('SQL: meine_mitteilungen(p_org …) liefert die Felder, die das Dashboard liest', /function public\.meine_mitteilungen\s*\(\s*p_org uuid/i.test(sql) && ['mitteilungen', 'art_name', 'titel', 'text', 'kurz', 'zeit', 'kritisch'].every((k) => sql.includes(`'${k}'`)));
     check('SQL: Fassung v 1', /'v',\s*1\b/.test(sql));
+    // Absage des Servers: das Dashboard versteckt die Glocke nur beim Wort „kein_mitglied“ (sonst: letzter Stand bleibt)
+    const rpc = sql.slice(sql.search(/create or replace function public\.meine_mitteilungen/i));
+    const rpcAbsagen = [...rpc.slice(0, rpc.search(/\bend \$\$;/)).matchAll(/'fehler',\s*'([a-z_]+)'/g)].map((x) => x[1]);
+    check('SQL: Absage für Nicht-Mitglieder heißt „kein_mitglied“ (vom Dashboard erkannt), sonst nur „nicht_angemeldet“',
+      rpcAbsagen.includes('kein_mitglied') && rpcAbsagen.every((w) => ['kein_mitglied', 'nicht_angemeldet'].includes(w)), rpcAbsagen);
     check('SQL: kein Gelesen-Stand am Server', !/gelesen_at|gelesen\s+(boolean|timestamptz)/i.test(sql));
   } else console.log('  --    (Gegenprobe übersprungen: keine WinterDex-Arbeitskopie mit NACHTRAG-MITTEILUNGEN-2026-11-26.sql gefunden)');
 }

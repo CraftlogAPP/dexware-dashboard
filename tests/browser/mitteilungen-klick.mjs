@@ -153,6 +153,15 @@ try {
   console.log('\nB: Klick auf die amtliche Warnung → Detail mit Karte „Heute Nacht“');
   await main.ev(`document.querySelector('.due-bell-btn').click()`, true);
   await warteAuf(`!!document.querySelector('.mt-pop')`, 3000);
+  // Rückfrage „Aufzeichnung läuft / Einsatz nicht gespeichert“ (useUnsavedGuard) nachgestellt: fängt Klicks auf Links in
+  // der Capture-Phase ab, „Abbrechen“ = preventDefault + stopPropagation. Der Eintrag muss dann stehen bleiben.
+  await main.ev(`window.__wache = (e) => { if (e.target.closest?.('a[href]')) { e.preventDefault(); e.stopPropagation(); window.__abgefangen = (window.__abgefangen ?? 0) + 1; } }; document.addEventListener('click', window.__wache, true); true`);
+  await main.ev(`[...document.querySelectorAll('.mt-pop .mt-eintrag')].find((x) => x.querySelector('.mt-titel').textContent === 'Amtliche Warnung').click()`, true);
+  await sleep(400);
+  check('Rückfrage „Seite verlassen?“ → Abbrechen: kein Wechsel, Fenster bleibt offen (Einträge sind Links, kein navigate())',
+    (await main.ev(`window.__abgefangen === 1 && !location.search.includes('id=40') && !!document.querySelector('.mt-pop')`)) === true,
+    await main.ev(`({ abgefangen: window.__abgefangen ?? 0, such: location.search, offen: !!document.querySelector('.mt-pop') })`));
+  await main.ev(`document.removeEventListener('click', window.__wache, true); true`);
   await main.ev(`[...document.querySelectorAll('.mt-pop .mt-eintrag')].find((x) => x.querySelector('.mt-titel').textContent === 'Amtliche Warnung').click()`, true);
   check('Detail offen (id=40), Fenster zu', (await warteAuf(`location.search.includes('id=40') && !!document.querySelector('.mt-detail')`, 5000)) && (await main.ev(`!document.querySelector('.mt-pop')`)));
   const det = await main.ev(`({ h: document.querySelector('.mt-detail h1').textContent, zeit: document.querySelector('.mt-detail .muted').textContent, text: document.querySelector('.mt-detail-text').textContent })`);
