@@ -352,7 +352,7 @@ export function LoginScreen({ returnTo }: {
   );
 }
 
-/** Bewirbt den Haupteinstieg: eine Übersicht aller App-Dashboards der Suite. */
+/** Bewirbt den Haupteinstieg: eine Übersicht aller Dexware-Dashboards. */
 function SuiteHint() {
   return (
     <div className="suite-hint">

@@ -84,7 +84,7 @@ export function Report() {
     const period = checkPeriod(from, to);
     if (pdfErlaubt === false) {
       throw new ExportNotice(
-        'Die Excel-Liste gehört zu TourDex Pro — genau wie das Fahrtenbuch-PDF. Pro schließt du in der TourDex-App unter „Mehr“ ab, oder du nutzt die Dexware Suite.',
+        'Die Excel-Liste gehört zu TourDex Pro — genau wie das Fahrtenbuch-PDF. Pro schließt du in der TourDex-App unter „Mehr“ ab.',
         { href: pathname.replace(/\/bericht\/?$/, '/abo'), label: 'Zum Abo' },
       );
     }
@@ -130,8 +130,8 @@ export function Report() {
               <Crown className="i" aria-hidden /> <strong>Das Fahrtenbuch-PDF gehört zu TourDex Pro</strong> — genau wie in der App.
             </p>
             <p className="muted">
-              Pro schließt du in der TourDex-App unter „Mehr“ ab, oder du nutzt die Dexware Suite. Danach stehen der Bericht
-              und die Excel-Liste hier sofort bereit. Deine Fahrten siehst und bearbeitest du weiterhin kostenlos.
+              Pro schließt du in der TourDex-App unter „Mehr“ ab. Danach stehen der Bericht und die Excel-Liste hier sofort
+              bereit. Deine Fahrten siehst und bearbeitest du weiterhin kostenlos.
             </p>
             <Link className="btn" to={pathname.replace(/\/bericht\/?$/, '/abo')}>Zum Abo</Link>
           </div>

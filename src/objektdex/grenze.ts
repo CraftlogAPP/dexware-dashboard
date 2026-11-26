@@ -10,7 +10,8 @@ import { PRO_UNKLAR } from '../lib/proStand.ts';
 export const GRATIS_OBJEKTE = 2;
 export const GRATIS_STRECKEN = 0;
 
-const PRO_WEG = 'Pro schließt du in der ObjektDex-App unter „Abo“ ab (mit einem Dexware-Suite-Abo ist es schon dabei).';
+// ObjektDex gehört nicht zum Suite-Abo (Alex, 26.11.2026) — deshalb kein Suite-Hinweis.
+const PRO_WEG = 'Pro schließt du in der ObjektDex-App unter „Abo“ ab.';
 
 /**
  * Massen-Anlage (Übernahme, Import): wie viele dürfen neu dazu? null = unbegrenzt (Pro).

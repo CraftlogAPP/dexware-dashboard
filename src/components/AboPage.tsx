@@ -11,6 +11,8 @@ import {
 import { LoadGuard, useAsync } from './ui';
 import { WebBuy, type WebBuyGroup } from './WebBuy';
 import { WEB_OFFERS } from '../apps/webOffers';
+import { inSuite } from '../apps/registry';
+import { aboAnzeige, fmtAboDatum as fmtDate, suiteLead } from '../lib/aboAnzeige';
 import { useOrgOptional } from './OrgContext';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -34,6 +36,10 @@ async function fetchOrgProStrict(sb: SupabaseClient): Promise<boolean | null> {
  * (Free / Pro / Suite), Ablauf-/Verlängerungsdatum und der Weg zur
  * Kündigung. Käufe & Kündigungen laufen über Google Play — das Dashboard
  * zeigt an und verlinkt dorthin.
+ *
+ * Suite-Umstellung 26.11.2026: Das Suite-Abo umfasst nur noch die Apps aus SUITE_APPS (registry). In Apps mit
+ * suiteNurBestand gilt eine Suite nur noch als Bestand (Abo vom Stichtag, ohne Unterbrechung) — die Seite sagt das so,
+ * verkauft dort keine Suite und wirbt dort nicht mit ihr.
  */
 export function AboPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { app, session } = useAppAuth();
@@ -66,21 +72,16 @@ function AboContent({ info }: { info: AboInfo }) {
   // Ein Betrieb mit Pro auf Rechnung/Kommunal-Lizenz/Bonus sah hier bisher „Free“ und Kauf-Kacheln (21.11.2026).
   const orgPro = useAsync(async () => (orgCtx ? fetchOrgProStrict(client) : null), [client, orgCtx?.org.id]).data === true;
   const bonusUntil = (orgCtx?.org as { pro_bonus_until?: string | null } | undefined)?.pro_bonus_until ?? null;
-  const bonusActive = !!bonusUntil && Date.parse(bonusUntil) > Date.now();
   const dexId = useAsync(async () => (email ? dexwareId(email) : null), [email]).data;
   const groups: WebBuyGroup[] = [];
   // Angebot aus der registry (WinterDex) oder aus den vorbereiteten Angeboten (webOffers); ohne Kauf-Link ausgegraut.
   const prepared = WEB_OFFERS[app.id];
   const proOffer = app.webCheckout?.pro ?? prepared?.pro;
   if (proOffer) groups.push({ title: `${app.name} Pro`, lead: app.webCheckoutLead ?? prepared?.lead ?? 'Alle Pro-Funktionen dieser App', offer: proOffer });
-  if (app.webCheckout?.suite && !app.notInSuite) groups.push({ title: 'Dexware Suite', lead: 'Pro in allen Prüf-Apps mit einem Abo', offer: app.webCheckout.suite });
-  const suiteActive = !!info.suite?.active || info.suiteBackendActive;
-  const proActive = !!info.pro?.active;
-
-  // Suite deckt Pro mit ab — angezeigt werden die Details des höchsten Tarifs.
-  const current = suiteActive ? (info.suite?.active ? info.suite : null) : proActive ? info.pro : null;
-  const viaOrg = !suiteActive && !proActive && orgPro;
-  const planName = suiteActive ? 'Dexware Suite' : proActive ? `${app.name} Pro` : viaOrg ? `${app.name} Pro (für deinen Betrieb)` : 'Free';
+  // Die Suite wird nur in Apps des Suite-Abos angeboten (nicht bei notInSuite/suiteNurBestand).
+  if (app.webCheckout?.suite && inSuite(app)) groups.push({ title: 'Dexware Suite', lead: suiteLead(), offer: app.webCheckout.suite });
+  // Tarif, Text und Suite-Hinweis (Entscheidung in src/lib/aboAnzeige.ts, geprüft in tests/suite-bestand.test.mjs)
+  const { suiteActive, proActive, viaOrg, current, planName, text, suiteNichtHierText } = aboAnzeige(app, info, { orgPro, bonusUntil });
 
   return (
     <div className="abo-stack">
@@ -95,17 +96,11 @@ function AboContent({ info }: { info: AboInfo }) {
           {current?.sandbox && <span className="badge amber">Sandbox-/Testkauf</span>}
         </div>
         <p className="muted" style={{ marginBottom: 0 }}>
-          {suiteActive
-            ? 'Das Suite-Bundle schaltet die Pro-Funktionen in allen Dex-Apps frei — auch in dieser.'
-            : viaOrg
-              ? `Pro gilt für deinen Betrieb — freigeschaltet über das Abo des Inhabers, auf Rechnung, eine Kommunal-Lizenz oder einen Bonus${bonusActive ? ` (Freischaltung/Bonus bis ${fmtDate(bonusUntil!)})` : ''}. Ein eigenes Abo ist nicht nötig.`
-            : proActive
-              ? `Dein Pro-Abo für ${app.name} ist aktiv.`
-              : app.notInSuite
-                ? `Du nutzt ${app.name} im Free-Tarif. Pro schließt du in der ${app.name}-App am Handy ab (Google Play). ${app.name} ist nicht Teil des Dexware-Suite-Abos.`
-                : `Du nutzt ${app.name} im Free-Tarif. Pro oder das Suite-Bundle schließt du in der ${app.name}-App am Handy ab (Google Play).`}
+          {text}
         </p>
       </div>
+
+      {suiteNichtHierText && <div className="info-box">{suiteNichtHierText}</div>}
 
       {notOwner && groups.length > 0 && !viaOrg && (
         <div className="info-box">
@@ -121,7 +116,7 @@ function AboContent({ info }: { info: AboInfo }) {
 
       {suiteActive && !info.suite?.active && (
         <div className="info-box">
-          Dein Suite-Bundle wurde in einer <b>anderen Dex-App</b> abgeschlossen
+          Dein Suite-Abo wurde in einer <b>anderen Dexware-App</b> abgeschlossen
           {info.suiteBackendExpires && (
             <>
               {' '}
@@ -222,14 +217,6 @@ function EntitlementDetails({ info }: { info: EntitlementInfo }) {
       </div>
     </div>
   );
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('de-DE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
 }
 
 /** Teamgrößen-Stufe aus der Produkt-ID (seit 03.11.2026: *_team_* bis 50, *_teamxl_* bis 100). */

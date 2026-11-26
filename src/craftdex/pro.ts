@@ -2,7 +2,8 @@
 // ohne Pro höchstens 2 eigene Aufträge (Beispiel-Aufträge „seed-…“ und gelöschte zählen nicht). Bis 25.11.2026 prüfte das
 // Dashboard beim „Auftrag anlegen“ GAR NICHT (Paywall-Audit Abschnitt 8).
 // Pro wie in der App: RevenueCat (pro/suite), Suite-Abo aus einer anderen App, CraftDex Pro aus der Sammel-App
-// (&app=craftdex) und die manuelle Freischaltung (Tabelle pro_overrides.is_pro). Unklar → letzter sicherer Stand dieses
+// (&app=craftdex) und die manuelle Freischaltung (Tabelle pro_overrides.is_pro). Seit 26.11.2026 ist CraftDex nicht mehr im
+// Suite-Abo: eine Suite zählt nur noch als Bestand (src/lib/abo.ts), der Text wirbt deshalb nicht mehr mit ihr. Unklar → letzter sicherer Stand dieses
 // Kontos, gibt es keinen → „gleich nochmal“ (nie still erlauben, nie einen Zahlenden falsch sperren).
 
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
@@ -12,7 +13,7 @@ import { GRENZE_UNKLAR, ProUnklarError, proFuerGrenze } from '../lib/proStand';
 
 export const FREE_PROJECT_LIMIT = 2;
 
-export const PROJECT_GATE_TEXT = `Im Gratis-Paket sind ${FREE_PROJECT_LIMIT} Aufträge möglich (Beispiel-Aufträge zählen nicht) — unbegrenzt viele gibt es mit CraftDex Pro. Pro schließt du in der CraftDex-App ab, oder du nutzt die Dexware Suite.`;
+export const PROJECT_GATE_TEXT = `Im Gratis-Paket sind ${FREE_PROJECT_LIMIT} Aufträge möglich (Beispiel-Aufträge zählen nicht) — unbegrenzt viele gibt es mit CraftDex Pro. Pro schließt du in der CraftDex-App ab.`;
 
 /** Pro-Stand dieses Kontos: true/false, null = nicht feststellbar und kein letzter sicherer Stand. */
 export function craftProStand(app: AppConfig, session: Session | null, sb: SupabaseClient): Promise<boolean | null> {

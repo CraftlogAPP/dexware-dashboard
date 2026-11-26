@@ -8,6 +8,8 @@
 // Preise = die Play-Preise der App (Quelle: dexware-suite/landing-system/apps/<app>.js → pricing.pro). Ein Tarif ohne
 // belegten Preis wird nicht angeboten (SpielDex/SchutzDex: Jahrespreis steht auf der Landing nicht → nur monatlich).
 // WinterDex steht in registry.ts (eigener Saison-Tarif).
+// Ein Suite-Angebot (webCheckout.suite) zeigt die Abo-Seite seit 26.11.2026 nur in Apps des Suite-Abos (registry: inSuite) —
+// SpielDex, KfzDex & Co. bekommen hier nur ihr eigenes Pro.
 import type { WebOffer, WebPlan } from './registry';
 
 const monthly = (price: string): WebPlan => ({ pkg: '$rc_monthly', title: 'Monatlich', price, per: 'pro Monat', note: 'monatlich kündbar' });

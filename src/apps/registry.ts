@@ -1,5 +1,7 @@
-// Zentrale App-Registry der dexware-Suite (16 Apps, HebeDex noch „Dashboard folgt“).
-// Eine neue App im Dashboard = ein Eintrag hier (plus ggf. ein Dashboard-Modul).
+// Zentrale App-Registry des Dexware-Dashboards (alle Dexware-Apps mit Bereich hier, auch die außerhalb des Suite-Abos).
+// Zum Dexware-Suite-Abo gehören seit 26.11.2026 (Alex) nur noch 9 Apps — siehe inSuite()/SUITE_APPS unten; die übrigen
+// haben ein eigenes Abo (notInSuite bzw. suiteNurBestand). Eine neue App im Dashboard = ein Eintrag hier (plus ggf. ein
+// Dashboard-Modul).
 
 export type AppStatus = 'dashboard' | 'external' | 'soon';
 
@@ -83,6 +85,14 @@ export interface AppConfig {
    */
   notInSuite?: boolean;
   /**
+   * Seit 26.11.2026 (Alex) NICHT mehr im Dexware-Suite-Abo — eigenes Abo. BESTANDSSCHUTZ: Ein Suite-Abo, das am Stichtag
+   * 26.11.2026 schon bestand, gilt hier weiter, solange es ohne Unterbrechung läuft (nie aussperren). Deshalb fragt das
+   * Dashboard den Suite-Server mit &app=<id> (der Server prüft die Stichtags-Liste suite_bestand) und zählt eine Suite aus
+   * dem RevenueCat-Projekt dieser App nur, wenn sie bis zum Ende des Stichtags gekauft wurde (lib/abo.ts SUITE_STICHTAG_ENDE).
+   * Neue Suite-Abos schalten hier nichts frei; die Abo-Seite verkauft die Suite hier nicht und wirbt nicht mit ihr.
+   */
+  suiteNurBestand?: boolean;
+  /**
    * Nicht auf der Startseite zeigen (noch nicht gestartet) — der Bereich ist nur über die Direktadresse
    * /app/<id> erreichbar. Beim Launch einfach entfernen.
    */
@@ -110,7 +120,7 @@ const INSTALLATEURDEX_SUPABASE: SupabaseConfig = {
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxdWR3c3h2amhkd2ZsZWJva2x6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4ODgyMjQsImV4cCI6MjEwOTQ2NDIyNH0.p5SvVCHjeNGDITr4bZqUgeN9FUXo_YHZo0UVeSYKl0k',
 };
 
-// ObjektDex (Leistungsnachweis Hausbetreuung/Grünpflege/Reinigung, Suite-App): Supabase-Projekt yugakdpkrbcenyqkzkad (Frankfurt),
+// ObjektDex (Leistungsnachweis Hausbetreuung/Grünpflege/Reinigung; gehört zu WinterDex, seit 26.11.2026 NICHT im Suite-Abo): Supabase-Projekt yugakdpkrbcenyqkzkad (Frankfurt),
 // Schema ObjektDex/supabase/schema.sql + Nachträge eingespielt. Werte wie ObjektDex/mobile/.env (Anon-Key ist öffentlich, RLS
 // schützt; ohne Anmeldung sind seit NACHTRAG-SICHERHEIT-2026-11-13 keine Tabellen lesbar). Verbunden 14.11.2026.
 const OBJEKTDEX_SUPABASE: SupabaseConfig = {
@@ -132,6 +142,8 @@ export const APPS: AppConfig[] = [
     name: 'CraftDex',
     tagline: 'Aufträge, Zeiterfassung & Doku für Handwerksbetriebe',
     status: 'dashboard',
+    // seit 26.11.2026 nicht mehr im Suite-Abo (eigenes Abo); Suite-Abos vom Stichtag gelten weiter (Bestandsschutz)
+    suiteNurBestand: true,
     emoji: '🛠️',
     theme: { accent: '#E8C97A', onAccent: '#1c1607', bg: '#13110c' },
     landingUrl: 'https://craftdex.dexware.app',
@@ -147,6 +159,8 @@ export const APPS: AppConfig[] = [
     name: 'DokuDex',
     tagline: 'Dokumente sicher archivieren & jederzeit wiederfinden',
     status: 'dashboard',
+    // seit 26.11.2026 nicht mehr im Suite-Abo (eigenes Abo); Suite-Abos vom Stichtag gelten weiter (Bestandsschutz)
+    suiteNurBestand: true,
     emoji: '📄',
     theme: { accent: '#4F9EF8', onAccent: '#03172e', bg: '#0b0c10' },
     landingUrl: 'https://dokudex.dexware.app',
@@ -162,6 +176,8 @@ export const APPS: AppConfig[] = [
     name: 'TourDex',
     tagline: 'Automatisches Fahrtenbuch mit PDF fürs Finanzamt',
     status: 'dashboard',
+    // seit 26.11.2026 nicht mehr im Suite-Abo (eigenes Abo); Suite-Abos vom Stichtag gelten weiter (Bestandsschutz)
+    suiteNurBestand: true,
     emoji: '🧭',
     theme: { accent: '#3B82F6', onAccent: '#ffffff', bg: '#0a1119' },
     landingUrl: 'https://tourdex.dexware.app',
@@ -177,6 +193,8 @@ export const APPS: AppConfig[] = [
     name: 'BaumDex',
     tagline: 'Baumkataster & Verkehrssicherung — Kontrollen lückenlos dokumentiert',
     status: 'external',
+    // seit 26.11.2026 nicht mehr im Suite-Abo (eigenes Abo); Suite-Abos vom Stichtag gelten weiter (Bestandsschutz)
+    suiteNurBestand: true,
     emoji: '🌳',
     theme: { accent: '#4ADE80', onAccent: '#052e16', bg: '#0a1410' },
     landingUrl: 'https://baumdex.dexware.app',
@@ -220,6 +238,8 @@ export const APPS: AppConfig[] = [
     name: 'WinterDex',
     tagline: 'Räum- & Streupflicht lückenlos dokumentiert',
     status: 'dashboard',
+    // seit 26.11.2026 nicht mehr im Suite-Abo (eigenes Abo); Suite-Abos vom Stichtag gelten weiter (Bestandsschutz)
+    suiteNurBestand: true,
     emoji: '❄️',
     theme: { accent: '#0EA5E9', onAccent: '#03202f', bg: '#08111a' },
     landingUrl: 'https://winterdex.dexware.app',
@@ -253,6 +273,8 @@ export const APPS: AppConfig[] = [
     name: 'KfzDex',
     tagline: 'UVV-Prüfung & Führerscheinkontrolle mit Fristen-Ampel',
     status: 'dashboard',
+    // seit 26.11.2026 nicht mehr im Suite-Abo (eigenes Abo); Suite-Abos vom Stichtag gelten weiter (Bestandsschutz)
+    suiteNurBestand: true,
     emoji: '🚛',
     theme: { accent: '#F97316', onAccent: '#1f0b00', bg: '#0b0f15' },
     landingUrl: 'https://kfzdex.dexware.app',
@@ -270,6 +292,8 @@ export const APPS: AppConfig[] = [
     name: 'SpielDex',
     tagline: 'Spielplatzkontrolle nach DIN EN 1176 mit PDF-Kontrollbuch',
     status: 'dashboard',
+    // seit 26.11.2026 nicht mehr im Suite-Abo (eigenes Abo); Suite-Abos vom Stichtag gelten weiter (Bestandsschutz)
+    suiteNurBestand: true,
     emoji: '🎠',
     theme: { accent: '#EA5A47', onAccent: '#ffffff', bg: '#0b1517' },
     landingUrl: 'https://spieldex.dexware.app',
@@ -442,6 +466,8 @@ export const APPS: AppConfig[] = [
     name: 'ObjektDex',
     tagline: 'Hausbetreuung, Grünpflege & Reinigung — jeder Einsatz mit Soll/Ist belegt',
     status: 'dashboard',
+    // seit 26.11.2026 nicht mehr im Suite-Abo (eigenes Abo); Suite-Abos vom Stichtag gelten weiter (Bestandsschutz)
+    suiteNurBestand: true,
     // noch nicht gestartet (geschlossener Test) → nicht auf der Startseite; die App verlinkt direkt /app/objektdex
     unlisted: true,
     emoji: '🏠',
@@ -460,6 +486,8 @@ export const APPS: AppConfig[] = [
     status: 'dashboard',
     // Eigenständige Marke, noch nicht gestartet → nicht auf der Startseite (nur /app/pinndex bzw. /app/laufzettel)
     unlisted: true,
+    // nicht im Suite-Abo (eigene Marke seit 11.11.2026, wie NOT_IN_SUITE in suite-status) — zählt nicht zu SUITE_APPS
+    notInSuite: true,
     emoji: '📋',
     // Farben wie die App (Bernstein auf Graphit, PinnDex/mobile)
     theme: { accent: '#F5B544', onAccent: '#1A1305', bg: '#121315' },
@@ -474,7 +502,27 @@ export function getApp(id: string): AppConfig | undefined {
   return APPS.find((a) => a.id === id);
 }
 
-/** Echtes App-Icon (public/icons/<id>.png, 128 px) — für alle 14 Apps vorhanden. */
+/** Stichtag der Suite-Umstellung (Alex, 26.11.2026) — für Texte. */
+export const SUITE_STICHTAG = '26.11.2026';
+
+/** Gehört die App für NEUE Abos zum Dexware-Suite-Abo? (nein bei notInSuite und suiteNurBestand) */
+export function inSuite(app: Pick<AppConfig, 'notInSuite' | 'suiteNurBestand'>): boolean {
+  return !app.notInSuite && !app.suiteNurBestand;
+}
+
+/**
+ * Die Apps des Dexware-Suite-Abos (seit 26.11.2026: GurtDex, ToreDex, GerüstDex, FeuerDex, LeiterDex, RegalDex, HebeDex,
+ * PrüfDex, SchutzDex) — Quelle für Anzahl und Namen in den Texten; tests/suite-bestand.test.mjs prüft die Liste.
+ */
+export const SUITE_APPS: AppConfig[] = APPS.filter(inSuite);
+
+/** Namen der Suite-Apps fürs Lesen: „FeuerDex, GerüstDex, … und ToreDex“ (alphabetisch). */
+export function suiteAppNamen(): string {
+  const n = SUITE_APPS.map((a) => a.name).sort((a, b) => a.localeCompare(b, 'de'));
+  return n.length > 1 ? `${n.slice(0, -1).join(', ')} und ${n[n.length - 1]}` : (n[0] ?? '');
+}
+
+/** Echtes App-Icon (public/icons/<id>.png, 128 px) — für alle Apps dieser Liste vorhanden. */
 export function appIcon(id: string): string {
   return `/icons/${id}.png`;
 }

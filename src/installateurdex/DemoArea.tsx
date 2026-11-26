@@ -38,7 +38,7 @@ export function DemoArea({ app }: { app: AppConfig }) {
           {app.name} <span className="hide-sm">Betriebsportal</span>
         </span>
         <div className="spacer" />
-        <Link className="btn ghost small" to="/" title="Haupteinstieg: alle App-Dashboards der Suite">
+        <Link className="btn ghost small" to="/" title="Haupteinstieg: alle Dexware-Dashboards">
           <LayoutGrid className="i" aria-hidden />
           <span className="hide-sm">Alle Dashboards</span>
         </Link>

@@ -3,6 +3,7 @@
 import { WebBuy } from '../components/WebBuy';
 import { WEB_OFFERS } from '../apps/webOffers';
 import { APPS } from '../apps/registry';
+import { suiteLead } from '../lib/aboAnzeige';
 
 // Kein echter Kauf-Link im öffentlichen Repo (auch kein Test-Link): Platzhalter, die Kacheln sind nur zum Ansehen.
 const TEST = 'https://pay.rev.cat/beispiel';
@@ -18,6 +19,8 @@ export default function KaufVorschau() {
       </div>
     );
   }
+  // Seit 26.11.2026 gibt es die Suite nur noch in den Apps des Suite-Abos (registry: inSuite) — WinterDex hat ein eigenes
+  // Abo. Die Vorschau zeigt deshalb WinterDex allein und darunter LeiterDex mit der Suite-Kachel.
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
       <WebBuy
@@ -35,9 +38,16 @@ export default function KaufVorschau() {
               ],
             },
           },
+        ]}
+      />
+      <WebBuy
+        email="beispiel@betrieb.at"
+        dexId="claude-sichttest-0000"
+        groups={[
+          { title: 'LeiterDex Pro', lead: WEB_OFFERS.leiterdex.lead, offer: { ...WEB_OFFERS.leiterdex.pro, link: TEST } },
           {
             title: 'Dexware Suite',
-            lead: 'Pro in allen Prüf-Apps mit einem Abo',
+            lead: suiteLead(),
             offer: {
               link: TEST,
               plans: [

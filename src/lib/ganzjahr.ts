@@ -7,7 +7,8 @@
  *                  Die Übernahme im ObjektDex-Bereich bleibt per Direktlink /app/objektdex/aus-winterdex erreichbar
  *                  (der Bereich selbst bleibt `unlisted` in apps/registry.ts).
  *   true:          erst umlegen, wenn ObjektDex in Produktion ist (Plan Punkt 1) — dann auch `unlisted` bei ObjektDex
- *                  entfernen und ObjektDex in suite.js/apps.json aufnehmen.
+ *                  entfernen und ObjektDex in suite.js (unter `extern`, eigenes Abo — seit 26.11.2026 nicht im
+ *                  Suite-Abo) und apps.json aufnehmen.
  */
 export const OBJEKTDEX_OEFFENTLICH = false;
 

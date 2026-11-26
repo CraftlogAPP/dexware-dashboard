@@ -596,8 +596,7 @@ function GrenzHinweis({
       <p style={{ margin: 0 }}>
         Ohne ObjektDex Pro sind {GRATIS_OBJEKTE} aktive Objekte möglich — dein Betrieb hat {aktiv}.{' '}
         {frei === 0 ? 'Neue Objekte gehen erst mit Pro.' : `Jetzt ${frei === 1 ? 'kommt höchstens 1 Objekt' : `kommen höchstens ${frei} Objekte`} dazu.`}
-        {hatStrecken && ' Strecken werden zu Runden — die gehören zu Pro.'} Pro schließt du in der ObjektDex-App unter „Abo“ ab (mit einem
-        Dexware-Suite-Abo ist es schon dabei).
+        {hatStrecken && ' Strecken werden zu Runden — die gehören zu Pro.'} Pro schließt du in der ObjektDex-App unter „Abo“ ab.
       </p>
     </div>
   );

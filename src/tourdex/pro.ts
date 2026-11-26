@@ -5,6 +5,8 @@ import { GRENZE_UNKLAR, ProUnklarError, proFuerAnzeige, proFuerGrenze } from '..
 
 // Pro wie in der TourDex-App (services/subscription.ts): TourDex Pro (RevenueCat), Dexware Suite oder TourDex Pro aus der
 // Sammel-App „Dexware“ (suite-status &app=tourdex). Seit 25.11.2026 mit letztem sicherem Stand (src/lib/proStand.ts).
+// Seit 26.11.2026 ist TourDex nicht mehr im Suite-Abo: eine Suite zählt nur noch als Bestand (src/lib/abo.ts), die Texte
+// werben deshalb nicht mehr mit ihr.
 
 /** Pro-Stand dieses Kontos: true/false, null = nicht feststellbar und kein letzter sicherer Stand. */
 export function tourdexProStand(app: AppConfig, session: Session | null): Promise<boolean | null> {
@@ -23,7 +25,7 @@ export async function tourdexPdfAllowed(app: AppConfig, session: Session): Promi
 /** Gratis-Grenze wie FREE_TRIP_LIMIT der App (src/types/index.ts): 10 Fahrten je Kalendermonat, stornierte zählen nicht. */
 export const FREE_TRIP_LIMIT = 10;
 
-export const TRIP_GATE_TEXT = `Im Gratis-Paket sind ${FREE_TRIP_LIMIT} Fahrten pro Monat möglich (stornierte zählen nicht) — unbegrenzt viele gibt es mit TourDex Pro. Pro schließt du in der TourDex-App unter „Mehr“ ab, oder du nutzt die Dexware Suite.`;
+export const TRIP_GATE_TEXT = `Im Gratis-Paket sind ${FREE_TRIP_LIMIT} Fahrten pro Monat möglich (stornierte zählen nicht) — unbegrenzt viele gibt es mit TourDex Pro. Pro schließt du in der TourDex-App unter „Mehr“ ab.`;
 
 /** Monat einer Fahrt wie monthKey() der App: Ortszeit des Geräts (hier: des Browsers). */
 export function monatVon(iso: string): { start: string; ende: string; key: string } {

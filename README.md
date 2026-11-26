@@ -9,10 +9,14 @@ Kachel pro App, dahinter pro App ein Dashboard auf das jeweilige Supabase-Projek
   weiterer `supabase-js`-Client auf das bestehende Supabase-Projekt der App —
   dieselben RLS-Regeln wie in der Mobile-App gelten auch hier. Anon-Keys sind
   public by design.
-- **App-Registry** (`src/apps/registry.ts`): alle 11 Apps mit Name, Tagline,
+- **App-Registry** (`src/apps/registry.ts`): alle Apps mit Name, Tagline,
   Markenfarben, Status (`dashboard` = internes Dashboard, `external` = Link auf
   bestehendes Portal, `soon` = Kachel ohne Link) und ggf. Supabase-Zugang.
   Eine neue App im Dashboard = ein Registry-Eintrag + ein Bereich unter `src/<app>/`.
+  **Suite-Abo** (seit 26.11.2026 nur 9 Apps, `inSuite`/`SUITE_APPS`): `notInSuite` = nie in der Suite
+  (InstallateurDex, Laufzettel); `suiteNurBestand` = eigenes Abo mit Bestandsschutz für Suite-Abos vom Stichtag
+  (SpielDex, WinterDex, KfzDex, BaumDex, TourDex, CraftDex, DokuDex, ObjektDex) — Abfrage `suite-status?…&app=<id>`,
+  Entscheidung `src/lib/abo.ts`, Texte der Abo-Seite `src/lib/aboAnzeige.ts`, Test `tests/suite-bestand.test.mjs`.
 - **Per-App-Login** (`src/auth/`): E-Mail + Passwort des bestehenden App-Kontos,
   Passwort-Reset per 6-stelligem OTP (wie mobil). Sessions pro App getrennt
   (`storageKey: dexware-dash-<app>`), es gibt bewusst kein Suite-SSO.

@@ -73,7 +73,7 @@ export function Home() {
             Ein Cockpit.
           </h1>
           <p>
-            Das Web-Dashboard zur Dexware-Suite: Objekte, Kontrollen und Fristen deiner
+            Das Dexware-Web-Dashboard: Objekte, Kontrollen und Fristen deiner
             Apps am großen Bildschirm — gleiche Daten, live. Anmeldung mit deinem
             App-Konto: per Google oder E-Mail + Passwort.
           </p>

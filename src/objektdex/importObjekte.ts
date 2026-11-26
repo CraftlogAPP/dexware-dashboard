@@ -136,7 +136,7 @@ export async function ladeObjektImport(data: OdData): Promise<ObjektImportDaten>
   return { existing, pro, aktiv, allowance: gratisRahmen(pro, aktiv).objekte };
 }
 
-const PRO_TEXT = `Ohne ObjektDex Pro sind ${GRATIS_OBJEKTE} aktive Objekte möglich. Pro schließt du in der ObjektDex-App unter „Abo“ ab (mit einem Dexware-Suite-Abo ist es schon dabei).`;
+const PRO_TEXT = `Ohne ObjektDex Pro sind ${GRATIS_OBJEKTE} aktive Objekte möglich. Pro schließt du in der ObjektDex-App unter „Abo“ ab.`;
 
 export function limitText(d: Pick<ObjektImportDaten, 'pro' | 'aktiv'>, allowance: number): string {
   const unklar = d.pro === null ? 'Ob dein Betrieb Pro hat, ließ sich gerade nicht prüfen — bis dahin gilt die Gratis-Grenze. ' : '';

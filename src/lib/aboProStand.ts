@@ -2,6 +2,10 @@
 // RevenueCat (Einzel-„pro“, Team-Stufen, „suite“) über src/lib/abo.ts, Suite-Server (Suite-Abo aus einer anderen App),
 // Suite-Server mit &app=<app> (Pro dieser App, gekauft in der Sammel-App „Dexware“ bzw. auf dem anderen System) und
 // app-eigene Freischaltungen (app_metadata.pro bei SchutzDex, Tabelle pro_overrides bei CraftDex).
+// Suite-Umstellung 26.11.2026: CraftDex und TourDex sind nicht mehr im Suite-Abo (registry: suiteNurBestand). Dort zählt
+// eine Suite nur noch, wenn der Suite-Server sie mit &app=<app> bestätigt (Bestandsschutz, Stichtags-Liste) oder sie im
+// RevenueCat-Projekt der App bis zum Stichtag gekauft wurde — das entscheidet loadAboInfo (src/lib/abo.ts). SchutzDex
+// bleibt in der Suite: unverändert.
 //
 // Drei Zustände wie überall (src/lib/proStand.ts): true = sicher Pro · false = ALLE Quellen haben sicher „nein“ gesagt ·
 // null = mindestens eine Quelle hat nicht geantwortet (dann gilt der letzte sichere Stand dieses Kontos, sonst „unklar“).
@@ -26,16 +30,20 @@ export function aboQuelle(app: AppConfig, session: Session, opt: AboProOptionen 
   return async () => {
     if (opt.metaPro && session.user.app_metadata?.pro === true) return true;
     let sicher = true;
-    // 1) RevenueCat (+ Suite-Server ohne &app, wenn die App zur Suite gehört)
+    let schonMitApp = false;
+    // 1) RevenueCat + Suite-Server (ohne &app für Suite-Apps; mit &app=<id> für Apps mit suiteNurBestand — dann zählt die
+    //    Suite nur als Bestand, und die Antwort enthält schon Pro dieser App aus der Sammel-App bzw. per Gutschein)
     try {
       const abo = await loadAboInfo(app, session);
-      if (abo.pro?.active || abo.suite?.active || abo.suiteBackendActive) return true;
+      if (abo.pro?.active || abo.suite?.active || abo.suiteBackendActive || abo.appProBackend) return true;
       if (abo.suiteBackendUnknown) sicher = false;
+      else schonMitApp = !!opt.appParam && abo.suiteAppParam === opt.appParam;
     } catch {
       sicher = false; // RevenueCat hat nicht (vollständig) geantwortet
     }
-    // 2) Pro dieser App aus der Sammel-App „Dexware“ (suite-status &app=)
-    if (opt.appParam) {
+    // 2) Pro dieser App aus der Sammel-App „Dexware“ (suite-status &app=) — entfällt, wenn Schritt 1 genau das schon
+    //    sicher gefragt hat
+    if (opt.appParam && !schonMitApp) {
       const email = session.user.email;
       if (email) {
         try {

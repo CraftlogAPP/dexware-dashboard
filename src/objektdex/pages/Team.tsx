@@ -69,8 +69,7 @@ export function Team() {
             <>
               {ohnePro && (
                 <div className="info-box">
-                  Mitarbeiter einladen gehört zu ObjektDex Pro — Pro schließt du in der ObjektDex-App unter „Abo“ ab (mit einem
-                  Dexware-Suite-Abo ist es schon dabei).
+                  Mitarbeiter einladen gehört zu ObjektDex Pro — Pro schließt du in der ObjektDex-App unter „Abo“ ab.
                 </div>
               )}
               {proUnklar && (

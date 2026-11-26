@@ -9,6 +9,12 @@
 //
 //  Käufe/Kündigungen laufen ausschließlich über den Store (Google Play) —
 //  das Dashboard zeigt nur an und verlinkt zur Verwaltung.
+//
+//  Suite-Umstellung 26.11.2026 (Alex): Das Suite-Abo umfasst nur noch 9 Apps (registry: inSuite). Für die Apps, die
+//  herausgefallen sind (registry: suiteNurBestand), gilt Bestandsschutz — eine Suite zählt dort nur,
+//   - wenn der Suite-Server sie mit &app=<id> für diese App bestätigt (Server prüft die Stichtags-Liste suite_bestand), oder
+//   - wenn sie im RevenueCat-Projekt DIESER App bis zum Ende des Stichtags gekauft wurde (suiteImBestand).
+//  Bei Störungen gilt wie überall: lieber zu großzügig als einen Bestandskunden aussperren.
 // ============================================================================
 import type { Session } from '@supabase/supabase-js';
 import type { AppConfig } from '../apps/registry';
@@ -38,18 +44,30 @@ export interface EntitlementInfo {
   productId: string | null;
   /** Test-/Sandbox-Kauf (kein echter Store-Kauf) */
   sandbox: boolean;
+  /** Ursprünglicher Kauf (bleibt bei Verlängerungen gleich) — für den Suite-Bestandsschutz; null = unbekannt */
+  originalPurchaseDate: string | null;
 }
 
 export interface AboInfo {
   /** Einzel-Abo dieser App */
   pro: EntitlementInfo | null;
-  /** Suite-Bundle, gekauft in DIESER App (RevenueCat-Entitlement) */
+  /** Suite-Abo, gekauft in DIESER App (RevenueCat-Entitlement) — bei suiteNurBestand nur Bestand (siehe oben) */
   suite: EntitlementInfo | null;
-  /** Suite-Bundle laut Suite-Backend (deckt Käufe in anderen Apps ab) */
+  /** Suite-Abo laut Suite-Backend, das für DIESE App zählt (deckt Käufe in anderen Apps ab; bei suiteNurBestand nur Bestand) */
   suiteBackendActive: boolean;
   suiteBackendExpires: string | null;
   /** Suite-Server hat nicht geantwortet — „nicht aktiv“ ist dann keine sichere Auskunft */
   suiteBackendUnknown: boolean;
+  /**
+   * Pro DIESER App laut Suite-Server — nur bekannt, wenn mit &app gefragt wurde (Apps mit suiteNurBestand): gekauft in der
+   * Sammel-App „Dexware“ ('sammelapp') oder per eingelöstem Dankeschön-Code ('gutschein'); null = nein bzw. unbekannt.
+   */
+  appProBackend: 'sammelapp' | 'gutschein' | null;
+  appProBackendExpires: string | null;
+  /** Ein Suite-Abo besteht, gilt aber NICHT für diese App (nach dem Stichtag abgeschlossen, kein Bestand) */
+  suiteNichtHier: boolean;
+  /** Mit welchem &app der Suite-Server gefragt wurde (null = ohne &app oder gar nicht) */
+  suiteAppParam: string | null;
   /** Store-Verwaltungslink des Abos (Google Play), falls RevenueCat einen kennt */
   managementUrl: string | null;
 }
@@ -73,6 +91,8 @@ interface RcEntitlement {
 
 interface RcSubscription {
   expires_date: string | null;
+  /** Erster Kauf dieses Produkts (RevenueCat REST v1) — Verlängerungen ändern ihn nicht */
+  original_purchase_date?: string | null;
   unsubscribe_detected_at: string | null;
   billing_issues_detected_at: string | null;
   period_type: string;
@@ -113,6 +133,7 @@ function toInfo(sub: RcSubscriber, key: string): EntitlementInfo | null {
     store: subscription?.store ?? (expires ? null : 'promotional'),
     productId: ent.product_identifier,
     sandbox: !!subscription?.is_sandbox,
+    originalPurchaseDate: subscription?.original_purchase_date ?? null,
   };
 }
 
@@ -126,20 +147,95 @@ function better(a: EntitlementInfo | null, b: EntitlementInfo | null): Entitleme
   return new Date(a.expiresDate) >= new Date(b.expiresDate) ? a : b;
 }
 
+// --- Suite-Bestandsschutz (Alex, 26.11.2026) ----------------------------------
+
+/**
+ * Ende des Stichtags der Suite-Umstellung: 27.11.2026, 00:00 Uhr Berliner Zeit. Eine Suite aus dem RevenueCat-Projekt
+ * einer App mit suiteNurBestand zählt dort nur, wenn sie VORHER gekauft wurde (ursprünglicher Kauf — Verlängerungen
+ * ändern ihn nicht). Wer am 26.11. selbst gekauft hat, gehört noch dazu („wer an diesem Tag eine Suite hat“).
+ */
+export const SUITE_STICHTAG_ENDE = '2026-11-27T00:00:00+01:00';
+
+/** Zählt diese Suite aus dem RevenueCat-Projekt der App als Bestand? Ohne lesbares Kaufdatum: ja (nie aussperren). */
+export function suiteImBestand(info: Pick<EntitlementInfo, 'originalPurchaseDate'>): boolean {
+  const t = info.originalPurchaseDate ? Date.parse(info.originalPurchaseDate) : NaN;
+  return !(t >= Date.parse(SUITE_STICHTAG_ENDE));
+}
+
 // --- Suite-Backend -----------------------------------------------------------
+
+/** Antwort von suite-status (dexware-suite/supabase/functions/suite-status/index.ts) — Felder bewusst lose geprüft. */
+export interface SuiteStatusAntwort {
+  active?: unknown;
+  expires_at?: unknown;
+  /**
+   * Ein Suite-Abo besteht. Ab der Server-Fassung zur Umstellung (26.11.2026) meldet `suite` bei Apps mit suiteNurBestand,
+   * ob die Suite HIER zählt (Bestand) — beides wird unten richtig gelesen.
+   */
+  suite?: unknown;
+  /** Pro dieser App aus einem anderen RevenueCat-Projekt (Sammel-App „Dexware“) — nur mit &app */
+  app_pro?: unknown;
+  /** Eingelöster Dankeschön-Code für diese App — nur mit &app */
+  bonus?: unknown;
+  gutschein?: unknown;
+  /** Kennung steht in der Stichtags-Liste suite_bestand (Suite-Umstellung 26.11.2026) */
+  bestand?: unknown;
+}
+
+export interface SuiteStand {
+  /** Die Suite zählt für DIESE App */
+  aktiv: boolean;
+  ablauf: string | null;
+  /** Pro dieser App aus der Sammel-App bzw. per Dankeschön-Code (nur mit &app bekannt) */
+  appPro: 'sammelapp' | 'gutschein' | null;
+  appProAblauf: string | null;
+  /** Ein Suite-Abo besteht, gilt aber nicht für diese App */
+  nichtHier: boolean;
+}
+
+/**
+ * Wertet eine suite-status-Antwort aus. Ohne &app ist `active` der reine Suite-Stand. Mit &app ist `active` = Suite
+ * (sofern sie für die App zählt — bei Apps mit suiteNurBestand nur der Bestand) ODER Pro dieser App ODER Dankeschön-Code;
+ * getrennt wird über die Zusatzfelder. Im Zweifel zählt `active` als Suite — nie aussperren.
+ */
+export function suiteStand(r: SuiteStatusAntwort | null | undefined, mitApp: boolean): SuiteStand {
+  const nein: SuiteStand = { aktiv: false, ablauf: null, appPro: null, appProAblauf: null, nichtHier: false };
+  if (!r) return nein;
+  const active = r.active === true;
+  const ablauf = typeof r.expires_at === 'string' ? r.expires_at : null;
+  if (!mitApp) return { ...nein, aktiv: active, ablauf };
+  const appPro: SuiteStand['appPro'] = !active
+    ? null
+    : r.app_pro === true
+      ? 'sammelapp'
+      : r.bonus === true || r.gutschein === true
+        ? 'gutschein'
+        : null;
+  // active nur wegen Pro dieser App/Gutschein? Dann zählt die Suite nur, wenn der Server den Bestand ausdrücklich meldet.
+  const aktiv = active && (r.bestand === true || !appPro);
+  return {
+    aktiv,
+    ablauf: aktiv ? ablauf : null,
+    appPro,
+    appProAblauf: appPro && !aktiv ? ablauf : null,
+    nichtHier: !aktiv && r.suite === true && (!active || r.bestand === false),
+  };
+}
 
 async function fetchSuiteStatus(
   id: string,
-): Promise<{ active: boolean; expires_at?: string | null; unknown?: boolean }> {
+  appParam: string | null,
+): Promise<{ antwort: SuiteStatusAntwort | null; unknown: boolean }> {
   try {
-    const res = await fetch(`${SUITE_URL}/suite-status?app_user_id=${id}`, {
+    const mitApp = appParam ? `&app=${encodeURIComponent(appParam)}` : '';
+    const res = await fetch(`${SUITE_URL}/suite-status?app_user_id=${id}${mitApp}`, {
       headers: { Authorization: `Bearer ${SUITE_ANON}`, apikey: SUITE_ANON },
     });
-    if (!res.ok) return { active: false, unknown: true };
-    return (await res.json()) as { active: boolean; expires_at?: string | null };
+    if (!res.ok) return { antwort: null, unknown: true };
+    return { antwort: (await res.json()) as SuiteStatusAntwort, unknown: false };
   } catch {
     // Offline/CORS → Suite unbekannt, Anzeige degradiert zu „nicht aktiv".
-    return { active: false, unknown: true };
+    return { antwort: null, unknown: true };
   }
 }
 
@@ -152,12 +248,15 @@ export async function loadAboInfo(app: AppConfig, session: Session): Promise<Abo
   const email = session.user.email ?? '';
   const dexId = email ? await dexwareId(email) : null;
 
-  // Apps außerhalb des Suite-Abos (registry: notInSuite) fragen den Suite-Server gar nicht erst.
+  // Apps außerhalb des Suite-Abos (registry: notInSuite) fragen den Suite-Server gar nicht erst. Apps, die seit 26.11.2026
+  // nicht mehr in der Suite sind (registry: suiteNurBestand), fragen ihn mit &app=<id>: Der Server zählt die Suite dort
+  // nur für Bestandskunden (Stichtags-Liste) und meldet zugleich Pro dieser App aus der Sammel-App bzw. per Gutschein.
   const suiteCounts = !app.notInSuite;
-  const [byUid, byDexId, suiteStatus] = await Promise.all([
+  const appParam = suiteCounts && app.suiteNurBestand ? app.id : null;
+  const [byUid, byDexId, suiteRes] = await Promise.all([
     fetchSubscriber(app.revenueCat, session.user.id),
     dexId ? fetchSubscriber(app.revenueCat, dexId) : Promise.resolve(null),
-    dexId && suiteCounts ? fetchSuiteStatus(dexId) : Promise.resolve({ active: false as const }),
+    dexId && suiteCounts ? fetchSuiteStatus(dexId, appParam) : Promise.resolve({ antwort: null, unknown: false }),
   ]);
 
   // Käufe hängen an der Dexware-ID (App, Web-Kauf, Server). Fehlt genau diese Antwort, wäre „Free“ nur geraten —
@@ -175,16 +274,28 @@ export async function loadAboInfo(app: AppConfig, session: Session): Promise<Abo
           .reduce<EntitlementInfo | null>((a, b) => better(a, b), null)
       : null;
   const pro = better(proOf(byUid), proOf(byDexId));
-  const suite = suiteCounts
-    ? better(byUid ? toInfo(byUid, ENTITLEMENT_SUITE) : null, byDexId ? toInfo(byDexId, ENTITLEMENT_SUITE) : null)
-    : null;
+  const st = suiteStand(suiteRes.antwort, !!appParam);
+
+  // Suite aus dem RevenueCat-Projekt DIESER App. Bei suiteNurBestand zählt sie nur als Bestand: gekauft bis Ende des
+  // Stichtags — oder der Suite-Server bestätigt die Suite für diese App ohnehin (dann gilt auch die Kauf-Angabe hier).
+  const rcSuites = suiteCounts
+    ? [byUid ? toInfo(byUid, ENTITLEMENT_SUITE) : null, byDexId ? toInfo(byDexId, ENTITLEMENT_SUITE) : null]
+    : [];
+  const zaehlt = (i: EntitlementInfo | null) => (i && (!app.suiteNurBestand || st.aktiv || suiteImBestand(i)) ? i : null);
+  const suite = suiteCounts ? better(zaehlt(rcSuites[0] ?? null), zaehlt(rcSuites[1] ?? null)) : null;
+  const rcSuiteNeu = rcSuites.some((i) => !!i?.active && !zaehlt(i));
 
   return {
     pro,
     suite,
-    suiteBackendActive: suiteStatus.active,
-    suiteBackendExpires: 'expires_at' in suiteStatus ? (suiteStatus.expires_at ?? null) : null,
-    suiteBackendUnknown: 'unknown' in suiteStatus && suiteStatus.unknown === true,
+    suiteBackendActive: st.aktiv,
+    suiteBackendExpires: st.ablauf,
+    suiteBackendUnknown: suiteRes.unknown,
+    appProBackend: st.appPro,
+    appProBackendExpires: st.appProAblauf,
+    // Hinweis nur bei sicherer Auskunft — antwortet der Suite-Server nicht, könnte er den Bestand ja noch bestätigen
+    suiteNichtHier: !suite?.active && !st.aktiv && !suiteRes.unknown && (st.nichtHier || rcSuiteNeu),
+    suiteAppParam: dexId && appParam ? appParam : null,
     managementUrl: byDexId?.management_url ?? byUid?.management_url ?? null,
   };
 }

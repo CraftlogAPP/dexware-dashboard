@@ -20,6 +20,7 @@ import {
 import { LoadGuard, useAsync } from './ui';
 import { FormDialog, s, type FieldDef, type FormValues } from './form';
 import { fmtDate } from '../lib/format';
+import { inSuite } from '../apps/registry';
 
 /** Team-Seite — Mitgliederliste + Beitrittscode; identisch in allen Dex-Apps. */
 export function TeamPage() {
@@ -163,7 +164,9 @@ export function TeamPage() {
           </div>
           <p className="muted" style={{ marginBottom: 0 }}>
             Einladen ist Teil von {app.name} Pro — das Gratis-Paket ist das Solo-Paket.{' '}
-            {app.id === 'winterdex' ? PRO_HOW : `Pro schließt du in der ${app.name}-App unter „Abo“ ab (mit einem Dexware-Suite-Abo ist es schon dabei).`}
+            {app.id === 'winterdex'
+              ? PRO_HOW
+              : `Pro schließt du in der ${app.name}-App unter „Abo“ ab${inSuite(app) ? ' (mit einem Dexware-Suite-Abo ist es schon dabei)' : ''}.`}
           </p>
         </div>
       )}

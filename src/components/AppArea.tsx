@@ -71,7 +71,7 @@ function Gate({ app, children, headerAction }: { app: AppConfig; children: React
         <Link
           className="btn ghost small all-dash"
           to="/"
-          title="Haupteinstieg: alle App-Dashboards der Suite"
+          title="Haupteinstieg: alle Dexware-Dashboards"
         >
           <LayoutGrid className="i" aria-hidden />
           <span className="hide-sm">Alle Dashboards</span>
