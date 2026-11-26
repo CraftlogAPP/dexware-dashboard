@@ -17,6 +17,8 @@ import { fmtDistance, type LatLng, type Route } from '../routes';
 import { weatherLabel } from '../labels';
 import type { WeatherSnapshot } from '../types';
 import { formToRecord, initialForm } from '../einsatz/amount';
+import { useStreumittelAus } from '../einsatz/useStreumittel';
+import { startStreumittel } from '../streumittel';
 import { isNetworkError, type RunRow } from '../einsatz/backend';
 import { useEinsatz } from '../einsatz/context';
 import { getPerformerName, newId, setPerformerName } from '../einsatz/data';
@@ -63,7 +65,9 @@ function Fahren({ routeId, q }: { routeId: string | null; q: URLSearchParams }) 
   const [sess, setSess] = useState<Sess | null>(null);
   const [old, setOld] = useState<ActiveRun | null>(null);
   const [stoppedAt, setStoppedAt] = useState<string | null>(null);
-  const [form, setForm] = useState<FormValues>(() => initialForm(getPerformerName(userId)));
+  // Vorauswahl Streumittel: Splitt, außer der Betrieb hat es ausgeblendet (Team-Seite)
+  const streumittelAus = useStreumittelAus();
+  const [form, setForm] = useState<FormValues>(() => initialForm(getPerformerName(userId), startStreumittel(streumittelAus)));
   const [photos, setPhotos] = useState<string[]>([]);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);

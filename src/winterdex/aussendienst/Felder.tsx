@@ -5,7 +5,6 @@ import { Camera, X } from 'lucide-react';
 import { ACTION_LABELS } from '../types';
 import {
   ACTIONS,
-  GRIT_MATERIALS,
   GRIT_UNITS,
   UNIT_LABEL,
   cleanAmount,
@@ -15,6 +14,8 @@ import {
 } from '../einsatz/amount';
 import { fileToPhoto } from '../einsatz/photo';
 import type { FormValues } from '../einsatz/store';
+import { useStreumittelAus } from '../einsatz/useStreumittel';
+import { streumittelZurAuswahl } from '../streumittel';
 
 export function Felder({
   form,
@@ -36,6 +37,8 @@ export function Felder({
 }) {
   const [busy, setBusy] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // nur die Streumittel, die der Betrieb nicht ausgeblendet hat (Team-Seite) — die gewählte bleibt immer sichtbar
+  const streumittelAus = useStreumittelAus();
   const set = (patch: Partial<FormValues>) => onForm({ ...form, ...patch });
 
   const onFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,7 +78,7 @@ export function Felder({
         <>
           <h2 className="ez-section">Streumittel</h2>
           <div className="ez-chips" role="group" aria-label="Streumittel">
-            {GRIT_MATERIALS.map((m) => (
+            {streumittelZurAuswahl(streumittelAus, form.gritMaterial).map((m) => (
               <button
                 key={m}
                 type="button"

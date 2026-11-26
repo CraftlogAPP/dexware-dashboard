@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAppAuth } from '../../auth/AppAuthContext';
 import { useOrg } from '../../components/OrgContext';
 import {
@@ -13,6 +13,8 @@ import type { ErsteSchritteAdapter } from '../../lib/ersteSchritte';
 import { fmtDateTime } from '../../lib/format';
 import { lastOpByProperty, propertyNameMap, WEATHER_SOURCE, weatherLabel } from '../labels';
 import { HeuteNacht } from '../HeuteNacht';
+import { NeuHinweis } from '../MitteilungsCenter';
+import { KARTE_ANKER, weckerFrei } from '../mitteilungenDaten';
 import { nachweisZone } from '../nachweisZeit';
 import type { Operation, Property } from '../types';
 
@@ -39,6 +41,9 @@ const START: ErsteSchritteAdapter = {
 export function Overview() {
   const { client } = useAppAuth();
   const { data: orgCtx } = useOrg();
+  // „Zur Karte“ aus der Box einer Mitteilung (…/winterdex#heute-nacht): Karte aufgeklappt, ins Bild — bei jedem Sprung neu
+  const { hash, key } = useLocation();
+  const zurKarte = hash === `#${KARTE_ANKER}` ? key : null;
 
   const state = useAsync<OverviewData>(async () => {
     const [properties, meta, recentOps] = await Promise.all([
@@ -59,7 +64,8 @@ export function Overview() {
           {orgCtx.org.name} · Saison im Blick — live aus der WinterDex-App.
         </p>
       )}
-      {/* Wetter-Guide: Karte „Heute Nacht“ über den Kennzahlen — nur wenn der Server sie für den Betrieb freigibt */}
+      {/* Wetter-Guide: Karte „Heute Nacht“ über den Kennzahlen — nur wenn der Server sie für den Betrieb freigibt;
+          darüber EINMAL der Hinweis „Neu: Heute Nacht und Mitteilungen“ (nur Bestand, nur wenn die Karte zu sehen ist) */}
       {orgCtx && (
         <HeuteNacht
           client={client}
@@ -69,6 +75,8 @@ export function Overview() {
           tz={nachweisZone(orgCtx.org.land)}
           ops={state.data?.meta}
           links={{ objekte: 'objekte', team: 'team', abo: 'abo' }}
+          aufklappen={zurKarte}
+          davor={(d) => <NeuHinweis wecker={weckerFrei(d.guide_live_arten)} />}
         />
       )}
 

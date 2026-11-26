@@ -117,6 +117,7 @@ export const ART_NAME: Record<string, string> = {
   K7: 'Schneefall vorbei',
   K8: 'Update Schneefall',
   K9: 'Amtliche Warnung',
+  K10: 'Schnee-Wecker',
   TEST: 'Test',
 };
 export const STATUS_WORT: Record<string, string> = {
@@ -134,7 +135,20 @@ export const GERAET_WORT: Record<GeraetStatus, string> = {
 /** Haftung (Bauplan 5.4, wortgleich mit der App) */
 export const HAFTUNG =
   'Der Wetter-Guide ist eine Hilfe ohne Gewähr. Er ersetzt nicht deine Kontrolle vor Ort und entbindet nicht von der Räum- und Streupflicht. Vorhersagen können danebenliegen, Mitteilungen verspätet oder gar nicht ankommen (z. B. Nicht stören, Energiesparen, kein Netz). Keine Mitteilung heißt nicht, dass es nicht glatt ist. Maßgeblich sind die amtlichen Warnungen.';
-export const QUELLEN = ['Datenquelle: GeoSphere Austria – data.hub.geosphere.at (CC BY 4.0)', 'Wetterdaten: Open-Meteo.com (CC BY 4.0)'];
+/**
+ * Namensnennung CC BY 4.0, wortgleich mit dem Quellenverzeichnis im WinterDex-Impressum (winterdex-web, 26.11.2026).
+ * Deutscher Wetterdienst und MeteoSchweiz nur für den Schnee-Wecker (Deutschland bzw. Westschweiz); die Karte „Heute
+ * Nacht“ rechnet nur mit GeoSphere Austria bzw. Open-Meteo (Fußzeile dort: heuteNachtDaten.ts fussZeile).
+ */
+export const QUELLEN = [
+  'Datenquelle: GeoSphere Austria – data.hub.geosphere.at (CC BY 4.0)',
+  'Datenbasis: Deutscher Wetterdienst, eigene Berechnungen – opendata.dwd.de (CC BY 4.0; Schnee-Wecker für Orte in Deutschland)',
+  'Quelle: MeteoSchweiz – opendatadocs.meteoswiss.ch (CC BY 4.0; Messwerte für den Schnee-Wecker in der Schweiz)',
+  'Wetterdaten: Open-Meteo.com (CC BY 4.0)',
+];
+/** Eine Zeile unter der Mitteilungsliste (die Mitteilungen des Schnee-Weckers stammen auch vom DWD bzw. von MeteoSchweiz) */
+export const QUELLEN_ZEILE =
+  'Datenquellen: GeoSphere Austria · Datenbasis: Deutscher Wetterdienst, eigene Berechnungen · Quelle: MeteoSchweiz · Open-Meteo.com (jeweils CC BY 4.0). Ausgewertet von WinterDex; die genannten Stellen sind daran nicht beteiligt.';
 
 /** Wie die Arten je Handy eingestellt werden (G8) — Dashboard schaltet nichts */
 export const ARTEN_HINWEIS =
@@ -158,6 +172,7 @@ export function mitarbeiterInfo(betrieb: string, anschrift: string | null, bewer
     'beim ‚Strecke fahren‘ den gefahrenen Weg mit Uhrzeit, bis Sie die Fahrt beenden. Nachweise enthalten außerdem die Wetterlage am ' +
     'Objekt (z. B. Ende des Schneefalls). Zweck: Nachweis der Räum- und Streupflicht gegenüber Auftraggebern, Behörden und ' +
     `Versicherungen. Verantwortlich: ${wer || '…'}. Eine Leistungsbewertung einzelner Personen anhand dieser Daten erfolgt ${bew}. ` +
-    'Wetter-Hinweise auf Ihrem Gerät schalten Sie in der App unter Einstellungen → Wetter-Guide selbst ein oder aus.'
+    // Seite heißt ab App 0.7.15 (vc47) „Mitteilungen“ — eine veröffentlichte App mit „Einstellungen → Wetter-Guide“ gab es nie
+    'Wetter-Hinweise auf Ihrem Gerät schalten Sie in der App unter Einstellungen → Mitteilungen selbst ein oder aus.'
   );
 }

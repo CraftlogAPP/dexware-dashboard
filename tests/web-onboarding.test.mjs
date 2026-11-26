@@ -276,6 +276,11 @@ function eingehaengt() {
     const soll = f ? `<OrgProvider fetch={${f}}>\n        <OrgGate noOrg={<WebOnboarding fetchOrg={${f}} />}>` : `<OrgProvider>\n        <OrgGate noOrg={<WebOnboarding />}>`;
     check(`${id}: Bereich zeigt ohne Betrieb das Onboarding (mit derselben Betriebs-Abfrage wie der Bereich)`, src.includes(soll));
   }
+  // WinterDex hat sein eigenes Onboarding (src/winterdex/Onboarding.tsx, Schema-Tests im WinterDex-Repo) — seit dem
+  // Vertrag v2 (26.11.) mit dem Schritt „Wetter-Guide & Mitteilungen“ nach dem Anlegen/Beitreten (tests/mitteilungen.test.mjs [11])
+  const wdOnb = liesWeb('src/winterdex/Onboarding.tsx');
+  check('winterdex: Bereich zeigt ohne Betrieb sein eigenes Onboarding, danach den Schritt „Wetter-Guide & Mitteilungen“',
+    liesWeb('src/winterdex/WinterdexArea.tsx').includes('<OrgGate noOrg={<Onboarding />}>') && wdOnb.includes("geschafft('inhaber');") && wdOnb.includes("geschafft('team');") && wdOnb.includes('<h1>Wetter-Guide & Mitteilungen</h1>'));
   const gate = liesWeb('src/components/OrgContext.tsx');
   check('Apps ohne Onboarding: Hinweistext „Lege den Betrieb zuerst in der …-App am Handy an“ unverändert',
     gate.includes('Dieses Konto gehört noch zu keinem Betrieb. Lege den Betrieb zuerst in der{\' \'}') && gate.includes('if (!data && noOrg) return <>{noOrg}</>;'));

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { Building2, CreditCard, FileDown, Gift, LayoutDashboard, MessageSquare, Monitor, Route as RouteIcon, Snowflake, Sprout, Truck, Users } from 'lucide-react';
 import type { AppConfig } from '../apps/registry';
@@ -33,6 +33,8 @@ import { roleLabel } from '../lib/orgApi';
 import { OBJEKTDEX_OEFFENTLICH } from '../lib/ganzjahr';
 import { dankeschoenApi } from '../lib/gutschein';
 import { GratisBanner } from './GratisHinweise';
+import { MitteilungenProvider, MitteilungsGlocke } from './MitteilungsCenter';
+import { MitteilungenSeite } from './pages/Mitteilungen';
 
 // Abmelde-Rückfrage auf ALLEN WinterDex-Seiten (auch im Dashboard), nicht nur im Außendienst: wartende Einsätze und
 // Fahrten, angefangene Einsätze und eine unterbrochene Aufzeichnung liegen nur auf diesem Gerät.
@@ -71,60 +73,34 @@ function demoWanted(): boolean {
 
 export function WinterdexArea({ app }: { app: AppConfig }) {
   useHomeScreenIcon();
+  // Platz für die Mitteilungs-Glocke in der Kopfzeile: AppArea zeichnet die Kopfzeile außerhalb des Betriebs-Kontexts,
+  // die Glocke (MitteilungsCenter.tsx) hängt sich per Portal hier hinein — nur im WinterDex-Bereich, nie in anderen Apps.
+  const [glockenPlatz, setGlockenPlatz] = useState<HTMLElement | null>(null);
   if (EinsatzDemo && demoWanted()) return <EinsatzDemo app={app} />;
   return (
-    <AppArea app={app} headerAction={<ModeSwitch />}>
+    <AppArea
+      app={app}
+      headerAction={
+        <>
+          <span className="mt-platz" ref={setGlockenPlatz} />
+          <ModeSwitch />
+        </>
+      }
+    >
       <OrgProvider>
         <OrgGate noOrg={<Onboarding />}>
-          <Routes>
-            <Route path="aussendienst/*" element={<EinsatzScope><Aussendienst /></EinsatzScope>} />
-            <Route path="einsatz" element={<EinsatzRedirect to={`/app/${app.id}/aussendienst`} />} />
-            <Route path="einsatz/:id" element={<EinsatzRedirect to={`/app/${app.id}/aussendienst`} />} />
-            <Route element={<Shell />}>
-              <Route index element={<Overview />} />
-              <Route path="objekte" element={<Properties />} />
-              <Route
-                path="objekte/import"
-                element={
-                  <Suspense
-                    fallback={
-                      <div className="empty">
-                        <span className="spinner" />
-                      </div>
-                    }
-                  >
-                    <PropertyImport />
-                  </Suspense>
-                }
-              />
-              <Route path="objekte/:id" element={<PropertyDetail />} />
-              <Route path="einsaetze" element={<Operations />} />
-              <Route path="einsaetze/:id" element={<OperationDetail />} />
-              <Route path="strecken" element={<RoutesPage />} />
-              <Route path="strecken/fahrten/:id" element={<RunDetail />} />
-              <Route path="strecken/:id" element={<RouteDetail />} />
-              <Route path="team" element={<TeamPage />} />
-              <Route path="bericht" element={<Report />} />
-              <Route path="abo" element={<AboPage />} />
-              <Route path="rueckmeldungen" element={<NurDexware><FeedbackAdminPage /><FeedbackZentral /></NurDexware>} />
-              <Route path="rueckmeldung" element={<FeedbackForm />} />
-              <Route
-                path="dankeschoen"
-                element={
-                  <Suspense
-                    fallback={
-                      <div className="empty">
-                        <span className="spinner" />
-                      </div>
-                    }
-                  >
-                    <Dankeschoen />
-                  </Suspense>
-                }
-              />
-              {OBJEKTDEX_OEFFENTLICH && (
+          {/* Mitteilungs-Center: ein Abruf (meine_mitteilungen) für Glocke, Liste und Box; ohne Nachtrag keine Glocke */}
+          <MitteilungenProvider base={`/app/${app.id}`}>
+            <MitteilungsGlocke platz={glockenPlatz} />
+            <Routes>
+              <Route path="aussendienst/*" element={<EinsatzScope><Aussendienst /></EinsatzScope>} />
+              <Route path="einsatz" element={<EinsatzRedirect to={`/app/${app.id}/aussendienst`} />} />
+              <Route path="einsatz/:id" element={<EinsatzRedirect to={`/app/${app.id}/aussendienst`} />} />
+              <Route element={<Shell />}>
+                <Route index element={<Overview />} />
+                <Route path="objekte" element={<Properties />} />
                 <Route
-                  path="nach-dem-winter"
+                  path="objekte/import"
                   element={
                     <Suspense
                       fallback={
@@ -133,13 +109,56 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
                         </div>
                       }
                     >
-                      <NachDemWinter />
+                      <PropertyImport />
                     </Suspense>
                   }
                 />
-              )}
-            </Route>
-          </Routes>
+                <Route path="objekte/:id" element={<PropertyDetail />} />
+                <Route path="einsaetze" element={<Operations />} />
+                <Route path="einsaetze/:id" element={<OperationDetail />} />
+                <Route path="strecken" element={<RoutesPage />} />
+                <Route path="strecken/fahrten/:id" element={<RunDetail />} />
+                <Route path="strecken/:id" element={<RouteDetail />} />
+                <Route path="team" element={<TeamPage />} />
+                <Route path="bericht" element={<Report />} />
+                {/* eine Mitteilung öffnet sich als Box über der Seite (MitteilungsCenter.tsx) — keine eigene Detail-Adresse */}
+                <Route path="mitteilungen" element={<MitteilungenSeite />} />
+                <Route path="abo" element={<AboPage />} />
+                <Route path="rueckmeldungen" element={<NurDexware><FeedbackAdminPage /><FeedbackZentral /></NurDexware>} />
+                <Route path="rueckmeldung" element={<FeedbackForm />} />
+                <Route
+                  path="dankeschoen"
+                  element={
+                    <Suspense
+                      fallback={
+                        <div className="empty">
+                          <span className="spinner" />
+                        </div>
+                      }
+                    >
+                      <Dankeschoen />
+                    </Suspense>
+                  }
+                />
+                {OBJEKTDEX_OEFFENTLICH && (
+                  <Route
+                    path="nach-dem-winter"
+                    element={
+                      <Suspense
+                        fallback={
+                          <div className="empty">
+                            <span className="spinner" />
+                          </div>
+                        }
+                      >
+                        <NachDemWinter />
+                      </Suspense>
+                    }
+                  />
+                )}
+              </Route>
+            </Routes>
+          </MitteilungenProvider>
         </OrgGate>
       </OrgProvider>
     </AppArea>

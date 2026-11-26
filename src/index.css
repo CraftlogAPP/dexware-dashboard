@@ -2046,6 +2046,24 @@ tr.fk-z-luecke td.wrap {
   border-color: var(--accent);
   color: var(--on-accent);
 }
+/* WinterDex: Streumittel ausblenden (Team-Seite, StreumittelKarte.tsx) */
+.sm-chips {
+  margin: 10px 0 8px;
+}
+.sm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sm-chip.sm-aus {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.sm-chip:disabled,
+.sm-chip.sm-fest {
+  cursor: default;
+  opacity: 0.7;
+}
 .ez-amount {
   display: flex;
   flex-wrap: wrap;
@@ -4409,6 +4427,319 @@ input {
 [data-theme='light'] .hn-m-ja b { color: #9a3412; }
 [data-theme='light'] .hn-m-knapp b { color: #854d0e; }
 [data-theme='light'] .hn-m-gesendet b { color: #166534; }
+
+/* ---------- WinterDex Mitteilungs-Center (26.11.2026): Glocke in der Kopfzeile (mt-), Klappfenster, Seite, Box ----------
+   Glocke und Fenster nutzen die Klassen der Fälligkeiten-Glocke (due-bell, due-pop) — gleiche Optik, gleiches Handy-Verhalten
+   (≤ 520 px spannt sich das Fenster unter der Kopfzeile über die Breite). Symbol immer mit Wort (Titel/Art), nie nur Farbe. */
+.mt-platz {
+  display: contents;
+}
+@media (min-width: 521px) {
+  .mt-pop {
+    width: min(420px, calc(100vw - 28px));
+  }
+}
+.mt-pop .mt-liste {
+  display: flex;
+  flex-direction: column;
+}
+.mt-gruppe + .mt-gruppe {
+  margin-top: 6px;
+}
+.mt-gruppe-kopf {
+  margin: 0;
+  padding: 8px 10px 4px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.mt-eintrag {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 9px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mt-eintrag:hover,
+.mt-eintrag:focus-visible {
+  background: rgba(255, 255, 255, 0.05);
+  text-decoration: none;
+}
+.mt-sym {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--accent-text);
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+}
+.mt-sym .i {
+  width: 17px;
+  height: 17px;
+}
+.mt-sym.mt-s-amtlich,
+.mt-sym.mt-s-frueh {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.14);
+}
+.mt-sym.mt-krit {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.18);
+}
+.mt-inhalt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.mt-kopf {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.mt-titel {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.mt-zeit {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mt-text {
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.mt-art {
+  font-size: 12px;
+  color: var(--muted);
+}
+.mt-neu {
+  flex: none;
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+.mt-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.mt-fuss {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 10px 10px 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.mt-fuss a {
+  font-size: 14px;
+  font-weight: 600;
+}
+/* Seite „Alle Mitteilungen“: größere Einträge (Handschuhe), Gruppen als Karten */
+.mt-seite .mt-gruppe-kopf {
+  padding: 14px 2px 6px;
+}
+.mt-seite .card.mt-liste {
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.mt-seite .mt-eintrag {
+  min-height: 56px;
+  padding: 12px;
+}
+.mt-seite .mt-eintrag + .mt-eintrag {
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+.mt-seite .mt-titel {
+  font-size: 15px;
+}
+.mt-seite .mt-text {
+  font-size: 15px;
+}
+.mt-seite .mt-zeit {
+  font-size: 13px;
+}
+.mt-eintrag.mt-kritisch .mt-titel {
+  color: #fca5a5;
+}
+/* Box „Mitteilung“ (Vertrag v2, 26.11.): über der Seite statt eigener Detailseite — Symbol, Titel, Art · Uhrzeit, voller
+   Text groß, zwei große Knöpfe „Zur Karte“ / „OK“ (Handschuhe: ≥ 52 px hoch, nebeneinander je halbe Breite) */
+.mt-box {
+  max-width: 520px;
+  border-top: 4px solid var(--accent);
+}
+.mt-box.mt-kritisch {
+  border-top-color: var(--red);
+}
+.mt-box-kopf {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.mt-box-titel {
+  min-width: 0;
+}
+.mt-box-titel h2 {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.mt-box-titel .muted {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+}
+.mt-sym.mt-sym-gross {
+  width: 46px;
+  height: 46px;
+}
+.mt-sym.mt-sym-gross .i {
+  width: 24px;
+  height: 24px;
+}
+.mt-box-text {
+  margin: 16px 0 0;
+  font-size: 17px;
+  line-height: 1.55;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.mt-box-knoepfe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+.btn.mt-box-knopf {
+  flex: 1 1 130px;
+  height: auto;
+  min-height: 52px;
+  font-size: 16px;
+}
+@media (max-width: 420px) {
+  .modal-card.mt-box {
+    padding: 20px 18px;
+  }
+}
+/* Karte „Heute Nacht“ nach „Zur Karte“: nicht unter der klebenden Kopfzeile verschwinden */
+.hn {
+  scroll-margin-top: 76px;
+}
+/* Erklärung „Heute Nacht · Glocke · Handy“ (Onboarding-Schritt und Hinweis „Neu“) */
+.mt-erklaer {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mt-erklaer li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  line-height: 1.45;
+}
+.mt-erklaer .mt-pro {
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+.mt-schritt .mt-erklaer {
+  margin: 18px 0 14px;
+  font-size: 15.5px;
+}
+.mt-schritt .btn.ez-big {
+  margin-top: 8px;
+}
+.mt-neu-hinweis {
+  margin: 0 0 14px;
+  border-left: 4px solid var(--accent);
+}
+.mt-neu-hinweis h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+.mt-neu-knoepfe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.mt-neu-knoepfe .btn {
+  height: auto;
+  min-height: 48px;
+}
+[data-theme='light'] .mt-sym.mt-s-amtlich,
+[data-theme='light'] .mt-sym.mt-s-frueh {
+  color: #92400e;
+}
+[data-theme='light'] .mt-sym.mt-krit,
+[data-theme='light'] .mt-eintrag.mt-kritisch .mt-titel {
+  color: #991b1b;
+}
+[data-theme='light'] .mt-eintrag:hover,
+[data-theme='light'] .mt-eintrag:focus-visible {
+  background: rgba(0, 0, 0, 0.04);
+}
+/* Kopfzeile mit Glocke am Handy: nichts ragt heraus (gemessen 320–1000 px) — erst weicht der Schriftzug „Dexware“, dann
+   der Text „WinterDex“ (das Symbol bleibt), am ganz schmalen Handy (≤ 340 px) auch das Symbol. Glocke, „Außendienst“ und
+   „Abmelden“ bleiben immer ganz sichtbar (Abmelden schrumpft nicht mehr aus dem Bild). */
+@media (max-width: 960px) {
+  .site-header:has(.mt-glocke) .header-user {
+    flex: none;
+  }
+}
+@media (max-width: 520px) {
+  .site-header:has(.mt-glocke) .brand .wm {
+    display: none;
+  }
+}
+@media (max-width: 440px) {
+  .site-header:has(.mt-glocke) .app-chip {
+    font-size: 0;
+    gap: 0;
+  }
+}
+@media (max-width: 340px) {
+  .site-header:has(.mt-glocke) .app-chip {
+    display: none;
+  }
+}
 
 /* ---------- iPhone-Zoom: Safari zoomt beim Antippen eines Felds unter 16 px hinein und bleibt gezoomt ----------
    (Feldtest 24.11.: Anmeldung 15 px, „Mehr“ → Name, alle eingebetteten Seiten). Am Touch-Gerät haben deshalb ALLE

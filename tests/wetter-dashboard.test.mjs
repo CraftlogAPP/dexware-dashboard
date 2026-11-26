@@ -529,9 +529,22 @@ console.log('\n[9] Team-Karte Wetter-Guide');
     })());
   else console.log('  --    (Gegenprobe Grant übersprungen: keine WinterDex-Arbeitskopie mit NACHTRAG-WETTER-GUIDE gefunden)');
   const t = WG.mitarbeiterInfo('Musterbetrieb', 'Hauptplatz 1, 8010 Graz', 'nicht');
-  check('Mitarbeiter-Info: Betrieb + Anschrift, „erfolgt nicht“', t.includes('Verantwortlich: Musterbetrieb, Hauptplatz 1, 8010 Graz.') && t.includes('anhand dieser Daten erfolgt nicht.') && t.includes('Einstellungen → Wetter-Guide'));
+  check('Mitarbeiter-Info: Betrieb + Anschrift, „erfolgt nicht“', t.includes('Verantwortlich: Musterbetrieb, Hauptplatz 1, 8010 Graz.') && t.includes('anhand dieser Daten erfolgt nicht.') && t.includes('Einstellungen → Mitteilungen') && !t.includes('Einstellungen → Wetter-Guide'));
   check('… Betriebsvereinbarung mit Datum, leer → „…“', WG.mitarbeiterInfo('B', null, 'betriebsvereinbarung', '01.12.2026').includes('nur nach Betriebsvereinbarung vom 01.12.2026.') && WG.mitarbeiterInfo('B', null, 'betriebsvereinbarung').includes('vom ….'));
   check('Haftungstext wortgleich (5.4)', WG.HAFTUNG.startsWith('Der Wetter-Guide ist eine Hilfe ohne Gewähr.') && WG.HAFTUNG.endsWith('Maßgeblich sind die amtlichen Warnungen.'));
+  // Go-Live vc47 (V1): Schnee-Wecker Deutschland (DWD) und Westschweiz (MeteoSchweiz) — Wortlaut wie das Impressum
+  check('Quellen unter „Hinweis und Datenquellen“: GeoSphere, DWD, MeteoSchweiz, Open-Meteo (je CC BY 4.0)',
+    WG.QUELLEN.length === 4 && WG.QUELLEN[0].startsWith('Datenquelle: GeoSphere Austria') &&
+      WG.QUELLEN[1].startsWith('Datenbasis: Deutscher Wetterdienst, eigene Berechnungen – opendata.dwd.de') &&
+      WG.QUELLEN[2].startsWith('Quelle: MeteoSchweiz – opendatadocs.meteoswiss.ch') && WG.QUELLEN[3].startsWith('Wetterdaten: Open-Meteo.com') &&
+      WG.QUELLEN.every((q) => q.includes('CC BY 4.0')), WG.QUELLEN);
+  check('… die Team-Karte zeigt alle Quellen (QUELLEN.map)', /\{QUELLEN\.map\(\(q\) => \(/.test(lies('src/winterdex/GlaetteFruehwarnung.tsx')));
+  // Gegenprobe mit dem Impressum (falls die Arbeitskopie mit dem Quellenverzeichnis da ist)
+  const imp = ['C:/Users/2easy/Desktop/winterdex-web-wt-dse-wetter/impressum.html', 'C:/Users/2easy/Desktop/winterdex-web/impressum.html']
+    .filter(existsSync).map((f) => readFileSync(f, 'utf8')).find((s) => s.includes('Datenbasis: Deutscher Wetterdienst'));
+  if (imp)
+    check('… Wortlaut wie im WinterDex-Impressum (Datenbasis: DWD, Quelle: MeteoSchweiz)', imp.includes('Datenbasis: Deutscher Wetterdienst, eigene Berechnungen') && imp.includes('Quelle: MeteoSchweiz'));
+  else console.log('  --    (Gegenprobe Impressum übersprungen: keine winterdex-web-Arbeitskopie mit dem Quellenverzeichnis gefunden)');
   // Freischaltung gemeinsam mit Alex: vorher (Schatten) sehen Kunden auf der Team-Seite keine Wetter-Guide-Teile
   const hnAntwort = (extra) => attrappe({ rpc: { heute_nacht: { data: { ...kopie(DEMO.HN_PROBE), ...extra }, error: null } } });
   check('Team-Karte: nicht freigegeben (karte_live false, keine Arten live) → keine Wetter-Guide-Teile', (await WG.guideFreigegeben(hnAntwort({}), 'o-frei')) === false);
@@ -568,8 +581,9 @@ console.log('\n[10] Quelltext-Wächter');
   const karte = lies('src/winterdex/HeuteNacht.tsx');
   check('Karte: Ereignisse nur, wenn der Server sie schickt (Pro)', /d\.ereignisse && d\.ereignisse\.length > 0/.test(karte));
   check('Karte: Sichtbarkeit nur über hnSichtbar (karte_live vom Server)', /if \(!hnSichtbar\(d, jetzt, tz, darf, offline \?\? jetzt\)\) return null;/.test(karte));
-  check('Karte: Ampel, Aufklappen und Morgen-Satz aus EINER Rechnung (kartenKopf) — kein eigenes ampel_gesamt im Kopf',
-    /const \{ m, amp, gefahr \} = kartenKopf\(d, jetzt, tz, offlineSeit \?\? jetzt\);/.test(karte) && /const auf = offen \?\? \(gefahr && !eingeklappt\);/.test(karte) && !/ampelAnzeige\(d\.ampel_gesamt/.test(karte));
+  // Ausnahme (Mitteilungen 26.11., Vertrag v2): „Zur Karte“ aus der Box einer Mitteilung öffnet die Karte immer
+  check('Karte: Ampel, Aufklappen und Morgen-Satz aus EINER Rechnung (kartenKopf) — kein eigenes ampel_gesamt im Kopf; aufgeklappt sonst nur über „Zur Karte“',
+    /const \{ m, amp, gefahr \} = kartenKopf\(d, jetzt, tz, offlineSeit \?\? jetzt\);/.test(karte) && /const auf = offen \?\? \(aufklappen \? true : gefahr && !eingeklappt\);/.test(karte) && !/ampelAnzeige\(d\.ampel_gesamt/.test(karte));
   check('Karte: Handy-Hinweis am Morgen-Satz, solange die Geräte-Zeile ihn nicht zeigt (eingeklappt/Außendienst)',
     /const handyHinweis = geraeteZeileSichtbar \? null : morgenHandyHinweis\(d, m\);/.test(karte) && /\{handyHinweis && <span className="muted"> · \{handyHinweis\}<\/span>\}/.test(karte));
   check('Übersicht bindet die Karte über den Kennzahlen ein', /<HeuteNacht[\s\S]*?\/>[\s\S]*<LoadGuard/.test(lies('src/winterdex/pages/Overview.tsx')));

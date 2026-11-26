@@ -37,6 +37,13 @@ export function Vorschau() {
         <WetterVorschau params={params} />
       </Suspense>
     );
+  // WinterDex Mitteilungs-Center (Glocke, Liste, Detail): …&seite=mitteilungen[&id=41][&zustand=leer|gestoert][&teil=glocke]
+  if (params.get('app') === 'winterdex' && params.get('seite') === 'mitteilungen')
+    return (
+      <Suspense fallback={null}>
+        <MitteilungenVorschau params={params} />
+      </Suspense>
+    );
   // Laufzettel (intern pinndex) hat einen eigenen Beispieldaten-Bereich (Pinnwand live, alle Seiten bedienbar)
   if (params.get('app') === 'pinndex' || params.get('app') === 'laufzettel') {
     const rolle = params.get('rolle');
@@ -47,6 +54,7 @@ export function Vorschau() {
 
 const NachDemWinterInhalt = lazy(() => import('../winterdex/pages/NachDemWinter').then((m) => ({ default: m.NachDemWinterInhalt })));
 const WetterVorschau = lazy(() => import('./WetterVorschau').then((m) => ({ default: m.WetterVorschau })));
+const MitteilungenVorschau = lazy(() => import('./MitteilungenVorschau').then((m) => ({ default: m.MitteilungenVorschau })));
 const TYP_BEISPIEL: Record<string, { name: string; email: string }> = {
   gemeinde: { name: 'Marktgemeinde Musterdorf', email: 'bauhof@musterdorf.gv.at' },
   galabau: { name: 'Huber Garten- und Landschaftsbau', email: 'office@huber-garten.example' },

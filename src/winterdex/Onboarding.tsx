@@ -1,11 +1,16 @@
 // Erster Start ohne Betrieb — wie das Onboarding der App (mobile/src/screens/OnboardingScreen.tsx):
 // „Eigener Betrieb“ (RPC create_org_with_owner, optional Empfehlungs-Code) oder „Ich wurde eingeladen“ (RPC redeem_invite).
 // Damit lässt sich WinterDex auch ganz ohne Android-Gerät einrichten (Übergang fürs iPhone, 19.11.2026).
+// Danach EIN kurzer Schritt „Wetter-Guide & Mitteilungen“ (Vertrag v2, F; wie der Schritt im Onboarding der App): was
+// „Heute Nacht“ zeigt, die Glocke oben rechts, Mitteilungen aufs Handy (eingestellt wird in der App, G8). Wer ihn gesehen
+// hat, bekommt den Hinweis „Neu: Heute Nacht und Mitteilungen“ für Bestandsnutzer nicht (Merker neuHinweisMerken).
 import { useRef, useState } from 'react';
 import { useAppAuth } from '../auth/AppAuthContext';
 import { useOrg } from '../components/OrgContext';
 import { fetchOrgContext } from '../lib/orgApi';
 import { LAND_LABELS } from './types';
+import { ErklaerListe } from './MitteilungsCenter';
+import { neuHinweisMerken, PRO_HINWEIS } from './mitteilungenDaten';
 
 type Land = 'DE' | 'AT' | 'CH';
 const LANDS: Land[] = ['DE', 'AT', 'CH'];
@@ -45,7 +50,15 @@ export function Onboarding() {
   const [error, setError] = useState<string | null>(null);
   // Betrieb steht, nur der Empfehlungs-Code ging nicht: Hinweis zeigen, dann weiter
   const [refNote, setRefNote] = useState<string | null>(null);
+  // angelegt bzw. beigetreten → Schritt „Wetter-Guide & Mitteilungen“, erst danach ins Dashboard (org.reload)
+  const [fertig, setFertig] = useState<'inhaber' | 'team' | null>(null);
   const running = useRef(false);
+  const uid = session?.user.id ?? null;
+
+  const geschafft = (wie: 'inhaber' | 'team') => {
+    neuHinweisMerken(uid);
+    setFertig(wie);
+  };
 
   const create = async () => {
     if (running.current) return;
@@ -64,10 +77,9 @@ export function Onboarding() {
         const { error: re } = await client.rpc('redeem_referral', { p_code: entered });
         if (re) {
           setRefNote(`${referralErrorText(re.message)} Dein Betrieb ist angelegt — den Code kannst du später in der App unter Einstellungen → „Empfehlen & 3 Monate gratis“ nachtragen.`);
-          return;
         }
       }
-      org.reload();
+      geschafft('inhaber');
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
       setError(netText(m) ?? `Betrieb konnte nicht angelegt werden: ${m}`);
@@ -87,7 +99,7 @@ export function Onboarding() {
       const { error: e } = await client.rpc('redeem_invite', { p_code: code.trim() });
       // Erster Tipp kam am Server an, nur die Antwort ging verloren → man ist schon drin (wie ein Erfolg behandeln).
       if (e && !/already member of an org/i.test(e.message)) throw new Error(e.message);
-      org.reload();
+      geschafft('team');
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
       setError(
@@ -107,17 +119,7 @@ export function Onboarding() {
     }
   };
 
-  if (refNote) {
-    return (
-      <div className="page ez" style={{ margin: "0 auto", paddingTop: 24 }}>
-        <h1>Betrieb angelegt</h1>
-        <div className="info-box">Empfehlungs-Code nicht eingetragen: {refNote}</div>
-        <button type="button" className="btn ez-big" onClick={org.reload}>
-          Weiter
-        </button>
-      </div>
-    );
-  }
+  if (fertig) return <WetterGuideSchritt inhaber={fertig === 'inhaber'} refNote={refNote} onWeiter={org.reload} />;
 
   return (
     <div className="page ez" style={{ margin: "0 auto", paddingTop: 24 }}>
@@ -190,6 +192,30 @@ export function Onboarding() {
           </button>
         </form>
       )}
+    </div>
+  );
+}
+
+/**
+ * Schritt „Wetter-Guide & Mitteilungen“ nach dem Anlegen bzw. Beitreten (rein, auch für die Vorschau). Kurz, ohne
+ * Kauf-Druck: Inhaber lesen nur „Mitteilungen aufs Handy gibt es mit WinterDex Pro.“ Eingeschaltet wird in der App.
+ * Den Schnee-Wecker nennt der Schritt nicht: ob er am Server freigegeben ist, steht hier noch nicht fest (nie etwas
+ * versprechen, das man in der App nicht findet) — die App erklärt ihn in ihrem Onboarding samt Schalter.
+ */
+export function WetterGuideSchritt({ inhaber, refNote = null, onWeiter }: { inhaber: boolean; refNote?: string | null; onWeiter: () => void }) {
+  return (
+    <div className="page ez mt-schritt" style={{ margin: '0 auto', paddingTop: 24 }}>
+      <h1>Wetter-Guide & Mitteilungen</h1>
+      <p className="muted" style={{ marginTop: -6 }}>
+        {inhaber ? 'Dein Betrieb ist angelegt.' : 'Du bist dem Team beigetreten.'} Noch kurz, wo du das Wetter für deine Objekte
+        findest:
+      </p>
+      {refNote && <div className="info-box">Empfehlungs-Code nicht eingetragen: {refNote}</div>}
+      <ErklaerListe />
+      {inhaber && <p className="muted small">{PRO_HINWEIS}</p>}
+      <button type="button" className="btn ez-big" onClick={onWeiter}>
+        Weiter zum Dashboard
+      </button>
     </div>
   );
 }
