@@ -529,7 +529,7 @@ console.log('\n[9] Team-Karte Wetter-Guide');
     })());
   else console.log('  --    (Gegenprobe Grant übersprungen: keine WinterDex-Arbeitskopie mit NACHTRAG-WETTER-GUIDE gefunden)');
   const t = WG.mitarbeiterInfo('Musterbetrieb', 'Hauptplatz 1, 8010 Graz', 'nicht');
-  check('Mitarbeiter-Info: Betrieb + Anschrift, „erfolgt nicht“', t.includes('Verantwortlich: Musterbetrieb, Hauptplatz 1, 8010 Graz.') && t.includes('anhand dieser Daten erfolgt nicht.') && t.includes('Einstellungen → Wetter-Guide'));
+  check('Mitarbeiter-Info: Betrieb + Anschrift, „erfolgt nicht“', t.includes('Verantwortlich: Musterbetrieb, Hauptplatz 1, 8010 Graz.') && t.includes('anhand dieser Daten erfolgt nicht.') && t.includes('Einstellungen → Mitteilungen') && !t.includes('Einstellungen → Wetter-Guide'));
   check('… Betriebsvereinbarung mit Datum, leer → „…“', WG.mitarbeiterInfo('B', null, 'betriebsvereinbarung', '01.12.2026').includes('nur nach Betriebsvereinbarung vom 01.12.2026.') && WG.mitarbeiterInfo('B', null, 'betriebsvereinbarung').includes('vom ….'));
   check('Haftungstext wortgleich (5.4)', WG.HAFTUNG.startsWith('Der Wetter-Guide ist eine Hilfe ohne Gewähr.') && WG.HAFTUNG.endsWith('Maßgeblich sind die amtlichen Warnungen.'));
   // Freischaltung gemeinsam mit Alex: vorher (Schatten) sehen Kunden auf der Team-Seite keine Wetter-Guide-Teile

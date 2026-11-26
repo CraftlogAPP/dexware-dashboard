@@ -271,7 +271,9 @@ export function MitteilungBox({ m, tz, basis, onClose }: { m: Mitteilung; tz: st
     const erstes = ziele[0];
     const letztes = ziele[ziele.length - 1];
     const aktiv = document.activeElement;
-    if (e.shiftKey && (aktiv === erstes || !karte.contains(aktiv))) {
+    // aktiv === karte: nach einem Klick in den Text steht der Fokus auf der Box selbst (tabIndex -1) — Umschalt+Tab
+    // ginge von dort zum Element VOR der Box, also hinaus auf die Seite dahinter (und Escape schlösse dann nicht mehr)
+    if (e.shiftKey && (aktiv === erstes || aktiv === karte || !karte.contains(aktiv))) {
       e.preventDefault();
       letztes.focus();
     } else if (!e.shiftKey && (aktiv === letztes || !karte.contains(aktiv))) {

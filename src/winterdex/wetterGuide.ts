@@ -159,6 +159,7 @@ export function mitarbeiterInfo(betrieb: string, anschrift: string | null, bewer
     'beim ‚Strecke fahren‘ den gefahrenen Weg mit Uhrzeit, bis Sie die Fahrt beenden. Nachweise enthalten außerdem die Wetterlage am ' +
     'Objekt (z. B. Ende des Schneefalls). Zweck: Nachweis der Räum- und Streupflicht gegenüber Auftraggebern, Behörden und ' +
     `Versicherungen. Verantwortlich: ${wer || '…'}. Eine Leistungsbewertung einzelner Personen anhand dieser Daten erfolgt ${bew}. ` +
-    'Wetter-Hinweise auf Ihrem Gerät schalten Sie in der App unter Einstellungen → Wetter-Guide selbst ein oder aus.'
+    // Seite heißt ab App 0.7.15 (vc47) „Mitteilungen“ — eine veröffentlichte App mit „Einstellungen → Wetter-Guide“ gab es nie
+    'Wetter-Hinweise auf Ihrem Gerät schalten Sie in der App unter Einstellungen → Mitteilungen selbst ein oder aus.'
   );
 }

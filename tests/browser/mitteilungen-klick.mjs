@@ -176,6 +176,11 @@ try {
   await main.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
   await main.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
   check('Tab bleibt in der Box (von „OK“ zurück auf „Zur Karte“)', (await main.ev(`document.activeElement?.textContent?.trim()`)) === 'Zur Karte', await main.ev(`document.activeElement?.outerHTML?.slice(0, 80)`));
+  // Klick in den Text: Fokus auf der Box selbst (tabIndex -1) — Umschalt+Tab darf von dort nicht auf die Seite dahinter
+  await main.ev(`document.querySelector('.mt-box').focus(); document.activeElement === document.querySelector('.mt-box')`);
+  await main.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+  await main.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+  check('Umschalt+Tab nach Klick in den Text bleibt in der Box (auf „OK“)', (await main.ev(`document.activeElement?.textContent?.trim()`)) === 'OK', await main.ev(`document.activeElement?.outerHTML?.slice(0, 80)`));
   await main.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
   await main.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
   check('Escape schließt die Box, Fokus zurück auf der Glocke', (await warteAuf(`!document.querySelector('.mt-box')`, 2000)) && (await main.ev(`document.activeElement === document.querySelector('.due-bell-btn')`)));

@@ -286,7 +286,9 @@ console.log('\n[7] Quelltext-Wächter');
       /<button ref=\{okRef\} type="button" className="btn mt-box-knopf" onClick=\{onClose\}>\s*OK\s*<\/button>/.test(center));
   check('Box: Dialog (aria-modal, Titel + Text verknüpft), Fokus auf „OK“ und danach zurück, Escape und Klick daneben schließen',
     /role="dialog"\s*aria-modal="true"\s*aria-labelledby=\{titelId\}\s*aria-describedby=\{textId\}/.test(center) && /okRef\.current\?\.focus\(/.test(center) && /vorher\.isConnected\) vorher\.focus\(/.test(center) &&
-      /if \(e\.key === 'Escape'\) \{\s*e\.stopPropagation\(\);\s*onClose\(\);/.test(center) && /if \(e\.target === e\.currentTarget\) onClose\(\);/.test(center));
+      /if \(e\.key === 'Escape'\) \{\s*e\.stopPropagation\(\);\s*onClose\(\);/.test(center) && /if \(e\.target === e\.currentTarget\) onClose\(\);/.test(center) &&
+      // Umschalt+Tab vom Fokus auf der Box selbst (nach Klick in den Text) bleibt drin
+      /e\.shiftKey && \(aktiv === erstes \|\| aktiv === karte \|\| !karte\.contains\(aktiv\)\)/.test(center));
   check('Box: Symbol der Art, Titel, Art · volle Uhrzeit (boxZeile)', /<MtSymbolBild kart=\{m\.kart\} kritisch=\{m\.kritisch\} gross \/>/.test(center) && /<h2 id=\{titelId\}>\{m\.titel\}<\/h2>/.test(center) && /\{boxZeile\(m, tz\)\}/.test(center));
   const ov = lies('src/winterdex/pages/Overview.tsx');
   const ad = lies('src/winterdex/aussendienst/Aussendienst.tsx');
