@@ -102,6 +102,11 @@ check('Pro über den Betrieb (Rechnung, Kommunal, Bonus, Team) → keine', K.dar
 check('Teammitglied/Verwalter (nicht Inhaber) → keine (Pro hängt am Konto des Inhabers)', K.darfKaufen({ ...basis, notOwner: true }) === false);
 check('Suite-Server gestört („Free“ nur geraten) → keine', K.darfKaufen({ ...basis, suiteUnklar: true }) === false);
 check('ohne Dexware-ID oder E-Mail → keine', K.darfKaufen({ ...basis, dexId: null }) === false && K.darfKaufen({ ...basis, email: '' }) === false);
+// Pro über den Betrieb kommt erst nach dem Aufbau der Seite vom Server (org_pro_active) — bis dahin ist viaOrg false
+check('Kasse erst nach klarem „kein Pro über den Betrieb“: Server-Antwort noch offen (undefined/null) → keine Kasse',
+  K.betriebOhneProKlar(true, undefined) === false && K.betriebOhneProKlar(true, null) === false);
+check('Betrieb mit Pro (Rechnung/Kommunal/Bonus) → keine Kasse; klares Nein → Kasse', K.betriebOhneProKlar(true, true) === false && K.betriebOhneProKlar(true, false) === true);
+check('Konto ohne Betrieb → nichts zu prüfen', K.betriebOhneProKlar(false, null) === true);
 
 // ============================================================================ [3] Pakete
 teil('3 paketeAusAngebot(): Preise aus dem Angebot, Reihenfolge, Texte');
@@ -261,6 +266,10 @@ check('Abo-Seite fragt den Schalter (kasseKonfig) — eingebettet (InstallateurD
 check('Kauf-Karte nur nach darfKaufen(); Kasse aus → WebBuy wie bisher', /darfKaufen\(\{[^}]*\}\)/.test(abo) && /kasse && proOffer && onGekauft \?[\s\S]*<PaddleKasse[\s\S]*:\s*\(\s*<WebBuy/.test(abo));
 check('nach dem Kauf: Pro-Prüfung des Betriebs frisch (orgProStand …, true) + pro_status_auffrischen + Gratis-Banner neu', /orgProStand\(client, app\.id, true\)/.test(abo) && /pro_status_auffrischen/.test(abo) && /meldeGratisAenderung\(\)/.test(abo));
 check('Danke-Ansicht oben auf der Abo-Seite', /<KaufDanke/.test(abo));
+check('Kasse nur nach klarer Server-Antwort zum Pro des Betriebs (nicht während des Ladens, nicht bei unklarer Antwort)',
+  /betriebOhneProKlar\(!!orgCtx, orgProState\.data\)/.test(abo) && /kasseBetriebKlar \?\s*\(\s*<PaddleKasse/.test(abo));
+check('lebt wird beim (Wieder-)Einhängen auf true gesetzt (StrictMode im Dev-Server: Danke-Ansicht bleibt nicht hängen)',
+  /useEffect\(\(\) => \{\s*lebt\.current = true;/.test(abo));
 check('Karte nennt Paddle als Händler (Merchant of Record) und die Verlängerung', /Kauf über Paddle \(Händler\)/.test(karte) && /Merchant of Record/.test(karte) && /verlängert sich automatisch/.test(karte));
 check('Links: AGB, Widerruf & Erstattung, Datenschutz, Kaufbedingungen von Paddle', ['dexware.app/agb.html', 'dexware.app/erstattung.html', 'dexware.app/datenschutz.html', 'paddle.com/legal/checkout-buyer-terms'].every((u) => karte.includes(u)));
 check('Widerrufsrecht bleibt unberührt (kein Verzicht-Häkchen auf unserer Seite)', /Widerrufsrecht bleibt davon\s+unberührt/.test(karte) && !/type="checkbox"/.test(karte));

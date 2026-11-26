@@ -16,7 +16,7 @@ import { inSuite } from '../apps/registry';
 import { aboAnzeige, fmtAboDatum as fmtDate, suiteLead } from '../lib/aboAnzeige';
 import { useOrgOptional } from './OrgContext';
 import { KaufDanke, PaddleKasse, type GekauftInfo } from './PaddleKasse';
-import { darfKaufen, kasseKonfig, warteAufPro, type KasseKonfig } from '../lib/paddleKasse';
+import { betriebOhneProKlar, darfKaufen, kasseKonfig, warteAufPro, type KasseKonfig } from '../lib/paddleKasse';
 import { orgProStand } from '../lib/proStand';
 import { meldeGratisAenderung } from '../winterdex/gratisLage';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -61,12 +61,14 @@ export function AboPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [kaufNr, setKaufNr] = useState(0);
   const { refresh } = state;
   const lebt = useRef(true);
-  useEffect(
-    () => () => {
+  // Beim (Wieder-)Einhängen auf true setzen: StrictMode (Dev-Server, Sandbox-Probekauf) hängt einmal aus und wieder ein —
+  // ohne das bliebe lebt false und die Danke-Ansicht stünde für immer auf „wird bestätigt …“.
+  useEffect(() => {
+    lebt.current = true;
+    return () => {
       lebt.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
 
   // Nach checkout.completed: Abo-Anzeige still neu laden (RevenueCat kennt den Kauf schon) und warten, bis die
   // vorhandene Pro-Prüfung des Betriebs (Server org_pro_active, gemerkt in proStand) Pro meldet — vorher frischt
@@ -143,7 +145,10 @@ function AboContent({
   const notOwner = !!role && role !== 'owner';
   const { client } = useAppAuth();
   // Ein Betrieb mit Pro auf Rechnung/Kommunal-Lizenz/Bonus sah hier bisher „Free“ und Kauf-Kacheln (21.11.2026).
-  const orgPro = useAsync(async () => (orgCtx ? fetchOrgProStrict(client) : null), [client, orgCtx?.org.id, kaufNr]).data === true;
+  const orgProState = useAsync(async () => (orgCtx ? fetchOrgProStrict(client) : null), [client, orgCtx?.org.id, kaufNr]);
+  const orgPro = orgProState.data === true;
+  // Nur für die Kasse (echter Kauf): erst nach einem klaren „kein Pro über den Betrieb“ vom Server (paddleKasse.ts)
+  const kasseBetriebKlar = betriebOhneProKlar(!!orgCtx, orgProState.data);
   const bonusUntil = (orgCtx?.org as { pro_bonus_until?: string | null } | undefined)?.pro_bonus_until ?? null;
   const dexId = useAsync(async () => (email ? dexwareId(email) : null), [email]).data;
   const groups: WebBuyGroup[] = [];
@@ -196,15 +201,23 @@ function AboContent({
         dexId &&
         email &&
         (kasse && proOffer && onGekauft ? (
-          <PaddleKasse
-            appName={app.name}
-            lead={groups[0]?.lead ?? 'Alle Pro-Funktionen dieser App'}
-            plaene={proOffer.plans}
-            konf={kasse}
-            dexId={dexId}
-            email={email}
-            onGekauft={onGekauft}
-          />
+          kasseBetriebKlar ? (
+            <PaddleKasse
+              appName={app.name}
+              lead={groups[0]?.lead ?? 'Alle Pro-Funktionen dieser App'}
+              plaene={proOffer.plans}
+              konf={kasse}
+              dexId={dexId}
+              email={email}
+              onGekauft={onGekauft}
+            />
+          ) : orgProState.loading ? null : (
+            // Server-Antwort zum Pro des Betriebs unklar: lieber nicht verkaufen (wie beim gestörten Suite-Server)
+            <div className="info-box">
+              Ob für deinen Betrieb schon Pro freigeschaltet ist (z. B. auf Rechnung), konnten wir gerade nicht prüfen. Bitte
+              lade die Seite später neu, bevor du ein Abo abschließt.
+            </div>
+          )
         ) : (
           <WebBuy groups={groups} dexId={dexId} email={email} />
         ))}

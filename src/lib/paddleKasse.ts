@@ -98,6 +98,17 @@ export function darfKaufen(s: {
   return !s.notOwner && !s.suiteActive && !s.proActive && !s.viaOrg && !s.suiteUnklar && !!s.dexId && !!s.email;
 }
 
+/**
+ * Zusatzregel NUR für die Kasse (echter Kauf; die ausgegrauten Kacheln bleiben wie bisher): Pro über den Betrieb (auf
+ * Rechnung, Kommunal-Lizenz, Bonus, Team …) kennt nur der Server (org_pro_active), und seine Antwort kommt erst NACH dem
+ * Aufbau der Abo-Seite. Bis dahin ist viaOrg „false“ — eine Gemeinde mit Pro auf Rechnung sähe sonst kurz „Direkt hier
+ * kaufen“ (samt Laden des SDK) und könnte doppelt zahlen; bei einer gestörten Antwort (null) sogar dauerhaft. Deshalb: Kasse
+ * erst, wenn der Server für den Betrieb ein klares „kein Pro“ gemeldet hat. Konto ohne Betrieb: nichts zu prüfen.
+ */
+export function betriebOhneProKlar(hatBetrieb: boolean, orgProServer: boolean | null | undefined): boolean {
+  return !hatBetrieb || orgProServer === false;
+}
+
 // ---------------------------------------------------------------------------- SDK-Ausschnitt (nur was wir nutzen)
 
 export interface RcPreis {

@@ -26,7 +26,10 @@ Stand: 26.11.2026 · Code: `src/lib/paddleKasse.ts` (Entscheidungen, ohne Laufze
 **Wer sieht die Karte?** Genau wer bisher die Kauf-Kacheln sah (`darfKaufen`): der **Inhaber** (oder ein Konto ohne Betrieb)
 ohne bestehenden Tarif. Nie bei eigenem Pro (Play, Web, Promo), Suite bzw. Suite-Bestand, Pro über den Betrieb (Rechnung,
 Kommunal-Lizenz, Bonus, Team) und nie, solange der Suite-Server gestört ist. Teammitglieder/Verwalter sehen den Hinweis, dass
-der Tarif über das Konto des Inhabers läuft (Pro hängt am Inhaber-Konto, `org_pro_fuer`).
+der Tarif über das Konto des Inhabers läuft (Pro hängt am Inhaber-Konto, `org_pro_fuer`). Zusätzlich für die Kasse
+(`betriebOhneProKlar`): Sie erscheint erst, wenn der Server (`org_pro_active`) für den Betrieb ein klares „kein Pro“ gemeldet
+hat — nicht während diese Antwort noch lädt (sonst sähe eine Gemeinde mit Pro auf Rechnung kurz „Direkt hier kaufen“) und
+nicht bei gestörter Antwort (dann der Hinweis „bitte später neu laden, bevor du ein Abo abschließt“).
 
 ## Schalter
 
@@ -88,18 +91,21 @@ Danke-Ansicht: `/vorschau-kauf?kasse=danke&status=pruefe|ok|spaeter[&sandbox]`.
 1. Sandbox-Probekauf (oben) bestanden.
 2. **Standard-Zahlungslink bei Paddle prüfen** (Paddle Live → Checkout → Checkout settings → Default payment link). Dort steht
    noch `https://pay.rev.cat`, und diese Domain ist bei Paddle nicht freigegeben. Ob RevenueCat die Live-Transaktion damit
-   anlegen kann, zeigt erst der Echtkauf (Schritt 5). Scheitert er beim Öffnen der Kasse („Der Kauf im Browser ist gerade nicht
+   anlegen kann, zeigt erst der Echtkauf (Schritt 6). Scheitert er beim Öffnen der Kasse („Der Kauf im Browser ist gerade nicht
    verfügbar“), braucht es eine Seite auf einer freigegebenen Domain, die Paddle.js mit einem Client-Token lädt
    (`?_ptxn=…`), und den Standard-Link dorthin — siehe „Offene Punkte“.
 3. Live-Schlüssel eintragen: `src/apps/registry.ts` → WinterDex → `paddleKasse.live.rcKey: 'pdl_…'`.
    (Alternativ Bau-Variable `VITE_RC_PADDLE_KEY` — dann muss `.github/workflows/pages.yml` sie beim Schritt `npm run build`
    aus einer Repo-Variable setzen; der Eintrag in `registry.ts` ist einfacher.)
-4. `node tests/paddle-kasse.test.mjs` (prüft auch den eingetragenen Schlüssel), alle Tests, `npm run build`; dann auf `master`
+4. **Vorher** Datenschutz-Absatz 7a ersetzen (Text unten unter „Rechtliches“) und den Hub veröffentlichen: Sobald das
+   Dashboard mit Schlüssel online ist, kann jeder Inhaber kaufen — der alte Absatz („weitergeleitet“, „nur eine pseudonyme
+   Kennung“) stimmt dann nicht mehr.
+5. `node tests/paddle-kasse.test.mjs` (prüft auch den eingetragenen Schlüssel), alle Tests, `npm run build`; dann auf `master`
    übernehmen und veröffentlichen.
-5. Echtkauf mit dem eigenen Konto: Monatstarif (9,99 €), Ablauf wie im Sandbox-Test prüfen. Danach in Paddle Live →
+6. Echtkauf mit dem eigenen Konto: Monatstarif (9,99 €), Ablauf wie im Sandbox-Test prüfen. Danach in Paddle Live →
    Transactions → die Transaktion → **Refund** (voll). Prüfen, dass RevenueCat die Erstattung übernimmt und Pro endet.
-6. Danach: Landing (`landing-system/iphone.js`, `BROWSER.winterdex.buyLive`) auf die Abo-Seite des Dashboards zeigen lassen,
-   Datenschutz-Absatz 7a anpassen (unten), Landings bauen und veröffentlichen.
+7. Danach: Landing (`landing-system/iphone.js`, `BROWSER.winterdex.buyLive`) auf die Abo-Seite des Dashboards zeigen lassen,
+   Landings bauen und veröffentlichen.
 
 ## Rückweg
 
@@ -123,7 +129,7 @@ Danke-Ansicht: `/vorschau-kauf?kasse=danke&status=pruefe|ok|spaeter[&sandbox]`.
   Verzicht-Häkchen: Dexware erstattet Käufe über die Webseite 14 Tage lang ohne Angabe von Gründen (erstattung.html), das
   gesetzliche Widerrufsrecht bleibt davon unberührt — so steht es auch auf der Karte.
 - **AGB § 4 / § 5 und erstattung.html** sprechen schon vom Kauf „über unsere Webseite bzw. das Dashboard“ — passt weiter.
-- **Datenschutz Abschnitt 7a muss bei der Live-Schaltung angepasst werden.** Bisher steht dort „wirst du zum Bestellvorgang
+- **Datenschutz Abschnitt 7a muss VOR der Live-Schaltung angepasst werden (Live-Schaltung, Schritt 4).** Bisher steht dort „wirst du zum Bestellvorgang
   … weitergeleitet“ und „Wir übergeben dem Bestellvorgang nur eine pseudonyme Kennung“. Neu öffnet sich das Fenster auf
   unserer Seite (Paddle.js von Paddle-Servern) und die E-Mail-Adresse des Kontos wird vorausgefüllt. Vorschlag für den Absatz:
 
