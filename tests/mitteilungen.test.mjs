@@ -433,6 +433,12 @@ console.log('\n[12] Texte (G): Begriffe, Wecker-Hinweis, keine Versprechen');
   const verboten = ['verpasst nichts', 'verpasst du nichts', 'nichts verpassen', 'schützt vor Haftung', 'garantiert', 'Garantie'].filter((w) => ohneKommentare.toLowerCase().includes(w.toLowerCase()));
   check('nie „verpasst nichts“, „schützt vor Haftung“, „garantiert“', verboten.length === 0, verboten);
   check('Free-Text ohne Kauf-Druck (kein „jetzt“, kein Preis)', !/jetzt|€|kaufen/i.test(MT.LEER_FREE + MT.PRO_HINWEIS));
+  // Go-Live vc47 (V1): die Mitteilungen des Schnee-Weckers beruhen in Deutschland auf DWD-Daten, in der Westschweiz auf
+  // Messwerten von MeteoSchweiz → Namensnennung (CC BY 4.0) unter der Liste, wortgleich mit dem Impressum
+  check('Seite „Alle Mitteilungen“ zeigt die Quellenzeile unter dem Einstell-Hinweis',
+    /<p className="muted small">\{EINSTELLEN_HINWEIS\}<\/p>\s*<p className="muted small">\{QUELLEN_ZEILE\}<\/p>/.test(lies('src/winterdex/pages/Mitteilungen.tsx')));
+  check('… Quellenzeile nennt GeoSphere Austria, „Datenbasis: Deutscher Wetterdienst, eigene Berechnungen“, „Quelle: MeteoSchweiz“, Open-Meteo.com, CC BY 4.0 und „nicht beteiligt“',
+    ['GeoSphere Austria', 'Datenbasis: Deutscher Wetterdienst, eigene Berechnungen', 'Quelle: MeteoSchweiz', 'Open-Meteo.com', 'CC BY 4.0', 'nicht beteiligt'].every((w) => WG.QUELLEN_ZEILE.includes(w)), WG.QUELLEN_ZEILE);
 }
 
 // ---------------------------------------------------------------------------------------------------------------- [13]

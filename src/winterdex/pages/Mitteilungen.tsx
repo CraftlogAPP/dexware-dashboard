@@ -6,6 +6,7 @@ import { useMitteilungen } from '../mitteilungenKontext';
 import { EintragInhalt } from '../MitteilungsCenter';
 import { EINSTELLEN_HINWEIS, gruppieren, istNeu, leerText, SEITE_TEXT } from '../mitteilungenDaten';
 import { standText } from '../heuteNachtDaten';
+import { QUELLEN_ZEILE } from '../wetterGuide';
 
 function Laedt() {
   return (
@@ -61,6 +62,7 @@ export function MitteilungenSeite() {
         ))
       )}
       <p className="muted small">{EINSTELLEN_HINWEIS}</p>
+      <p className="muted small">{QUELLEN_ZEILE}</p>
     </div>
   );
 }
