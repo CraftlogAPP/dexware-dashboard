@@ -7,7 +7,9 @@
 // mitteilungenKontext.ts. Nur im WinterDex-Bereich (WinterdexArea.tsx) — andere Apps bekommen keine Glocke. Das Dashboard
 // schaltet keine Mitteilungsarten (G8: je Handy in der App, Seite „Mitteilungen einstellen“).
 // Dazu (F): ErklaerListe für den Onboarding-Schritt „Wetter-Guide & Mitteilungen“ (Onboarding.tsx) und den einmaligen
-// Hinweis „Neu: Heute Nacht und Mitteilungen“ für Bestandsnutzer (NeuHinweis, auf der Übersicht über der Karte).
+// Hinweis „Neu: Heute Nacht und Mitteilungen“ für Bestandsnutzer (NeuHinweis, auf der Übersicht über der Karte und im
+// Außendienst über der Karte auf der Objektliste — dort mit eigenen Texten, Prüfpunkt Runde 2).
+// Browser-Zurück schließt eine offene Box zuerst (eigener Verlaufseintrag, boxVerlauf.ts).
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -46,11 +48,13 @@ import {
   neuHinweisMerken,
   PRO_HINWEIS,
   zaehlerText,
+  type ErklaerOrt,
   type ErklaerPunkt,
   type Mitteilung,
   type MtSymbol,
 } from './mitteilungenDaten';
 import { standText } from './heuteNachtDaten';
+import { boxVerlauf, type BoxVerlauf } from './boxVerlauf';
 
 /** So viele stehen im Klappfenster, der Rest auf der Seite „Alle Mitteilungen“ */
 const IM_FENSTER = 30;
@@ -248,6 +252,18 @@ export function MitteilungBox({ m, tz, basis, onClose }: { m: Mitteilung; tz: st
   const textId = useId();
   const kartenRef = useRef<HTMLDivElement>(null);
   const okRef = useRef<HTMLButtonElement>(null);
+  // Browser-Zurück (Zurück-Geste am Handy) schließt zuerst die Box: eigener Verlaufseintrag mit derselben Adresse
+  const verlaufRef = useRef<BoxVerlauf | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const v = boxVerlauf(window, () => onCloseRef.current());
+    verlaufRef.current = v;
+    return () => {
+      v.abbauen();
+      if (verlaufRef.current === v) verlaufRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const vorher = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -311,7 +327,18 @@ export function MitteilungBox({ m, tz, basis, onClose }: { m: Mitteilung; tz: st
           {m.text}
         </p>
         <div className="mt-box-knoepfe">
-          <Link className="btn ghost mt-box-knopf" to={kartePfad(basis, pathname)} onClick={onClose}>
+          {/* replace: der Sprung ersetzt den Verlaufseintrag der Box — Zurück führt danach auf die Seite von vorher. Die
+              Rückfrage „Aufzeichnung läuft“ (useUnsavedGuard) fängt den Klick vorher ab; bei „Abbrechen“ bleibt alles offen. */}
+          <Link
+            className="btn ghost mt-box-knopf"
+            to={kartePfad(basis, pathname)}
+            replace
+            onClick={(e) => {
+              // Strg-/Umschalt-Klick (neuer Tab) bleibt hier: dann wie „OK“ (Eintrag wieder weg)
+              if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) verlaufRef.current?.verlassen();
+              onClose();
+            }}
+          >
             <MapIcon className="i" aria-hidden /> Zur Karte
           </Link>
           <button ref={okRef} type="button" className="btn mt-box-knopf" onClick={onClose}>
@@ -334,10 +361,10 @@ const ERKLAER_ICON: Record<ErklaerPunkt['art'], typeof Bell> = {
  * Punkte „Heute Nacht“, „Glocke oben rechts“, „Mitteilungen aufs Handy“ (Onboarding-Schritt und Hinweis „Neu“), dazu
  * „Schnee-Wecker“ (Pro) nur, wenn der Server ihn freigegeben hat (`wecker`).
  */
-export function ErklaerListe({ wecker = false }: { wecker?: boolean }) {
+export function ErklaerListe({ wecker = false, ort = 'dashboard' }: { wecker?: boolean; ort?: ErklaerOrt }) {
   return (
     <ul className="mt-erklaer">
-      {erklaerPunkte(wecker).map((p) => {
+      {erklaerPunkte(wecker, ort).map((p) => {
         const I = ERKLAER_ICON[p.art];
         return (
           <li key={p.art}>
@@ -357,36 +384,54 @@ export function ErklaerListe({ wecker = false }: { wecker?: boolean }) {
   );
 }
 
-/** Hinweis „Neu“ selbst (rein, auch für die Vorschau) */
-export function NeuHinweisKarte({ seite, pro, wecker, onZu }: { seite: string; pro: boolean | null; wecker: boolean; onZu: () => void }) {
+/**
+ * Hinweis „Neu“ selbst (rein, auch für die Vorschau). Im Außendienst (`ort`) eigene Texte und nur „Alles klar“: „Alle
+ * Mitteilungen“ läge im Dashboard (Büro-Ansicht) — die Glocke steht ohnehin oben rechts.
+ */
+export function NeuHinweisKarte({
+  seite,
+  pro,
+  wecker,
+  onZu,
+  ort = 'dashboard',
+}: {
+  seite: string;
+  pro: boolean | null;
+  wecker: boolean;
+  onZu: () => void;
+  ort?: ErklaerOrt;
+}) {
   const titelId = useId();
   return (
     <section className="card mt-neu-hinweis" aria-labelledby={titelId}>
       <h2 id={titelId}>
         <Sparkles className="i" aria-hidden /> Neu: Heute Nacht und Mitteilungen
       </h2>
-      <ErklaerListe wecker={wecker} />
+      <ErklaerListe wecker={wecker} ort={ort} />
       {pro === false && <p className="muted small">{PRO_HINWEIS}</p>}
       <div className="mt-neu-knoepfe">
         <button type="button" className="btn" onClick={onZu}>
           Alles klar
         </button>
-        <Link className="btn ghost" to={seite}>
-          Alle Mitteilungen
-        </Link>
+        {ort === 'dashboard' && (
+          <Link className="btn ghost" to={seite}>
+            Alle Mitteilungen
+          </Link>
+        )}
       </div>
     </section>
   );
 }
 
 /**
- * Einmaliger Hinweis „Neu: Heute Nacht und Mitteilungen“ für Bestandsnutzer (F) — auf der Übersicht direkt über der
- * Karte „Heute Nacht“ (HeuteNacht `davor`: erscheint nur, wenn die Karte selbst zu sehen ist). Nur mit Glocke (Server-
+ * Einmaliger Hinweis „Neu: Heute Nacht und Mitteilungen“ für Bestandsnutzer (F) — auf der Übersicht bzw. im Außendienst
+ * (`ort`, Objektliste) direkt über der Karte „Heute Nacht“ (HeuteNacht `davor`: erscheint nur, wenn die Karte selbst zu
+ * sehen ist). Ein Merker je Konto für beide Orte: wer ihn im Büro gesehen hat, sieht ihn draußen nicht noch einmal. Nur mit Glocke (Server-
  * Nachtrag da), nicht nach einer Neuanlage (mitteilungenDaten.ts: neuHinweisFaellig). Der Merker wird schon beim Zeigen
  * gesetzt — EINMAL heißt einmal; der Hinweis bleibt bis „Alles klar“ bzw. bis man die Übersicht verlässt.
  * `wecker`: Schnee-Wecker am Server freigegeben (aus der Karte „Heute Nacht“: guide_live_arten).
  */
-export function NeuHinweis({ wecker }: { wecker: boolean }) {
+export function NeuHinweis({ wecker, ort = 'dashboard' }: { wecker: boolean; ort?: ErklaerOrt }) {
   const st = useMitteilungen();
   const uid = useAppAuthOptional()?.session?.user.id ?? null;
   const angelegt = useOrgOptional()?.data?.org.created_at ?? null;
@@ -397,5 +442,5 @@ export function NeuHinweis({ wecker }: { wecker: boolean }) {
     if (stand === 'offen') neuHinweisMerken(uid);
   }, [stand, uid]);
   if (stand !== 'offen' || !st) return null;
-  return <NeuHinweisKarte seite={st.seite} pro={st.pro} wecker={wecker} onZu={() => setStand('zu')} />;
+  return <NeuHinweisKarte seite={st.seite} pro={st.pro} wecker={wecker} ort={ort} onZu={() => setStand('zu')} />;
 }

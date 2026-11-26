@@ -2046,6 +2046,24 @@ tr.fk-z-luecke td.wrap {
   border-color: var(--accent);
   color: var(--on-accent);
 }
+/* WinterDex: Streumittel ausblenden (Team-Seite, StreumittelKarte.tsx) */
+.sm-chips {
+  margin: 10px 0 8px;
+}
+.sm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sm-chip.sm-aus {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.sm-chip:disabled,
+.sm-chip.sm-fest {
+  cursor: default;
+  opacity: 0.7;
+}
 .ez-amount {
   display: flex;
   flex-wrap: wrap;

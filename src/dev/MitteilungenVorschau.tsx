@@ -1,11 +1,12 @@
-// Nur Entwicklung: /vorschau?app=winterdex&seite=mitteilungen[&id=41][&zustand=leer|gestoert][&pro=0][&teil=glocke|neu|onboarding][&rolle=team][&karte=gruen][&wecker=0]
+// Nur Entwicklung: /vorschau?app=winterdex&seite=mitteilungen[&id=41][&zustand=leer|gestoert][&pro=0][&teil=glocke|neu|onboarding][&rolle=team][&karte=gruen][&wecker=0][&ort=aussendienst]
 // Mitteilungs-Center mit Beispieldaten (Vertrag v1 von meine_mitteilungen, Texte wie aus Alex' Feldtest 26.11.): Kopfzeile
 // wie im WinterDex-Bereich mit der Glocke, darunter „Alle Mitteilungen“. Klick auf eine Mitteilung → Box (mit &id=… gleich
 // offen); „Zur Karte“ springt hier auf …#heute-nacht und zeigt die Karte „Heute Nacht“ aufgeklappt (Beispieldaten der
 // PGlite-Probe) wie die Übersicht. teil=neu: Hinweis „Neu“ über der Karte; teil=onboarding: Schritt „Wetter-Guide &
 // Mitteilungen“ nach dem Anlegen (rolle=team: nach dem Beitreten). karte=gruen: ruhige Nacht (Karte sonst eingeklappt —
 // zeigt, dass „Zur Karte“ sie trotzdem aufklappt). wecker=0: Schnee-Wecker am Server noch nicht frei (Hinweis „Neu“ ohne
-// ihn). Kein Server, kein Login, kein localStorage.
+// ihn). ort=aussendienst: Hinweis „Neu“ mit den Texten des Außendiensts (ohne „Alle Mitteilungen“). Kein Server, kein
+// Login, kein localStorage.
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutGrid, LogOut, Truck } from 'lucide-react';
@@ -154,7 +155,7 @@ export function MitteilungenVorschau({ params }: { params: URLSearchParams }) {
             // wie die Übersicht: (Hinweis „Neu“) + Karte „Heute Nacht“, nach „Zur Karte“ aufgeklappt und im Bild
             <>
               <h1>Übersicht</h1>
-              {teil === 'neu' && !neuZu && <NeuHinweisKarte seite={BASIS} pro={pro} wecker={params.get('wecker') !== '0'} onZu={() => setNeuZu(true)} />}
+              {teil === 'neu' && !neuZu && <NeuHinweisKarte seite={BASIS} pro={pro} wecker={params.get('wecker') !== '0'} ort={params.get('ort') === 'aussendienst' ? 'aussendienst' : 'dashboard'} onZu={() => setNeuZu(true)} />}
               <HeuteNachtKarte key={zurKarte ?? 'karte'} d={hn} jetzt={Date.parse('2026-11-25T21:32:00Z')} tz={TZ} land="AT" rolle="owner" links={links} aufklappen={zurKarte} />
               <div style={{ height: 900 }} aria-hidden />
             </>

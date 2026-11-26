@@ -23,6 +23,8 @@ import {
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
 import { gritLabel, propertyNameMap, WEATHER_SOURCE, weatherLabel } from '../labels';
 import { ACTION_LABELS, type Operation, type OperationAction } from '../types';
+import { nachtragBeispiel } from '../streumittel';
+import { useStreumittelAus } from '../einsatz/useStreumittel';
 
 export function Operations() {
   const { client, session, app } = useAppAuth();
@@ -45,6 +47,8 @@ export function Operations() {
   // „Einsatz nachtragen“ (ohne GPS, Fotos, Wetter, freie Uhrzeit) nur für Inhaber/Verwalter — in der App gibt es das
   // nicht, und für Mitarbeiter wäre es im Außendienst neben „Einsatz erfassen“ verwechselbar (Feldtest 24.11.)
   const canBackfill = isOwnerOrAdmin(org?.role);
+  // Platzhalter beim Nachtragen nennt nur Streumittel, die der Betrieb nicht ausgeblendet hat (Team-Seite)
+  const streumittelAus = useStreumittelAus();
 
   // Objektliste ändert sich durch Filter nicht — einmal laden, nicht pro Filterwechsel.
   const propsState = useAsync(() => fetchProperties(client), [client]);
@@ -180,7 +184,7 @@ export function Operations() {
                 label: ACTION_LABELS[a],
               })),
             },
-            { key: 'grit_material', label: 'Streumittel', placeholder: 'z. B. Splitt, Salz' },
+            { key: 'grit_material', label: 'Streumittel', placeholder: nachtragBeispiel(streumittelAus) },
             { key: 'grit_amount', label: 'Streumenge', placeholder: 'z. B. 20 kg' },
             { key: 'performer_name', label: 'Durchgeführt von' },
             { key: 'notes', label: 'Notizen', kind: 'textarea' },

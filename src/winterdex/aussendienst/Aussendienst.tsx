@@ -21,7 +21,8 @@ import { GratisBanner } from '../GratisHinweise';
 import { useAppAuthOptional } from '../../auth/AppAuthContext';
 import { useOrgOptional } from '../../components/OrgContext';
 import { HeuteNacht } from '../HeuteNacht';
-import { KARTE_ANKER } from '../mitteilungenDaten';
+import { KARTE_ANKER, weckerFrei } from '../mitteilungenDaten';
+import { NeuHinweis } from '../MitteilungsCenter';
 import { nachweisZone } from '../nachweisZeit';
 
 // Karte mit Leaflet: eigener Chunk, erst beim Öffnen des Reiters geladen — aber nach dem Start im Leerlauf schon
@@ -29,6 +30,7 @@ import { nachweisZone } from '../nachweisZeit';
 const loadKarte = () => import('./Karte');
 const Karte = lazy(loadKarte);
 import { useEinsatz } from '../einsatz/context';
+import { useStreumittelNachladen } from '../einsatz/useStreumittel';
 import { Einsatz } from '../pages/Einsatz';
 import { EinsatzErfassen } from '../pages/EinsatzErfassen';
 import { Strecken } from './Strecken';
@@ -37,7 +39,9 @@ import { StreckeDetail } from './StreckeDetail';
 
 /** Erwartet den Einsatz-Kontext (Server-Zugriff, Konto, Betrieb) vom Aufrufer. */
 export function Aussendienst() {
-  const { base } = useEinsatz();
+  const { base, orgId } = useEinsatz();
+  // ausgeblendete Streumittel (Team-Seite) beim Zurückkehren in den Tab still nachladen — das Handy-Fenster bleibt oft lange offen
+  useStreumittelNachladen(useAppAuthOptional()?.client ?? null, orgId);
   const { pathname } = useLocation();
   const rest = pathname.slice(base.length);
   const tab = rest.startsWith('/strecken') ? 'strecken' : rest.startsWith('/einsaetze') ? 'einsaetze' : rest.startsWith('/karte') ? 'karte'
@@ -128,7 +132,11 @@ export function Aussendienst() {
   );
 }
 
-/** Karte „Heute Nacht“ im Außendienst — nur mit Anmeldung (Beispieldaten ohne Server: keine Karte). */
+/**
+ * Karte „Heute Nacht“ im Außendienst — nur mit Anmeldung (Beispieldaten ohne Server: keine Karte). Darüber EINMAL der
+ * Hinweis „Neu: Heute Nacht und Mitteilungen“ mit Außendienst-Texten (nur Bestand, nur wenn die Karte zu sehen ist; ein
+ * Merker je Konto mit der Übersicht im Dashboard).
+ */
 function AussendienstWetter({ base }: { base: string }) {
   const auth = useAppAuthOptional();
   const org = useOrgOptional()?.data ?? null;
@@ -145,6 +153,7 @@ function AussendienstWetter({ base }: { base: string }) {
       links={{ objekte: `${base}/objekte`, team: `${base}/team`, abo: `${base}/abo` }}
       eingeklappt
       aufklappen={hash === `#${KARTE_ANKER}` ? key : null}
+      davor={(d) => <NeuHinweis wecker={weckerFrei(d.guide_live_arten)} ort="aussendienst" />}
     />
   );
 }

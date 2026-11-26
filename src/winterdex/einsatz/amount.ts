@@ -3,9 +3,11 @@
 
 import type { OperationAction } from '../types';
 import type { FormValues, GritUnit } from './store';
+import { STREUMITTEL } from '../streumittel';
 
 export const ACTIONS: OperationAction[] = ['cleared', 'gritted', 'cleared_gritted', 'checked_no_action'];
-export const GRIT_MATERIALS = ['Splitt', 'Salz', 'Sole', 'Granulat', 'Sonstiges'] as const;
+/** Alle Streumittel (Schlüssel wie in der App). Beim Erfassen nur die aktiven: streumittel.ts streumittelZurAuswahl. */
+export const GRIT_MATERIALS = STREUMITTEL;
 export const GRIT_UNITS: GritUnit[] = ['kg', 'g/m²', 'l'];
 export const UNIT_LABEL: Record<GritUnit, string> = { kg: 'kg', 'g/m²': 'g/m²', l: 'Liter' };
 export const defaultUnitFor = (material: string): GritUnit => (material === 'Sole' ? 'l' : 'kg');
@@ -29,11 +31,12 @@ export function finishAmount(a: string): string {
   return a.replace(/\./g, ',').replace(/,$/, '');
 }
 
-export const initialForm = (performerName = ''): FormValues => ({
+/** Neues Formular. `gritMaterial`: Vorauswahl (startStreumittel — Splitt, außer der Betrieb hat Splitt ausgeblendet). */
+export const initialForm = (performerName = '', gritMaterial = 'Splitt'): FormValues => ({
   action: 'cleared_gritted',
-  gritMaterial: 'Splitt',
+  gritMaterial,
   gritAmount: '',
-  gritUnit: 'kg',
+  gritUnit: defaultUnitFor(gritMaterial),
   unitTouched: false,
   performerName,
   notes: '',

@@ -318,7 +318,11 @@ export const SEITE_TEXT = 'Dieselben Mitteilungen wie am Handy – hier immer mi
  * Nie „verpasst nichts“, „schützt vor Haftung“, „garantiert“. Den Schnee-Wecker nennen die Texte nur, wenn der Server ihn
  * freigegeben hat (K10 in guide_live_arten, wie die Box „Neu in WinterDex 0.7.15“ der App) — nie etwas versprechen, das
  * man in der App nicht findet: erklaerPunkte(wecker).
+ * Im Außendienst (Handy-Ansicht im Browser, Prüfpunkt Runde 2) eigene Texte: Die Karte steht dort eingeklappt über der
+ * Objektliste, man tippt statt zu klicken, und Mitteilungen aufs Handy bzw. den Schnee-Wecker gibt es nur in der App —
+ * der Browser bekommt keine (viele Außendienst-Nutzer haben ein iPhone ohne die App).
  */
+export type ErklaerOrt = 'dashboard' | 'aussendienst';
 export interface ErklaerPunkt {
   art: 'karte' | 'glocke' | 'handy' | 'wecker';
   titel: string;
@@ -352,9 +356,33 @@ export const WECKER_PUNKT: ErklaerPunkt = {
   text: `Weckt dich, wenn bei deinen Objekten Schnee kommt – 1 Stunde vorher oder wenn er einsetzt. ${WECKER_HINWEIS}`,
   pro: true,
 };
+/** Dieselben Punkte im Außendienst — gleiche Titel, Texte passend zur Handy-Ansicht im Browser */
+export const ERKLAER_PUNKTE_AUSSENDIENST: ReadonlyArray<ErklaerPunkt> = [
+  {
+    art: 'karte',
+    titel: 'Heute Nacht',
+    text: 'Die Karte über deinen Objekten zeigt, wie die Nacht wird: ab wann Glätte oder Schnee möglich ist und welche Objekte betroffen sind. Antippen klappt sie auf.',
+  },
+  {
+    art: 'glocke',
+    titel: 'Glocke oben rechts',
+    text: 'Dort stehen die Mitteilungen der letzten 30 Tage mit vollem Text. Antippen öffnet die Mitteilung.',
+  },
+  {
+    art: 'handy',
+    titel: 'Mitteilungen aufs Handy',
+    text: 'Mitteilungen direkt aufs Handy – etwa die Glätte-Frühwarnung – kommen über die WinterDex-App: Einstellungen → Mitteilungen. Hier im Browser stehen sie unter der Glocke.',
+  },
+];
+/** Schnee-Wecker im Außendienst: weckt nur die App, nicht der Browser */
+export const WECKER_PUNKT_AUSSENDIENST: ErklaerPunkt = {
+  ...WECKER_PUNKT,
+  text: `In der WinterDex-App: weckt dich, wenn bei deinen Objekten Schnee kommt – 1 Stunde vorher oder wenn er einsetzt. ${WECKER_HINWEIS}`,
+};
 /** Punkte für Onboarding-Schritt und Hinweis „Neu“; den Schnee-Wecker nur, wenn er am Server freigegeben ist */
-export function erklaerPunkte(wecker: boolean): ReadonlyArray<ErklaerPunkt> {
-  return wecker ? [...ERKLAER_PUNKTE, WECKER_PUNKT] : ERKLAER_PUNKTE;
+export function erklaerPunkte(wecker: boolean, ort: ErklaerOrt = 'dashboard'): ReadonlyArray<ErklaerPunkt> {
+  const punkte = ort === 'aussendienst' ? ERKLAER_PUNKTE_AUSSENDIENST : ERKLAER_PUNKTE;
+  return wecker ? [...punkte, ort === 'aussendienst' ? WECKER_PUNKT_AUSSENDIENST : WECKER_PUNKT] : punkte;
 }
 /** Schnee-Wecker am Server freigegeben? (heute_nacht: guide_live_arten enthält K10) */
 export function weckerFrei(liveArten: readonly string[] | null | undefined): boolean {

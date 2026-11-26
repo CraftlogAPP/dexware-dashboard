@@ -11,7 +11,6 @@ import { WEATHER_SOURCE, weatherLabel } from '../labels';
 import { ACTION_LABELS, type Property, type WeatherSnapshot } from '../types';
 import {
   ACTIONS,
-  GRIT_MATERIALS,
   GRIT_UNITS,
   UNIT_LABEL,
   cleanAmount,
@@ -31,6 +30,8 @@ import { submit, type SubmitResult } from '../einsatz/send';
 import { GratisFehler } from '../GratisHinweise';
 import { gratisArt } from '../gratisLage';
 import { nachTour } from '../tour';
+import { startStreumittel, streumittelZurAuswahl } from '../streumittel';
+import { useStreumittelAus } from '../einsatz/useStreumittel';
 import {
   deleteDraft,
   draftKey,
@@ -64,7 +65,9 @@ function Erfassen({ propertyId }: { propertyId: string }) {
   const opIdRef = useRef(newId());
   const openedAtRef = useRef(new Date().toISOString());
   const [restoredStart, setRestoredStart] = useState<GpsFix | null>(null);
-  const [form, setForm] = useState<FormValues>(() => initialForm(getPerformerName(userId)));
+  // Streumittel, die der Betrieb ausgeblendet hat (Team-Seite), stehen nicht zur Auswahl — Vorauswahl das erste aktive
+  const streumittelAus = useStreumittelAus();
+  const [form, setForm] = useState<FormValues>(() => initialForm(getPerformerName(userId), startStreumittel(streumittelAus)));
   const [photos, setPhotos] = useState<string[]>([]);
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
   const weatherRef = useRef<WeatherSnapshot | null>(null);
@@ -459,7 +462,7 @@ function Erfassen({ propertyId }: { propertyId: string }) {
         <>
           <h2 className="ez-section">Streumittel</h2>
           <div className="ez-chips" role="group" aria-label="Streumittel">
-            {GRIT_MATERIALS.map((m) => (
+            {streumittelZurAuswahl(streumittelAus, form.gritMaterial).map((m) => (
               <button
                 key={m}
                 type="button"

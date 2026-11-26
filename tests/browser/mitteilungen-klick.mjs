@@ -10,7 +10,10 @@
 //      dazu 300–1000 px: kein Knopf der Kopfzeile ragt aus dem Bild (Abmelden schrumpfte bei 360/421/440 px hinaus)
 //   D: Seite „Alle Mitteilungen“ am Handy — große Einträge, Klick öffnet DIESELBE Box (Knöpfe ≥ 48 px), kein Querscrollen
 //   E: leer (Pro / Free: ruhiger Text, Glocke bleibt) / gestört
-//   F: Hinweis „Neu: Heute Nacht und Mitteilungen“ (PC + Handy) und Onboarding-Schritt „Wetter-Guide & Mitteilungen“
+//   F: Hinweis „Neu: Heute Nacht und Mitteilungen“ (PC + Handy, dazu die Außendienst-Fassung) und Onboarding-Schritt
+//      „Wetter-Guide & Mitteilungen“
+//   G: Browser-Zurück schließt die offene Box zuerst (eigener Verlaufseintrag; OK/Escape nehmen ihn zurück, „Zur Karte“
+//      ersetzt ihn; Rückfrage-Wache wird von Zurück nicht ausgelöst) — PC und Handy
 //
 //   npx vite --port 5263 --strictPort
 //   node tests/browser/mitteilungen-klick.mjs http://localhost:5263 <ausgabe-ordner>
@@ -335,6 +338,16 @@ try {
   check('Schnee-Wecker noch nicht frei: Hinweis „Neu“ nennt ihn nicht (drei Punkte)',
     (await main.ev(`[...document.querySelectorAll('.mt-neu-hinweis .mt-erklaer b')].map((b) => b.textContent).join('|')`)) === 'Heute Nacht|Glocke oben rechts|Mitteilungen aufs Handy' &&
       !(await main.ev(`document.querySelector('.mt-neu-hinweis').textContent.includes('Schnee-Wecker')`)));
+  // Außendienst (Handy-Ansicht im Browser, Prüfpunkt Runde 2): eigene Texte, nur „Alles klar“ (Alle Mitteilungen läge im Büro)
+  await oeffne(V('&teil=neu&ort=aussendienst&pro=0'), 360, 740);
+  check('Außendienst 360 px: Hinweis „Neu“ über der Karte', await warteAuf(`!!document.querySelector('.mt-neu-hinweis') && !!document.querySelector('section.hn')`, 5000));
+  const neuAd = await main.ev(`({ punkte: [...document.querySelectorAll('.mt-neu-hinweis .mt-erklaer b')].map((b) => b.textContent), text: document.querySelector('.mt-neu-hinweis').textContent, k: [...document.querySelectorAll('.mt-neu-knoepfe .btn')].map((e) => ({ t: e.textContent.trim(), h: Math.round(e.getBoundingClientRect().height) })) })`);
+  check('… Außendienst-Texte (über deinen Objekten, Antippen, App fürs Handy, Wecker als App-Funktion), nur „Alles klar“ ≥ 48 px',
+    neuAd.punkte.join('|') === 'Heute Nacht|Glocke oben rechts|Mitteilungen aufs Handy|Schnee-Wecker' && neuAd.text.includes('Die Karte über deinen Objekten') && neuAd.text.includes('Antippen öffnet die Mitteilung.') &&
+      neuAd.text.includes('Hier im Browser stehen sie unter der Glocke.') && neuAd.text.includes('In der WinterDex-App: weckt dich') && !neuAd.text.includes('Übersicht') &&
+      neuAd.k.length === 1 && neuAd.k[0].t === 'Alles klar' && neuAd.k[0].h >= 48, neuAd);
+  check('… kein Querscrollen', (await querscroll()) <= 0, await querscroll());
+  console.log('  Bild:', await bild('F-360-neu-aussendienst.png'));
   for (const [rolle, breite] of [['', 360], ['team', 360], ['', 1280]]) {
     await oeffne(V(`&teil=onboarding${rolle ? `&rolle=${rolle}` : ''}`), breite, 740);
     check(`Onboarding ${rolle || 'Inhaber'} ${breite} px: Schritt „Wetter-Guide & Mitteilungen“ mit drei Punkten`,
@@ -345,6 +358,74 @@ try {
         !ob.text.includes('Schnee-Wecker') && ob.knopf.t === 'Weiter zum Dashboard' && ob.knopf.h >= 48, ob);
     check('… kein Querscrollen', (await querscroll()) <= 0, await querscroll());
     console.log('  Bild:', await bild(`F-onboarding-${rolle || 'inhaber'}-${breite}.png`));
+  }
+  check('keine Seitenfehler', kein().length === 0, kein().join(' | '));
+
+  // ------------------------------------------------------------------ G: Browser-Zurück schließt die Box zuerst
+  console.log('\nG: Browser-Zurück schließt die offene Box zuerst (Prüfpunkt Runde 2, Dev-Server mit StrictMode)');
+  const verlauf = async () => (await main.send('Page.getNavigationHistory')).result;
+  // wie die Zurück-Taste bzw. -Geste des Browsers: einen Eintrag zurück
+  const zurueck = async () => {
+    const h = await verlauf();
+    await main.send('Page.navigateToHistoryEntry', { entryId: h.entries[h.currentIndex - 1].id });
+    await sleep(400);
+  };
+  const EINTRAG2 = `document.querySelectorAll('.mt-seite button.mt-eintrag')[1]`;
+  for (const [breite, hoehe] of [[1280, 900], [360, 740]]) {
+    await oeffne(V(), breite, hoehe);
+    await warteAuf(`document.querySelectorAll('.mt-seite button.mt-eintrag').length === 6`);
+    const h0 = await verlauf();
+    const adr0 = await main.ev(`location.href`);
+    await main.ev(`(() => { const b = ${EINTRAG2}; b.focus(); b.click(); return true; })()`, true);
+    await warteAuf(`!!document.querySelector('.mt-box')`, 3000);
+    await sleep(200);
+    const h1 = await verlauf();
+    check(`${breite} px: Box öffnen legt EINEN Verlaufseintrag an (gleiche Adresse)`,
+      h1.currentIndex === h0.currentIndex + 1 && h1.entries.length === h0.currentIndex + 2 && (await main.ev(`location.href`)) === adr0,
+      { vorher: h0.currentIndex, nachher: h1.currentIndex, eintraege: h1.entries.length });
+    // Rückfrage-Wache (wie useUnsavedGuard): Zurück darf sie nicht auslösen, es ist kein Link-Klick
+    await main.ev(`window.__abgefangen = 0; window.__wache = (e) => { if (e.target.closest?.('a[href]')) { e.preventDefault(); e.stopPropagation(); window.__abgefangen++; } }; document.addEventListener('click', window.__wache, true); true`);
+    await zurueck();
+    check(`${breite} px: Zurück schließt die Box — Seite bleibt (Liste, gleiche Adresse), Fokus zurück auf dem Eintrag, keine Rückfrage`,
+      (await warteAuf(`!document.querySelector('.mt-box')`, 2000)) &&
+        (await main.ev(`!!document.querySelector('.mt-seite') && location.href === ${JSON.stringify(adr0)} && window.__abgefangen === 0 && document.activeElement === ${EINTRAG2}`)) &&
+        (await verlauf()).currentIndex === h0.currentIndex,
+      await main.ev(`({ box: !!document.querySelector('.mt-box'), seite: !!document.querySelector('.mt-seite'), href: location.href, abgefangen: window.__abgefangen })`));
+    await main.ev(`document.removeEventListener('click', window.__wache, true); true`);
+    // „OK“, Escape: Box zu UND Eintrag wieder weg — Zurück verlässt danach die Seite wie gewohnt
+    await main.ev(`${EINTRAG2}.click()`, true);
+    await warteAuf(`!!document.querySelector('.mt-box')`, 3000);
+    await main.ev(`[...document.querySelectorAll('.mt-box-knoepfe button')].find((b) => b.textContent.trim() === 'OK').click()`, true);
+    await warteAuf(`!document.querySelector('.mt-box')`, 2000);
+    await sleep(400);
+    check(`${breite} px: „OK“ nimmt den Eintrag wieder weg, Seite bleibt`, (await verlauf()).currentIndex === h0.currentIndex && (await main.ev(`location.href === ${JSON.stringify(adr0)} && !!document.querySelector('.mt-seite')`)));
+    await main.ev(`${EINTRAG2}.click()`, true);
+    await warteAuf(`!!document.querySelector('.mt-box')`, 3000);
+    await main.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await main.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await warteAuf(`!document.querySelector('.mt-box')`, 2000);
+    await sleep(400);
+    check(`${breite} px: Escape ebenso`, (await verlauf()).currentIndex === h0.currentIndex && (await main.ev(`location.href === ${JSON.stringify(adr0)}`)));
+    // mehrmals hintereinander öffnen/schließen: der Verlauf wächst nicht
+    for (let n = 0; n < 3; n++) {
+      await main.ev(`${EINTRAG2}.click()`, true);
+      await warteAuf(`!!document.querySelector('.mt-box')`, 3000);
+      await main.ev(`[...document.querySelectorAll('.mt-box-knoepfe button')].find((b) => b.textContent.trim() === 'OK').click()`, true);
+      await warteAuf(`!document.querySelector('.mt-box')`, 2000);
+      await sleep(250);
+    }
+    check(`${breite} px: dreimal öffnen/schließen — Verlauf wächst nicht`, (await verlauf()).currentIndex === h0.currentIndex);
+    // „Zur Karte“ ersetzt den Box-Eintrag; Zurück führt auf die Liste (ohne #heute-nacht, ohne Box)
+    await main.ev(`${EINTRAG2}.click()`, true);
+    await warteAuf(`!!document.querySelector('.mt-box')`, 3000);
+    await main.ev(`[...document.querySelectorAll('.mt-box a')].find((a) => a.textContent.trim() === 'Zur Karte').click()`, true);
+    check(`${breite} px: „Zur Karte“ → Karte aufgeklappt, ersetzt den Box-Eintrag (ein Schritt weiter, nicht zwei)`,
+      (await warteAuf(`location.hash === '#heute-nacht' && !document.querySelector('.mt-box') && !!document.querySelector('section.hn .hn-streifen-rahmen')`, 5000)) && (await verlauf()).currentIndex === h0.currentIndex + 1,
+      (await verlauf()).currentIndex - h0.currentIndex);
+    await zurueck();
+    check(`${breite} px: … Zurück von der Karte → wieder die Liste (ohne Box)`,
+      await warteAuf(`!location.hash && !!document.querySelector('.mt-seite') && !document.querySelector('.mt-box')`, 3000),
+      await main.ev(`({ hash: location.hash, seite: !!document.querySelector('.mt-seite'), box: !!document.querySelector('.mt-box') })`));
   }
   check('keine Seitenfehler', kein().length === 0, kein().join(' | '));
 } catch (e) {

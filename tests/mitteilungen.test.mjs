@@ -18,6 +18,9 @@
 //   [10] leere Liste: Pro „Noch keine Mitteilungen …“, Free „Hier erscheinen … (WinterDex Pro).“
 //   [11] Hinweis „Neu: Heute Nacht und Mitteilungen“ (einmal, nur Bestand, localStorage) + Onboarding-Schritt
 //   [12] Texte: Begriffe, „ersetzt keinen eigenen Wecker“, keine Versprechen
+//   Prüfpunkte Runde 2:
+//   [13] Hinweis „Neu“ auch im Außendienst (über der Karte auf der Objektliste, eigene Texte, ein Merker mit der Übersicht)
+//   [14] Browser-Zurück schließt die offene Box zuerst (eigener Verlaufseintrag, Verlaufs-Attrappe; Router-Schutz unberührt)
 //
 //   Aufruf:  node tests/mitteilungen.test.mjs        (Node ab 22.18, liest die .ts-Dateien direkt)
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -282,7 +285,7 @@ console.log('\n[7] Quelltext-Wächter');
       /<button key=\{m\.id\} type="button" className=\{`mt-eintrag\$\{m\.kritisch \? ' mt-kritisch' : ''\}`\} onClick=\{\(\) => st\.zeigen\(m\)\}>/.test(seiten) &&
       !/useNavigate|navigate\(/.test(ohneKommentar + seiten) && !/<Link[^>]*mt-eintrag/.test(center + seiten));
   check('Box: „Zur Karte“ ist ein Link (Rückfrage greift) zur Karte „Heute Nacht“, schließt die Box; „OK“ schließt',
-    /<Link className="btn ghost mt-box-knopf" to=\{kartePfad\(basis, pathname\)\} onClick=\{onClose\}>\s*<MapIcon className="i" aria-hidden \/> Zur Karte\s*<\/Link>/.test(center) &&
+    /<Link\s*className="btn ghost mt-box-knopf"\s*to=\{kartePfad\(basis, pathname\)\}\s*replace\s*onClick=\{\(e\) => \{[^}]*\s*onClose\(\);\s*\}\}\s*>\s*<MapIcon className="i" aria-hidden \/> Zur Karte\s*<\/Link>/.test(center) &&
       /<button ref=\{okRef\} type="button" className="btn mt-box-knopf" onClick=\{onClose\}>\s*OK\s*<\/button>/.test(center));
   check('Box: Dialog (aria-modal, Titel + Text verknüpft), Fokus auf „OK“ und danach zurück, Escape und Klick daneben schließen',
     /role="dialog"\s*aria-modal="true"\s*aria-labelledby=\{titelId\}\s*aria-describedby=\{textId\}/.test(center) && /okRef\.current\?\.focus\(/.test(center) && /vorher\.isConnected\) vorher\.focus\(/.test(center) &&
@@ -395,10 +398,12 @@ console.log('\n[11] Hinweis „Neu: Heute Nacht und Mitteilungen“ (Bestand, nu
   const hnSrc = lies('src/winterdex/HeuteNacht.tsx');
   check('Hinweis „Neu“ nur mit Glocke (Server-Nachtrag da) und Konto; Merker schon beim Zeigen (EINMAL)',
     /if \(stand === null && st\?\.da && uid\) setStand\(neuHinweisFaellig\(uid, angelegt, Date\.now\(\)\) \? 'offen' : 'zu'\);/.test(center) && /if \(stand === 'offen'\) neuHinweisMerken\(uid\);/.test(center));
-  check('Hinweis „Neu“ steht auf der Übersicht direkt über der Karte „Heute Nacht“ — nur wenn die Karte zu sehen ist; nicht im Außendienst',
-    /davor=\{\(d\) => <NeuHinweis wecker=\{weckerFrei\(d\.guide_live_arten\)\} \/>\}/.test(ov) && /<>\s*\{davor\?\.\(d\)\}\s*<HeuteNachtKarte/.test(hnSrc) && !/NeuHinweis/.test(ad));
-  check('Hinweis „Neu“: Titel, die Punkte (Schnee-Wecker nur wenn frei), „Alles klar“ und „Alle Mitteilungen“ (große Knöpfe)',
-    /Neu: Heute Nacht und Mitteilungen/.test(center) && /<ErklaerListe wecker=\{wecker\} \/>/.test(center) && /Alles klar/.test(center) && /<Link className="btn ghost" to=\{seite\}>\s*Alle Mitteilungen/.test(center));
+  check('Hinweis „Neu“ steht auf der Übersicht und im Außendienst (Objektliste) direkt über der Karte „Heute Nacht“ — nur wenn die Karte zu sehen ist',
+    /davor=\{\(d\) => <NeuHinweis wecker=\{weckerFrei\(d\.guide_live_arten\)\} \/>\}/.test(ov) && /<>\s*\{davor\?\.\(d\)\}\s*<HeuteNachtKarte/.test(hnSrc) &&
+      /davor=\{\(d\) => <NeuHinweis wecker=\{weckerFrei\(d\.guide_live_arten\)\} ort="aussendienst" \/>\}/.test(ad));
+  check('Hinweis „Neu“: Titel, die Punkte (Schnee-Wecker nur wenn frei), „Alles klar“ und — nur im Dashboard — „Alle Mitteilungen“ (große Knöpfe)',
+    /Neu: Heute Nacht und Mitteilungen/.test(center) && /<ErklaerListe wecker=\{wecker\} ort=\{ort\} \/>/.test(center) && /Alles klar/.test(center) &&
+      /\{ort === 'dashboard' && \(\s*<Link className="btn ghost" to=\{seite\}>\s*Alle Mitteilungen/.test(center));
   check('Onboarding: nach Anlegen UND Beitreten der Schritt „Wetter-Guide & Mitteilungen“ (erst dann ins Dashboard), Merker gesetzt',
     /const geschafft = \(wie: 'inhaber' \| 'team'\) => \{\s*neuHinweisMerken\(uid\);\s*setFertig\(wie\);/.test(ob) && /geschafft\('inhaber'\);/.test(ob) && /geschafft\('team'\);/.test(ob) &&
       /if \(fertig\) return <WetterGuideSchritt inhaber=\{fertig === 'inhaber'\} refNote=\{refNote\} onWeiter=\{org\.reload\} \/>;/.test(ob) && /<h1>Wetter-Guide & Mitteilungen<\/h1>/.test(ob));
@@ -410,7 +415,7 @@ console.log('\n[11] Hinweis „Neu: Heute Nacht und Mitteilungen“ (Bestand, nu
 // ---------------------------------------------------------------------------------------------------------------- [12]
 console.log('\n[12] Texte (G): Begriffe, Wecker-Hinweis, keine Versprechen');
 {
-  const texte = [MT.LEER_PRO, MT.LEER_FREE, MT.SEITE_TEXT, MT.EINSTELLEN_HINWEIS, MT.PRO_HINWEIS, ...MT.erklaerPunkte(true).flatMap((p) => [p.titel, p.text])].join(' ');
+  const texte = [MT.LEER_PRO, MT.LEER_FREE, MT.SEITE_TEXT, MT.EINSTELLEN_HINWEIS, MT.PRO_HINWEIS, ...MT.erklaerPunkte(true).flatMap((p) => [p.titel, p.text]), ...MT.erklaerPunkte(true, 'aussendienst').flatMap((p) => [p.titel, p.text])].join(' ');
   check('drei Punkte: Heute Nacht, Glocke oben rechts, Mitteilungen aufs Handy', MT.erklaerPunkte(false).map((p) => p.titel).join('|') === 'Heute Nacht|Glocke oben rechts|Mitteilungen aufs Handy');
   check('Begriffe wie in der App: Glätte-Frühwarnung, Schnee-Wecker, Mitteilungen; eingestellt in der App (Einstellungen → Mitteilungen)',
     ['Glätte-Frühwarnung', 'Schnee-Wecker', 'Mitteilungen', 'Einstellungen → Mitteilungen'].every((w) => texte.includes(w)));
@@ -422,12 +427,168 @@ console.log('\n[12] Texte (G): Begriffe, Wecker-Hinweis, keine Versprechen');
   check('… mit dem Pflicht-Hinweis „ersetzt keinen eigenen Wecker“', MT.WECKER_HINWEIS === 'Der Schnee-Wecker ersetzt keinen eigenen Wecker.' && MT.WECKER_PUNKT.text.endsWith(MT.WECKER_HINWEIS));
   const obCode = lies('src/winterdex/Onboarding.tsx').replace(/^\s*(\/\/|\*|\/\*).*$/gm, '');
   check('Onboarding-Schritt nennt den Schnee-Wecker nicht (Freigabe dort unbekannt)', !/Schnee-Wecker|WECKER/.test(obCode) && /<ErklaerListe \/>/.test(obCode));
-  check('Liste nimmt die Punkte aus erklaerPunkte(wecker)', /\{erklaerPunkte\(wecker\)\.map\(/.test(lies('src/winterdex/MitteilungsCenter.tsx')));
+  check('Liste nimmt die Punkte aus erklaerPunkte(wecker, ort)', /\{erklaerPunkte\(wecker, ort\)\.map\(/.test(lies('src/winterdex/MitteilungsCenter.tsx')));
   const dateien = ['src/winterdex/mitteilungenDaten.ts', 'src/winterdex/mitteilungenKontext.ts', 'src/winterdex/MitteilungsCenter.tsx', 'src/winterdex/pages/Mitteilungen.tsx', 'src/winterdex/Onboarding.tsx'];
   const ohneKommentare = dateien.map((f) => lies(f).replace(/^\s*(\/\/|\*|\/\*).*$/gm, '')).join('\n');
   const verboten = ['verpasst nichts', 'verpasst du nichts', 'nichts verpassen', 'schützt vor Haftung', 'garantiert', 'Garantie'].filter((w) => ohneKommentare.toLowerCase().includes(w.toLowerCase()));
   check('nie „verpasst nichts“, „schützt vor Haftung“, „garantiert“', verboten.length === 0, verboten);
   check('Free-Text ohne Kauf-Druck (kein „jetzt“, kein Preis)', !/jetzt|€|kaufen/i.test(MT.LEER_FREE + MT.PRO_HINWEIS));
+}
+
+// ---------------------------------------------------------------------------------------------------------------- [13]
+console.log('\n[13] Hinweis „Neu“ auch im Außendienst (Prüfpunkt Runde 2)');
+{
+  const d = MT.erklaerPunkte(false, 'dashboard');
+  const a = MT.erklaerPunkte(false, 'aussendienst');
+  check('Standard bleibt das Dashboard (Übersicht, Onboarding unverändert)', MT.erklaerPunkte(false) === MT.ERKLAER_PUNKTE && d === MT.ERKLAER_PUNKTE);
+  check('Außendienst: dieselben drei Titel', a.map((p) => p.titel).join('|') === 'Heute Nacht|Glocke oben rechts|Mitteilungen aufs Handy');
+  check('… Karte „über deinen Objekten“ (eingeklappt, Antippen klappt auf) — nicht „auf der Übersicht“',
+    /über deinen Objekten/.test(a[0].text) && /Antippen klappt sie auf/.test(a[0].text) && !/Übersicht/.test(a.map((p) => p.text).join(' ')));
+  check('… Glocke: „Antippen“ statt „Klick“', /Antippen öffnet die Mitteilung/.test(a[1].text) && !/Klick/.test(a[1].text));
+  check('… Mitteilungen aufs Handy kommen über die App, im Browser unter der Glocke (iPhone ohne App: nichts versprechen)',
+    /über die WinterDex-App: Einstellungen → Mitteilungen/.test(a[2].text) && /Hier im Browser stehen sie unter der Glocke/.test(a[2].text));
+  const w = MT.erklaerPunkte(true, 'aussendienst');
+  check('… Schnee-Wecker nur wenn frei, als App-Funktion gekennzeichnet, mit Pflicht-Hinweis und „Pro“',
+    w.length === 4 && w[3].titel === 'Schnee-Wecker' && w[3].pro === true && w[3].text.startsWith('In der WinterDex-App: weckt dich') && w[3].text.endsWith(MT.WECKER_HINWEIS) &&
+      !a.some((p) => /Schnee-Wecker/.test(p.titel + p.text)));
+  const center = lies('src/winterdex/MitteilungsCenter.tsx');
+  check('ein Merker für beide Orte (je Konto) — NeuHinweis entscheidet unabhängig vom Ort',
+    /export function NeuHinweis\(\{ wecker, ort = 'dashboard' \}/.test(center) && /setStand\(neuHinweisFaellig\(uid, angelegt, Date\.now\(\)\) \? 'offen' : 'zu'\)/.test(center) && (center.match(/neuHinweisFaellig\(/g) ?? []).length === 1);
+  const ad = lies('src/winterdex/aussendienst/Aussendienst.tsx');
+  check('Außendienst: nur auf der Objektliste und nicht während einer Aufzeichnung (wie die Karte)',
+    /\{!recording && tab === 'objekte' && \(rest === '' \|\| rest === '\/'\) && <AussendienstWetter base=\{base\} \/>\}/.test(ad));
+}
+
+// ---------------------------------------------------------------------------------------------------------------- [14]
+console.log('\n[14] Browser-Zurück schließt die offene Box zuerst (Prüfpunkt Runde 2)');
+{
+  const BV = await web('src/winterdex/boxVerlauf.ts');
+  /** Verlaufs-Attrappe wie im Browser: Einträge, Index, popstate erst danach (asynchron), setTimeout als Aufgabe */
+  const fenster = (start = { usr: null, key: 'k1', idx: 3 }, href = 'https://dashboard.example/app/winterdex/mitteilungen') => {
+    const e = [{ state: start, href }];
+    let i = 0;
+    const hoerer = new Set();
+    const aufgaben = [];
+    const w = {
+      history: {
+        get state() {
+          return e[i].state;
+        },
+        pushState(st, _t, url) {
+          e.splice(i + 1);
+          e.push({ state: st, href: url });
+          i++;
+        },
+        replaceState(st, _t, url) {
+          e[i] = { state: st, href: url };
+        },
+        back() {
+          aufgaben.push(() => {
+            if (i > 0) {
+              i--;
+              [...hoerer].forEach((f) => f());
+            }
+          });
+        },
+      },
+      location: {
+        get href() {
+          return e[i].href;
+        },
+      },
+      addEventListener: (_t, f) => hoerer.add(f),
+      removeEventListener: (_t, f) => hoerer.delete(f),
+      setTimeout: (f) => aufgaben.push(f),
+    };
+    const laufen = () => {
+      while (aufgaben.length) aufgaben.shift()();
+    };
+    return { w, e, i: () => i, hoerer, laufen, zurueck: () => (w.history.back(), laufen()) };
+  };
+
+  {
+    const f = fenster();
+    let zu = 0;
+    const v = BV.boxVerlauf(f.w, () => zu++);
+    const st = f.w.history.state;
+    check('Öffnen: EIN neuer Eintrag mit DERSELBEN Adresse, Router-Zustand (key, idx) bleibt, Marke dazu',
+      f.e.length === 2 && f.i() === 1 && f.e[1].href === f.e[0].href && st.key === 'k1' && st.idx === 3 && st.usr === null && typeof st[BV.BOX_MARKE] === 'string');
+    f.zurueck();
+    check('Zurück → Box zu (einmal), Seite bleibt (gleiche Adresse, alter Eintrag)', zu === 1 && f.i() === 0 && f.w.location.href === f.e[0].href && f.w.history.state.key === 'k1');
+    v.abbauen();
+    f.laufen();
+    check('… danach Abbau: kein zweites Zurück (Seite wird nicht verlassen), Horcher weg', f.i() === 0 && f.hoerer.size === 0 && zu === 1);
+  }
+  {
+    const f = fenster();
+    let zu = 0;
+    const v = BV.boxVerlauf(f.w, () => zu++);
+    v.abbauen(); // „OK“ / Escape / Klick daneben
+    check('„OK“: Eintrag wird erst NACH dem Abbau weggenommen (nicht mitten im Rendern)', f.i() === 1);
+    f.laufen();
+    check('… dann ist er weg: Zurück verlässt die Seite danach wie gewohnt; die Box ruft sich nicht selbst noch einmal', f.i() === 0 && zu === 0 && f.hoerer.size === 0);
+  }
+  {
+    const f = fenster();
+    let zu = 0;
+    const v = BV.boxVerlauf(f.w, () => zu++);
+    // „Zur Karte“: Link mit replace — der Router ersetzt den Box-Eintrag durch das Ziel
+    v.verlassen();
+    f.w.history.replaceState({ usr: null, key: 'k2', idx: 3 }, '', 'https://dashboard.example/app/winterdex#heute-nacht');
+    v.abbauen();
+    f.laufen();
+    check('„Zur Karte“: Ziel ersetzt den Box-Eintrag, nichts zurückgenommen (sonst landete man wieder auf der Seite)',
+      f.i() === 1 && f.w.location.href.endsWith('#heute-nacht') && zu === 0 && f.hoerer.size === 0);
+    f.zurueck();
+    check('… Zurück von der Karte führt auf die Seite von vorher', f.i() === 0 && f.w.location.href.endsWith('/mitteilungen'));
+  }
+  {
+    const f = fenster();
+    let zu1 = 0;
+    let zu2 = 0;
+    // React StrictMode (Dev-Server): aufbauen, abbauen, sofort wieder aufbauen
+    const v1 = BV.boxVerlauf(f.w, () => zu1++);
+    v1.abbauen();
+    BV.boxVerlauf(f.w, () => zu2++);
+    f.laufen();
+    check('StrictMode (doppelter Aufbau): genau EIN Box-Eintrag, Box bleibt offen', f.e.length === 2 && f.i() === 1 && zu1 === 0 && zu2 === 0);
+    f.zurueck();
+    check('… Zurück schließt sie (einmal)', zu2 === 1 && zu1 === 0 && f.i() === 0);
+  }
+  {
+    // nach dem Neuladen liegt ein alter Box-Eintrag obenauf → übernehmen statt stapeln
+    const f = fenster({ usr: null, key: 'k1', idx: 3, [BV.BOX_MARKE]: 'alt' });
+    BV.boxVerlauf(f.w, () => undefined);
+    check('alter Box-Eintrag (Neuladen) wird übernommen, nicht gestapelt', f.e.length === 1 && f.w.history.state[BV.BOX_MARKE] !== 'alt' && f.w.history.state.key === 'k1');
+  }
+  {
+    const f = fenster();
+    let zu = 0;
+    BV.boxVerlauf(f.w, () => zu++);
+    [...f.hoerer].forEach((h) => h()); // popstate, während der eigene Eintrag noch obenauf liegt (z. B. Vorwärts)
+    check('popstate auf dem eigenen Eintrag schließt nicht', zu === 0 && f.hoerer.size === 1);
+  }
+  {
+    const f = fenster();
+    const v = BV.boxVerlauf(f.w, () => undefined);
+    f.w.history.pushState({ usr: null, key: 'k9', idx: 4 }, '', 'https://dashboard.example/app/winterdex/objekte');
+    v.abbauen();
+    f.laufen();
+    check('liegt beim Abbau schon ein fremder Eintrag obenauf → kein Zurück (nie eine fremde Seite verlassen)', f.i() === 2);
+  }
+
+  const center = lies('src/winterdex/MitteilungsCenter.tsx');
+  check('Box: Verlaufseintrag beim Aufbau (einmal), Abbau nimmt ihn zurück',
+    /useEffect\(\(\) => \{\s*const v = boxVerlauf\(window, \(\) => onCloseRef\.current\(\)\);[\s\S]*?return \(\) => \{\s*v\.abbauen\(\);[\s\S]*?\}, \[\]\);/.test(center));
+  check('„Zur Karte“: Link mit replace, verlassen() nur bei normalem Klick (Strg-Klick = neuer Tab → wie OK)',
+    /to=\{kartePfad\(basis, pathname\)\}\s*replace\s*onClick=\{\(e\) => \{\s*\/\/[^\n]*\n\s*if \(e\.button === 0 && !e\.metaKey && !e\.ctrlKey && !e\.shiftKey && !e\.altKey\) verlaufRef\.current\?\.verlassen\(\);\s*onClose\(\);/.test(center));
+  const ui = lies('src/components/ui.tsx');
+  check('Router-Schutz useUnsavedGuard unberührt (Klick-Abfang in der Capture-Phase, kein popstate, keine Box-Marke)',
+    /document\.addEventListener\('click', onClick, true\);/.test(ui) && !/popstate|mtBox/.test(ui));
+  const liste = (d) =>
+    readdirSync(path.join(here, '..', d), { withFileTypes: true }).flatMap((x) => (x.isDirectory() ? liste(`${d}/${x.name}`) : /\.tsx?$/.test(x.name) ? [`${d}/${x.name}`] : []));
+  const mitVerlauf = ['src/winterdex', 'src/components', 'src/lib'].flatMap(liste).filter((f) => /pushState|popstate/.test(lies(f).replace(/^\s*(\/\/|\*|\/\*).*$/gm, '')));
+  check('nur boxVerlauf.ts legt Verlaufseinträge an bzw. horcht auf Zurück', mitVerlauf.join(',') === 'src/winterdex/boxVerlauf.ts', mitVerlauf);
 }
 
 console.log(`\n${fail === 0 ? 'ALLES GRÜN' : 'FEHLER'}: ${ok} ok, ${fail} Fehler`);
