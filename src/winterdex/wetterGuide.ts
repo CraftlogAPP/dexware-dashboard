@@ -117,6 +117,7 @@ export const ART_NAME: Record<string, string> = {
   K7: 'Schneefall vorbei',
   K8: 'Update Schneefall',
   K9: 'Amtliche Warnung',
+  K10: 'Schnee-Wecker',
   TEST: 'Test',
 };
 export const STATUS_WORT: Record<string, string> = {
