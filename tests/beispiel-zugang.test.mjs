@@ -1,8 +1,11 @@
 // Beispiel-Zugang (docs/beispiel-zugang.md) — nur Dev-Server, für Bilder der Landing-Seiten und zum Durchklicken.
 //   [1] Speicher-Client (src/dev/beispiel/client.ts): Filter, Sortierung, Seiten, count/head, single, Schreiben, RPC,
 //       unbekannte Tabellen/RPCs → leere Antwort statt Fehler, keine Server-Anfrage
-//   [2] Beispieldaten FeuerDex/SpielDex mit den ECHTEN Abfragen der Übersicht (src/<app>/api.ts, lib/pruefExport.ts):
-//       Kennzahlen und Fälligkeit genau wie in den Bildern beschrieben, keine Karte „Erste Schritte“
+//       JSON-Pfade wie PostgREST (data->>title) für TourDex/CraftDex/DokuDex
+//   [2] Beispieldaten FeuerDex/SpielDex/RegalDex/GerüstDex/ToreDex/LeiterDex mit den ECHTEN Abfragen der Übersicht
+//       (src/<app>/api.ts, lib/pruefExport.ts): Kennzahlen und Fälligkeit wie in den Bildern, keine Karte „Erste Schritte“.
+//       GurtDex/HebeDex/PrüfDex/SchutzDex: tests/beispiel-pruefapps.test.mjs, KfzDex/TourDex/CraftDex/DokuDex:
+//       tests/beispiel-weitere.test.mjs
 //   [3] Beispieldaten passen zum Schema der App (Spalten aus <App>/supabase/*.sql; fehlt das Repo: übersprungen)
 //   [4] Abo im Beispielmodus: RevenueCat-Antwort ergibt „Pro aktiv“ (src/lib/abo.ts)
 //   [5] Nur Dev: Schalter hinter import.meta.env.DEV, kein anderer Code bindet src/dev/beispiel ein, ?beispiel statt ?demo
@@ -119,6 +122,13 @@ teil('1 Speicher-Client');
   await new Promise((r) => setTimeout(r, 5));
   check('channel: stumm, meldet SUBSCRIBED', kanal === 'SUBSCRIBED');
   check('keine einzige Netz-Anfrage', netz === 0, netz);
+  const z = { data: { a: { b: 2, c: 'x' }, ok: true }, deleted: false };
+  check('JSON-Pfade: ->> Text, -> JSON, verschachtelt, fehlend = null', C.feld(z, 'data->a->>b') === '2' && C.feld(z, 'data->a->b') === 2 && C.feld(z, 'data->ok') === true && C.feld(z, 'data->fehlt->>x') === null && C.feld(z, 'deleted') === false);
+  const j = C.beispielClient({ app: 'testdex', nutzer: { id: 'u1', email: 'test@beispiel.example' }, tabellen: { doc: [
+    { id: '1', data: { title: 'B', t: '2026-11-02' } }, { id: '2', data: { title: 'A', t: '2026-11-05' } }, { id: '3', data: { title: 'C', t: '2026-10-01' } },
+  ] } });
+  const jr = await j.from('doc').select('id, title:data->>title').gte('data->>t', '2026-11-01').order('data->>title');
+  check('select/Filter/Sortierung über JSON-Pfad', JSON.stringify(jr.data) === '[{"id":"2","title":"A"},{"id":"1","title":"B"}]', jr.data);
 }
 
 // ---------------------------------------------------------------------------------------------------------------- [2]
@@ -192,6 +202,44 @@ teil('2b SpielDex — Übersicht wie im Bild');
   check('Gemeldet von/Behoben: nur erfundene Kürzel (Initial + Nachname)', [...open].every((d) => /^[A-Z]\. [A-ZÄÖÜ][a-zäöüß]+$/.test(String(d.reporter_name))));
 }
 
+for (const [teilName, app, a] of [
+  ['2c RegalDex — Übersicht wie im Bild', 'regaldex', { name: 'Musterlogistik GmbH', sites: 'fetchWarehouses', units: 'fetchRacks', defects: 'fetchDamages', exp: 'REGALDEX_EXPORT', tage: 7, orte: [8, 9], insp: 9, offen: 3, due: [2, 2, 1, 8], folge: 'blocked,overdue,never,soon,soon', orts: true }],
+  ['2d GerüstDex — Übersicht wie im Bild', 'geruestdex', { name: 'Musterbau GmbH', sites: 'fetchSites', units: 'fetchScaffolds', defects: 'fetchDamages', exp: 'GERUESTDEX_EXPORT', tage: 30, orte: [7, 9], inspMin: 90, offen: 3, due: [2, 3, 1, 7], folge: 'blocked,overdue,never,soon,soon,soon', orts: true }],
+  ['2e ToreDex — Übersicht wie im Bild', 'toredex', { name: 'Muster Immobilien GmbH', sites: 'fetchSites', units: 'fetchGates', defects: 'fetchDefects', exp: 'TOREDEX_EXPORT', tage: 30, orte: [6, 7], insp: 28, offen: 3, due: [3, 4, 1, 26], folge: 'blocked,overdue,overdue,never,soon,soon,soon,soon' }],
+  ['2f LeiterDex — Übersicht wie im Bild', 'leiterdex', { name: 'Muster Haustechnik GmbH', sites: 'fetchSites', units: 'fetchLadders', defects: 'fetchDefects', exp: 'LEITERDEX_EXPORT', tage: 30, orte: [6, 7], insp: 21, offen: 3, due: [2, 4, 1, 19], folge: 'blocked,overdue,never,soon,soon,soon,soon' }],
+]) {
+  teil(teilName);
+  const { daten } = await web(`src/dev/beispiel/${app}.ts`);
+  const api = await web(`src/${app}/api.ts`);
+  const spec = (await web(`src/${app}/exportLists.ts`))[a.exp];
+  const { sb, ctx } = await uebersicht(app, daten);
+  check(`Betrieb ${a.name}, Inhaber`, ctx?.org.name === a.name && ctx.role === 'owner', ctx);
+  const [sites, units, meta, recent, open] = await Promise.all([
+    api[a.sites](sb),
+    api[a.units](sb),
+    api.fetchInspectionMeta(sb),
+    api.fetchInspections(sb, { limit: 10 }),
+    api[a.defects](sb, { status: 'open' }),
+  ]);
+  const valid = meta.filter((i) => !i.canceled);
+  const insp = valid.filter((i) => Date.now() - Date.parse(i.started_at) <= a.tage * DAY);
+  check(`Aktive Orte ${a.orte[0]} von ${a.orte[1]}`, sites.filter((s) => s.active).length === a.orte[0] && sites.length === a.orte[1]);
+  if (a.insp !== undefined) check(`Prüfungen ${a.tage} Tage = ${a.insp} (ohne Storno)`, insp.length === a.insp, insp.length);
+  else check(`Prüfungen ${a.tage} Tage ≥ ${a.inspMin} (arbeitstäglich)`, insp.length >= a.inspMin, insp.length);
+  check(`Offene Mängel ${a.offen}, davon 1× Rot`, open.length === a.offen && open.filter((d) => d.severity === 'red').length === 1);
+  const due = PX.dueOverview(spec, { org: ctx.org, sites, units: a.orts ? units : units, inspections: meta, openDefects: open });
+  const [d, s, b, t] = a.due;
+  check(`fällig ${d} · ${s} bald · ${b} gesperrt · von ${t}`, due.due === d && due.soon === s && due.blocked === b && due.total === t, { due: due.due, soon: due.soon, blocked: due.blocked, total: due.total });
+  check('Reihenfolge gesperrt → überfällig → nie → bald, höchstens 8 Zeilen', due.list.map((r) => r.state).join(',') === a.folge && due.list.length <= 8, due.list.map((r) => r.state));
+  check(`Letzte Prüfungen: 10, beide Prüfarten unter den ersten drei (${app})`, recent.length === 10 && new Set(recent.slice(0, 3).map((r) => r.type)).size === 2, recent.slice(0, 4).map((r) => `${r.started_at} ${r.type}`));
+  check('nichts liegt in der Zukunft', [...meta, ...recent].every((i) => Date.parse(i.started_at) < Date.now()));
+  const st = ES.startSteps({ stock: a.orts ? sites.length : units.length, first: valid.length > 0, members: 3, team: true });
+  check('keine Karte „Erste Schritte“', !ES.cardVisible({ owner: true, hidden: false, state: st, newOrg: ES.isNewOrg(ctx.org.created_at) }));
+  check('Gemeldet von: nur erfundene Kürzel (Initial + Nachname)', open.every((x) => /^[A-Z]\. [A-ZÄÖÜ][a-zäöüß]+$/.test(String(x.reporter_name))));
+  const det = await api.fetchInspectionWithPhotos(sb, recent[0].id);
+  check('Prüfung im Detail ladbar', det.id === recent[0].id);
+}
+
 // ---------------------------------------------------------------------------------------------------------------- [3]
 teil('3 Beispieldaten passen zum Schema der App');
 function spaltenAus(repo) {
@@ -222,9 +270,16 @@ function spaltenAus(repo) {
   }
   return spalten;
 }
-for (const [app, repoName] of [['feuerdex', 'FeuerDex'], ['spieldex', 'SpielDex']]) {
+// Alle Apps mit Beispieldaten (Ordnername des App-Repos auf dem Desktop); SchutzDex, KfzDex, TourDex und CraftDex haben kein
+// schema.sql, nur Migrationen — spaltenAus() liest alle *.sql unter supabase/.
+const APPS = [
+  ['feuerdex', 'FeuerDex'], ['spieldex', 'SpielDex'], ['regaldex', 'RegalDex'], ['geruestdex', 'GeruestDex'],
+  ['toredex', 'ToreDex'], ['leiterdex', 'LeiterDex'], ['gurtdex', 'GurtDex'], ['hebedex', 'HebeDex'], ['pruefdex', 'PruefDex'],
+  ['schutzdex', 'SchutzDex'], ['kfzdex', 'KfzDex'], ['tourdex', 'TourDex'], ['craftdex', 'CraftDex'], ['dokudex', 'DokuDex'],
+];
+for (const [app, repoName] of APPS) {
   const repo = process.env[`${repoName.toUpperCase()}_REPO`] ?? path.join(DESKTOP, repoName);
-  if (!existsSync(path.join(repo, 'supabase', 'schema.sql'))) {
+  if (!existsSync(path.join(repo, 'supabase'))) {
     console.log(`  —     ${repoName}: Repo nicht gefunden (${repo}) — Schema-Abgleich übersprungen`);
     continue;
   }
@@ -271,8 +326,9 @@ teil('5 Nur im Dev-Server');
   check('nur AppAuthContext bindet src/dev/beispiel ein', einbinder.join(',') === 'src/auth/AppAuthContext.tsx', einbinder);
   const sch = lies('src/dev/beispiel/schalter.ts');
   check('Adresszusatz ?beispiel (nicht ?demo — Vor-Ort-Demo der Prüf-Apps)', /has\('beispiel'\)/.test(sch) && !/has\('demo'\)/.test(sch));
-  check('Beispieldaten für feuerdex und spieldex eingetragen', /feuerdex: \(\) => import\('\.\/feuerdex'\)/.test(sch) && /spieldex: \(\) => import\('\.\/spieldex'\)/.test(sch));
-  const daten = ['feuerdex', 'spieldex'].map((a) => lies(`src/dev/beispiel/${a}.ts`)).join('\n');
+  const fehlt = APPS.map(([a]) => a).filter((a) => !sch.includes(`${a}: () => import('./${a}')`));
+  check(`Beispieldaten für alle ${APPS.length} Apps eingetragen`, fehlt.length === 0, fehlt);
+  const daten = APPS.map(([a]) => lies(`src/dev/beispiel/${a}.ts`)).join('\n');
   check('keine echten E-Mail-Domains in den Beispieldaten (nur .example)', [...daten.matchAll(/[\w.-]+@([\w.-]+)/g)].every((m) => m[1].endsWith('.example')));
 }
 
@@ -292,7 +348,12 @@ teil('6 Produktions-Build ohne Beispiel-Zugang');
       }
     };
     sammle(dist);
-    const WOERTER = [C.MERKWORT, 'dex-beispiel-zugang', 'Musterbetrieb GmbH', 'bauhof@musterstadt.example'];
+    const WOERTER = [
+      C.MERKWORT, 'dex-beispiel-zugang', 'Musterbetrieb GmbH', 'bauhof@musterstadt.example',
+      // je eine Kennung aus den übrigen Beispieldaten (nur dort, nicht in anderen Demos)
+      'Musterlogistik GmbH', 'Muster Immobilien GmbH', 'Muster Dachtechnik GmbH', 'Muster Stahlbau GmbH', 'Elektro Muster GmbH',
+      'Muster Holzbau GmbH', 'MU-EL 240', 'Einbauschrank Dachschräge',
+    ];
     const treffer = dateien.flatMap((p) => {
       const s = readFileSync(p, 'utf8');
       return WOERTER.filter((w) => s.includes(w)).map((w) => `${path.relative(ROOT, p)}: ${w}`);

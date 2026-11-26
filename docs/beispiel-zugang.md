@@ -7,8 +7,12 @@ Er dient für Bilder der Landing-Seiten (Dashboard-Block) und zum Durchklicken o
   Der Modus bleibt im Tab an, auch auf Unterseiten.
 - **Beenden:** `?beispiel=aus` oder „Abmelden“ im Kopf.
 - **Nicht `?demo`:** Bei `?demo` springen die Prüf-Apps in die Handy-Ansicht „Vor Ort“ mit eigenen Beispieldaten.
-- **Apps mit Beispieldaten:** `feuerdex`, `spieldex`. Andere Apps zeigen bei `?beispiel` die normale Anmeldung,
-  die Konsole meldet dann „noch keine Beispieldaten“.
+- **Apps mit Beispieldaten (26.11.2026):** die 9 Suite-Apps `gurtdex`, `toredex`, `geruestdex`, `feuerdex`, `leiterdex`,
+  `regaldex`, `hebedex`, `pruefdex`, `schutzdex` sowie `spieldex`, `kfzdex`, `tourdex`, `craftdex`, `dokudex`.
+  Andere Apps zeigen bei `?beispiel` die normale Anmeldung, die Konsole meldet dann „noch keine Beispieldaten“.
+  WinterDex, ObjektDex, AngebotDex (`installateurdex`) und Laufzettel (`pinndex`) haben eigene Demos über `?demo`.
+- **JSON-Pfade:** TourDex, CraftDex und DokuDex lesen über PostgREST-Pfade (`title:data->>title`, `.gte('data->>startTime', …)`);
+  der Speicher-Client wertet sie mit `feld()` aus (`->` liefert JSON, `->>` Text).
 
 ## So funktioniert es
 
@@ -109,7 +113,9 @@ In `tests/beispiel-zugang.test.mjs`:
 - In Teil 2 einen Block wie „2a FeuerDex“ anlegen: Kennzahlen und Fälligkeit über die echten Abfragen aus `src/<app>/api.ts`.
 - In Teil 3 die App in die Liste für den Schema-Abgleich eintragen.
 
-Dann `node tests/beispiel-zugang.test.mjs` ausführen.
+Dann `node tests/beispiel-zugang.test.mjs` ausführen. Weitere Prüfungen mit den echten Abfragen:
+`node tests/beispiel-pruefapps.test.mjs` (GurtDex, HebeDex, PrüfDex, SchutzDex) und
+`node tests/beispiel-weitere.test.mjs` (KfzDex, TourDex, CraftDex, DokuDex).
 
 ### 6. Durchklicken und Bild aufnehmen
 

@@ -16,6 +16,25 @@ type Fehler = { message: string; code?: string; details?: string; hint?: string 
 type Antwort = { data: unknown; error: Fehler | null; count: number | null; status: number; statusText: string };
 type Pruefer = (z: Zeile) => boolean;
 
+/**
+ * Wert einer Spalte — auch JSON-Pfade wie PostgREST: `data->a->>b` (-> liefert JSON, ->> Text).
+ * TourDex, CraftDex und DokuDex lesen ihre Listen nur über solche Pfade (z. B. 'title:data->>title').
+ */
+export function feld(zeile: Zeile, spalte: string): unknown {
+  if (!spalte.includes('->')) return zeile[spalte];
+  const teile = spalte.split(/(->>|->)/);
+  let w: unknown = zeile[teile[0].trim()];
+  let text = false;
+  for (let i = 1; i < teile.length; i += 2) {
+    const schluessel = teile[i + 1].trim();
+    if (w == null || typeof w !== 'object') return null;
+    w = Array.isArray(w) && /^\d+$/.test(schluessel) ? w[Number(schluessel)] : (w as Zeile)[schluessel];
+    text = teile[i] === '->>';
+  }
+  if (w == null) return null;
+  return text ? (typeof w === 'object' ? JSON.stringify(w) : String(w)) : w;
+}
+
 const gemeldet = new Set<string>();
 /** Alle Meldungen dieser Seite (zum Nachsehen: window.__beispiel.meldungen) */
 export const meldungen: string[] = [];
@@ -92,30 +111,30 @@ function textWert(v: string): unknown {
 function operator(spalte: string, op: string, v: unknown): Pruefer {
   switch (op) {
     case 'eq':
-      return (z) => gleich(z[spalte], v);
+      return (z) => gleich(feld(z, spalte), v);
     case 'neq':
-      return (z) => z[spalte] != null && !gleich(z[spalte], v);
+      return (z) => feld(z, spalte) != null && !gleich(feld(z, spalte), v);
     case 'gt':
-      return (z) => z[spalte] != null && vergleiche(z[spalte], v) > 0;
+      return (z) => feld(z, spalte) != null && vergleiche(feld(z, spalte), v) > 0;
     case 'gte':
-      return (z) => z[spalte] != null && vergleiche(z[spalte], v) >= 0;
+      return (z) => feld(z, spalte) != null && vergleiche(feld(z, spalte), v) >= 0;
     case 'lt':
-      return (z) => z[spalte] != null && vergleiche(z[spalte], v) < 0;
+      return (z) => feld(z, spalte) != null && vergleiche(feld(z, spalte), v) < 0;
     case 'lte':
-      return (z) => z[spalte] != null && vergleiche(z[spalte], v) <= 0;
+      return (z) => feld(z, spalte) != null && vergleiche(feld(z, spalte), v) <= 0;
     case 'in': {
       const liste = Array.isArray(v) ? v : typeof v === 'string' ? (textWert(v) as unknown[]) : [v];
-      return (z) => liste.some((x) => gleich(z[spalte], x));
+      return (z) => liste.some((x) => gleich(feld(z, spalte), x));
     }
     case 'is':
-      return (z) => (v === null || v === 'null' ? z[spalte] == null : z[spalte] === (v === 'true' ? true : v === 'false' ? false : v));
+      return (z) => (v === null || v === 'null' ? feld(z, spalte) == null : feld(z, spalte) === (v === 'true' ? true : v === 'false' ? false : v));
     case 'like':
-      return (z) => typeof z[spalte] === 'string' && muster(String(v), false).test(z[spalte] as string);
+      return (z) => typeof feld(z, spalte) === 'string' && muster(String(v), false).test(feld(z, spalte) as string);
     case 'ilike':
-      return (z) => typeof z[spalte] === 'string' && muster(String(v), true).test(z[spalte] as string);
+      return (z) => typeof feld(z, spalte) === 'string' && muster(String(v), true).test(feld(z, spalte) as string);
     case 'cs':
     case 'contains':
-      return (z) => enthaelt(z[spalte], v);
+      return (z) => enthaelt(feld(z, spalte), v);
     default:
       melde(`Filter-Operator „${op}“ wird nicht nachgebaut — ignoriert`);
       return () => true;
@@ -147,7 +166,7 @@ function spaltenListe(sel: string): [string, string][] | null {
   return teile.map((t) => {
     const ohneCast = t.replace(/::\w+$/, '');
     const [a, b] = ohneCast.split(':');
-    return b ? [a.trim(), b.trim()] : [a.trim(), a.trim()];
+    return b ? [a.trim(), b.trim()] : [a.trim().split(/->>?/).pop()!.trim(), a.trim()];
   });
 }
 
@@ -155,7 +174,10 @@ function auswahl(z: Zeile, spalten: [string, string][] | null): Zeile {
   if (!spalten) return structuredClone(z);
   const out: Zeile = {};
   // Spalte fehlt in den Beispieldaten → null (wie eine leere Spalte; PostgREST würde bei einer unbekannten Spalte 42703 melden)
-  for (const [ziel, quelle] of spalten) out[ziel] = z[quelle] === undefined ? null : structuredClone(z[quelle]);
+  for (const [ziel, quelle] of spalten) {
+    const w = feld(z, quelle);
+    out[ziel] = w === undefined ? null : structuredClone(w);
+  }
   return out;
 }
 
@@ -348,8 +370,8 @@ export class Abfrage implements PromiseLike<Antwort> {
     if (this.sortierung.length === 0) return liste;
     return [...liste].sort((a, b) => {
       for (const { spalte, auf, nullsFirst } of this.sortierung) {
-        const x = a[spalte];
-        const y = b[spalte];
+        const x = feld(a, spalte);
+        const y = feld(b, spalte);
         if (x == null || y == null) {
           if (x == null && y == null) continue;
           // PostgreSQL: aufsteigend NULLS LAST, absteigend NULLS FIRST (sofern nicht angegeben)

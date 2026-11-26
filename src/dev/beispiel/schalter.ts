@@ -13,6 +13,18 @@ import type { BeispielDaten } from './typen';
 export const BEISPIEL_APPS: Record<string, () => Promise<{ daten: BeispielDaten }>> = {
   feuerdex: () => import('./feuerdex'),
   spieldex: () => import('./spieldex'),
+  regaldex: () => import('./regaldex'),
+  geruestdex: () => import('./geruestdex'),
+  toredex: () => import('./toredex'),
+  leiterdex: () => import('./leiterdex'),
+  gurtdex: () => import('./gurtdex'),
+  hebedex: () => import('./hebedex'),
+  pruefdex: () => import('./pruefdex'),
+  schutzdex: () => import('./schutzdex'),
+  kfzdex: () => import('./kfzdex'),
+  tourdex: () => import('./tourdex'),
+  craftdex: () => import('./craftdex'),
+  dokudex: () => import('./dokudex'),
 };
 
 const SCHLUESSEL = 'dex-beispiel-zugang';

@@ -302,6 +302,11 @@ export function createDemoStore(opts: { pro?: boolean; wdPro?: boolean } = {}): 
   const start = addDays(today, -70);
   const properties: OdProperty[] = [];
   const services: OdService[] = [];
+  // Rasen mähen nur in der Mähsaison: von November bis März ist die Leistung zum 1. November beendet (wie „Leistung
+  // beenden“ in der App) — sonst stünde im Winter „Rasen mähen, heute 07:48“ in den Beispieldaten.
+  const [jahr, monat] = today.split('-').map(Number);
+  const maehEnde = monat >= 11 ? `${jahr}-11-01` : monat <= 3 ? `${jahr - 1}-11-01` : null;
+  const saison = (s: S) => (s.template_key === 'mow' && maehEnde ? { active: false, end_on: maehEnde } : { active: true, end_on: null });
   PROPS.forEach(([p, ss], pi) => {
     const pid = did(1, pi + 1);
     properties.push({
@@ -315,7 +320,7 @@ export function createDemoStore(opts: { pro?: boolean; wdPro?: boolean } = {}): 
       created_at: at(start, 9, 0),
     } as OdProperty);
     ss.forEach((s, si) =>
-      services.push({ ...s, id: did(2, pi * 10 + si + 1), org_id: ORG, property_id: pid, start_on: start, end_on: null, active: true, sort: si, notes: null, created_at: at(start, 9, 5) }),
+      services.push({ ...s, id: did(2, pi * 10 + si + 1), org_id: ORG, property_id: pid, start_on: start, ...saison(s), sort: si, notes: null, created_at: at(start, 9, 5) }),
     );
   });
 
@@ -370,7 +375,9 @@ export function createDemoStore(opts: { pro?: boolean; wdPro?: boolean } = {}): 
       });
     });
   }
-  const c = operations[Math.floor(operations.length / 2)];
+  // Storno-Grund „richtig: Sonnenhof“ passt nur zu einem Einsatz an einem anderen Objekt
+  const andere = operations.filter((o) => o.property_id !== did(1, 2));
+  const c = andere[Math.floor(andere.length / 2)];
   if (c) Object.assign(c, { canceled: true, cancel_reason: 'Falsches Objekt gewählt — richtig: Sonnenhof', canceled_at: c.ended_at });
   operations.sort((a, b) => (a.started_at < b.started_at ? 1 : -1));
 
