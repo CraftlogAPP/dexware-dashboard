@@ -135,11 +135,18 @@ Danke-Ansicht: `/vorschau-kauf?kasse=danke&status=pruefe|ok|spaeter[&sandbox]`.
   ([paddle.com/legal/checkout-buyer-terms](https://www.paddle.com/legal/checkout-buyer-terms)). Die Karte sagt das vor dem Klick
   („Kauf über Paddle (Händler)“) und verlinkt AGB, Widerruf & Erstattung, Datenschutz und die Kaufbedingungen von Paddle.
 - **Vor dem Klick angezeigt:** Preis inkl. USt. aus dem Angebot, Laufzeit, automatische Verlängerung, Kündigung jederzeit zum
-  Laufzeitende, 14 Tage Geld zurück. Der verbindliche Bestellknopf liegt im Paddle-Fenster (Paddle ist Verkäufer).
+  Laufzeitende, Widerruf und Erstattung nach dem gesetzlichen Widerrufsrecht und den Kaufbedingungen von Paddle. Der
+  verbindliche Bestellknopf liegt im Paddle-Fenster (Paddle ist Verkäufer).
 - **Widerruf / Verzicht bei digitalen Inhalten:** Die Belehrung und — falls nötig — die Zustimmung zur sofortigen
-  Bereitstellung holt Paddle im Bestellvorgang ein (Kaufbedingungen von Paddle). Auf unserer Seite gibt es bewusst **kein**
-  Verzicht-Häkchen: Dexware erstattet Käufe über die Webseite 14 Tage lang ohne Angabe von Gründen (erstattung.html), das
-  gesetzliche Widerrufsrecht bleibt davon unberührt — so steht es auch auf der Karte.
+  Bereitstellung holt Paddle im Bestellvorgang ein (Kaufbedingungen von Paddle). Auf unserer Seite gibt es **kein**
+  Verzicht-Häkchen (die Erklärung gehört zum Kauf bei Paddle als Verkäufer).
+- **Keine freiwillige Geld-zurück-Zusage mehr (Alex, 26.11.2026, für Käufe ab 27.11.2026):** bis dahin stand auf Karte,
+  Kacheln und Abo-Seite „14 Tage Geld zurück“ (Erstattung ohne Angabe von Gründen). Jetzt gilt nur das Gesetz plus die
+  Erstattungsrichtlinie von Paddle (paddle.com/legal/refund-policy, darauf verweist erstattung.html — Paddle erlaubt als
+  Erstattungsregel entweder eine eigene Frist von 14–90 Tagen oder den Verweis auf die eigene Richtlinie). Käufe bis
+  einschließlich 26.11.2026 behalten die alte Zusage (Hinweis auf erstattung.html). Unternehmer haben kein
+  Widerrufsrecht. **Prüfen:** zeigt das Live-Bestellfenster für Verbraucher in der EU die Zustimmung zur sofortigen
+  Bereitstellung (Kästchen/Hinweis)? Sonst besteht das Widerrufsrecht die vollen 14 Tage (Erstattung durch Paddle).
 - **AGB § 4 / § 5 und erstattung.html** sprechen schon vom Kauf „über unsere Webseite bzw. das Dashboard“ — passt weiter.
 - **Datenschutz Abschnitt 7a muss VOR der Live-Schaltung angepasst werden (Live-Schaltung, Schritt 4).** Bisher steht dort „wirst du zum Bestellvorgang
   … weitergeleitet“ und „Wir übergeben dem Bestellvorgang nur eine pseudonyme Kennung“. Neu öffnet sich das Fenster auf

@@ -8,7 +8,7 @@
 // Widerrufsbelehrung; hier stehen die Pflicht-Hinweise vor dem Klick (Preis, Laufzeit, Verlängerung, Kündigung, Händler).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, CreditCard, Loader2, ShieldCheck, Smartphone } from 'lucide-react';
+import { CheckCircle2, CreditCard, Loader2, Smartphone } from 'lucide-react';
 import type { WebPlan } from '../apps/registry';
 import {
   kasseEinrichten,
@@ -205,9 +205,6 @@ export function PaddleKasse({
       )}
       <ul className="buy-trust">
         <li>
-          <ShieldCheck className="i" aria-hidden /> 14 Tage Geld zurück
-        </li>
-        <li>
           <CreditCard className="i" aria-hidden /> Karte oder PayPal, Preise inkl. USt.
         </li>
         <li>
@@ -219,8 +216,8 @@ export function PaddleKasse({
         („Merchant of Record“): Paddle wickelt die Zahlung ab, stellt die Rechnung aus und zeigt im Bestellfenster seine
         Kaufbedingungen samt Widerrufsbelehrung. Das Abo verlängert sich automatisch um die gewählte Laufzeit, bis du
         kündigst — kündigen kannst du jederzeit zum Ende der Laufzeit, über den Link in der Kaufbestätigung von Paddle oder
-        hier auf der Abo-Seite. Bei uns gilt zusätzlich: 14 Tage Geld zurück; dein gesetzliches Widerrufsrecht bleibt davon
-        unberührt.
+        hier auf der Abo-Seite. Widerruf und Erstattung richten sich nach dem gesetzlichen Widerrufsrecht und den
+        Kaufbedingungen von Paddle.
       </p>
       <p className="muted small" style={{ marginBottom: 0, marginTop: 8 }}>
         <a href="https://dexware.app/agb.html" target="_blank" rel="noreferrer">

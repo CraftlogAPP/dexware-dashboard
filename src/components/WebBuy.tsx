@@ -2,7 +2,7 @@
 // RevenueCat-Kauf-Link; an die Adresse wird die Dexware-ID des Kontos gehängt (dieselbe Kennung wie in der App), deshalb
 // gilt der Tarif danach in App und Browser. Ist für einen Tarif noch kein Kauf-Link eingetragen (registry / webOffers),
 // stehen die Kacheln schon da, der Knopf ist aber ausgegraut („In Kürze verfügbar“) — nichts führt ins Leere.
-import { CreditCard, ShieldCheck, Smartphone } from 'lucide-react';
+import { CreditCard, Smartphone } from 'lucide-react';
 import type { WebOffer } from '../apps/registry';
 import { webCheckoutUrl } from '../lib/abo';
 
@@ -76,13 +76,10 @@ export function WebBuy({ groups, dexId, email }: { groups: WebBuyGroup[]; dexId:
       ))}
       <ul className="buy-trust">
         <li>
-          <ShieldCheck className="i" aria-hidden /> 14 Tage Geld zurück
-        </li>
-        <li>
           <CreditCard className="i" aria-hidden /> Karte oder PayPal, Preise inkl. USt.
         </li>
         <li>
-          <Smartphone className="i" aria-hidden /> Jederzeit kündbar
+          <Smartphone className="i" aria-hidden /> Jederzeit zum Laufzeitende kündbar
         </li>
       </ul>
       <p className="muted small" style={{ marginBottom: 0 }}>

@@ -274,9 +274,14 @@ check('lebt wird beim (Wieder-)Einhängen auf true gesetzt (StrictMode im Dev-Se
   /useEffect\(\(\) => \{\s*lebt\.current = true;/.test(abo));
 check('Karte nennt Paddle als Händler (Merchant of Record) und die Verlängerung', /Kauf über Paddle \(Händler\)/.test(karte) && /Merchant of Record/.test(karte) && /verlängert sich automatisch/.test(karte));
 check('Links: AGB, Widerruf & Erstattung, Datenschutz, Kaufbedingungen von Paddle', ['dexware.app/agb.html', 'dexware.app/erstattung.html', 'dexware.app/datenschutz.html', 'paddle.com/legal/checkout-buyer-terms'].every((u) => karte.includes(u)));
-check('Widerrufsrecht bleibt unberührt (kein Verzicht-Häkchen auf unserer Seite)', /Widerrufsrecht bleibt davon\s+unberührt/.test(karte) && !/type="checkbox"/.test(karte));
+// Seit 27.11.2026 keine freiwillige „14 Tage Geld zurück“-Zusage mehr (Alex, 26.11.): nur gesetzliches Widerrufsrecht,
+// Belehrung/Zustimmung und Erstattung über Paddle; kein Verzicht-Häkchen auf unserer Seite (das holt Paddle im Fenster ein).
+check('Widerruf/Erstattung nach Gesetz und Paddle, kein Verzicht-Häkchen auf unserer Seite',
+  /gesetzlichen Widerrufsrecht und den\s+Kaufbedingungen von Paddle/.test(karte) && /Widerrufsbelehrung/.test(karte) && !/type="checkbox"/.test(karte));
 const srcDateien = (dir) =>
   readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? srcDateien(path.join(dir, e.name)) : /\.(ts|tsx)$/.test(e.name) ? [path.join(dir, e.name)] : []));
+const geldZurueck = srcDateien('src').filter((f) => /Geld zur(ü|ue)ck|Geld-zur(ü|ue)ck|14 Tagen nach\s+dem Kauf/i.test(lies(f)));
+check('nirgends mehr „Geld zurück“-Versprechen (Kasse, Kacheln, Abo-Seite)', geldZurueck.length === 0, geldZurueck);
 const statisch = srcDateien('src').filter((f) => /from\s+['"]@revenuecat\/purchases-js['"]/.test(lies(f)));
 check('SDK nirgends statisch eingebunden (nur import() in PaddleKasse.tsx)', statisch.length === 0 && /import\('@revenuecat\/purchases-js'\)/.test(karte), statisch);
 const pkg = JSON.parse(lies('package.json'));

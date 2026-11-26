@@ -253,8 +253,9 @@ function AboContent({
             Abo bei Paddle verwalten ↗
           </a>
           <p className="muted small" style={{ marginBottom: 0, marginTop: 10 }}>
-            Nach einer Kündigung bleibt der Tarif bis zum Ende des bezahlten Zeitraums aktiv. Innerhalb von 14 Tagen nach
-            dem Kauf bekommst du dein Geld zurück — schreib an support@dexware.app.{' '}
+            Nach einer Kündigung bleibt der Tarif bis zum Ende des bezahlten Zeitraums aktiv. Widerruf und Erstattung
+            laufen über Paddle (Link in der Kaufbestätigung) nach dem gesetzlichen Widerrufsrecht und den Kaufbedingungen
+            von Paddle; Hilfe: support@dexware.app.{' '}
             <a href="https://dexware.app/erstattung.html" target="_blank" rel="noreferrer">Widerruf &amp; Erstattung</a>
             {' · '}
             <a href="https://dexware.app/agb.html" target="_blank" rel="noreferrer">AGB</a>
