@@ -242,9 +242,123 @@ export function zaehlerText(n: number): string {
   return n <= 0 ? '' : n > 99 ? '99+' : String(n);
 }
 
+// ---------------------------------------------------------------------------------------------- Box „Mitteilung“ (Vertrag v2, A)
+
+/**
+ * Klick auf eine Mitteilung (Glocke oder Seite „Alle Mitteilungen“) öffnet eine Box über der Seite — keine eigene
+ * Detailseite mehr (Alex 26.11., wie das Antippen am Handy). „Zur Karte“ führt zur Karte „Heute Nacht“ (aufgeklappt):
+ * im Außendienst auf den Reiter Objekte, sonst auf die Übersicht des Dashboards.
+ */
+export const KARTE_ANKER = 'heute-nacht';
+
+/** Ziel von „Zur Karte“ je nachdem, wo man gerade ist (Außendienst bleibt im Außendienst). */
+export function kartePfad(basis: string, pathname: string): string {
+  const ad = `${basis}/aussendienst`;
+  const imAussendienst = pathname === ad || pathname.startsWith(`${ad}/`);
+  return `${imAussendienst ? ad : basis}#${KARTE_ANKER}`;
+}
+
+/** Zeile unter dem Titel in der Box: „Vorabend-Lage · Mi, 25.11.2026, 19:00 Uhr“ (Art nur, wenn der Titel sie nicht nennt) */
+export function boxZeile(m: Pick<Mitteilung, 'titel' | 'art_name' | 'ms'>, tz: string): string {
+  return artZeigen(m) ? `${m.art_name} · ${vollZeit(m.ms, tz)}` : vollZeit(m.ms, tz);
+}
+
+// ---------------------------------------------------------------------------------------------- Hinweis „Neu“ (F, nur dieser Browser)
+
+/**
+ * Bestandsnutzer sehen im Dashboard EINMAL den Hinweis „Neu: Heute Nacht und Mitteilungen“. Merker nur in diesem Browser,
+ * je Konto (nicht je Betrieb — der Hinweis gilt der Person), nur „1“ — nie an den Server.
+ *   · Neuanlage im Browser (Onboarding: Betrieb angelegt / Team beigetreten) setzt den Merker gleich mit — wer den
+ *     Schritt „Wetter-Guide & Mitteilungen“ gesehen hat, bekommt den Hinweis nicht noch einmal.
+ *   · Betrieb erst vor Kurzem angelegt (in der App, < NEU_ANLAGE_MS): ebenfalls kein Hinweis „Neu“ (die App erklärt es
+ *     im Onboarding). Unlesbares Anlegedatum zählt als Bestand.
+ */
+export const NEU_HINWEIS_KEY = (uid: string) => `winterdex.hinweis.neu-mitteilungen.${uid}`;
+export const NEU_ANLAGE_MS = 3 * 24 * 3_600_000;
+
+/** Hinweis „Neu“ fällig? Wirft nie (gesperrter Speicher → kein Hinweis, lieber zu selten als bei jedem Besuch). */
+export function neuHinweisFaellig(uid: string | null | undefined, orgAngelegt: string | null | undefined, jetzt: number): boolean {
+  if (!uid) return false;
+  const angelegt = typeof orgAngelegt === 'string' ? Date.parse(orgAngelegt) : NaN;
+  if (Number.isFinite(angelegt) && jetzt - angelegt < NEU_ANLAGE_MS) return false;
+  try {
+    return localStorage.getItem(NEU_HINWEIS_KEY(uid)) === null;
+  } catch {
+    return false;
+  }
+}
+
+/** Hinweis „Neu“ gesehen (bzw. Onboarding durchlaufen). Wirft nie. */
+export function neuHinweisMerken(uid: string | null | undefined): void {
+  if (!uid) return;
+  try {
+    localStorage.setItem(NEU_HINWEIS_KEY(uid), '1');
+  } catch {
+    /* privater Modus / voll — dann eben ohne Merker */
+  }
+}
+
 // ---------------------------------------------------------------------------------------------- feste Texte
 
 /** Wo man die Mitteilungen ein- und ausschaltet (je Handy, Vertrag 7) — das Dashboard schaltet nichts (G8). */
 export const EINSTELLEN_HINWEIS = 'Ein- und ausschalten je Handy: WinterDex-App → Einstellungen → Mitteilungen.';
-export const LEER_TEXT = 'Keine Mitteilungen in den letzten 30 Tagen.';
-export const SEITE_TEXT = 'Dieselben Mitteilungen wie am Handy – hier immer mit vollem Text. Gezeigt werden die letzten 30 Tage.';
+/** Leere Liste mit Pro (bzw. Pro-Stand unklar — nie zu Unrecht „Pro“ zeigen) */
+export const LEER_PRO = 'Noch keine Mitteilungen in den letzten 30 Tagen.';
+/** Leere Liste ohne Pro: ruhig, ohne Kauf-Knopf */
+export const LEER_FREE = 'Hier erscheinen Glätte-Frühwarnung und Wetter-Hinweise (WinterDex Pro).';
+/** Text bei leerer Liste: nur bei SICHER kein Pro (false) der Pro-Hinweis */
+export function leerText(pro: boolean | null | undefined): string {
+  return pro === false ? LEER_FREE : LEER_PRO;
+}
+export const SEITE_TEXT = 'Dieselben Mitteilungen wie am Handy – hier immer mit vollem Text. Gezeigt werden die letzten 30 Tage, ein Klick öffnet die Mitteilung.';
+
+/**
+ * Kurz erklärt — Onboarding-Schritt „Wetter-Guide & Mitteilungen“ (neue Betriebe im Browser) und einmaliger Hinweis
+ * „Neu“ (Bestand). Begriffe wie in der App (G): Wetter-Guide, Glätte-Frühwarnung, Schnee-Wecker, Mitteilungen.
+ * Nie „verpasst nichts“, „schützt vor Haftung“, „garantiert“. Den Schnee-Wecker nennen die Texte nur, wenn der Server ihn
+ * freigegeben hat (K10 in guide_live_arten, wie die Box „Neu in WinterDex 0.7.15“ der App) — nie etwas versprechen, das
+ * man in der App nicht findet: erklaerPunkte(wecker).
+ */
+export interface ErklaerPunkt {
+  art: 'karte' | 'glocke' | 'handy' | 'wecker';
+  titel: string;
+  text: string;
+  /** nur mit WinterDex Pro */
+  pro?: boolean;
+}
+export const ERKLAER_PUNKTE: ReadonlyArray<ErklaerPunkt> = [
+  {
+    art: 'karte',
+    titel: 'Heute Nacht',
+    text: 'Die Karte auf der Übersicht zeigt, wie die Nacht für deine Objekte wird: ab wann Glätte oder Schnee möglich ist und welche Objekte betroffen sind – sobald sie einen Standort haben.',
+  },
+  {
+    art: 'glocke',
+    titel: 'Glocke oben rechts',
+    text: 'Dort stehen die Mitteilungen der letzten 30 Tage mit vollem Text. Ein Klick öffnet die Mitteilung.',
+  },
+  {
+    art: 'handy',
+    titel: 'Mitteilungen aufs Handy',
+    text: 'Welche Mitteilungen dein Handy bekommt – etwa die Glätte-Frühwarnung –, stellst du in der WinterDex-App ein: Einstellungen → Mitteilungen.',
+  },
+];
+/** Pflicht-Hinweis zum Schnee-Wecker (G) */
+export const WECKER_HINWEIS = 'Der Schnee-Wecker ersetzt keinen eigenen Wecker.';
+/** Schnee-Wecker (Pro) — wortgleich mit der App (NEU_0715_WECKER), dazu der Pflicht-Hinweis */
+export const WECKER_PUNKT: ErklaerPunkt = {
+  art: 'wecker',
+  titel: 'Schnee-Wecker',
+  text: `Weckt dich, wenn bei deinen Objekten Schnee kommt – 1 Stunde vorher oder wenn er einsetzt. ${WECKER_HINWEIS}`,
+  pro: true,
+};
+/** Punkte für Onboarding-Schritt und Hinweis „Neu“; den Schnee-Wecker nur, wenn er am Server freigegeben ist */
+export function erklaerPunkte(wecker: boolean): ReadonlyArray<ErklaerPunkt> {
+  return wecker ? [...ERKLAER_PUNKTE, WECKER_PUNKT] : ERKLAER_PUNKTE;
+}
+/** Schnee-Wecker am Server freigegeben? (heute_nacht: guide_live_arten enthält K10) */
+export function weckerFrei(liveArten: readonly string[] | null | undefined): boolean {
+  return Array.isArray(liveArten) && liveArten.includes('K10');
+}
+/** Pro-Hinweis ohne Kauf-Druck (Inhaber im Onboarding; Hinweis „Neu“ nur bei sicher kein Pro) */
+export const PRO_HINWEIS = 'Mitteilungen aufs Handy gibt es mit WinterDex Pro.';

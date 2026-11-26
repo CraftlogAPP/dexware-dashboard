@@ -1,15 +1,20 @@
-// Nur Entwicklung: /vorschau?app=winterdex&seite=mitteilungen[&id=41][&zustand=leer|gestoert][&teil=glocke]
+// Nur Entwicklung: /vorschau?app=winterdex&seite=mitteilungen[&id=41][&zustand=leer|gestoert][&pro=0][&teil=glocke|neu|onboarding][&rolle=team][&karte=gruen][&wecker=0]
 // Mitteilungs-Center mit Beispieldaten (Vertrag v1 von meine_mitteilungen, Texte wie aus Alex' Feldtest 26.11.): Kopfzeile
-// wie im WinterDex-Bereich mit der Glocke, darunter „Alle Mitteilungen“ bzw. mit &id=… die Detailseite samt Karte „Heute
-// Nacht“ (Beispieldaten der PGlite-Probe). Kein Server, kein Login, kein localStorage („gesehen“ nur im Speicher der Seite).
+// wie im WinterDex-Bereich mit der Glocke, darunter „Alle Mitteilungen“. Klick auf eine Mitteilung → Box (mit &id=… gleich
+// offen); „Zur Karte“ springt hier auf …#heute-nacht und zeigt die Karte „Heute Nacht“ aufgeklappt (Beispieldaten der
+// PGlite-Probe) wie die Übersicht. teil=neu: Hinweis „Neu“ über der Karte; teil=onboarding: Schritt „Wetter-Guide &
+// Mitteilungen“ nach dem Anlegen (rolle=team: nach dem Beitreten). karte=gruen: ruhige Nacht (Karte sonst eingeklappt —
+// zeigt, dass „Zur Karte“ sie trotzdem aufklappt). wecker=0: Schnee-Wecker am Server noch nicht frei (Hinweis „Neu“ ohne
+// ihn). Kein Server, kein Login, kein localStorage.
 import { useCallback, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { LayoutGrid, LogOut, Truck } from 'lucide-react';
 import { APPS, appIcon } from '../apps/registry';
-import { MitteilungAnsicht, MitteilungsGlocke } from '../winterdex/MitteilungsCenter';
+import { MitteilungsGlocke, NeuHinweisKarte } from '../winterdex/MitteilungsCenter';
 import { MtKontext, type MtStand } from '../winterdex/mitteilungenKontext';
-import { mitteilungenLesen, neuZahl } from '../winterdex/mitteilungenDaten';
+import { KARTE_ANKER, mitteilungenLesen, neuZahl, type Mitteilung } from '../winterdex/mitteilungenDaten';
 import { MitteilungenSeite } from '../winterdex/pages/Mitteilungen';
+import { WetterGuideSchritt } from '../winterdex/Onboarding';
 import { HeuteNachtKarte } from '../winterdex/HeuteNacht';
 import { heuteNachtLesen } from '../winterdex/heuteNachtDaten';
 import { HN_PROBE } from '../winterdex/wetterDemo';
@@ -43,15 +48,27 @@ const DEMO = {
 export function MitteilungenVorschau({ params }: { params: URLSearchParams }) {
   const app = APPS.find((a) => a.id === 'winterdex')!;
   const style = { '--accent': app.theme.accent, '--on-accent': app.theme.onAccent, '--bg': app.theme.bg } as React.CSSProperties;
+  const { hash, key } = useLocation();
   const zustand = params.get('zustand');
-  const id = params.get('id');
+  const teil = params.get('teil');
   const [platz, setPlatz] = useState<HTMLElement | null>(null);
   const [gesehen, setGesehen] = useState<number | null>(null);
   const liste = useMemo(() => (zustand === 'leer' ? [] : (mitteilungenLesen(DEMO) ?? [])), [zustand]);
-  const pfad = useCallback((x?: string) => (x ? `${BASIS}&id=${encodeURIComponent(x)}` : BASIS), []);
+  // &id=… → Box gleich offen (für den Klick-Test und Bilder)
+  const [offen, setOffen] = useState<Mitteilung | null>(() => {
+    const id = params.get('id');
+    return id ? ((mitteilungenLesen(DEMO) ?? []).find((m) => m.id === id) ?? null) : null;
+  });
+  const zeigen = useCallback((m: Mitteilung) => setOffen(m), []);
+  const schliessen = useCallback(() => setOffen(null), []);
+  const [neuZu, setNeuZu] = useState(false);
   const alsGesehen = useCallback(() => {
     if (liste.length) setGesehen((g) => Math.max(g ?? 0, liste[0].ms));
   }, [liste]);
+  const pro = params.get('pro') === '0' ? false : true;
+  const gruen = params.get('karte') === 'gruen';
+  // „Zur Karte“ führt auf basis#heute-nacht — die Wahl „ruhige Nacht“ reist mit
+  const basis = gruen ? `${BASIS}&karte=gruen` : BASIS;
   const st: MtStand = useMemo(
     () => ({
       da: true,
@@ -61,21 +78,42 @@ export function MitteilungenVorschau({ params }: { params: URLSearchParams }) {
       gestoert: zustand === 'gestoert',
       gesehen,
       neu: neuZahl(liste, gesehen, JETZT),
+      pro,
       tz: TZ,
-      basis: BASIS,
-      pfad,
+      basis,
+      seite: BASIS,
       alsGesehen,
+      offen,
+      zeigen,
+      schliessen,
     }),
-    [liste, zustand, gesehen, pfad, alsGesehen],
+    [liste, zustand, gesehen, pro, basis, alsGesehen, offen, zeigen, schliessen],
   );
-  const m = id ? liste.find((x) => x.id === id) : null;
-  // teil=glocke: nur die Kopfzeile (die Seite „Alle Mitteilungen“ setzt den Zähler sonst sofort auf 0)
-  const nurGlocke = params.get('teil') === 'glocke';
   const hn = useMemo(() => {
-    const d = heuteNachtLesen(HN_PROBE)!;
-    return { ...d, karte_live: true };
-  }, []);
+    const d = structuredClone(heuteNachtLesen(HN_PROBE)!);
+    d.karte_live = true;
+    if (gruen) {
+      // wie WetterVorschau zustand=gruen: trocken, Ampel grün → Karte startet eingeklappt
+      d.stunden = d.stunden.map((s) => ({ ...s, ampel: 0, art: 'trocken', mm: 0, schnee_cm: null, t: (s.t ?? 0) + 4 }));
+      d.ampel_gesamt = 0;
+      d.lage = { satz: 'Trocken, Tiefstwert ca. 2 °C gegen 06:00.', betroffen_orte: '0 von 3' };
+      d.je_ort = d.je_ort.map((o) => ({ ...o, ampel: 0 }));
+      d.amtlich = [];
+      d.morgen = { ...d.morgen, erwartet: 'nein', grund: null };
+      d.ereignisse = [];
+    }
+    return d;
+  }, [gruen]);
   const links = { objekte: BASIS, team: BASIS, abo: BASIS };
+  const zurKarte = hash === `#${KARTE_ANKER}` ? key : null;
+
+  if (teil === 'onboarding') {
+    return (
+      <div className="app-scope" style={style}>
+        <WetterGuideSchritt inhaber={params.get('rolle') !== 'team'} onWeiter={() => undefined} />
+      </div>
+    );
+  }
 
   return (
     <div className="app-scope" style={style}>
@@ -112,9 +150,15 @@ export function MitteilungenVorschau({ params }: { params: URLSearchParams }) {
         </header>
         <MitteilungsGlocke platz={platz} />
         <div className="page">
-          {m ? (
-            <MitteilungAnsicht m={m} tz={TZ} zurueck={BASIS} karte={<HeuteNachtKarte d={hn} jetzt={Date.parse('2026-11-25T21:32:00Z')} tz={TZ} land="AT" rolle="owner" links={links} />} />
-          ) : nurGlocke ? (
+          {zurKarte || teil === 'neu' ? (
+            // wie die Übersicht: (Hinweis „Neu“) + Karte „Heute Nacht“, nach „Zur Karte“ aufgeklappt und im Bild
+            <>
+              <h1>Übersicht</h1>
+              {teil === 'neu' && !neuZu && <NeuHinweisKarte seite={BASIS} pro={pro} wecker={params.get('wecker') !== '0'} onZu={() => setNeuZu(true)} />}
+              <HeuteNachtKarte key={zurKarte ?? 'karte'} d={hn} jetzt={Date.parse('2026-11-25T21:32:00Z')} tz={TZ} land="AT" rolle="owner" links={links} aufklappen={zurKarte} />
+              <div style={{ height: 900 }} aria-hidden />
+            </>
+          ) : teil === 'glocke' ? (
             <p className="muted">Vorschau Mitteilungs-Center: Glocke oben rechts.</p>
           ) : (
             <MitteilungenSeite />

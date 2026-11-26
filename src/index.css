@@ -4410,7 +4410,7 @@ input {
 [data-theme='light'] .hn-m-knapp b { color: #854d0e; }
 [data-theme='light'] .hn-m-gesendet b { color: #166534; }
 
-/* ---------- WinterDex Mitteilungs-Center (26.11.2026): Glocke in der Kopfzeile (mt-), Klappfenster, Seite, Detail ----------
+/* ---------- WinterDex Mitteilungs-Center (26.11.2026): Glocke in der Kopfzeile (mt-), Klappfenster, Seite, Box ----------
    Glocke und Fenster nutzen die Klassen der Fälligkeiten-Glocke (due-bell, due-pop) — gleiche Optik, gleiches Handy-Verhalten
    (≤ 520 px spannt sich das Fenster unter der Kopfzeile über die Breite). Symbol immer mit Wort (Titel/Art), nie nur Farbe. */
 .mt-platz {
@@ -4576,33 +4576,115 @@ input {
 .mt-eintrag.mt-kritisch .mt-titel {
   color: #fca5a5;
 }
-/* Detail: voller Text groß, darunter die Karte „Heute Nacht“ */
-.mt-detail {
-  margin: 0 0 18px;
-  border-left: 4px solid var(--accent);
+/* Box „Mitteilung“ (Vertrag v2, 26.11.): über der Seite statt eigener Detailseite — Symbol, Titel, Art · Uhrzeit, voller
+   Text groß, zwei große Knöpfe „Zur Karte“ / „OK“ (Handschuhe: ≥ 52 px hoch, nebeneinander je halbe Breite) */
+.mt-box {
+  max-width: 520px;
+  border-top: 4px solid var(--accent);
 }
-.mt-detail.mt-kritisch {
-  border-left-color: var(--red);
+.mt-box.mt-kritisch {
+  border-top-color: var(--red);
 }
-.mt-detail-kopf {
+.mt-box-kopf {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 14px;
 }
-.mt-detail-kopf h1 {
+.mt-box-titel {
+  min-width: 0;
+}
+.mt-box-titel h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: 21px;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
-.mt-detail-kopf .muted {
+.mt-box-titel .muted {
   margin: 4px 0 0;
+  font-size: 13.5px;
 }
-.mt-detail-text {
-  margin: 14px 0 0;
-  font-size: 16.5px;
+.mt-sym.mt-sym-gross {
+  width: 46px;
+  height: 46px;
+}
+.mt-sym.mt-sym-gross .i {
+  width: 24px;
+  height: 24px;
+}
+.mt-box-text {
+  margin: 16px 0 0;
+  font-size: 17px;
   line-height: 1.55;
   white-space: pre-line;
   overflow-wrap: anywhere;
+}
+.mt-box-knoepfe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+.btn.mt-box-knopf {
+  flex: 1 1 130px;
+  height: auto;
+  min-height: 52px;
+  font-size: 16px;
+}
+@media (max-width: 420px) {
+  .modal-card.mt-box {
+    padding: 20px 18px;
+  }
+}
+/* Karte „Heute Nacht“ nach „Zur Karte“: nicht unter der klebenden Kopfzeile verschwinden */
+.hn {
+  scroll-margin-top: 76px;
+}
+/* Erklärung „Heute Nacht · Glocke · Handy“ (Onboarding-Schritt und Hinweis „Neu“) */
+.mt-erklaer {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mt-erklaer li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  line-height: 1.45;
+}
+.mt-erklaer .mt-pro {
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+.mt-schritt .mt-erklaer {
+  margin: 18px 0 14px;
+  font-size: 15.5px;
+}
+.mt-schritt .btn.ez-big {
+  margin-top: 8px;
+}
+.mt-neu-hinweis {
+  margin: 0 0 14px;
+  border-left: 4px solid var(--accent);
+}
+.mt-neu-hinweis h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+.mt-neu-knoepfe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.mt-neu-knoepfe .btn {
+  height: auto;
+  min-height: 48px;
 }
 [data-theme='light'] .mt-sym.mt-s-amtlich,
 [data-theme='light'] .mt-sym.mt-s-frueh {

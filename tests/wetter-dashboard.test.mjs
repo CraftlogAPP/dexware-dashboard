@@ -568,8 +568,9 @@ console.log('\n[10] Quelltext-Wächter');
   const karte = lies('src/winterdex/HeuteNacht.tsx');
   check('Karte: Ereignisse nur, wenn der Server sie schickt (Pro)', /d\.ereignisse && d\.ereignisse\.length > 0/.test(karte));
   check('Karte: Sichtbarkeit nur über hnSichtbar (karte_live vom Server)', /if \(!hnSichtbar\(d, jetzt, tz, darf, offline \?\? jetzt\)\) return null;/.test(karte));
-  check('Karte: Ampel, Aufklappen und Morgen-Satz aus EINER Rechnung (kartenKopf) — kein eigenes ampel_gesamt im Kopf',
-    /const \{ m, amp, gefahr \} = kartenKopf\(d, jetzt, tz, offlineSeit \?\? jetzt\);/.test(karte) && /const auf = offen \?\? \(gefahr && !eingeklappt\);/.test(karte) && !/ampelAnzeige\(d\.ampel_gesamt/.test(karte));
+  // Ausnahme (Mitteilungen 26.11., Vertrag v2): „Zur Karte“ aus der Box einer Mitteilung öffnet die Karte immer
+  check('Karte: Ampel, Aufklappen und Morgen-Satz aus EINER Rechnung (kartenKopf) — kein eigenes ampel_gesamt im Kopf; aufgeklappt sonst nur über „Zur Karte“',
+    /const \{ m, amp, gefahr \} = kartenKopf\(d, jetzt, tz, offlineSeit \?\? jetzt\);/.test(karte) && /const auf = offen \?\? \(aufklappen \? true : gefahr && !eingeklappt\);/.test(karte) && !/ampelAnzeige\(d\.ampel_gesamt/.test(karte));
   check('Karte: Handy-Hinweis am Morgen-Satz, solange die Geräte-Zeile ihn nicht zeigt (eingeklappt/Außendienst)',
     /const handyHinweis = geraeteZeileSichtbar \? null : morgenHandyHinweis\(d, m\);/.test(karte) && /\{handyHinweis && <span className="muted"> · \{handyHinweis\}<\/span>\}/.test(karte));
   check('Übersicht bindet die Karte über den Kennzahlen ein', /<HeuteNacht[\s\S]*?\/>[\s\S]*<LoadGuard/.test(lies('src/winterdex/pages/Overview.tsx')));

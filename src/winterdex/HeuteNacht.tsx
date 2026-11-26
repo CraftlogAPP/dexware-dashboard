@@ -3,7 +3,7 @@
 // ist, Fußzeile mit Quelle. Grün/unbekannt eingeklappt (2 Zeilen), ab gelb aufgeklappt. Nie eine Bewertung, nie Namen.
 // Daten und Regeln: heuteNachtDaten.ts (Sichtbarkeit entscheidet der Server über karte_live; Pro-Teile nur, wenn der Server sie
 // schickt). HeuteNachtKarte ist rein (Beispieldaten-Vorschau /vorschau?app=winterdex&seite=wetter).
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ChevronDown, ChevronUp, CloudHail, CloudRain, CloudSnow, Minus, Snowflake } from 'lucide-react';
@@ -34,6 +34,7 @@ import {
   type HnSpalte,
 } from './heuteNachtDaten';
 import { ladeGeraete, type GuideGeraete } from './wetterGuide';
+import { KARTE_ANKER } from './mitteilungenDaten';
 
 export interface HnLinks {
   objekte: string;
@@ -51,6 +52,8 @@ export function HeuteNacht({
   ops,
   links,
   eingeklappt = false,
+  aufklappen = null,
+  davor = null,
 }: {
   client: SupabaseClient;
   orgId: string;
@@ -62,6 +65,10 @@ export function HeuteNacht({
   links: HnLinks;
   /** immer eingeklappt starten (Außendienst) */
   eingeklappt?: boolean;
+  /** „Zur Karte“ aus der Box einer Mitteilung: Kennung des Sprungs (location.key) — Karte aufgeklappt und ins Bild geholt */
+  aufklappen?: string | null;
+  /** steht direkt über der Karte, aber nur, wenn die Karte selbst zu sehen ist (Hinweis „Neu“) — bekommt deren Daten */
+  davor?: ((d: HnDaten) => ReactNode) | null;
 }) {
   const state = useAsync(() => ladeHeuteNacht(client, orgId), [client, orgId]);
   // alle 10 Minuten still neu (der Wetter-Lauf rechnet alle 15 Minuten) und beim Zurückkehren in den Tab
@@ -89,18 +96,24 @@ export function HeuteNacht({
   const offline = ladung.art === 'fehler' && ladung.alt ? ladung.alt.abgerufen : null;
   if (!hnSichtbar(d, jetzt, tz, darf, offline ?? jetzt)) return null;
   return (
-    <HeuteNachtKarte
-      d={d}
-      jetzt={jetzt}
-      tz={tz}
-      land={land}
-      rolle={rolle}
-      erledigt={erledigtHeute(ops, jetzt, tz)}
-      offlineSeit={offline}
-      geraete={geraete.data ?? null}
-      links={links}
-      eingeklappt={eingeklappt}
-    />
+    <>
+      {davor?.(d)}
+      <HeuteNachtKarte
+        // jeder Sprung „Zur Karte“ baut die Karte neu auf: wieder aufgeklappt, wieder im Bild (Daten bleiben geladen)
+        key={aufklappen ?? 'karte'}
+        d={d}
+        jetzt={jetzt}
+        tz={tz}
+        land={land}
+        rolle={rolle}
+        erledigt={erledigtHeute(ops, jetzt, tz)}
+        offlineSeit={offline}
+        geraete={geraete.data ?? null}
+        links={links}
+        eingeklappt={eingeklappt}
+        aufklappen={aufklappen}
+      />
+    </>
   );
 }
 
@@ -144,6 +157,7 @@ export function HeuteNachtKarte({
   geraete = null,
   links,
   eingeklappt = false,
+  aufklappen = null,
 }: {
   d: HnDaten;
   jetzt: number;
@@ -156,14 +170,21 @@ export function HeuteNachtKarte({
   geraete?: GuideGeraete | null;
   links: HnLinks;
   eingeklappt?: boolean;
+  /** „Zur Karte“ (Box einer Mitteilung): aufgeklappt starten und ins Bild holen */
+  aufklappen?: string | null;
 }) {
   const darf = rolle === 'owner' || rolle === 'admin';
   const zustand = hnZustand(d);
   // Ampel + Morgen-Satz aus einer Rechnung: erwartet die Frühwarnung (bis 10:00) „ja“/„knapp“, nie grün und aufgeklappt
   const { m, amp, gefahr } = kartenKopf(d, jetzt, tz, offlineSeit ?? jetzt);
-  // Grün/unbekannt eingeklappt, ab gelb offen; der Knopf merkt sich die Wahl nur bis zum Neuladen
+  // Grün/unbekannt eingeklappt, ab gelb offen; der Knopf merkt sich die Wahl nur bis zum Neuladen.
+  // Kommt man über „Zur Karte“, ist sie offen (wie am Handy: Tab Objekte mit aufgeklappter Karte „Heute Nacht“).
   const [offen, setOffen] = useState<boolean | null>(null);
-  const auf = offen ?? (gefahr && !eingeklappt);
+  const auf = offen ?? (aufklappen ? true : gefahr && !eingeklappt);
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (aufklappen) ref.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [aufklappen]);
   const breit = useMemo(() => streifen(d.stunden, 12), [d.stunden]);
   const schmal = useMemo(() => streifen(d.stunden, 6), [d.stunden]);
   const titel = hnTitel(jetzt, tz);
@@ -176,7 +197,7 @@ export function HeuteNachtKarte({
 
   if (zustand === 'ohne_standort') {
     return (
-      <section className="card hn hn-au" aria-label={`Wetter ${titel}`}>
+      <section ref={ref} id={KARTE_ANKER} className="card hn hn-au" aria-label={`Wetter ${titel}`}>
         <div className="hn-kopf">
           <h2>{titel}</h2>
         </div>
@@ -188,7 +209,7 @@ export function HeuteNachtKarte({
   }
 
   return (
-    <section className={`card hn ${amp.klasse}`} aria-labelledby="hn-titel">
+    <section ref={ref} id={KARTE_ANKER} className={`card hn ${amp.klasse}`} aria-labelledby="hn-titel">
       <div className="hn-kopf">
         <h2 id="hn-titel">{titel}</h2>
         {zustand === 'karte' && (

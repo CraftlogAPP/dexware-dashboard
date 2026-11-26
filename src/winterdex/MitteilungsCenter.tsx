@@ -1,28 +1,52 @@
-// Mitteilungs-Center im WinterDex-Dashboard (26.11.2026, Alex' Feldtest): Glocke oben rechts in der Kopfzeile mit Zähler
-// „neu seit zuletzt geöffnet“, Klappfenster mit denselben Mitteilungen wie am Handy (Heute / Gestern / Älter, Symbol je
-// Art, Titel, VOLLER Text, Uhrzeit), Klick → Detailseite mit der Karte „Heute Nacht“ darunter (pages/Mitteilungen.tsx).
-// Daten: mitteilungenDaten.ts (RPC meine_mitteilungen, Vertrag v1), ein Abruf je Betrieb: mitteilungenKontext.ts.
-// Nur im WinterDex-Bereich (WinterdexArea.tsx) — andere Apps bekommen keine Glocke. Das Dashboard schaltet keine
-// Mitteilungsarten (G8: je Handy in der App, Seite „Mitteilungen“).
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+// Mitteilungs-Center im WinterDex-Dashboard (26.11.2026, Alex' Feldtest; Vertrag v2 nach Runde 1): Glocke oben rechts in
+// der Kopfzeile mit Zähler „neu seit zuletzt geöffnet“, Klappfenster mit denselben Mitteilungen wie am Handy (Heute /
+// Gestern / Älter, Symbol je Art, Titel, VOLLER Text, Uhrzeit). Klick auf eine Mitteilung → BOX über der Seite (Symbol,
+// Titel, voller Text, Uhrzeit, „Zur Karte“ → Karte „Heute Nacht“ aufgeklappt, „OK“) — keine eigene Detailseite mehr. Die
+// Seite „Alle Mitteilungen“ (pages/Mitteilungen.tsx) öffnet dieselbe Box. Die Glocke ist nur zum Nachschauen.
+// Daten: mitteilungenDaten.ts (RPC meine_mitteilungen, Vertrag v1, letzte 30 Tage), ein Abruf je Betrieb:
+// mitteilungenKontext.ts. Nur im WinterDex-Bereich (WinterdexArea.tsx) — andere Apps bekommen keine Glocke. Das Dashboard
+// schaltet keine Mitteilungsarten (G8: je Handy in der App, Seite „Mitteilungen einstellen“).
+// Dazu (F): ErklaerListe für den Onboarding-Schritt „Wetter-Guide & Mitteilungen“ (Onboarding.tsx) und den einmaligen
+// Hinweis „Neu: Heute Nacht und Mitteilungen“ für Bestandsnutzer (NeuHinweis, auf der Übersicht über der Karte).
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { Link } from 'react-router-dom';
-import { AlarmClock, Bell, CloudSnow, CloudSun, FlaskConical, Landmark, Moon, RefreshCw, Sunrise, TriangleAlert } from 'lucide-react';
-import { useAppAuth } from '../auth/AppAuthContext';
-import { useOrg } from '../components/OrgContext';
+import { Link, useLocation } from 'react-router-dom';
+import {
+  AlarmClock,
+  Bell,
+  CloudSnow,
+  CloudSun,
+  FlaskConical,
+  Landmark,
+  Map as MapIcon,
+  Moon,
+  RefreshCw,
+  Smartphone,
+  Sparkles,
+  Sunrise,
+  TriangleAlert,
+} from 'lucide-react';
+import { useAppAuth, useAppAuthOptional } from '../auth/AppAuthContext';
+import { useOrg, useOrgOptional } from '../components/OrgContext';
 import { nachweisZone } from './nachweisZeit';
 import { MtKontext, useMitteilungen, useMitteilungenLaden, type MtStand } from './mitteilungenKontext';
 import {
   artSymbol,
   artZeigen,
+  boxZeile,
   EINSTELLEN_HINWEIS,
   eintragZeit,
+  erklaerPunkte,
   gruppieren,
   istNeu,
-  LEER_TEXT,
-  vollZeit,
+  kartePfad,
+  leerText,
+  neuHinweisFaellig,
+  neuHinweisMerken,
+  PRO_HINWEIS,
   zaehlerText,
+  type ErklaerPunkt,
   type Mitteilung,
   type MtSymbol,
 } from './mitteilungenDaten';
@@ -31,7 +55,7 @@ import { standText } from './heuteNachtDaten';
 /** So viele stehen im Klappfenster, der Rest auf der Seite „Alle Mitteilungen“ */
 const IM_FENSTER = 30;
 
-/** Ein Abruf für Glocke, Liste und Detail — nur innerhalb von OrgGate (Betrieb steht fest). */
+/** Ein Abruf für Glocke, Liste und Box — nur innerhalb von OrgGate (Betrieb steht fest). */
 export function MitteilungenProvider({ base, children }: { base: string; children: ReactNode }) {
   const { client } = useAppAuth();
   const { data } = useOrg();
@@ -49,13 +73,19 @@ function MitteilungenLaden({ client, orgId, tz, base, children }: { client: Supa
 }
 
 /**
- * Glocke in der Kopfzeile: Die Kopfzeile (AppArea) liegt außerhalb des Betriebs-Kontexts — darum hängt die Glocke per
- * Portal im Platz, den WinterdexArea dort freihält. Unsichtbar, solange der Server keine Mitteilungen anbietet.
+ * Glocke in der Kopfzeile + die Box. Die Kopfzeile (AppArea) liegt außerhalb des Betriebs-Kontexts — darum hängt die Glocke
+ * per Portal im Platz, den WinterdexArea dort freihält. Die Box steht NICHT im Portal, sondern hier im Bereich (dort gelten
+ * die Farben der App). Unsichtbar, solange der Server keine Mitteilungen anbietet.
  */
 export function MitteilungsGlocke({ platz }: { platz: HTMLElement | null }) {
   const st = useMitteilungen();
-  if (!st || !st.da || !platz) return null;
-  return createPortal(<Glocke st={st} />, platz);
+  if (!st || !st.da) return null;
+  return (
+    <>
+      {platz && createPortal(<Glocke st={st} />, platz)}
+      {st.offen && <MitteilungBox key={st.offen.id} m={st.offen} tz={st.tz} basis={st.basis} onClose={st.schliessen} />}
+    </>
+  );
 }
 
 const SYMBOL_ICON: Record<MtSymbol, typeof Bell> = {
@@ -71,11 +101,11 @@ const SYMBOL_ICON: Record<MtSymbol, typeof Bell> = {
   info: Bell,
 };
 
-export function MtSymbolBild({ kart, kritisch }: { kart: string; kritisch: boolean }) {
+export function MtSymbolBild({ kart, kritisch, gross = false }: { kart: string; kritisch: boolean; gross?: boolean }) {
   const s = artSymbol(kart);
   const I = SYMBOL_ICON[s];
   return (
-    <span className={`mt-sym mt-s-${s}${kritisch ? ' mt-krit' : ''}`} aria-hidden="true">
+    <span className={`mt-sym mt-s-${s}${kritisch ? ' mt-krit' : ''}${gross ? ' mt-sym-gross' : ''}`} aria-hidden="true">
       <I className="i" />
     </span>
   );
@@ -109,7 +139,7 @@ function Glocke({ st }: { st: MtStand }) {
   const [vorher, setVorher] = useState<number | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const knopfRef = useRef<HTMLButtonElement>(null);
-  const { alsGesehen } = st;
+  const { alsGesehen, zeigen } = st;
 
   const zu = useCallback(
     (fokus = false) => {
@@ -127,7 +157,7 @@ function Glocke({ st }: { st: MtStand }) {
     const weg = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) zu();
     };
-    const taste = (e: KeyboardEvent) => {
+    const taste = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') zu(true);
     };
     document.addEventListener('mousedown', weg);
@@ -142,6 +172,12 @@ function Glocke({ st }: { st: MtStand }) {
     setVorher(st.gesehen);
     setOffen(true);
     alsGesehen();
+  }
+
+  // Eintrag angeklickt: Fenster zu, Fokus auf die Glocke (dorthin kehrt er nach der Box zurück), Box auf
+  function oeffne(m: Mitteilung) {
+    zu(true);
+    zeigen(m);
   }
 
   const jetzt = st.abgerufen ?? Date.now();
@@ -169,26 +205,26 @@ function Glocke({ st }: { st: MtStand }) {
             {st.gestoert && st.abgerufen !== null && <span className="due-pop-loading">nicht aktuell · Stand {standText(st.abgerufen, Date.now(), st.tz)}</span>}
           </div>
           {gruppen.length === 0 ? (
-            <div className="due-pop-empty">{LEER_TEXT}</div>
+            <div className="due-pop-empty">{leerText(st.pro)}</div>
           ) : (
             <div className="mt-liste">
               {gruppen.map((g) => (
                 <div className="mt-gruppe" key={g.gruppe}>
                   <div className="mt-gruppe-kopf">{g.gruppe}</div>
                   {g.eintraege.map((m) => (
-                    // Link statt navigate(): die Rückfrage „Aufzeichnung läuft / Einsatz nicht gespeichert“
-                    // (useUnsavedGuard fängt nur Klicks auf Links ab) greift auch hier — sonst verließe ein Klick
-                    // in der Glocke den Außendienst ohne Nachfrage.
-                    <Link key={m.id} to={st.pfad(m.id)} className={`mt-eintrag${m.kritisch ? ' mt-kritisch' : ''}`} onClick={() => zu()}>
+                    // Knopf, kein Link: der Eintrag öffnet nur die Box (die Seite bleibt, wo sie ist — auch mitten im
+                    // Außendienst). Erst „Zur Karte“ in der Box wechselt die Seite, und das ist ein Link (Rückfrage
+                    // „Aufzeichnung läuft“ greift).
+                    <button key={m.id} type="button" className={`mt-eintrag${m.kritisch ? ' mt-kritisch' : ''}`} onClick={() => oeffne(m)}>
                       <EintragInhalt m={m} jetzt={jetzt} tz={st.tz} neu={istNeu(m, vorher, jetzt)} />
-                    </Link>
+                    </button>
                   ))}
                 </div>
               ))}
             </div>
           )}
           <div className="mt-fuss">
-            <Link to={st.pfad()} onClick={() => zu()}>
+            <Link to={st.seite} onClick={() => zu()}>
               Alle Mitteilungen ›
             </Link>
             <span>{EINSTELLEN_HINWEIS}</span>
@@ -199,24 +235,165 @@ function Glocke({ st }: { st: MtStand }) {
   );
 }
 
-/** Detail (rein, auch für die Vorschau): Titel, Art, volle Uhrzeit, voller Text; darunter `karte` (Heute Nacht). */
-export function MitteilungAnsicht({ m, tz, zurueck, karte }: { m: Mitteilung; tz: string; zurueck: string; karte?: ReactNode }) {
+const FOKUSSIERBAR = 'a[href], button:not(:disabled)';
+
+/**
+ * Box „Mitteilung“ (rein, auch für die Vorschau): Symbol der Art, Titel, Art · volle Uhrzeit, VOLLER Text, große Knöpfe
+ * „Zur Karte“ (Link → Karte „Heute Nacht“ aufgeklappt) und „OK“. Fokus beim Öffnen auf „OK“, Tab bleibt in der Box,
+ * Escape / Klick daneben / OK schließen, danach Fokus zurück (Glocke bzw. Eintrag der Seite).
+ */
+export function MitteilungBox({ m, tz, basis, onClose }: { m: Mitteilung; tz: string; basis: string; onClose: () => void }) {
+  const { pathname } = useLocation();
+  const titelId = useId();
+  const textId = useId();
+  const kartenRef = useRef<HTMLDivElement>(null);
+  const okRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const vorher = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    okRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (vorher && vorher.isConnected) vorher.focus({ preventScroll: true });
+    };
+  }, []);
+
+  function taste(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const karte = kartenRef.current;
+    if (!karte) return;
+    const ziele = [...karte.querySelectorAll<HTMLElement>(FOKUSSIERBAR)];
+    if (!ziele.length) return;
+    const erstes = ziele[0];
+    const letztes = ziele[ziele.length - 1];
+    const aktiv = document.activeElement;
+    if (e.shiftKey && (aktiv === erstes || !karte.contains(aktiv))) {
+      e.preventDefault();
+      letztes.focus();
+    } else if (!e.shiftKey && (aktiv === letztes || !karte.contains(aktiv))) {
+      e.preventDefault();
+      erstes.focus();
+    }
+  }
+
   return (
-    <>
-      <p className="small" style={{ marginBottom: 4 }}>
-        <Link to={zurueck}>← Alle Mitteilungen</Link>
-      </p>
-      <div className={`card mt-detail${m.kritisch ? ' mt-kritisch' : ''}`}>
-        <div className="mt-detail-kopf">
-          <MtSymbolBild kart={m.kart} kritisch={m.kritisch} />
-          <div>
-            <h1>{m.titel}</h1>
-            <p className="muted">{artZeigen(m) ? `${m.art_name} · ${vollZeit(m.ms, tz)}` : vollZeit(m.ms, tz)}</p>
+    <div
+      className="modal-backdrop mt-box-hinter"
+      onKeyDown={taste}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={kartenRef}
+        className={`modal-card mt-box${m.kritisch ? ' mt-kritisch' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titelId}
+        aria-describedby={textId}
+        // Klick in den Text: Fokus bleibt in der Box (sonst ginge er an <body>, und Escape schlösse nicht mehr)
+        tabIndex={-1}
+      >
+        <div className="mt-box-kopf">
+          <MtSymbolBild kart={m.kart} kritisch={m.kritisch} gross />
+          <div className="mt-box-titel">
+            <h2 id={titelId}>{m.titel}</h2>
+            <p className="muted">{boxZeile(m, tz)}</p>
           </div>
         </div>
-        <p className="mt-detail-text">{m.text}</p>
+        <p id={textId} className="mt-box-text">
+          {m.text}
+        </p>
+        <div className="mt-box-knoepfe">
+          <Link className="btn ghost mt-box-knopf" to={kartePfad(basis, pathname)} onClick={onClose}>
+            <MapIcon className="i" aria-hidden /> Zur Karte
+          </Link>
+          <button ref={okRef} type="button" className="btn mt-box-knopf" onClick={onClose}>
+            OK
+          </button>
+        </div>
       </div>
-      {karte}
-    </>
+    </div>
   );
+}
+
+const ERKLAER_ICON: Record<ErklaerPunkt['art'], typeof Bell> = {
+  karte: Moon,
+  glocke: Bell,
+  handy: Smartphone,
+  wecker: AlarmClock,
+};
+
+/**
+ * Punkte „Heute Nacht“, „Glocke oben rechts“, „Mitteilungen aufs Handy“ (Onboarding-Schritt und Hinweis „Neu“), dazu
+ * „Schnee-Wecker“ (Pro) nur, wenn der Server ihn freigegeben hat (`wecker`).
+ */
+export function ErklaerListe({ wecker = false }: { wecker?: boolean }) {
+  return (
+    <ul className="mt-erklaer">
+      {erklaerPunkte(wecker).map((p) => {
+        const I = ERKLAER_ICON[p.art];
+        return (
+          <li key={p.art}>
+            <span className="mt-sym" aria-hidden="true">
+              <I className="i" />
+            </span>
+            <span>
+              <b>{p.titel}</b>
+              {p.pro && <span className="badge mt-pro">Pro</span>}
+              <br />
+              {p.text}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Hinweis „Neu“ selbst (rein, auch für die Vorschau) */
+export function NeuHinweisKarte({ seite, pro, wecker, onZu }: { seite: string; pro: boolean | null; wecker: boolean; onZu: () => void }) {
+  const titelId = useId();
+  return (
+    <section className="card mt-neu-hinweis" aria-labelledby={titelId}>
+      <h2 id={titelId}>
+        <Sparkles className="i" aria-hidden /> Neu: Heute Nacht und Mitteilungen
+      </h2>
+      <ErklaerListe wecker={wecker} />
+      {pro === false && <p className="muted small">{PRO_HINWEIS}</p>}
+      <div className="mt-neu-knoepfe">
+        <button type="button" className="btn" onClick={onZu}>
+          Alles klar
+        </button>
+        <Link className="btn ghost" to={seite}>
+          Alle Mitteilungen
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Einmaliger Hinweis „Neu: Heute Nacht und Mitteilungen“ für Bestandsnutzer (F) — auf der Übersicht direkt über der
+ * Karte „Heute Nacht“ (HeuteNacht `davor`: erscheint nur, wenn die Karte selbst zu sehen ist). Nur mit Glocke (Server-
+ * Nachtrag da), nicht nach einer Neuanlage (mitteilungenDaten.ts: neuHinweisFaellig). Der Merker wird schon beim Zeigen
+ * gesetzt — EINMAL heißt einmal; der Hinweis bleibt bis „Alles klar“ bzw. bis man die Übersicht verlässt.
+ * `wecker`: Schnee-Wecker am Server freigegeben (aus der Karte „Heute Nacht“: guide_live_arten).
+ */
+export function NeuHinweis({ wecker }: { wecker: boolean }) {
+  const st = useMitteilungen();
+  const uid = useAppAuthOptional()?.session?.user.id ?? null;
+  const angelegt = useOrgOptional()?.data?.org.created_at ?? null;
+  const [stand, setStand] = useState<'offen' | 'zu' | null>(null);
+  // einmal entscheiden, sobald die Glocke da ist (Zustand aus dem Rendern abgeleitet, kein Effekt-Umweg)
+  if (stand === null && st?.da && uid) setStand(neuHinweisFaellig(uid, angelegt, Date.now()) ? 'offen' : 'zu');
+  useEffect(() => {
+    if (stand === 'offen') neuHinweisMerken(uid);
+  }, [stand, uid]);
+  if (stand !== 'offen' || !st) return null;
+  return <NeuHinweisKarte seite={st.seite} pro={st.pro} wecker={wecker} onZu={() => setStand('zu')} />;
 }

@@ -21,6 +21,7 @@ import { GratisBanner } from '../GratisHinweise';
 import { useAppAuthOptional } from '../../auth/AppAuthContext';
 import { useOrgOptional } from '../../components/OrgContext';
 import { HeuteNacht } from '../HeuteNacht';
+import { KARTE_ANKER } from '../mitteilungenDaten';
 import { nachweisZone } from '../nachweisZeit';
 
 // Karte mit Leaflet: eigener Chunk, erst beim Öffnen des Reiters geladen — aber nach dem Start im Leerlauf schon
@@ -131,6 +132,8 @@ export function Aussendienst() {
 function AussendienstWetter({ base }: { base: string }) {
   const auth = useAppAuthOptional();
   const org = useOrgOptional()?.data ?? null;
+  // „Zur Karte“ aus der Box einer Mitteilung (…/aussendienst#heute-nacht): Karte aufgeklappt statt eingeklappt, ins Bild
+  const { hash, key } = useLocation();
   if (!auth || !org) return null;
   return (
     <HeuteNacht
@@ -141,6 +144,7 @@ function AussendienstWetter({ base }: { base: string }) {
       tz={nachweisZone(org.org.land)}
       links={{ objekte: `${base}/objekte`, team: `${base}/team`, abo: `${base}/abo` }}
       eingeklappt
+      aufklappen={hash === `#${KARTE_ANKER}` ? key : null}
     />
   );
 }

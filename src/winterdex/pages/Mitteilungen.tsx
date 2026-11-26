@@ -1,14 +1,10 @@
-// Seiten zum Mitteilungs-Center (MitteilungsCenter.tsx): „Alle Mitteilungen“ (Liste der letzten 30 Tage, Heute /
-// Gestern / Älter) und die Detailseite einer Mitteilung mit der Karte „Heute Nacht“ darunter — wie in der App beim
-// Antippen einer Mitteilung (Vertrag 4). Gelesen-Stand nur in diesem Browser (mitteilungenDaten.ts).
+// Seite „Alle Mitteilungen“ zum Mitteilungs-Center (MitteilungsCenter.tsx): Liste der letzten 30 Tage (Heute / Gestern /
+// Älter). Ein Klick öffnet DIESELBE Box wie in der Glocke (Vertrag v2, A) — keine eigene Detailseite mehr. Gelesen-Stand
+// nur in diesem Browser (mitteilungenDaten.ts).
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { useAppAuth } from '../../auth/AppAuthContext';
-import { useOrg } from '../../components/OrgContext';
-import { HeuteNacht } from '../HeuteNacht';
-import { EintragInhalt, MitteilungAnsicht } from '../MitteilungsCenter';
 import { useMitteilungen } from '../mitteilungenKontext';
-import { EINSTELLEN_HINWEIS, gruppieren, istNeu, LEER_TEXT, SEITE_TEXT } from '../mitteilungenDaten';
+import { EintragInhalt } from '../MitteilungsCenter';
+import { EINSTELLEN_HINWEIS, gruppieren, istNeu, leerText, SEITE_TEXT } from '../mitteilungenDaten';
 import { standText } from '../heuteNachtDaten';
 
 function Laedt() {
@@ -49,16 +45,16 @@ export function MitteilungenSeite() {
         </p>
       )}
       {gruppen.length === 0 ? (
-        <div className="card muted">{LEER_TEXT}</div>
+        <div className="card muted">{leerText(st.pro)}</div>
       ) : (
         gruppen.map((g) => (
           <section className="mt-gruppe" key={g.gruppe} aria-label={g.gruppe}>
             <h2 className="mt-gruppe-kopf">{g.gruppe}</h2>
             <div className="card mt-liste">
               {g.eintraege.map((m) => (
-                <Link key={m.id} to={st.pfad(m.id)} className={`mt-eintrag${m.kritisch ? ' mt-kritisch' : ''}`}>
+                <button key={m.id} type="button" className={`mt-eintrag${m.kritisch ? ' mt-kritisch' : ''}`} onClick={() => st.zeigen(m)}>
                   <EintragInhalt m={m} jetzt={jetzt} tz={st.tz} neu={istNeu(m, vorher, jetzt)} />
-                </Link>
+                </button>
               ))}
             </div>
           </section>
@@ -66,46 +62,5 @@ export function MitteilungenSeite() {
       )}
       <p className="muted small">{EINSTELLEN_HINWEIS}</p>
     </div>
-  );
-}
-
-export function MitteilungSeite() {
-  const { id } = useParams<{ id: string }>();
-  const st = useMitteilungen();
-  const { client } = useAppAuth();
-  const { data: orgCtx } = useOrg();
-  if (!st) return null;
-  if (st.laedt && !st.da) return <Laedt />;
-  if (!st.da) return <NichtDa />;
-  const m = st.liste.find((x) => x.id === id);
-  if (!m) {
-    return (
-      <>
-        <p className="small" style={{ marginBottom: 4 }}>
-          <Link to={st.pfad()}>← Alle Mitteilungen</Link>
-        </p>
-        <div className="info-box">Diese Mitteilung steht nicht mehr in der Liste (gezeigt werden die letzten 30 Tage).</div>
-      </>
-    );
-  }
-  const base = st.basis;
-  return (
-    <MitteilungAnsicht
-      m={m}
-      tz={st.tz}
-      zurueck={st.pfad()}
-      karte={
-        orgCtx && (
-          <HeuteNacht
-            client={client}
-            orgId={orgCtx.org.id}
-            land={orgCtx.org.land}
-            rolle={orgCtx.role}
-            tz={st.tz}
-            links={{ objekte: `${base}/objekte`, team: `${base}/team`, abo: `${base}/abo` }}
-          />
-        )
-      }
-    />
   );
 }

@@ -34,7 +34,7 @@ import { OBJEKTDEX_OEFFENTLICH } from '../lib/ganzjahr';
 import { dankeschoenApi } from '../lib/gutschein';
 import { GratisBanner } from './GratisHinweise';
 import { MitteilungenProvider, MitteilungsGlocke } from './MitteilungsCenter';
-import { MitteilungenSeite, MitteilungSeite } from './pages/Mitteilungen';
+import { MitteilungenSeite } from './pages/Mitteilungen';
 
 // Abmelde-Rückfrage auf ALLEN WinterDex-Seiten (auch im Dashboard), nicht nur im Außendienst: wartende Einsätze und
 // Fahrten, angefangene Einsätze und eine unterbrochene Aufzeichnung liegen nur auf diesem Gerät.
@@ -89,7 +89,7 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
     >
       <OrgProvider>
         <OrgGate noOrg={<Onboarding />}>
-          {/* Mitteilungs-Center: ein Abruf (meine_mitteilungen) für Glocke, Liste und Detail; ohne Nachtrag keine Glocke */}
+          {/* Mitteilungs-Center: ein Abruf (meine_mitteilungen) für Glocke, Liste und Box; ohne Nachtrag keine Glocke */}
           <MitteilungenProvider base={`/app/${app.id}`}>
             <MitteilungsGlocke platz={glockenPlatz} />
             <Routes>
@@ -121,8 +121,8 @@ export function WinterdexArea({ app }: { app: AppConfig }) {
                 <Route path="strecken/:id" element={<RouteDetail />} />
                 <Route path="team" element={<TeamPage />} />
                 <Route path="bericht" element={<Report />} />
+                {/* eine Mitteilung öffnet sich als Box über der Seite (MitteilungsCenter.tsx) — keine eigene Detail-Adresse */}
                 <Route path="mitteilungen" element={<MitteilungenSeite />} />
-                <Route path="mitteilungen/:id" element={<MitteilungSeite />} />
                 <Route path="abo" element={<AboPage />} />
                 <Route path="rueckmeldungen" element={<NurDexware><FeedbackAdminPage /><FeedbackZentral /></NurDexware>} />
                 <Route path="rueckmeldung" element={<FeedbackForm />} />

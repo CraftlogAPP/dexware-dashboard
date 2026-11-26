@@ -1,13 +1,16 @@
-// Klick-Test Mitteilungs-Center (26.11.2026) in Edge headless — NUR Beispieldaten der Vorschau
+// Klick-Test Mitteilungs-Center (26.11.2026, Vertrag v2) in Edge headless — NUR Beispieldaten der Vorschau
 // (/vorschau?app=winterdex&seite=mitteilungen, src/dev/MitteilungenVorschau.tsx), nie echte Server/Kundendaten.
 // Browser absichtlich auf UTC (falsch eingestellter PC): Tage und Uhrzeiten müssen trotzdem Wiener Zeit sein.
 //   A: PC 1280 px — Glocke mit Zähler 4 (erster Besuch: letzte 24 Std.), Fenster Heute/Gestern/Älter, voller Text der
 //      amtlichen Warnung, Zähler nach dem Öffnen weg, Escape schließt
-//   B: Klick auf die amtliche Warnung → Detail mit vollem Text, Uhrzeit in Wiener Zeit, Karte „Heute Nacht“ darunter
+//   B: Klick auf die amtliche Warnung → BOX über der Seite (Vertrag v2): voller Text, Uhrzeit in Wiener Zeit, Fokus,
+//      Tab bleibt drin, Escape/OK/Klick daneben schließen; „Zur Karte“ ist ein Link (Rückfrage greift) → Karte
+//      „Heute Nacht“ aufgeklappt
 //   C: Handy 360 px — Kopfzeile ragt nicht heraus, Glocke im Bild, Fenster über die Breite, Tippflächen ≥ 44 px;
 //      dazu 300–1000 px: kein Knopf der Kopfzeile ragt aus dem Bild (Abmelden schrumpfte bei 360/421/440 px hinaus)
-//   D: Seite „Alle Mitteilungen“ am Handy — große Einträge, kein Querscrollen
-//   E: leer / gestört
+//   D: Seite „Alle Mitteilungen“ am Handy — große Einträge, Klick öffnet DIESELBE Box (Knöpfe ≥ 48 px), kein Querscrollen
+//   E: leer (Pro / Free: ruhiger Text, Glocke bleibt) / gestört
+//   F: Hinweis „Neu: Heute Nacht und Mitteilungen“ (PC + Handy) und Onboarding-Schritt „Wetter-Guide & Mitteilungen“
 //
 //   npx vite --port 5263 --strictPort
 //   node tests/browser/mitteilungen-klick.mjs http://localhost:5263 <ausgabe-ordner>
@@ -149,27 +152,66 @@ try {
   check('Escape schließt, Fokus zurück auf der Glocke', (await warteAuf(`!document.querySelector('.mt-pop')`, 2000)) && (await main.ev(`document.activeElement === document.querySelector('.due-bell-btn')`)));
   check('nach dem Schließen: kein Zähler (alles gesehen)', await main.ev(`!document.querySelector('.due-bell-count')`));
 
-  // ------------------------------------------------------------------ B: Klick → Detail
-  console.log('\nB: Klick auf die amtliche Warnung → Detail mit Karte „Heute Nacht“');
+  // ------------------------------------------------------------------ B: Klick → Box (Vertrag v2)
+  console.log('\nB: Klick auf die amtliche Warnung → Box über der Seite (keine Detailseite)');
+  const adresseVorher = await main.ev(`location.pathname + location.search + location.hash`);
   await main.ev(`document.querySelector('.due-bell-btn').click()`, true);
   await warteAuf(`!!document.querySelector('.mt-pop')`, 3000);
   // Rückfrage „Aufzeichnung läuft / Einsatz nicht gespeichert“ (useUnsavedGuard) nachgestellt: fängt Klicks auf Links in
-  // der Capture-Phase ab, „Abbrechen“ = preventDefault + stopPropagation. Der Eintrag muss dann stehen bleiben.
-  await main.ev(`window.__wache = (e) => { if (e.target.closest?.('a[href]')) { e.preventDefault(); e.stopPropagation(); window.__abgefangen = (window.__abgefangen ?? 0) + 1; } }; document.addEventListener('click', window.__wache, true); true`);
+  // der Capture-Phase ab. Ein Eintrag ist KEIN Link mehr (er wechselt die Seite nicht) — die Rückfrage darf nicht kommen.
+  await main.ev(`window.__abgefangen = 0; window.__wache = (e) => { if (e.target.closest?.('a[href]')) { e.preventDefault(); e.stopPropagation(); window.__abgefangen++; } }; document.addEventListener('click', window.__wache, true); true`);
   await main.ev(`[...document.querySelectorAll('.mt-pop .mt-eintrag')].find((x) => x.querySelector('.mt-titel').textContent === 'Amtliche Warnung').click()`, true);
-  await sleep(400);
-  check('Rückfrage „Seite verlassen?“ → Abbrechen: kein Wechsel, Fenster bleibt offen (Einträge sind Links, kein navigate())',
-    (await main.ev(`window.__abgefangen === 1 && !location.search.includes('id=40') && !!document.querySelector('.mt-pop')`)) === true,
-    await main.ev(`({ abgefangen: window.__abgefangen ?? 0, such: location.search, offen: !!document.querySelector('.mt-pop') })`));
+  check('Box offen, Fenster zu, Seite NICHT gewechselt, keine Rückfrage (Eintrag ist ein Knopf)',
+    (await warteAuf(`!!document.querySelector('.mt-box')`, 3000)) && (await main.ev(`!document.querySelector('.mt-pop') && window.__abgefangen === 0`)) && (await main.ev(`location.pathname + location.search + location.hash`)) === adresseVorher,
+    await main.ev(`({ box: !!document.querySelector('.mt-box'), pop: !!document.querySelector('.mt-pop'), abgefangen: window.__abgefangen, adresse: location.href })`));
+  const box = await main.ev(`({ h: document.querySelector('.mt-box h2').textContent, zeit: document.querySelector('.mt-box .mt-box-titel .muted').textContent, text: document.querySelector('.mt-box-text').textContent, rolle: document.querySelector('.mt-box').getAttribute('role'), modal: document.querySelector('.mt-box').getAttribute('aria-modal'), fokus: document.activeElement?.textContent?.trim() })`);
+  check(`Box: Titel + „${box.zeit}“ (Wiener Zeit)`, box.h === 'Amtliche Warnung' && box.zeit === 'Do, 26.11.2026, 00:30 Uhr', box);
+  check('Box: voller Text', box.text === K9_VOLL);
+  check('Box: Dialog (aria-modal), Fokus auf „OK“', box.rolle === 'dialog' && box.modal === 'true' && box.fokus === 'OK', box);
+  check('Box: Symbol der Art (amtlich) groß', await main.ev(`!!document.querySelector('.mt-box .mt-sym.mt-s-amtlich.mt-sym-gross')`));
+  const knoepfe = await main.ev(`[...document.querySelectorAll('.mt-box-knoepfe > *')].map((e) => ({ t: e.textContent.trim(), tag: e.tagName, h: Math.round(e.getBoundingClientRect().height) }))`);
+  check('Box: Knöpfe „Zur Karte“ (Link) und „OK“, je ≥ 48 px', knoepfe.length === 2 && knoepfe[0].t === 'Zur Karte' && knoepfe[0].tag === 'A' && knoepfe[1].t === 'OK' && knoepfe.every((k) => k.h >= 48), knoepfe);
+  check('Box in den Farben der App (im Bereich, nicht am <body>)', await main.ev(`!!document.querySelector('.app-scope .mt-box')`));
+  console.log('  Bild:', await bild('B-pc-box.png'));
+  await main.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+  await main.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+  check('Tab bleibt in der Box (von „OK“ zurück auf „Zur Karte“)', (await main.ev(`document.activeElement?.textContent?.trim()`)) === 'Zur Karte', await main.ev(`document.activeElement?.outerHTML?.slice(0, 80)`));
+  await main.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await main.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  check('Escape schließt die Box, Fokus zurück auf der Glocke', (await warteAuf(`!document.querySelector('.mt-box')`, 2000)) && (await main.ev(`document.activeElement === document.querySelector('.due-bell-btn')`)));
+  // noch einmal öffnen: „OK“ schließt; Klick daneben schließt
+  await main.ev(`document.querySelector('.due-bell-btn').click()`, true);
+  await warteAuf(`!!document.querySelector('.mt-pop')`, 3000);
+  await main.ev(`document.querySelector('.mt-pop .mt-eintrag').click()`, true);
+  await warteAuf(`!!document.querySelector('.mt-box')`, 3000);
+  await main.ev(`[...document.querySelectorAll('.mt-box-knoepfe button')].find((b) => b.textContent.trim() === 'OK').click()`, true);
+  check('„OK“ schließt', await warteAuf(`!document.querySelector('.mt-box')`, 2000));
+  await main.ev(`document.querySelector('.due-bell-btn').click()`, true);
+  await warteAuf(`!!document.querySelector('.mt-pop')`, 3000);
+  await main.ev(`document.querySelector('.mt-pop .mt-eintrag').click()`, true);
+  await warteAuf(`!!document.querySelector('.mt-box')`, 3000);
+  const hinter = await main.ev(`(() => { const r = document.querySelector('.mt-box').getBoundingClientRect(); return { x: Math.round(r.right + 20), y: Math.round(r.top + 30) }; })()`);
+  await main.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: hinter.x, y: hinter.y, button: 'left', clickCount: 1 });
+  await main.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: hinter.x, y: hinter.y, button: 'left', clickCount: 1 });
+  check('Klick daneben schließt', await warteAuf(`!document.querySelector('.mt-box')`, 2000));
+  // „Zur Karte“ ist ein Link: die Rückfrage (Wache) greift — Abbrechen → Box bleibt, Seite bleibt
+  await main.ev(`document.querySelector('.due-bell-btn').click()`, true);
+  await warteAuf(`!!document.querySelector('.mt-pop')`, 3000);
+  await main.ev(`[...document.querySelectorAll('.mt-pop .mt-eintrag')].find((x) => x.querySelector('.mt-titel').textContent === 'Amtliche Warnung').click()`, true);
+  await warteAuf(`!!document.querySelector('.mt-box')`, 3000);
+  await main.ev(`[...document.querySelectorAll('.mt-box a')].find((a) => a.textContent.trim() === 'Zur Karte').click()`, true);
+  await sleep(300);
+  check('„Zur Karte“ mit Rückfrage → Abbrechen: Box bleibt, kein Wechsel (Link, Rückfrage greift)',
+    (await main.ev(`window.__abgefangen === 1 && !!document.querySelector('.mt-box') && !location.hash`)) === true,
+    await main.ev(`({ abgefangen: window.__abgefangen, box: !!document.querySelector('.mt-box'), hash: location.hash })`));
   await main.ev(`document.removeEventListener('click', window.__wache, true); true`);
-  await main.ev(`[...document.querySelectorAll('.mt-pop .mt-eintrag')].find((x) => x.querySelector('.mt-titel').textContent === 'Amtliche Warnung').click()`, true);
-  check('Detail offen (id=40), Fenster zu', (await warteAuf(`location.search.includes('id=40') && !!document.querySelector('.mt-detail')`, 5000)) && (await main.ev(`!document.querySelector('.mt-pop')`)));
-  const det = await main.ev(`({ h: document.querySelector('.mt-detail h1').textContent, zeit: document.querySelector('.mt-detail .muted').textContent, text: document.querySelector('.mt-detail-text').textContent })`);
-  check(`Detail: Titel + „${det.zeit}“`, det.h === 'Amtliche Warnung' && det.zeit === 'Do, 26.11.2026, 00:30 Uhr', det);
-  check('Detail: voller Text', det.text === K9_VOLL);
-  check('Karte „Heute Nacht“ darunter', await main.ev(`(() => { const d = document.querySelector('.mt-detail'); const h = document.querySelector('section.hn'); return !!h && !!(d.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING); })()`));
-  check('Zurück „← Alle Mitteilungen“', (await main.ev(`[...document.querySelectorAll('a')].some((a) => a.textContent === '← Alle Mitteilungen')`)) === true);
-  console.log('  Bild:', await bild('B-pc-detail.png'));
+  await main.ev(`[...document.querySelectorAll('.mt-box a')].find((a) => a.textContent.trim() === 'Zur Karte').click()`, true);
+  check('„Zur Karte“ → Box zu, #heute-nacht, Karte „Heute Nacht“ AUFGEKLAPPT (Stunden-Streifen sichtbar)',
+    (await warteAuf(`location.hash === '#heute-nacht' && !document.querySelector('.mt-box') && !!document.querySelector('section.hn#heute-nacht .hn-streifen-rahmen')`, 5000)) &&
+      (await main.ev(`document.querySelector('section.hn .hn-auf')?.getAttribute('aria-expanded')`)) === 'true',
+    await main.ev(`({ hash: location.hash, box: !!document.querySelector('.mt-box'), karte: !!document.querySelector('section.hn'), auf: document.querySelector('section.hn .hn-auf')?.getAttribute('aria-expanded') })`));
+  check('… Karte im Bild (nicht unter der Kopfzeile)', await main.ev(`(() => { const r = document.querySelector('section.hn').getBoundingClientRect(); return r.top >= 56 && r.top < window.innerHeight; })()`));
+  console.log('  Bild:', await bild('B-pc-zur-karte.png'));
   check('keine Seitenfehler', kein().length === 0, kein().join(' | '));
 
   // ------------------------------------------------------------------ C: Handy 360 px
@@ -205,17 +247,43 @@ try {
   console.log('\nD: Seite „Alle Mitteilungen“ am Handy');
   await oeffne(V(), 360, 740);
   check('Seite da (3 Gruppen)', await warteAuf(`document.querySelectorAll('.mt-seite h2.mt-gruppe-kopf').length === 3`));
-  const sz = await main.ev(`[...document.querySelectorAll('.mt-seite a.mt-eintrag')].map((e) => e.getBoundingClientRect().height)`);
-  check('6 Einträge als Links, je ≥ 56 px', sz.length === 6 && sz.every((h) => h >= 56), sz);
+  const sz = await main.ev(`[...document.querySelectorAll('.mt-seite button.mt-eintrag')].map((e) => e.getBoundingClientRect().height)`);
+  check('6 Einträge (Knöpfe), je ≥ 56 px', sz.length === 6 && sz.every((h) => h >= 56), sz);
   check('Seite öffnet = gesehen: kein Zähler an der Glocke, die 4 neuen bleiben markiert', (await main.ev(`!document.querySelector('.due-bell-count')`)) && (await main.ev(`document.querySelectorAll('.mt-seite .mt-neu').length`)) === 4);
   check('kein Querscrollen', (await querscroll()) <= 0, await querscroll());
   console.log('  Bild:', await bild('D-handy-liste.png'));
-  await main.ev(`document.querySelector('.mt-seite a.mt-eintrag').click()`, true);
-  check('Klick auf Eintrag → Detail Schnee-Wecker', await warteAuf(`document.querySelector('.mt-detail h1')?.textContent === '❄️ Schnee-Wecker'`, 5000));
-  check('kritisch: rot markiert (Rand)', await main.ev(`document.querySelector('.mt-detail').classList.contains('mt-kritisch')`));
-  check('kein Querscrollen im Detail (Karte „Heute Nacht“ inklusive)', (await querscroll()) <= 0, await querscroll());
-  console.log('  Bild:', await bild('D-handy-detail.png'));
+  // erst fokussieren (wie ein echter Klick in Chrome/Edge) — danach muss der Fokus dorthin zurück
+  await main.ev(`(() => { const b = document.querySelector('.mt-seite button.mt-eintrag'); b.focus(); b.click(); return true; })()`, true);
+  check('Klick auf Eintrag → DIESELBE Box (Schnee-Wecker), Seite bleibt darunter', (await warteAuf(`document.querySelector('.mt-box h2')?.textContent === '❄️ Schnee-Wecker'`, 5000)) && (await main.ev(`!!document.querySelector('.mt-seite')`)));
+  check('kritisch: rot markiert (Rand oben)', await main.ev(`document.querySelector('.mt-box').classList.contains('mt-kritisch')`));
+  const boxHandy = await main.ev(`(() => { const r = document.querySelector('.mt-box').getBoundingClientRect(); const k = [...document.querySelectorAll('.mt-box-knopf')].map((e) => { const q = e.getBoundingClientRect(); return { w: Math.round(q.width), h: Math.round(q.height), r: Math.round(q.right) }; }); return { l: r.left, r: r.right, k }; })()`);
+  check('Box am Handy ganz im Bild, Knöpfe ≥ 48 px hoch und breit genug (Handschuhe)', boxHandy.l >= 0 && boxHandy.r <= 360 && boxHandy.k.length === 2 && boxHandy.k.every((k) => k.h >= 48 && k.w >= 120 && k.r <= 360), boxHandy);
+  check('kein Querscrollen mit offener Box', (await querscroll()) <= 0, await querscroll());
+  console.log('  Bild:', await bild('D-handy-box.png'));
+  await main.ev(`[...document.querySelectorAll('.mt-box-knoepfe button')].find((b) => b.textContent.trim() === 'OK').click()`, true);
+  check('„OK“ → Box zu, Fokus zurück auf dem Eintrag', (await warteAuf(`!document.querySelector('.mt-box')`, 2000)) && (await main.ev(`document.activeElement === document.querySelector('.mt-seite button.mt-eintrag')`)));
   check('keine Seitenfehler', kein().length === 0, kein().join(' | '));
+
+  // gleich geöffnet (&id=41) am Handy: „Zur Karte“ → Karte aufgeklappt
+  await oeffne(V('&id=41'), 360, 740);
+  check('&id=41: Box gleich offen', await warteAuf(`document.querySelector('.mt-box h2')?.textContent === '❄️ Schnee-Wecker'`, 5000));
+  await main.ev(`[...document.querySelectorAll('.mt-box a')].find((a) => a.textContent.trim() === 'Zur Karte').click()`, true);
+  check('Handy: „Zur Karte“ → Karte „Heute Nacht“ aufgeklappt, kein Querscrollen',
+    (await warteAuf(`location.hash === '#heute-nacht' && !!document.querySelector('section.hn .hn-streifen-rahmen')`, 5000)) && (await querscroll()) <= 0);
+  console.log('  Bild:', await bild('D-handy-zur-karte.png'));
+
+  // ruhige Nacht (grün): ohne „Zur Karte“ eingeklappt — mit „Zur Karte“ trotzdem aufgeklappt (wie am Handy)
+  await oeffne(V('&teil=neu&karte=gruen'));
+  check('ruhige Nacht, normal geöffnet: Karte eingeklappt', await warteAuf(`document.querySelector('section.hn .hn-auf')?.getAttribute('aria-expanded') === 'false' && !document.querySelector('section.hn .hn-streifen-rahmen')`, 5000));
+  await oeffne(V('&id=41&karte=gruen'));
+  await warteAuf(`!!document.querySelector('.mt-box')`, 5000);
+  await main.ev(`[...document.querySelectorAll('.mt-box a')].find((a) => a.textContent.trim() === 'Zur Karte').click()`, true);
+  check('ruhige Nacht: „Zur Karte“ klappt die Karte trotzdem auf',
+    await warteAuf(`location.hash === '#heute-nacht' && document.querySelector('section.hn .hn-auf')?.getAttribute('aria-expanded') === 'true' && !!document.querySelector('section.hn .hn-streifen-rahmen')`, 5000),
+    await main.ev(`({ hash: location.hash, auf: document.querySelector('section.hn .hn-auf')?.getAttribute('aria-expanded') })`));
+  await main.ev(`document.querySelector('section.hn .hn-auf').click()`, true);
+  check('… „Weniger“ klappt sie danach wieder zu (Wahl bleibt beim Nutzer)', await warteAuf(`document.querySelector('section.hn .hn-auf')?.getAttribute('aria-expanded') === 'false'`, 2000));
+  console.log('  Bild:', await bild('D-pc-zur-karte-gruen.png'));
 
   // ------------------------------------------------------------------ E: leer / gestört
   console.log('\nE: leer / gestört');
@@ -223,11 +291,56 @@ try {
   await warteAuf(`!!document.querySelector('.due-bell-btn')`);
   check('leer: Glocke ohne Zähler', await main.ev(`!document.querySelector('.due-bell-count')`));
   await main.ev(`document.querySelector('.due-bell-btn').click()`, true);
-  check('leer: „Keine Mitteilungen in den letzten 30 Tagen.“', await warteAuf(`document.querySelector('.mt-pop .due-pop-empty')?.textContent === 'Keine Mitteilungen in den letzten 30 Tagen.'`, 3000));
+  check('leer (Pro): „Noch keine Mitteilungen in den letzten 30 Tagen.“', await warteAuf(`document.querySelector('.mt-pop .due-pop-empty')?.textContent === 'Noch keine Mitteilungen in den letzten 30 Tagen.'`, 3000));
+  await oeffne(V('&teil=glocke&zustand=leer&pro=0'));
+  await warteAuf(`!!document.querySelector('.due-bell-btn')`);
+  check('leer (Free): Glocke trotzdem da', await main.ev(`!!document.querySelector('.due-bell-btn')`));
+  await main.ev(`document.querySelector('.due-bell-btn').click()`, true);
+  check('leer (Free): „Hier erscheinen Glätte-Frühwarnung und Wetter-Hinweise (WinterDex Pro).“ — ohne Kauf-Knopf',
+    (await warteAuf(`document.querySelector('.mt-pop .due-pop-empty')?.textContent === 'Hier erscheinen Glätte-Frühwarnung und Wetter-Hinweise (WinterDex Pro).'`, 3000)) && (await main.ev(`![...document.querySelectorAll('.mt-pop a')].some((a) => /abo|kauf/i.test(a.href + a.textContent))`)));
+  await oeffne(V('&zustand=leer&pro=0'), 360, 740);
+  check('Seite leer (Free): derselbe ruhige Text', await warteAuf(`document.querySelector('.mt-seite .card.muted')?.textContent === 'Hier erscheinen Glätte-Frühwarnung und Wetter-Hinweise (WinterDex Pro).'`, 3000));
   await oeffne(V('&teil=glocke&zustand=gestoert'));
   await warteAuf(`!!document.querySelector('.due-bell-btn')`);
   await main.ev(`document.querySelector('.due-bell-btn').click()`, true);
   check('gestört: „nicht aktuell · Stand Do 10:00“ (letzter Stand bleibt)', await warteAuf(`/nicht aktuell · Stand/.test(document.querySelector('.mt-pop .due-pop-head')?.textContent ?? '') && document.querySelectorAll('.mt-pop .mt-eintrag').length === 6`, 3000), await main.ev(`document.querySelector('.mt-pop .due-pop-head')?.textContent`));
+  check('keine Seitenfehler', kein().length === 0, kein().join(' | '));
+
+  // ------------------------------------------------------------------ F: Hinweis „Neu“ und Onboarding-Schritt
+  console.log('\nF: Hinweis „Neu: Heute Nacht und Mitteilungen“ und Onboarding-Schritt „Wetter-Guide & Mitteilungen“');
+  for (const [breite, hoehe] of [[1280, 900], [360, 740]]) {
+    await oeffne(V('&teil=neu&pro=0'), breite, hoehe);
+    check(`${breite} px: Hinweis „Neu“ über der Karte „Heute Nacht“`,
+      await warteAuf(`(() => { const n = document.querySelector('.mt-neu-hinweis'); const h = document.querySelector('section.hn'); return !!n && !!h && !!(n.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING); })()`, 5000));
+    const neu = await main.ev(`({ h: document.querySelector('.mt-neu-hinweis h2').textContent.trim(), punkte: [...document.querySelectorAll('.mt-neu-hinweis .mt-erklaer b')].map((b) => b.textContent), pro: document.querySelectorAll('.mt-neu-hinweis .mt-erklaer .mt-pro').length, text: document.querySelector('.mt-neu-hinweis').textContent, k: [...document.querySelectorAll('.mt-neu-knoepfe .btn')].map((e) => Math.round(e.getBoundingClientRect().height)) })`);
+    check(`${breite} px: Titel, vier Punkte (Schnee-Wecker frei: mit „Pro“ und Wecker-Hinweis), Pro ruhig (Free), Knöpfe ≥ 48 px`,
+      neu.h === 'Neu: Heute Nacht und Mitteilungen' && neu.punkte.join('|') === 'Heute Nacht|Glocke oben rechts|Mitteilungen aufs Handy|Schnee-Wecker' && neu.pro === 1 && neu.text.includes('Der Schnee-Wecker ersetzt keinen eigenen Wecker.') &&
+        neu.text.includes('Mitteilungen aufs Handy gibt es mit WinterDex Pro.') && neu.k.length === 2 && neu.k.every((h) => h >= 48), neu);
+    check(`${breite} px: kein Querscrollen`, (await querscroll()) <= 0, await querscroll());
+    console.log('  Bild:', await bild(`F-${breite}-neu.png`));
+    await main.ev(`[...document.querySelectorAll('.mt-neu-knoepfe button')].find((b) => b.textContent.trim() === 'Alles klar').click()`, true);
+    check(`${breite} px: „Alles klar“ blendet den Hinweis aus, die Karte bleibt`, (await warteAuf(`!document.querySelector('.mt-neu-hinweis')`, 2000)) && (await main.ev(`!!document.querySelector('section.hn')`)));
+  }
+  await oeffne(V('&teil=neu'));
+  await warteAuf(`!!document.querySelector('.mt-neu-hinweis')`, 5000);
+  check('Pro: kein Pro-Hinweis im Hinweis „Neu“', !(await main.ev(`document.querySelector('.mt-neu-hinweis').textContent.includes('WinterDex Pro')`)));
+  // Schnee-Wecker am Server noch nicht frei (K10 fehlt in guide_live_arten): nie etwas versprechen, das man nicht findet
+  await oeffne(V('&teil=neu&wecker=0'));
+  await warteAuf(`!!document.querySelector('.mt-neu-hinweis')`, 5000);
+  check('Schnee-Wecker noch nicht frei: Hinweis „Neu“ nennt ihn nicht (drei Punkte)',
+    (await main.ev(`[...document.querySelectorAll('.mt-neu-hinweis .mt-erklaer b')].map((b) => b.textContent).join('|')`)) === 'Heute Nacht|Glocke oben rechts|Mitteilungen aufs Handy' &&
+      !(await main.ev(`document.querySelector('.mt-neu-hinweis').textContent.includes('Schnee-Wecker')`)));
+  for (const [rolle, breite] of [['', 360], ['team', 360], ['', 1280]]) {
+    await oeffne(V(`&teil=onboarding${rolle ? `&rolle=${rolle}` : ''}`), breite, 740);
+    check(`Onboarding ${rolle || 'Inhaber'} ${breite} px: Schritt „Wetter-Guide & Mitteilungen“ mit drei Punkten`,
+      await warteAuf(`document.querySelector('.mt-schritt h1')?.textContent === 'Wetter-Guide & Mitteilungen' && document.querySelectorAll('.mt-schritt .mt-erklaer li').length === 3`, 5000));
+    const ob = await main.ev(`({ text: document.querySelector('.mt-schritt').textContent, knopf: (() => { const r = document.querySelector('.mt-schritt .btn.ez-big').getBoundingClientRect(); return { h: Math.round(r.height), t: document.querySelector('.mt-schritt .btn.ez-big').textContent.trim() }; })() })`);
+    check(`… ${rolle ? 'Mitarbeiter: kein Pro-Hinweis' : 'Inhaber: Pro-Hinweis ruhig'}, kein Schnee-Wecker (Freigabe hier unbekannt), „Weiter zum Dashboard“ ≥ 48 px`,
+      (rolle ? !ob.text.includes('WinterDex Pro') && ob.text.includes('Du bist dem Team beigetreten.') : ob.text.includes('Mitteilungen aufs Handy gibt es mit WinterDex Pro.') && ob.text.includes('Dein Betrieb ist angelegt.')) &&
+        !ob.text.includes('Schnee-Wecker') && ob.knopf.t === 'Weiter zum Dashboard' && ob.knopf.h >= 48, ob);
+    check('… kein Querscrollen', (await querscroll()) <= 0, await querscroll());
+    console.log('  Bild:', await bild(`F-onboarding-${rolle || 'inhaber'}-${breite}.png`));
+  }
   check('keine Seitenfehler', kein().length === 0, kein().join(' | '));
 } catch (e) {
   fail++;

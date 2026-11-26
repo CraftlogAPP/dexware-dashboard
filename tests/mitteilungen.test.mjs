@@ -1,4 +1,4 @@
-// WinterDex Mitteilungs-Center im Dashboard (26.11.2026) — Glocke oben rechts, Liste, Detail. Ohne Browser und ohne
+// WinterDex Mitteilungs-Center im Dashboard (26.11.2026) — Glocke oben rechts, Liste, Box. Ohne Browser und ohne
 // Netz; Antworten im Format des Vertrags v1 von meine_mitteilungen (NACHTRAG-MITTEILUNGEN-2026-11-26.sql), keine
 // Kundendaten (Texte wie aus Alex' Feldtest 26.11., Orte erfunden bzw. nur Gemeinde).
 //   [1] meine_mitteilungen lesen (v1, Fallbacks, kaputte Einträge, Doppel, Reihenfolge, voller Text bleibt voll)
@@ -10,8 +10,14 @@
 //       Speicher kaputt/gesperrt → kein Absturz)
 //   [6] Symbol und Name je Art (K1 … K10, TEST)
 //   [7] Quelltext-Wächter (Glocke nur im WinterDex-Bereich, innerhalb des Betriebs-Kontexts, kein „gelesen“ an den
-//       Server, voller Text in Liste und Detail, Karte „Heute Nacht“ im Detail, keine Datums-Falle)
-//   [8] Gegenprobe mit dem SQL-Nachtrag (falls eine WinterDex-Arbeitskopie ihn hat)
+//       Server, voller Text in Liste und Box, Einträge öffnen die Box statt einer Detailseite, „Zur Karte“ als Link zur
+//       aufgeklappten Karte „Heute Nacht“, keine Datums-Falle)
+//   [8] Gegenprobe mit dem SQL-Nachtrag (falls eine WinterDex-Arbeitskopie ihn hat), u. a. letzte 30 Tage
+//   Vertrag v2 (Alex' Entscheidungen nach Runde 1, 26.11.):
+//   [9] Box: Ziel „Zur Karte“ (Dashboard / Außendienst), Zeile Art · Uhrzeit
+//   [10] leere Liste: Pro „Noch keine Mitteilungen …“, Free „Hier erscheinen … (WinterDex Pro).“
+//   [11] Hinweis „Neu: Heute Nacht und Mitteilungen“ (einmal, nur Bestand, localStorage) + Onboarding-Schritt
+//   [12] Texte: Begriffe, „ersetzt keinen eigenen Wecker“, keine Versprechen
 //
 //   Aufruf:  node tests/mitteilungen.test.mjs        (Node ab 22.18, liest die .ts-Dateien direkt)
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -256,21 +262,40 @@ console.log('\n[7] Quelltext-Wächter');
     glockeIn.length === 1 && glockeIn[0] === 'src/winterdex/WinterdexArea.tsx' && !/Mitteilung/.test(lies('src/components/AppArea.tsx')) && /const Vorschau = import\.meta\.env\.DEV/.test(lies('src/App.tsx')), glockeIn);
   check('Glocke + Provider innerhalb von OrgGate (Betrieb steht fest), Platz in der Kopfzeile per ref',
     /<OrgGate[^>]*>[\s\S]*<MitteilungenProvider base=\{`\/app\/\$\{app\.id\}`\}>[\s\S]*<MitteilungsGlocke platz=\{glockenPlatz\} \/>[\s\S]*<\/MitteilungenProvider>[\s\S]*<\/OrgGate>/.test(area) && /<span className="mt-platz" ref=\{setGlockenPlatz\} \/>/.test(area));
-  check('Seiten „Alle Mitteilungen“ und Detail im Dashboard', /<Route path="mitteilungen" element=\{<MitteilungenSeite \/>\} \/>/.test(area) && /<Route path="mitteilungen\/:id" element=\{<MitteilungSeite \/>\} \/>/.test(area));
+  check('Seite „Alle Mitteilungen“ im Dashboard — KEINE eigene Detailseite mehr (Vertrag v2: eine Mitteilung öffnet die Box)',
+    /<Route path="mitteilungen" element=\{<MitteilungenSeite \/>\} \/>/.test(area) && !/mitteilungen\/:id/.test(area) && !src.some(([, s]) => /MitteilungSeite\b|MitteilungAnsicht\b|mt-detail/.test(s)));
   check('kein „gelesen“ an den Server (AVV § 4a): keine RPC mit gelesen, kein Schreiben in wetter_push aus dem Browser',
     !src.some(([, s]) => /rpc\(\s*['"][^'"]*(gelesen|gesehen|read)/i.test(s)) && !src.some(([, s]) => /from\(['"]wetter_push['"]\)[\s\S]{0,80}\.(insert|update|upsert|delete)\(/.test(s)));
   const center = lies('src/winterdex/MitteilungsCenter.tsx');
   const seiten = lies('src/winterdex/pages/Mitteilungen.tsx');
-  check('Liste und Detail zeigen den VOLLEN Text (m.text), nie nur den kurzen Handy-Text', /<span className="mt-text">\{m\.text\}<\/span>/.test(center) && /<p className="mt-detail-text">\{m\.text\}<\/p>/.test(center) && !/m\.kurz/.test(center + seiten));
-  check('Detail: Karte „Heute Nacht“ darunter (mit festen Links, nicht relativ zur Detail-Adresse)', /<HeuteNacht[\s\S]*links=\{\{ objekte: `\$\{base\}\/objekte`, team: `\$\{base\}\/team`, abo: `\$\{base\}\/abo` \}\}/.test(seiten));
-  check('Glocke unsichtbar, solange der Server nichts anbietet (da = false)', /if \(!st \|\| !st\.da \|\| !platz\) return null;/.test(center));
-  // useUnsavedGuard (Aufzeichnung läuft / Einsatz nicht gespeichert) fängt nur Klicks auf Links ab — ein navigate()
-  // aus der Glocke verließe den Außendienst ohne Rückfrage
+  check('Liste und Box zeigen den VOLLEN Text (m.text), nie nur den kurzen Handy-Text',
+    /<span className="mt-text">\{m\.text\}<\/span>/.test(center) && /<p id=\{textId\} className="mt-box-text">\s*\{m\.text\}\s*<\/p>/.test(center) && !/m\.kurz/.test(center + seiten));
+  check('Glocke (und Box) unsichtbar, solange der Server nichts anbietet (da = false)', /if \(!st \|\| !st\.da\) return null;/.test(center) && /\{platz && createPortal\(<Glocke st=\{st\} \/>, platz\)\}/.test(center));
+  check('Box steht im Bereich, nicht per Portal am <body> (dort fehlten die Farben der App): genau EIN createPortal (Glocke)',
+    (center.match(/createPortal\(/g) ?? []).length === 1 && /\{st\.offen && <MitteilungBox key=\{st\.offen\.id\} m=\{st\.offen\} tz=\{st\.tz\} basis=\{st\.basis\} onClose=\{st\.schliessen\} \/>\}/.test(center));
+  // Einträge öffnen nur die Box — die Seite bleibt, wo sie ist (auch mitten im Außendienst). Erst „Zur Karte“ wechselt die
+  // Seite, und das ist ein Link: useUnsavedGuard (Aufzeichnung läuft / Einsatz nicht gespeichert) fängt nur Links ab.
   const ohneKommentar = center.replace(/^\s*\/\/.*$/gm, '');
-  check('Einträge im Glockenfenster sind Links (Rückfrage „Aufzeichnung läuft“ greift), kein navigate() aus der Glocke',
-    /<Link key=\{m\.id\} to=\{st\.pfad\(m\.id\)\} className=\{`mt-eintrag/.test(center) && !/useNavigate|navigate\(/.test(ohneKommentar) && !/<button[^>]*mt-eintrag/.test(center));
+  check('Einträge (Glocke und Seite) sind Knöpfe, die DIESELBE Box öffnen; kein navigate()',
+    /<button key=\{m\.id\} type="button" className=\{`mt-eintrag\$\{m\.kritisch \? ' mt-kritisch' : ''\}`\} onClick=\{\(\) => oeffne\(m\)\}>/.test(center) &&
+      /function oeffne\(m: Mitteilung\) \{\s*zu\(true\);\s*zeigen\(m\);\s*\}/.test(center) &&
+      /<button key=\{m\.id\} type="button" className=\{`mt-eintrag\$\{m\.kritisch \? ' mt-kritisch' : ''\}`\} onClick=\{\(\) => st\.zeigen\(m\)\}>/.test(seiten) &&
+      !/useNavigate|navigate\(/.test(ohneKommentar + seiten) && !/<Link[^>]*mt-eintrag/.test(center + seiten));
+  check('Box: „Zur Karte“ ist ein Link (Rückfrage greift) zur Karte „Heute Nacht“, schließt die Box; „OK“ schließt',
+    /<Link className="btn ghost mt-box-knopf" to=\{kartePfad\(basis, pathname\)\} onClick=\{onClose\}>\s*<MapIcon className="i" aria-hidden \/> Zur Karte\s*<\/Link>/.test(center) &&
+      /<button ref=\{okRef\} type="button" className="btn mt-box-knopf" onClick=\{onClose\}>\s*OK\s*<\/button>/.test(center));
+  check('Box: Dialog (aria-modal, Titel + Text verknüpft), Fokus auf „OK“ und danach zurück, Escape und Klick daneben schließen',
+    /role="dialog"\s*aria-modal="true"\s*aria-labelledby=\{titelId\}\s*aria-describedby=\{textId\}/.test(center) && /okRef\.current\?\.focus\(/.test(center) && /vorher\.isConnected\) vorher\.focus\(/.test(center) &&
+      /if \(e\.key === 'Escape'\) \{\s*e\.stopPropagation\(\);\s*onClose\(\);/.test(center) && /if \(e\.target === e\.currentTarget\) onClose\(\);/.test(center));
+  check('Box: Symbol der Art, Titel, Art · volle Uhrzeit (boxZeile)', /<MtSymbolBild kart=\{m\.kart\} kritisch=\{m\.kritisch\} gross \/>/.test(center) && /<h2 id=\{titelId\}>\{m\.titel\}<\/h2>/.test(center) && /\{boxZeile\(m, tz\)\}/.test(center));
+  const ov = lies('src/winterdex/pages/Overview.tsx');
+  const ad = lies('src/winterdex/aussendienst/Aussendienst.tsx');
+  const hnSrc = lies('src/winterdex/HeuteNacht.tsx');
+  check('„Zur Karte“ landet auf der Karte: Übersicht und Außendienst klappen sie bei #heute-nacht auf (je Sprung neu, ins Bild geholt)',
+    /const zurKarte = hash === `#\$\{KARTE_ANKER\}` \? key : null;/.test(ov) && /aufklappen=\{zurKarte\}/.test(ov) && /aufklappen=\{hash === `#\$\{KARTE_ANKER\}` \? key : null\}/.test(ad) &&
+      /key=\{aufklappen \?\? 'karte'\}/.test(hnSrc) && /id=\{KARTE_ANKER\}/.test(hnSrc) && /if \(aufklappen\) ref\.current\?\.scrollIntoView\(/.test(hnSrc));
   const schutz = lies('src/components/ui.tsx');
-  check('… die Rückfrage fängt wirklich nur a[href] ab (sonst wäre der Wächter oben unnötig)', /closest\?\.\('a\[href\]'\)/.test(schutz));
+  check('… die Rückfrage fängt wirklich nur a[href] ab (darum ist „Zur Karte“ ein Link)', /closest\?\.\('a\[href\]'\)/.test(schutz));
   check('ein Abruf je Betrieb (Kontext), alle 2 Min. still neu', /useLiveRefresh\(\[laden\], 2 \* 60_000\)/.test(lies('src/winterdex/mitteilungenKontext.ts')));
   const neueDateien = ['src/winterdex/mitteilungenDaten.ts', 'src/winterdex/mitteilungenKontext.ts', 'src/winterdex/MitteilungsCenter.tsx', 'src/winterdex/pages/Mitteilungen.tsx'].map(lies).join('\n');
   check('keine Datums-Falle (toISOString().slice) in den neuen Dateien', !/toISOString\(\)\.slice/.test(neueDateien));
@@ -291,6 +316,9 @@ console.log('\n[8] Gegenprobe SQL-Nachtrag');
   if (sql) {
     check('SQL: meine_mitteilungen(p_org …) liefert die Felder, die das Dashboard liest', /function public\.meine_mitteilungen\s*\(\s*p_org uuid/i.test(sql) && ['mitteilungen', 'art_name', 'titel', 'text', 'kurz', 'zeit', 'kritisch'].every((k) => sql.includes(`'${k}'`)));
     check('SQL: Fassung v 1', /'v',\s*1\b/.test(sql));
+    // E (Vertrag v2): Liste = letzte 30 Tage — der Server entscheidet (Standard von p_seit), das Dashboard schickt kein p_seit
+    check('SQL: meine_mitteilungen zeigt standardmäßig die letzten 30 Tage (p_seit default now() - 30 days, auch bei null)',
+      /meine_mitteilungen\s*\(\s*p_org uuid,\s*p_seit timestamptz default now\(\) - interval '30 days'\)/i.test(sql) && /coalesce\(p_seit, now\(\) - interval '30 days'\)/i.test(sql));
     // Absage des Servers: das Dashboard versteckt die Glocke nur beim Wort „kein_mitglied“ (sonst: letzter Stand bleibt)
     const rpc = sql.slice(sql.search(/create or replace function public\.meine_mitteilungen/i));
     const rpcAbsagen = [...rpc.slice(0, rpc.search(/\bend \$\$;/)).matchAll(/'fehler',\s*'([a-z_]+)'/g)].map((x) => x[1]);
@@ -298,6 +326,106 @@ console.log('\n[8] Gegenprobe SQL-Nachtrag');
       rpcAbsagen.includes('kein_mitglied') && rpcAbsagen.every((w) => ['kein_mitglied', 'nicht_angemeldet'].includes(w)), rpcAbsagen);
     check('SQL: kein Gelesen-Stand am Server', !/gelesen_at|gelesen\s+(boolean|timestamptz)/i.test(sql));
   } else console.log('  --    (Gegenprobe übersprungen: keine WinterDex-Arbeitskopie mit NACHTRAG-MITTEILUNGEN-2026-11-26.sql gefunden)');
+}
+
+// ---------------------------------------------------------------------------------------------------------------- [9]
+console.log('\n[9] Box: „Zur Karte“ und Zeile unter dem Titel');
+{
+  const B = '/app/winterdex';
+  check('aus dem Dashboard (Übersicht, Objekte, Seite „Mitteilungen“) → Übersicht #heute-nacht',
+    MT.kartePfad(B, B) === '/app/winterdex#heute-nacht' && MT.kartePfad(B, `${B}/objekte/7`) === '/app/winterdex#heute-nacht' && MT.kartePfad(B, `${B}/mitteilungen`) === '/app/winterdex#heute-nacht');
+  check('aus dem Außendienst → bleibt im Außendienst (Reiter Objekte, Karte aufgeklappt)',
+    MT.kartePfad(B, `${B}/aussendienst`) === '/app/winterdex/aussendienst#heute-nacht' && MT.kartePfad(B, `${B}/aussendienst/strecken/3/fahren`) === '/app/winterdex/aussendienst#heute-nacht');
+  check('… „aussendienstX“ ist nicht der Außendienst', MT.kartePfad(B, `${B}/aussendienstX`) === '/app/winterdex#heute-nacht');
+  const k10 = liste.find((m) => m.kart === 'K10');
+  const k1 = liste.find((m) => m.kart === 'K1');
+  const vorabend = { titel: 'Heute Nacht Glätte möglich', art_name: 'Vorabend-Lage', ms: Date.parse('2026-11-25T18:00:00Z') };
+  check('Zeile: nur die volle Uhrzeit, wenn der Titel die Art schon nennt („❄️ Schnee-Wecker“)', MT.boxZeile(k10, TZ) === 'Do, 26.11.2026, 04:12 Uhr', MT.boxZeile(k10, TZ));
+  check('Zeile: „Vorabend-Lage · Mi, 25.11.2026, 19:00 Uhr“ (Art + Wiener Zeit, Gerät auf UTC)', MT.boxZeile(vorabend, TZ) === 'Vorabend-Lage · Mi, 25.11.2026, 19:00 Uhr' && MT.boxZeile(k1, TZ) === 'Mi, 25.11.2026, 19:00 Uhr', [MT.boxZeile(vorabend, TZ), MT.boxZeile(k1, TZ)]);
+}
+
+// ---------------------------------------------------------------------------------------------------------------- [10]
+console.log('\n[10] Leere Liste: Pro / Free (Alex 26.11.)');
+{
+  check('Pro: „Noch keine Mitteilungen in den letzten 30 Tagen.“', MT.leerText(true) === 'Noch keine Mitteilungen in den letzten 30 Tagen.' && MT.LEER_PRO === MT.leerText(true));
+  check('Free (sicher kein Pro): „Hier erscheinen Glätte-Frühwarnung und Wetter-Hinweise (WinterDex Pro).“', MT.leerText(false) === 'Hier erscheinen Glätte-Frühwarnung und Wetter-Hinweise (WinterDex Pro).');
+  check('Pro-Stand unklar / noch nicht gefragt → Text wie bei Pro (nie zu Unrecht „Pro“ zeigen)', MT.leerText(null) === MT.LEER_PRO && MT.leerText(undefined) === MT.LEER_PRO);
+  const center = lies('src/winterdex/MitteilungsCenter.tsx');
+  const seiten = lies('src/winterdex/pages/Mitteilungen.tsx');
+  const kontext = lies('src/winterdex/mitteilungenKontext.ts');
+  check('Glocke und Seite zeigen bei leerer Liste leerText(st.pro) — die Glocke bleibt auch für Free-Betriebe', /<div className="due-pop-empty">\{leerText\(st\.pro\)\}<\/div>/.test(center) && /<div className="card muted">\{leerText\(st\.pro\)\}<\/div>/.test(seiten) && !/LEER_TEXT/.test(center + seiten));
+  check('Pro wird nur gefragt, wenn die Liste leer ist (Anzeige-Regel fetchOrgPro: unklar → wie Pro)', /const leer = !!ok && ok\.liste\.length === 0;/.test(kontext) && /if \(!leer\) return;\s*let weg = false;\s*fetchOrgPro\(client\)/.test(kontext));
+  check('kein Kauf-Knopf in Glocke/Seite (ruhiger Text, kein harter Verkauf)', !/to=\{[^}]*abo|Pro holen|Jetzt kaufen/i.test(center + seiten));
+}
+
+// ---------------------------------------------------------------------------------------------------------------- [11]
+console.log('\n[11] Hinweis „Neu: Heute Nacht und Mitteilungen“ (Bestand, nur dieser Browser) und Onboarding-Schritt');
+{
+  speicher.clear();
+  const alt = '2026-10-01T08:00:00Z';
+  check('Schlüssel je Konto, im Speicher nur „1“', MT.NEU_HINWEIS_KEY('u-1') === 'winterdex.hinweis.neu-mitteilungen.u-1');
+  check('Bestand (Betrieb älter als 3 Tage), noch nie gesehen → fällig', MT.neuHinweisFaellig('u-1', alt, JETZT) === true);
+  check('ohne Konto → nie', MT.neuHinweisFaellig(null, alt, JETZT) === false && MT.neuHinweisFaellig('', alt, JETZT) === false);
+  check('Neuanlage (Betrieb vor 2 Tagen angelegt, z. B. in der App) → nicht fällig', MT.neuHinweisFaellig('u-1', new Date(JETZT - 2 * 86_400_000).toISOString(), JETZT) === false);
+  check('… vor 4 Tagen angelegt → fällig (Bestand)', MT.neuHinweisFaellig('u-1', new Date(JETZT - 4 * 86_400_000).toISOString(), JETZT) === true);
+  check('Anlegedatum fehlt/kaputt → zählt als Bestand', MT.neuHinweisFaellig('u-1', null, JETZT) === true && MT.neuHinweisFaellig('u-1', 'gestern', JETZT) === true);
+  MT.neuHinweisMerken('u-1');
+  check('einmal gezeigt → gemerkt (nur „1“), danach nie wieder', speicher.get(MT.NEU_HINWEIS_KEY('u-1')) === '1' && MT.neuHinweisFaellig('u-1', alt, JETZT) === false);
+  check('anderes Konto im selben Browser: eigener Stand', MT.neuHinweisFaellig('u-2', alt, JETZT) === true);
+  MT.neuHinweisMerken(null);
+  check('merken ohne Konto: nichts gespeichert', speicher.size === 1);
+  globalThis.localStorage = { getItem() { throw new Error('gesperrt'); }, setItem() { throw new Error('gesperrt'); }, removeItem() {} };
+  let wirft = false;
+  let r = null;
+  try {
+    r = MT.neuHinweisFaellig('u-9', alt, JETZT);
+    MT.neuHinweisMerken('u-9');
+  } catch {
+    wirft = true;
+  }
+  check('Speicher gesperrt: wirft nie, kein Hinweis (lieber zu selten als bei jedem Besuch)', !wirft && r === false);
+  globalThis.localStorage = normalerSpeicher;
+
+  const center = lies('src/winterdex/MitteilungsCenter.tsx');
+  const ob = lies('src/winterdex/Onboarding.tsx');
+  const ov = lies('src/winterdex/pages/Overview.tsx');
+  const ad = lies('src/winterdex/aussendienst/Aussendienst.tsx');
+  const hnSrc = lies('src/winterdex/HeuteNacht.tsx');
+  check('Hinweis „Neu“ nur mit Glocke (Server-Nachtrag da) und Konto; Merker schon beim Zeigen (EINMAL)',
+    /if \(stand === null && st\?\.da && uid\) setStand\(neuHinweisFaellig\(uid, angelegt, Date\.now\(\)\) \? 'offen' : 'zu'\);/.test(center) && /if \(stand === 'offen'\) neuHinweisMerken\(uid\);/.test(center));
+  check('Hinweis „Neu“ steht auf der Übersicht direkt über der Karte „Heute Nacht“ — nur wenn die Karte zu sehen ist; nicht im Außendienst',
+    /davor=\{\(d\) => <NeuHinweis wecker=\{weckerFrei\(d\.guide_live_arten\)\} \/>\}/.test(ov) && /<>\s*\{davor\?\.\(d\)\}\s*<HeuteNachtKarte/.test(hnSrc) && !/NeuHinweis/.test(ad));
+  check('Hinweis „Neu“: Titel, die Punkte (Schnee-Wecker nur wenn frei), „Alles klar“ und „Alle Mitteilungen“ (große Knöpfe)',
+    /Neu: Heute Nacht und Mitteilungen/.test(center) && /<ErklaerListe wecker=\{wecker\} \/>/.test(center) && /Alles klar/.test(center) && /<Link className="btn ghost" to=\{seite\}>\s*Alle Mitteilungen/.test(center));
+  check('Onboarding: nach Anlegen UND Beitreten der Schritt „Wetter-Guide & Mitteilungen“ (erst dann ins Dashboard), Merker gesetzt',
+    /const geschafft = \(wie: 'inhaber' \| 'team'\) => \{\s*neuHinweisMerken\(uid\);\s*setFertig\(wie\);/.test(ob) && /geschafft\('inhaber'\);/.test(ob) && /geschafft\('team'\);/.test(ob) &&
+      /if \(fertig\) return <WetterGuideSchritt inhaber=\{fertig === 'inhaber'\} refNote=\{refNote\} onWeiter=\{org\.reload\} \/>;/.test(ob) && /<h1>Wetter-Guide & Mitteilungen<\/h1>/.test(ob));
+  check('… Empfehlungs-Code ging nicht: Hinweis steht im Schritt, Betrieb bleibt angelegt', /\{refNote && <div className="info-box">Empfehlungs-Code nicht eingetragen: \{refNote\}<\/div>\}/.test(ob));
+  check('… Pro-Hinweis nur für den Inhaber, ohne Kauf-Knopf', /\{inhaber && <p className="muted small">\{PRO_HINWEIS\}<\/p>\}/.test(ob) &&!/to=\{[^}]*abo|Pro holen/i.test(ob.slice(ob.indexOf('export function WetterGuideSchritt'))));
+  check('… WinterDex-Bereich zeigt ohne Betrieb genau dieses Onboarding', /<OrgGate noOrg=\{<Onboarding \/>\}>/.test(lies('src/winterdex/WinterdexArea.tsx')));
+}
+
+// ---------------------------------------------------------------------------------------------------------------- [12]
+console.log('\n[12] Texte (G): Begriffe, Wecker-Hinweis, keine Versprechen');
+{
+  const texte = [MT.LEER_PRO, MT.LEER_FREE, MT.SEITE_TEXT, MT.EINSTELLEN_HINWEIS, MT.PRO_HINWEIS, ...MT.erklaerPunkte(true).flatMap((p) => [p.titel, p.text])].join(' ');
+  check('drei Punkte: Heute Nacht, Glocke oben rechts, Mitteilungen aufs Handy', MT.erklaerPunkte(false).map((p) => p.titel).join('|') === 'Heute Nacht|Glocke oben rechts|Mitteilungen aufs Handy');
+  check('Begriffe wie in der App: Glätte-Frühwarnung, Schnee-Wecker, Mitteilungen; eingestellt in der App (Einstellungen → Mitteilungen)',
+    ['Glätte-Frühwarnung', 'Schnee-Wecker', 'Mitteilungen', 'Einstellungen → Mitteilungen'].every((w) => texte.includes(w)));
+  // nie etwas versprechen, das man in der App nicht findet (wie „Neu in WinterDex 0.7.15“ der App)
+  check('Schnee-Wecker nur, wenn am Server freigegeben (K10 in guide_live_arten) — dann als 4. Punkt mit „Pro“, Text wie in der App',
+    !MT.erklaerPunkte(false).some((p) => /Schnee-Wecker/.test(p.titel + p.text)) && MT.erklaerPunkte(true).length === 4 && MT.erklaerPunkte(true)[3].titel === 'Schnee-Wecker' && MT.erklaerPunkte(true)[3].pro === true &&
+      MT.WECKER_PUNKT.text.startsWith('Weckt dich, wenn bei deinen Objekten Schnee kommt – 1 Stunde vorher oder wenn er einsetzt.') &&
+      MT.weckerFrei(['K2', 'K10']) && !MT.weckerFrei(['K2']) && !MT.weckerFrei([]) && !MT.weckerFrei(null) && !MT.weckerFrei(undefined));
+  check('… mit dem Pflicht-Hinweis „ersetzt keinen eigenen Wecker“', MT.WECKER_HINWEIS === 'Der Schnee-Wecker ersetzt keinen eigenen Wecker.' && MT.WECKER_PUNKT.text.endsWith(MT.WECKER_HINWEIS));
+  const obCode = lies('src/winterdex/Onboarding.tsx').replace(/^\s*(\/\/|\*|\/\*).*$/gm, '');
+  check('Onboarding-Schritt nennt den Schnee-Wecker nicht (Freigabe dort unbekannt)', !/Schnee-Wecker|WECKER/.test(obCode) && /<ErklaerListe \/>/.test(obCode));
+  check('Liste nimmt die Punkte aus erklaerPunkte(wecker)', /\{erklaerPunkte\(wecker\)\.map\(/.test(lies('src/winterdex/MitteilungsCenter.tsx')));
+  const dateien = ['src/winterdex/mitteilungenDaten.ts', 'src/winterdex/mitteilungenKontext.ts', 'src/winterdex/MitteilungsCenter.tsx', 'src/winterdex/pages/Mitteilungen.tsx', 'src/winterdex/Onboarding.tsx'];
+  const ohneKommentare = dateien.map((f) => lies(f).replace(/^\s*(\/\/|\*|\/\*).*$/gm, '')).join('\n');
+  const verboten = ['verpasst nichts', 'verpasst du nichts', 'nichts verpassen', 'schützt vor Haftung', 'garantiert', 'Garantie'].filter((w) => ohneKommentare.toLowerCase().includes(w.toLowerCase()));
+  check('nie „verpasst nichts“, „schützt vor Haftung“, „garantiert“', verboten.length === 0, verboten);
+  check('Free-Text ohne Kauf-Druck (kein „jetzt“, kein Preis)', !/jetzt|€|kaufen/i.test(MT.LEER_FREE + MT.PRO_HINWEIS));
 }
 
 console.log(`\n${fail === 0 ? 'ALLES GRÜN' : 'FEHLER'}: ${ok} ok, ${fail} Fehler`);
