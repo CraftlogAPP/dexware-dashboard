@@ -271,10 +271,11 @@ export const APPS: AppConfig[] = [
       pro: {
         link: '',
         plans: [
-          // Seit 25.11.2026: Paddle-Jahrespreis 49,99 € (pri_01m8a558fgmh4sjwsm33e96wy4) im RevenueCat-Angebot web_pro_live,
-          // Paket $rc_annual (+ $rc_monthly 9,99 €). Kauf-Link für web_pro_live erst nach Paddle-Freigabe von pay.rev.cat.
-          { pkg: '$rc_annual', title: 'Saison', price: '49,99 €', per: 'pro Jahr', note: 'deckt die ganze Wintersaison', best: true, tag: 'Meist gewählt' },
-          { pkg: '$rc_monthly', title: 'Monatlich', price: '9,99 €', per: 'pro Monat', note: 'monatlich kündbar' },
+          // Neukundenpreise seit 26.11.2026 (Alex): 69,99 € / Jahr, 19,99 € / Monat (25.11.: 49,99 € / 9,99 €, Paddle
+          // pri_01m8a558fgmh4sjwsm33e96wy4). Paddle-Preise + RevenueCat-Angebot web_pro_live ($rc_annual, $rc_monthly) stellt die
+          // Hauptsitzung im Browser um. Kauf-Link für web_pro_live erst nach Paddle-Freigabe von pay.rev.cat.
+          { pkg: '$rc_annual', title: 'Saison', price: '69,99 €', per: 'pro Jahr', note: 'deckt die ganze Wintersaison', best: true, tag: 'Meist gewählt' },
+          { pkg: '$rc_monthly', title: 'Monatlich', price: '19,99 €', per: 'pro Monat', note: 'monatlich kündbar' },
         ],
       },
     },

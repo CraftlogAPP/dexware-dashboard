@@ -102,7 +102,7 @@ Danke-Ansicht: `/vorschau-kauf?kasse=danke&status=pruefe|ok|spaeter[&sandbox]`.
    Kennung“) stimmt dann nicht mehr.
 5. `node tests/paddle-kasse.test.mjs` (prüft auch den eingetragenen Schlüssel), alle Tests, `npm run build`; dann auf `master`
    übernehmen und veröffentlichen.
-6. Echtkauf mit dem eigenen Konto: Monatstarif (9,99 €), Ablauf wie im Sandbox-Test prüfen. Danach in Paddle Live →
+6. Echtkauf mit dem eigenen Konto: Monatstarif (19,99 € für Neukunden seit 26.11.2026; solange Paddle noch nicht umgestellt ist: 9,99 €), Ablauf wie im Sandbox-Test prüfen. Danach in Paddle Live →
    Transactions → die Transaktion → **Refund** (voll). Prüfen, dass RevenueCat die Erstattung übernimmt und Pro endet.
 7. Danach: Landing (`landing-system/iphone.js`, `BROWSER.winterdex.buyLive`) auf die Abo-Seite des Dashboards zeigen lassen,
    Landings bauen und veröffentlichen.

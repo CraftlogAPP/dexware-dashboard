@@ -37,8 +37,8 @@ export const FREE_ROUTES = 1;
  */
 export function proHowText(kasseAn: boolean): string {
   return kasseAn
-    ? 'Pro kaufst du direkt hier im Dashboard unter „Abo“ (Zahlung über Paddle, auch am iPhone) oder in der WinterDex-App (Android) unter „Abo“. Auf Rechnung geht es auch (49,99 € pro Jahr) — schreib uns an support@dexware.app.'
-    : 'Pro schließt du in der WinterDex-App (Android) unter „Abo“ ab. Kein Android-Gerät? Wir schalten Pro auch auf Rechnung frei (49,99 € pro Jahr) — schreib uns an support@dexware.app.';
+    ? 'Pro kaufst du direkt hier im Dashboard unter „Abo“ (Zahlung über Paddle, auch am iPhone) oder in der WinterDex-App (Android) unter „Abo“. Auf Rechnung geht es auch (69,99 € pro Jahr) — schreib uns an support@dexware.app.'
+    : 'Pro schließt du in der WinterDex-App (Android) unter „Abo“ ab. Kein Android-Gerät? Wir schalten Pro auch auf Rechnung frei (69,99 € pro Jahr) — schreib uns an support@dexware.app.';
 }
 // Nur der Live-Schlüssel zählt (Sandbox nie in Texten). In Node-Tests gibt es kein import.meta.env → wie ohne Bau-Variable.
 const viteEnv = (import.meta as { env?: Record<string, unknown> }).env ?? {};
