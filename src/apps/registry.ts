@@ -265,7 +265,7 @@ export const APPS: AppConfig[] = [
     // sandbox: Schlüssel von „winterdex (Paddle)“ app545843109b (Test), Angebot web_pro — nur …/abo?kasse=sandbox; für den
     // Probekauf am besten NICHT hier, sondern lokal in .env.local (VITE_RC_PADDLE_SANDBOX_KEY). Preise kommen aus dem Angebot.
     paddleKasse: {
-      live: { rcKey: '', offering: 'web_pro_live' },
+      live: { rcKey: 'pdl_LqRQjzmmVdwVmLcGUcYpTvZkcDdL', offering: 'web_pro_live' },
       sandbox: { rcKey: '', offering: 'web_pro' }, // Sandbox-Probekauf 26.11.2026 bestanden; Schlüssel für weitere Tests: docs/paddle-kasse.md
     },
     webCheckout: {
