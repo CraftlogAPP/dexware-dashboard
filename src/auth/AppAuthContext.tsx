@@ -1,5 +1,7 @@
 import {
   createContext,
+  lazy,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -12,8 +14,9 @@ import type { AppConfig } from '../apps/registry';
 import { getClient } from '../lib/supabaseClients';
 import { confirmLogout } from '../lib/logoutGuard';
 import { cleanConfirmUrl, readConfirmReturn, type ConfirmReturn } from './confirmReturn';
+import { beispielAn } from '../dev/beispiel/schalter';
 
-interface AppAuthValue {
+export interface AppAuthValue {
   app: AppConfig;
   client: SupabaseClient;
   session: Session | null;
@@ -27,7 +30,39 @@ interface AppAuthValue {
 
 const Ctx = createContext<AppAuthValue | null>(null);
 
+// Beispiel-Zugang: Beispieldaten statt Server — NUR im Dev-Server (/app/<app>?beispiel), fehlt im Produktions-Build
+// (Nachweis und Anleitung: docs/beispiel-zugang.md). Für Bildschirmfotos der Landing-Seiten und zum Durchklicken ohne Konto.
+const BeispielZugang = import.meta.env.DEV
+  ? lazy(() => import('../dev/beispiel/zugang').then((m) => ({ default: m.BeispielZugang })))
+  : null;
+
 export function AppAuthProvider({
+  app,
+  children,
+}: {
+  app: AppConfig;
+  children: ReactNode;
+}) {
+  if (import.meta.env.DEV && BeispielZugang && beispielAn(app.id)) {
+    return (
+      <Suspense
+        fallback={
+          <div className="empty">
+            <span className="spinner" />
+          </div>
+        }
+      >
+        <BeispielZugang app={app} ctx={Ctx}>
+          {children}
+        </BeispielZugang>
+      </Suspense>
+    );
+  }
+  return <ServerAuthProvider app={app}>{children}</ServerAuthProvider>;
+}
+
+/** Anmeldung und Daten über den Supabase-Server der App (der Normalfall). */
+function ServerAuthProvider({
   app,
   children,
 }: {

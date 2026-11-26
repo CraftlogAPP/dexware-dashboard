@@ -91,6 +91,9 @@ Icons von `lucide-react` (Klasse `i`). Alles Optische steckt zentral in `src/ind
 App-Farben (`theme.accent/onAccent/bg` in der Registry) = Werte der jeweiligen Landing.
 Ohne Test-Login zeigt **`/vorschau?app=<id>`** (nur `npm run dev`, fehlt im Build) alle
 Bausteine mit Beispieldaten; `&dialog=1` öffnet zusätzlich den Bearbeiten-Dialog.
+Die ECHTEN Seiten eines Bereichs mit Beispieldaten (ohne Konto, ohne Server): **`/app/<id>?beispiel`** — bisher
+FeuerDex und SpielDex, nur `npm run dev`, fehlt im Build. Bilder für die Landing-Seiten: `tests/browser/beispiel-bild.mjs`.
+Anleitung und weitere Apps: [docs/beispiel-zugang.md](docs/beispiel-zugang.md).
 
 ## Deployment (GitHub Pages)
 
