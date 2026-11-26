@@ -207,7 +207,8 @@ teil('Quelltext: Einbindung, Wortwahl, Regeln');
   const odReport = lies('src/objektdex/report.ts');
   check('ObjektDex-Hinweis = Wortlaut der App', /GRATIS_HINWEIS = 'Erstellt mit ObjektDex – Gratis-Version · objektdex\.dexware\.app'/.test(odReport));
   check('Nachweis-PDF von ObjektDex trägt den Gratis-Hinweis jetzt auch (Regel 1)', /x\.pro === false \? `<div class="free">\$\{GRATIS_HINWEIS\}/.test(odReport) && /data\.proStatus\(\)/.test(lies('src/objektdex/pages/Report.tsx')));
-  check('Wetter-Quelle Open-Meteo (CC BY 4.0) im Winterdienst-Teil', /WEATHER_SOURCE_HTML/.test(pdf));
+  // Wetter staatlich (P8): Quelle je Datensatz — nur alte Datensätze → WEATHER_SOURCE_HTML (Open-Meteo) wie bisher
+  check('Wetter-Quelle (CC BY 4.0) im Winterdienst-Teil, je Herkunft der Momentwerte', /quelleFuerHtml\(ops\.map\(\(op\) => op\.weather\)\)/.test(pdf));
   check('storniert/nachgetragen/Prüfcode aus dem WinterDex-Baustein', /wdEinsatzTabelle\(ops, !x\.fotos\)/.test(pdf) && /NACHTRAG_NOTE/.test(pdf) && /PROOF_NOTE/.test(pdf));
   check('Pro je Teil vom Server: WinterDex fetchOrgPro, ObjektDex proStatus', /fetchOrgPro\(sb\)/.test(seite) && /data\.proStatus\(\)/.test(seite));
   const api = lies('src/winterdex/api.ts');

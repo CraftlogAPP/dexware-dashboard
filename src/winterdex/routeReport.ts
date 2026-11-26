@@ -4,7 +4,7 @@
 import { fmtDate, fmtDateTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
 import { isSafeImgSrc } from '../lib/imgSrc';
-import { gritLabel, WEATHER_SOURCE_HTML, weatherLabel } from './labels';
+import { gritLabel, quelleFuerHtml, weatherLabel } from './labels';
 import { ACTION_LABELS, LEGAL_BASIS } from './types';
 import { buildSketch, cleanGaps, fmtDistance, fmtDuration, fmtPct, fmtTimeSpan, pathLengthM, ROUTE_COLORS, sketchSvg, type Route, type Run, type RunMeta } from './routes';
 import {
@@ -183,10 +183,12 @@ function legend(plan: boolean, track: boolean, missed: boolean, marks = false, k
 }
 
 /**
- * weather: Bericht zeigt Wetterdaten → Namensnennung Open-Meteo (CC BY 4.0) in der Fußzeile. osm: Karte/Straßennamen aus OSM.
+ * momente: die gezeigten Wetter-Momentwerte → Namensnennung je Herkunft (CC BY 4.0; nur alte Datensätze → Open-Meteo wie
+ * bisher, wetterQuelle.ts) in der Fußzeile; keine Momentwerte → keine Wetter-Quelle. osm: Karte/Straßennamen aus OSM.
  * timeZone: Zone des Betriebs (auch für „Erstellt am“).
  */
-function page(title: string, body: string, weather: boolean, osm = false, timeZone?: string): string {
+function page(title: string, body: string, momente: readonly unknown[], osm = false, timeZone?: string): string {
+  const weather = momente.some(Boolean);
   return `<!doctype html>
 <html lang="de">
 <head>
@@ -251,7 +253,7 @@ ${WETTER_PDF_STYLE}
 </head>
 <body>${body}
   <div class="footer">
-    <span>Erstellt mit WinterDex — winterdex.dexware.app${weather ? ` · ${WEATHER_SOURCE_HTML}` : ''}${osm ? ` · Karte und Straßennamen: <a href="https://www.openstreetmap.org/copyright">${KARTE_QUELLE}</a>` : ''}</span>
+    <span>Erstellt mit WinterDex — winterdex.dexware.app${weather ? ` · ${quelleFuerHtml(momente)}` : ''}${osm ? ` · Karte und Straßennamen: <a href="https://www.openstreetmap.org/copyright">${KARTE_QUELLE}</a>` : ''}</span>
     <span>Erstellt am ${fmtDateTime(new Date().toISOString(), timeZone)}</span>
   </div>
 </body>
@@ -334,7 +336,7 @@ export function buildRunHtml(org: Org, run: Run, timeZone?: string, extra: RunBe
   ${PROOF_NOTE}
   ${wetterAnhangHtml(extra.wetter?.beleg ? [extra.wetter.beleg] : [])}
   ${run.entry_hash ? `<p class="small"><b>Prüfcode:</b> <span class="mono">${esc(run.entry_hash)}</span><br><b>Server-Eingang:</b> ${fmtDateTime(run.received_at ?? run.created_at, tz)}</p>` : ''}`;
-  return page(`Strecken-Nachweis — ${name}`, body, !!run.weather, !!karte || str?.art === 'tabelle', tz);
+  return page(`Strecken-Nachweis — ${name}`, body, [run.weather], !!karte || str?.art === 'tabelle', tz);
 }
 
 /**
@@ -437,7 +439,7 @@ export function buildRouteLogHtml(
   ${PROOF_NOTE}
   ${wetterAnhangHtml(runs.map((r) => extra.wetter?.get(r.id)?.beleg).filter((b): b is WetterBeleg => !!b))}`;
   const osm = !!extra.details && [...extra.details.values()].some((d) => d.bild || d.str?.art === 'tabelle');
-  return page(`Fahrtenbuch — ${route.name}`, body, runs.some((r) => !!r.weather), osm, tz);
+  return page(`Fahrtenbuch — ${route.name}`, body, runs.map((r) => r.weather), osm, tz);
 }
 
 /** Datenquelle für die Details im Fahrtenbuch (Dashboard: Supabase, Beispielseite: erfundene Fahrten). */

@@ -138,7 +138,9 @@ export const HAFTUNG =
 /**
  * Namensnennung CC BY 4.0, wortgleich mit dem Quellenverzeichnis im WinterDex-Impressum (winterdex-web, 26.11.2026).
  * Deutscher Wetterdienst und MeteoSchweiz nur für den Schnee-Wecker (Deutschland bzw. Westschweiz); die Karte „Heute
- * Nacht“ rechnet nur mit GeoSphere Austria bzw. Open-Meteo (Fußzeile dort: heuteNachtDaten.ts fussZeile).
+ * Nacht“ nennt die Quellen ihrer Zellen selbst (Server quelle_text, sonst quelle — heuteNachtDaten.ts fussZeile).
+ * Wetter staatlich (P8/P9): Mit dem Umschalten aller Zonen (Open-Meteo nur noch Reserve) gemeinsam mit dem Impressum
+ * (Zweig feat/recht-staatlich in winterdex-web) die Klammern „Schnee-Wecker …“ anpassen — vorher nicht (Text = Live-Stand).
  */
 export const QUELLEN = [
   'Datenquelle: GeoSphere Austria – data.hub.geosphere.at (CC BY 4.0)',

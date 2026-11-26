@@ -2,12 +2,22 @@
 
 import { fmtNum } from '../lib/format';
 import type { WeatherSnapshot } from './types';
+import { wetterQuelle, wetterQuelleHtml } from './wetterQuelle';
 
-/** Namensnennung der Wetterdaten (Lizenz CC BY 4.0) — überall, wo Wetter steht: PDFs, Excel-Listen, Seiten. Wie die App. */
+/**
+ * Namensnennung der Wetterdaten (Lizenz CC BY 4.0) — überall, wo Wetter steht: PDFs, Excel-Listen, Seiten. Wie die App.
+ * Seit „Wetter staatlich“ (P8) gilt sie nur noch für alte bzw. Open-Meteo-Datensätze: Die Stellen unten nehmen
+ * quelleFuer/quelleFuerHtml mit den gezeigten Momentwerten (nur alte Datensätze → genau dieser Text).
+ */
 export const WEATHER_SOURCE = 'Wetterdaten: Open-Meteo.com (CC BY 4.0)';
 /** Dasselbe als HTML mit Links (für die Druck-/PDF-Ansichten). */
 export const WEATHER_SOURCE_HTML =
   'Wetterdaten: <a href="https://open-meteo.com/">Open-Meteo.com</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>)';
+
+/** Quellenzeile für die GEZEIGTEN Momentwerte (Herkunft je Datensatz aus weather.source, wetterQuelle.ts) */
+export const quelleFuer = (ws: readonly unknown[] | unknown, zusatz = true): string => wetterQuelle(ws, WEATHER_SOURCE, zusatz);
+/** Dasselbe als HTML mit Links (Druck-/PDF-Ansichten) */
+export const quelleFuerHtml = (ws: readonly unknown[]): string => wetterQuelleHtml(ws, WEATHER_SOURCE_HTML);
 
 /** Kompakte Wetterzeile, gleiche Logik wie mobile lib/weather.ts */
 export function weatherLabel(w: WeatherSnapshot | null | undefined): string {

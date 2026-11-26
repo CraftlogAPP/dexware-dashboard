@@ -21,7 +21,7 @@ import {
   type FormValues,
 } from '../../components/form';
 import { fmtDateTime, parseLocalDate, toInputDate } from '../../lib/format';
-import { gritLabel, propertyNameMap, WEATHER_SOURCE, weatherLabel } from '../labels';
+import { gritLabel, propertyNameMap, quelleFuer, weatherLabel } from '../labels';
 import { ACTION_LABELS, type Operation, type OperationAction } from '../types';
 import { nachtragBeispiel } from '../streumittel';
 import { useStreumittelAus } from '../einsatz/useStreumittel';
@@ -284,7 +284,7 @@ export function Operations() {
                   </tbody>
                 </table>
               </div>
-              <p className="muted small">{WEATHER_SOURCE}</p>
+              <p className="muted small">{quelleFuer(ops.map((op) => op.weather))}</p>
             </>
           );
         }}

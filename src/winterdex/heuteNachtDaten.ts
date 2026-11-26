@@ -46,6 +46,13 @@ export interface HeuteNacht {
   karte_live: boolean;
   stand_at: string | null;
   quelle: 'geosphere' | 'open-meteo' | 'gemischt' | null;
+  /**
+   * quellen/quelle_text (NACHTRAG-WETTER-STAATLICH Teil A, optional — wie App vc48): Quellwerte der gezeigten Zellen und
+   * die fertige Fußzeile vom Server (wg_quelle_text). Fehlen sie (ältere SQL-Fassung), gilt nur `quelle` wie bisher. Für
+   * staatliche Daten liefert der Server `quelle` = null — die Quelle steht dann nur in quelle_text.
+   */
+  quellen: string[];
+  quelle_text: string | null;
   gebiet: { name: string | null; zellen: number; objekte: number; strecken: number; spanne_km: number | null };
   stunden: HnStunde[];
   ampel_gesamt: Ampel | null;
@@ -71,6 +78,11 @@ const ampel = (x: unknown): Ampel | null => {
   return n === 0 || n === 1 || n === 2 || n === 3 ? n : null;
 };
 const ARTEN: readonly HnArt[] = ['trocken', 'schnee', 'schneeregen', 'regen', 'gefrierend'];
+/** Fußzeilen-Text vom Server: eine Zeile, höchstens 300 Zeichen (sonst wie bisher aus `quelle`). */
+const quellText = (x: unknown): string | null => {
+  const t = typeof x === 'string' ? x.replace(/\s+/g, ' ').trim() : '';
+  return t && t.length <= 300 ? t : null;
+};
 const art = (x: unknown): HnArt | null => (typeof x === 'string' && (ARTEN as readonly string[]).includes(x) ? (x as HnArt) : null);
 
 /** Antwort des Servers → Vertrag v1; unbekannte Fassung oder kaputte Antwort → null (dann keine Karte, nie ein Absturz). */
@@ -87,6 +99,8 @@ export function heuteNachtLesen(x: unknown): HeuteNacht | null {
     karte_live: x.karte_live === true,
     stand_at: text(x.stand_at),
     quelle: q,
+    quellen: Array.isArray(x.quellen) ? x.quellen.filter((s): s is string => typeof s === 'string' && s.length <= 40).slice(0, 12) : [],
+    quelle_text: quellText(x.quelle_text),
     gebiet: {
       name: text(g.name),
       zellen: zahl(g.zellen) ?? 0,
@@ -472,17 +486,22 @@ export function betroffenZeile(d: HeuteNacht, erledigt: ReadonlySet<string> | nu
   return `Betroffen: ${teile}`;
 }
 
-/** Fußzeile: „Vorhersage, Stand 19:05 · Datenquelle: GeoSphere Austria · ohne Gewähr“ */
-export function fussZeile(d: HeuteNacht, jetzt: number, tz: string): string {
+/**
+ * Fußzeile: „Vorhersage, Stand 19:05 · Datenquelle: GeoSphere Austria · ohne Gewähr“. Liefert der Server `quelle_text`
+ * (Wetter staatlich: GeoSphere Austria, Deutscher Wetterdienst, MeteoSchweiz bzw. ersatzweise Open-Meteo.com — nur die
+ * Quellen der gezeigten Zellen), steht genau dieser Text da; sonst wie bisher aus `quelle`.
+ */
+export function fussZeile(d: Pick<HeuteNacht, 'stand_at' | 'quelle'> & { quelle_text?: string | null }, jetzt: number, tz: string): string {
   const stand = d.stand_at && Number.isFinite(Date.parse(d.stand_at)) ? `Stand ${standText(Date.parse(d.stand_at), jetzt, tz)}` : 'Stand unbekannt';
   const quelle =
-    d.quelle === 'geosphere'
+    quellText(d.quelle_text) ??
+    (d.quelle === 'geosphere'
       ? 'Datenquelle: GeoSphere Austria'
       : d.quelle === 'open-meteo'
         ? 'Wetterdaten: Open-Meteo.com'
         : d.quelle === 'gemischt'
           ? 'Datenquellen: GeoSphere Austria und Open-Meteo.com'
-          : '';
+          : '');
   return [`Vorhersage, ${stand}`, quelle, 'ohne Gewähr'].filter(Boolean).join(' · ');
 }
 

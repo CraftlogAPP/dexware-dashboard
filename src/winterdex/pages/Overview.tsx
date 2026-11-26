@@ -11,7 +11,7 @@ import { ActionBadge, LoadGuard, useAsync, useLiveRefresh } from '../../componen
 import { ErsteSchritte } from '../../components/ErsteSchritte';
 import type { ErsteSchritteAdapter } from '../../lib/ersteSchritte';
 import { fmtDateTime } from '../../lib/format';
-import { lastOpByProperty, propertyNameMap, WEATHER_SOURCE, weatherLabel } from '../labels';
+import { lastOpByProperty, propertyNameMap, quelleFuer, weatherLabel } from '../labels';
 import { HeuteNacht } from '../HeuteNacht';
 import { NeuHinweis } from '../MitteilungsCenter';
 import { KARTE_ANKER, weckerFrei } from '../mitteilungenDaten';
@@ -209,7 +209,7 @@ export function Overview() {
                       ))}
                     </tbody>
                   </table>
-                  <p className="table-source muted small">{WEATHER_SOURCE}</p>
+                  <p className="table-source muted small">{quelleFuer(recentOps.map((op) => op.weather))}</p>
                 </div>
               )}
             </>

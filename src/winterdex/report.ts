@@ -4,7 +4,7 @@
 import { fmtDate, fmtDateTime, fmtTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
 import { isSafeImgSrc } from '../lib/imgSrc';
-import { gritLabel, WEATHER_SOURCE_HTML, weatherLabel } from './labels';
+import { gritLabel, quelleFuerHtml, weatherLabel } from './labels';
 import { nachweisZone, zonenHinweis } from './nachweisZeit';
 import { WETTER_PDF_STYLE, wetterAnhangHtml, wetterZelleHtml, type WetterBeleg, type WetterInfo } from './wetterBeleg';
 import {
@@ -204,7 +204,7 @@ ${WETTER_PDF_STYLE}
   ${wetterAnhangHtml(belege)}
 
   <div class="footer">
-    <span>Erstellt mit WinterDex — winterdex.dexware.app${ops.some((o) => o.weather) ? ` · ${WEATHER_SOURCE_HTML}` : ''}</span>
+    <span>Erstellt mit WinterDex — winterdex.dexware.app${ops.some((o) => o.weather) ? ` · ${quelleFuerHtml(ops.map((o) => o.weather))}` : ''}</span>
     <span>Erstellt am ${fmtDateTime(new Date().toISOString(), tz)}</span>
   </div>
 </body>

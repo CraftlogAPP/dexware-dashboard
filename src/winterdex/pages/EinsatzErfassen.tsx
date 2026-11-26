@@ -7,7 +7,7 @@ import { ArrowLeft, Camera, Check, CloudOff, MapPin, TriangleAlert, X } from 'lu
 import { useUnsavedGuard } from '../../components/ui';
 import { Modal } from '../../components/form';
 import { fmtDateTime, fmtTime } from '../../lib/format';
-import { WEATHER_SOURCE, weatherLabel } from '../labels';
+import { quelleFuer, weatherLabel } from '../labels';
 import { ACTION_LABELS, type Property, type WeatherSnapshot } from '../types';
 import {
   ACTIONS,
@@ -438,7 +438,7 @@ function Erfassen({ propertyId }: { propertyId: string }) {
         )}
         {weather && weatherLabel(weather) !== '—' && (
           <p className="muted small">
-            Wetterlage wird archiviert: {weatherLabel(weather)} ({WEATHER_SOURCE})
+            Wetterlage wird archiviert: {weatherLabel(weather)} ({quelleFuer(weather, false)})
           </p>
         )}
       </div>

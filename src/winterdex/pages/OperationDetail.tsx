@@ -7,7 +7,7 @@ import { VerifyProof } from '../../components/VerifyProof';
 import { useOrg } from '../../components/OrgContext';
 import { nachweisZone } from '../nachweisZeit';
 import { isSafeImgSrc } from '../../lib/imgSrc';
-import { gritLabel, WEATHER_SOURCE } from '../labels';
+import { gritLabel, quelleFuer } from '../labels';
 import type { OperationWithPhotos, Property } from '../types';
 import { WetterVerlauf } from '../WetterZeitleiste';
 import { useWetterNachladen } from '../wetterNachladen';
@@ -185,7 +185,7 @@ export function OperationDetail() {
             ) : (
               <div className="card empty">Kein Wetter-Snapshot vorhanden.</div>
             )}
-            {w && <p className="muted small">{WEATHER_SOURCE}</p>}
+            {w && <p className="muted small">{quelleFuer(w)}</p>}
 
             {op.notes && (
               <>
