@@ -173,8 +173,8 @@ export default function KaufVorschau() {
             offer: {
               link: TEST,
               plans: [
-                { pkg: '$rc_annual', title: 'Jährlich', price: '319,99 €', per: 'pro Jahr', note: '4 Monate geschenkt', best: true, tag: 'Bester Preis' },
-                { pkg: '$rc_monthly', title: 'Monatlich', price: '39,99 €', per: 'pro Monat', note: 'monatlich kündbar' },
+                { pkg: '$rc_annual', title: 'Jährlich', price: '199,99 €', per: 'pro Jahr', note: '4 Monate geschenkt', best: true, tag: 'Bester Preis' },
+                { pkg: '$rc_monthly', title: 'Monatlich', price: '24,99 €', per: 'pro Monat', note: 'monatlich kündbar' },
               ],
             },
           },
