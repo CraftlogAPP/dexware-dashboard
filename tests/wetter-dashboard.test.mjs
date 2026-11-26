@@ -346,6 +346,17 @@ const op = (id, extra = {}) => ({
   const alt = REP.buildReportHtml(orgAT, prop, ops, 'x');
   check('ohne Wetter-Daten (Nachtrag fehlt/Fehler): wie bisher — „Wetterlage (archiviert)“, kein Anhang', alt.includes('<th>Wetterlage (archiviert)</th>') && !alt.includes('class="wv-anhang"') && !alt.includes('Wetter-Prüfcode'));
   check('ObjektDex-Jahresnachweis (einsatzTabelle mit 3 Argumenten) unverändert', REP.einsatzTabelle(ops, true, TZ).includes('<th>Wetterlage (archiviert)</th>'));
+  // Schattenbetrieb (beleg_modus 'schatten', Betrieb nicht im Test): der Server meldet für ALLE Einsätze „aus“
+  // (NACHTRAG-WETTER-BELEG ab 7c8c17c: Schalter vor der Pro-Frage) → Bericht genau wie bisher, keine Zeile, kein Pro-Hinweis
+  const allesAus = new Map(ops.map((o) => [o.id, { stand: 'aus', beleg: null }]));
+  const aus = REP.buildReportHtml(orgAT, prop, ops, '01.11.2026 – 26.11.2026', allesAus);
+  // nur der sichtbare Teil (body, ohne „Erstellt am“) — die Styles der Wetter-Bausteine stehen immer im Kopf
+  const ohneZeit = (h) => h.slice(h.indexOf('<body>')).replace(/Erstellt am [^<]+/, '');
+  check('alle Stände „aus“ (Schatten): Bericht wie ohne Wetter-Daten — Überschrift, Schnappschuss, kein Pro-Hinweis, kein Anhang',
+    aus.includes('<th>Wetterlage (archiviert)</th>') && !aus.includes('mit WinterDex Pro') && !aus.includes('class="wv-anhang"') && !aus.includes('class="wv-stand"') &&
+      ohneZeit(aus) === ohneZeit(REP.buildReportHtml(orgAT, prop, ops, '01.11.2026 – 26.11.2026')));
+  check('… Excel: keine Wetter-Spalten', XL.operationSheets({ org: orgAT, properties: [prop], ops, period: { from: '2026-11-01', to: '2026-11-26' }, propertyId: null, wetter: allesAus })[0].columns.every((c) => !/Wetter \(Kurzsatz\)|Wetter-Prüfcode/.test(c.header)));
+  check('… Detailseite/Kasten: „aus“ ergibt nichts', WB.wetterKastenHtml({ stand: 'aus', beleg: null }, 'operation', TZ) === '' && WB.wetterZelleHtml({ stand: 'aus', beleg: null }, 'operation', null) === null && /if \(!info \|\| info\.stand === 'aus'\) return null;/.test(lies('src/winterdex/WetterZeitleiste.tsx')));
 
   const run = {
     id: 'f1', org_id: 'o', route_id: 'r1', route_name: 'Runde Nord', started_at: '2026-11-26T04:50:00Z', ended_at: '2026-11-26T05:40:00Z', track: [], gaps: [], planned_path: null, missed: [],
@@ -359,6 +370,10 @@ const op = (id, extra = {}) => ({
   check('… „wird ermittelt“: „(ca. 1–3 Std. nach Fahrtende)“, nie leer', rw.includes('Wetterverlauf wird ermittelt (ca. 1–3 Std. nach Fahrtende).'));
   const r0 = RR.buildRunHtml(orgAT, run, TZ, {});
   check('… ohne Wetter-Daten kein Kasten', !r0.includes('class="wv-kasten"') && !r0.includes('class="wv-anhang"'));
+  const ra = RR.buildRunHtml(orgAT, run, TZ, { wetter: { stand: 'aus', beleg: null } });
+  check('… Stand „aus“ (Schatten): kein Kasten, kein Pro-Hinweis', !ra.includes('class="wv-kasten"') && !ra.includes('mit WinterDex Pro'));
+  const buchAus = RR.buildRouteLogHtml(orgAT, { id: 'r1', name: 'Runde Nord', path: null, length_m: 12000 }, [run], 'Nov', { wetter: new Map([['f1', { stand: 'aus', beleg: null }]]), timeZone: TZ });
+  check('… Fahrtenbuch mit „aus“: Schnappschuss wie bisher, kein Pro-Hinweis', !buchAus.includes('mit WinterDex Pro') && !buchAus.includes('class="wv-kurz"'));
   const route = { id: 'r1', name: 'Runde Nord', path: null, length_m: 12000 };
   const buch = RR.buildRouteLogHtml(orgAT, route, [run, { ...run, id: 'f2' }], 'Nov', { wetter: new Map([['f1', { stand: 'da', beleg: fahrt }], ['f2', { stand: 'nur_pro', beleg: null }]]), timeZone: TZ });
   check('Fahrtenbuch: nur der Kurzsatz in der Spalte Wetter (kein Kernsatz, keine Zeitleiste)', buch.includes(`<span class="wv-kurz">${fahrt.kurz}</span>`) && !buch.includes(fahrt.satz) && !buch.includes('<svg xmlns') && buch.includes('mit WinterDex Pro'));
