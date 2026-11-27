@@ -13,6 +13,9 @@ import { nachTour } from '../tour';
 import type { OperationAction, Property, WeatherSnapshot } from '../types';
 import type { LatLng, Route, Run, RunMeta, Track } from '../routes';
 
+/** Merkmal „quellen“ im Wetter-Snapshot (M5, wie App vc48 `WETTER_QUELLEN`): Server-Schwelle QUELLEN_STAATLICH_AB = 1. */
+export const WETTER_QUELLEN = 1;
+
 export interface TodayOp {
   id: string;
   property_id: string;
@@ -163,7 +166,9 @@ export async function requestWeather(
       res = await fetch(`${cfg.url.replace(/\/+$/, '')}/weather/snapshot`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.token}` },
-        body: JSON.stringify({ lat, lng }),
+        // M5 „B13“ (Worker ab 0.9.2): Merkmal „quellen“ — das Dashboard nimmt die Herkunft aus `weather.source`
+        // (wetterQuelle.ts, Zweig feat/quelle-staatlich); nur dann liefert der Server staatliche/DWD-Werte.
+        body: JSON.stringify({ lat, lng, quellen: WETTER_QUELLEN }),
         signal: controller.signal,
       });
     } catch {
