@@ -136,15 +136,20 @@ export const GERAET_WORT: Record<GeraetStatus, string> = {
 export const HAFTUNG =
   'Der Wetter-Guide ist eine Hilfe ohne Gewähr. Er ersetzt nicht deine Kontrolle vor Ort und entbindet nicht von der Räum- und Streupflicht. Vorhersagen können danebenliegen, Mitteilungen verspätet oder gar nicht ankommen (z. B. Nicht stören, Energiesparen, kein Netz). Keine Mitteilung heißt nicht, dass es nicht glatt ist. Maßgeblich sind die amtlichen Warnungen.';
 /**
- * Namensnennung CC BY 4.0, wortgleich mit dem Quellenverzeichnis im WinterDex-Impressum (winterdex-web, 26.11.2026).
- * Deutscher Wetterdienst und MeteoSchweiz nur für den Schnee-Wecker (Deutschland bzw. Westschweiz); die Karte „Heute
- * Nacht“ rechnet nur mit GeoSphere Austria bzw. Open-Meteo (Fußzeile dort: heuteNachtDaten.ts fussZeile).
+ * Namensnennung CC BY 4.0, wortgleich mit dem Quellenverzeichnis im WinterDex-Impressum (winterdex-web, Fassung B1 vom
+ * 27.11.2026, veröffentlicht mit dem Umschalten [G-U1]): Vorhersagen für Orte in Deutschland und der Schweiz aus dem
+ * DWD-Modell ICON-D2, Messwerte und Schnee-Wecker in Deutschland vom DWD, Messwerte in der Schweiz von MeteoSchweiz,
+ * Österreich GeoSphere Austria; Open-Meteo nur noch für Momentwerte im Einsatz, ersatzweise und in älteren Nachweisen.
+ * Letzte Zeile: Copernicus-Vermerk für die Höhen (WorldDEM-30/GLO-30), wortgleich mit dem Impressum (Stufe A0) — mit der
+ * Höhenkorrektur hk1 rechnet die Bewertung ab [G-U1] mit diesen Höhen. Die Karte „Heute Nacht“ nennt ihre Quelle in der
+ * eigenen Fußzeile (heuteNachtDaten.ts fussZeile).
  */
 export const QUELLEN = [
   'Datenquelle: GeoSphere Austria – data.hub.geosphere.at (CC BY 4.0)',
-  'Datenbasis: Deutscher Wetterdienst, eigene Berechnungen – opendata.dwd.de (CC BY 4.0; Schnee-Wecker für Orte in Deutschland)',
-  'Quelle: MeteoSchweiz – opendatadocs.meteoswiss.ch (CC BY 4.0; Messwerte für den Schnee-Wecker in der Schweiz)',
-  'Wetterdaten: Open-Meteo.com (CC BY 4.0)',
+  'Datenbasis: Deutscher Wetterdienst, eigene Berechnungen – opendata.dwd.de (CC BY 4.0; Vorhersage Modell ICON-D2 für Orte in Deutschland und der Schweiz, Messwerte und Schnee-Wecker in Deutschland)',
+  'Quelle: MeteoSchweiz – opendatadocs.meteoswiss.ch (CC BY 4.0; Messwerte für Orte in der Schweiz)',
+  'Wetterdaten: Open-Meteo.com (CC BY 4.0; Momentwerte im Einsatz, ersatzweise und in älteren Nachweisen)',
+  'Höhenangaben für die Wetterberechnung: produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved. The organisations in charge of the Copernicus programme by law or by delegation do not incur any liability for any use of the Copernicus WorldDEM-30. (Copernicus-Höhenmodell GLO-30, von WinterDex je Rasterfeld ausgewertet und nur auf dem eigenen Server genutzt; die Copernicus-Stellen und Airbus sind an WinterDex nicht beteiligt.)',
 ];
 /** Eine Zeile unter der Mitteilungsliste (die Mitteilungen des Schnee-Weckers stammen auch vom DWD bzw. von MeteoSchweiz) */
 export const QUELLEN_ZEILE =
