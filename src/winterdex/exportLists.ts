@@ -13,7 +13,7 @@ import { excelSerial, type XlsxCell, type XlsxSheet, type XlsxValue } from '../l
 import { fmtDateTime } from '../lib/format';
 import type { Org } from '../lib/orgApi';
 import { GPS_WEAK_M } from './einsatz/gps';
-import { WEATHER_SOURCE, weatherLabel } from './labels';
+import { quelleFuer, weatherLabel } from './labels';
 import { excelWetter, herkunftText, quellenTexte, wetterImBericht, type WetterBeleg, type WetterInfo } from './wetterBeleg';
 import type { RunMeta } from './routes';
 import { ACTION_LABELS, type Operation, type OperationAction, type Property } from './types';
@@ -277,7 +277,7 @@ export function operationSheets(input: OperationExportInput): XlsxSheet[] {
       ['', null],
       ['Hinweis', EXPORT_NOTE],
       ['Zeiten', TIME_NOTE],
-      ['Wetter', WEATHER_SOURCE],
+      ['Wetter', quelleFuer(ops.map((o) => o.weather))],
       ...wetterInfo(input.wetter, valid),
     ]),
   );
@@ -455,7 +455,7 @@ export function runSheets(input: RunExportInput): XlsxSheet[] {
       ['Hinweis', EXPORT_NOTE],
       ['Zeiten', TIME_NOTE],
       ['Abdeckung', 'Vom Server beim Eingang berechnet, nur bei Fahrten auf einer Strecke mit Vorlage.'],
-      ['Wetter', WEATHER_SOURCE],
+      ['Wetter', quelleFuer(runs.map((r) => r.weather))],
       ...wetterInfo(input.wetter, valid),
     ]),
   );

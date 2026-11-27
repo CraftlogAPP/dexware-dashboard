@@ -60,7 +60,10 @@ export interface WeatherSnapshot {
   today_min_c?: number;
   today_snowfall_cm?: number;
   today_precip_mm?: number;
+  /** Herkunft: 'open-meteo' (alle bisherigen Datensätze) bzw. 'geosphere', 'dwd', 'meteoschweiz' oder Kombination mit '+' (wetterQuelle.ts) */
   source?: string;
+  /** optional (Server ab Snapshot staatlich): fertiger Quellenvermerk für genau diesen Wert */
+  quelle_text?: string | null;
   fetched_at?: string;
 }
 

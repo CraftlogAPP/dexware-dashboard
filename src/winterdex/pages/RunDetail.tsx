@@ -13,7 +13,7 @@ import { isSafeImgSrc } from '../../lib/imgSrc';
 import { fmtDateTime } from '../../lib/format';
 import type { Org } from '../../lib/orgApi';
 import { openReportWindowAfter } from '../../lib/print';
-import { gritLabel, WEATHER_SOURCE, weatherLabel } from '../labels';
+import { gritLabel, quelleFuer, weatherLabel } from '../labels';
 import { CoverageBadge } from '../RouteSketch';
 import { FahrtAnsicht } from '../FahrtAnsicht';
 import { buildRunHtmlMitKarte, unterbrechungenFuer } from '../routeReport';
@@ -247,7 +247,7 @@ export function RunView({
           <div className="kpi-label">Maßnahme</div>
           <div>{gritLabel(run.grit_material, run.grit_amount) === '—' ? '' : `Streumittel: ${gritLabel(run.grit_material, run.grit_amount)}`}</div>
           <div className="muted small">Wetter (archiviert): {weatherLabel(run.weather)}</div>
-          {run.weather && <div className="muted small">{WEATHER_SOURCE}</div>}
+          {run.weather && <div className="muted small">{quelleFuer(run.weather)}</div>}
         </div>
         <div className="card">
           <div className="kpi-label">Prüffester Nachweis</div>

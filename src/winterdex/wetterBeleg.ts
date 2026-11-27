@@ -16,6 +16,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { rpcFehlt, uhrzeit, wochentag } from './heuteNachtDaten';
 import { weatherLabel } from './labels';
+import { momentQuelleKurz, momentTitel } from './wetterQuelle';
 import type { WeatherSnapshot } from './types';
 
 export type Bezug = 'operation' | 'run';
@@ -295,11 +296,16 @@ export function fusszeilen(belege: Iterable<WetterBeleg>): string[] {
   return out;
 }
 
-/** „Modell-Momentwert bei Beginn: −2 °C (Open-Meteo)“ — der bisherige Schnappschuss, klein unter dem Kurzsatz */
-export function momentwert(w: { temp_c?: number | null } | null | undefined): string | null {
+/**
+ * „Modell-Momentwert bei Beginn: −2 °C (Open-Meteo)“ — der bisherige Schnappschuss, klein unter dem Kurzsatz. Seit „Wetter
+ * staatlich“ (P8) mit der Herkunft je Datensatz (weather.source): alte Datensätze genau wie bisher, staatliche
+ * „Momentwert bei Beginn: −2 °C (GeoSphere Austria)“; unbekannte Herkunft ohne Klammer (nie falsch zugeordnet).
+ */
+export function momentwert(w: { temp_c?: number | null; source?: string | null } | null | undefined): string | null {
   if (!w || typeof w.temp_c !== 'number' || !Number.isFinite(w.temp_c)) return null;
   const r = Math.round(w.temp_c);
-  return `Modell-Momentwert bei Beginn: ${r < 0 ? '−' : ''}${Math.abs(r)} °C (Open-Meteo)`;
+  const k = momentQuelleKurz(w);
+  return `${momentTitel(w)}: ${r < 0 ? '−' : ''}${Math.abs(r)} °C${k ? ` (${k})` : ''}`;
 }
 
 // ---------------------------------------------------------------------------------------------- PDF-Bausteine (HTML)

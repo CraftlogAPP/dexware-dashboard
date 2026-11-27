@@ -142,7 +142,7 @@ export const HAFTUNG =
  * Österreich GeoSphere Austria; Open-Meteo nur noch für Momentwerte im Einsatz, ersatzweise und in älteren Nachweisen.
  * Letzte Zeile: Copernicus-Vermerk für die Höhen (WorldDEM-30/GLO-30), wortgleich mit dem Impressum (Stufe A0) — mit der
  * Höhenkorrektur hk1 rechnet die Bewertung ab [G-U1] mit diesen Höhen. Die Karte „Heute Nacht“ nennt ihre Quelle in der
- * eigenen Fußzeile (heuteNachtDaten.ts fussZeile).
+ * eigenen Fußzeile (Server quelle_text, sonst quelle — heuteNachtDaten.ts fussZeile).
  */
 export const QUELLEN = [
   'Datenquelle: GeoSphere Austria – data.hub.geosphere.at (CC BY 4.0)',

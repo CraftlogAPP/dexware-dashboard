@@ -10,6 +10,7 @@
 //   · Uhrzeiten in der Ortszeit des Betriebs (nachweisZone), nie per toISOString (Datums-Regeln).
 // Getestet in tests/wetter-dashboard.test.mjs (Fixture = echte Antwort der PGlite-Probe aus WinterDex wetter-karte.test).
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { karteQuelleText } from './wetterQuelle';
 
 export type Ampel = 0 | 1 | 2 | 3;
 export type HnArt = 'trocken' | 'schnee' | 'schneeregen' | 'regen' | 'gefrierend';
@@ -46,6 +47,13 @@ export interface HeuteNacht {
   karte_live: boolean;
   stand_at: string | null;
   quelle: 'geosphere' | 'open-meteo' | 'gemischt' | null;
+  /**
+   * quellen/quelle_text (NACHTRAG-WETTER-STAATLICH Teil A, optional — wie App vc48): Quellwerte der gezeigten Zellen und
+   * die fertige Fußzeile vom Server (wg_quelle_text). Fehlen sie (ältere SQL-Fassung), gilt nur `quelle` wie bisher. Für
+   * staatliche Daten liefert der Server `quelle` = null — die Quelle steht dann nur in quelle_text.
+   */
+  quellen: string[];
+  quelle_text: string | null;
   gebiet: { name: string | null; zellen: number; objekte: number; strecken: number; spanne_km: number | null };
   stunden: HnStunde[];
   ampel_gesamt: Ampel | null;
@@ -71,6 +79,11 @@ const ampel = (x: unknown): Ampel | null => {
   return n === 0 || n === 1 || n === 2 || n === 3 ? n : null;
 };
 const ARTEN: readonly HnArt[] = ['trocken', 'schnee', 'schneeregen', 'regen', 'gefrierend'];
+/** Fußzeilen-Text vom Server: eine Zeile, höchstens 300 Zeichen (sonst wie bisher aus `quelle`). */
+const quellText = (x: unknown): string | null => {
+  const t = typeof x === 'string' ? x.replace(/\s+/g, ' ').trim() : '';
+  return t && t.length <= 300 ? t : null;
+};
 const art = (x: unknown): HnArt | null => (typeof x === 'string' && (ARTEN as readonly string[]).includes(x) ? (x as HnArt) : null);
 
 /** Antwort des Servers → Vertrag v1; unbekannte Fassung oder kaputte Antwort → null (dann keine Karte, nie ein Absturz). */
@@ -87,6 +100,8 @@ export function heuteNachtLesen(x: unknown): HeuteNacht | null {
     karte_live: x.karte_live === true,
     stand_at: text(x.stand_at),
     quelle: q,
+    quellen: Array.isArray(x.quellen) ? x.quellen.filter((s): s is string => typeof s === 'string' && s.length <= 40).slice(0, 12) : [],
+    quelle_text: quellText(x.quelle_text),
     gebiet: {
       name: text(g.name),
       zellen: zahl(g.zellen) ?? 0,
@@ -356,10 +371,33 @@ export function mengeText(s: Pick<HnSpalte, 'art' | 'mm' | 'schnee'>): string {
   if (s.mm !== null && s.mm > 0) return `${zahlDe(s.mm)} mm`;
   return '';
 }
+/** „−3°“ / „0°“ / „–“ (unbekannt). Nie „−0°“: −0,3 rundet auf 0 und bekommt kein Minus (wie App tempText). */
 export function gradText(t: number | null): string {
-  if (t === null) return '–';
+  if (t === null || !Number.isFinite(t)) return '–';
   const r = Math.round(t);
   return `${r < 0 ? '−' : ''}${Math.abs(r)}°`;
+}
+
+/**
+ * Hell [Sonnenaufgang, Sonnenuntergang] in Minuten nach Mitternacht, Ortszeit (mit Sommerzeit), je Monat (Jan–Dez) zur
+ * Monatsmitte — grob für die Mitte von Deutschland, Österreich und der Schweiz (ca. 48° N, 11° O); gleiche Tabelle wie die
+ * App (WinterDex mobile/src/lib/heuteNacht.ts). Nur für das Symbol „trocken“ (Sonne bzw. Mond hinter einer Wolke) — keine
+ * Aussage über Bewölkung oder Glätte.
+ */
+const HELL: readonly (readonly [number, number])[] = [
+  [480, 1005], [450, 1050], [390, 1110], [390, 1200], [335, 1245], [315, 1275],
+  [330, 1270], [370, 1230], [415, 1165], [455, 1105], [445, 1000], [475, 980],
+];
+/** Dunkel zu dieser Ortszeit? monat 1–12, minute 0–1439. */
+export function istNacht(monat: number, minute: number): boolean {
+  const h = HELL[Math.min(12, Math.max(1, Math.round(monat))) - 1];
+  return minute < h[0] || minute >= h[1];
+}
+/** Spalte nachts? Gemessen an ihrer Mitte in der Ortszeit des Betriebs, z. B. 16–18 Uhr im November → 17:00 → Nacht. */
+export function spalteNachts(s: Pick<HnSpalte, 'von' | 'dauer'>, tz: string): boolean {
+  if (!Number.isFinite(s.von)) return false;
+  const o = ortsTeile(s.von + Math.max(1, s.dauer) * 1_800_000, tz);
+  return istNacht(o.mo, o.h * 60 + o.mi);
 }
 
 // ---------------------------------------------------------------------------------------------- Sätze
@@ -472,17 +510,28 @@ export function betroffenZeile(d: HeuteNacht, erledigt: ReadonlySet<string> | nu
   return `Betroffen: ${teile}`;
 }
 
-/** Fußzeile: „Vorhersage, Stand 19:05 · Datenquelle: GeoSphere Austria · ohne Gewähr“ */
-export function fussZeile(d: HeuteNacht, jetzt: number, tz: string): string {
+/**
+ * Fußzeile: „Vorhersage, Stand 19:05 · Datenquelle: GeoSphere Austria · ohne Gewähr“. Liefert der Server `quelle_text`
+ * (Wetter staatlich: GeoSphere Austria, Deutscher Wetterdienst, MeteoSchweiz bzw. ersatzweise Open-Meteo.com — nur die
+ * Quellen der gezeigten Zellen), steht genau dieser Text da; sonst wie bisher aus `quelle`; fehlen beide, bildet das
+ * Dashboard ihn mit derselben Regel aus `quellen` (karteQuelleText, z. B. 'dwd' = ICON-D2 in Deutschland und der Schweiz →
+ * „Datenbasis: Deutscher Wetterdienst, eigene Berechnungen“).
+ */
+export function fussZeile(
+  d: Pick<HeuteNacht, 'stand_at' | 'quelle'> & { quelle_text?: string | null; quellen?: readonly string[] | null },
+  jetzt: number,
+  tz: string,
+): string {
   const stand = d.stand_at && Number.isFinite(Date.parse(d.stand_at)) ? `Stand ${standText(Date.parse(d.stand_at), jetzt, tz)}` : 'Stand unbekannt';
   const quelle =
-    d.quelle === 'geosphere'
+    quellText(d.quelle_text) ??
+    (d.quelle === 'geosphere'
       ? 'Datenquelle: GeoSphere Austria'
       : d.quelle === 'open-meteo'
         ? 'Wetterdaten: Open-Meteo.com'
         : d.quelle === 'gemischt'
           ? 'Datenquellen: GeoSphere Austria und Open-Meteo.com'
-          : '';
+          : karteQuelleText(d.quellen) ?? '');
   return [`Vorhersage, ${stand}`, quelle, 'ohne Gewähr'].filter(Boolean).join(' · ');
 }
 

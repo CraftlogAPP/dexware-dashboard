@@ -6,7 +6,7 @@ import { useOrg } from '../../components/OrgContext';
 import { fetchOperations, fetchProperty, savePropertyLocation } from '../api';
 import { ActionBadge, LoadGuard, StatusBadge, useAsync } from '../../components/ui';
 import { fmtDateTime, gpsLabel } from '../../lib/format';
-import { gritLabel, WEATHER_SOURCE, weatherLabel } from '../labels';
+import { gritLabel, quelleFuer, weatherLabel } from '../labels';
 import { PropertyDialog } from '../dialogs';
 import type { Operation, Property } from '../types';
 import { dutyLabel } from './Properties';
@@ -145,7 +145,7 @@ export function PropertyDetail() {
                     ))}
                   </tbody>
                 </table>
-                <p className="table-source muted small">{WEATHER_SOURCE}</p>
+                <p className="table-source muted small">{quelleFuer(ops.map((op) => op.weather))}</p>
               </div>
             )}
           </>

@@ -7,7 +7,7 @@
 import { cmpKey } from '../lib/tableImport';
 import type { Org } from '../lib/orgApi';
 import { LEGAL_BASIS, type OperationWithPhotos } from '../winterdex/types';
-import { WEATHER_SOURCE_HTML } from '../winterdex/labels';
+import { quelleFuerHtml } from '../winterdex/labels';
 import { einsatzTabelle as wdEinsatzTabelle, fotoAnhang as wdFotoAnhang, NACHTRAG_NOTE, PROOF_NOTE } from '../winterdex/report';
 import {
   einsatzTabelle as odEinsatzTabelle,
@@ -129,7 +129,7 @@ export function buildJahresnachweisHtml(x: JahresnachweisInput): string {
   ${anhang ? `<h3 class="unter">Foto-Anhang Winterdienst</h3>${anhang}` : ''}
   ${ops.some((op) => !!op.entry_hash) ? PROOF_NOTE : ''}
   ${ops.some((op) => op.nachgetragen) ? NACHTRAG_NOTE : ''}
-  <p class="small fuss">Erstellt mit WinterDex — winterdex.dexware.app${ops.some((op) => op.weather) ? ` · ${WEATHER_SOURCE_HTML}` : ''}</p>
+  <p class="small fuss">Erstellt mit WinterDex — winterdex.dexware.app${ops.some((op) => op.weather) ? ` · ${quelleFuerHtml(ops.map((op) => op.weather))}` : ''}</p>
 </section>`;
   }
 

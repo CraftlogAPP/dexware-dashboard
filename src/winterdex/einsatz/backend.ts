@@ -147,7 +147,7 @@ function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T> {
   });
 }
 
-/** Wetter-Snapshot vom winterdex-backend (Cloudflare Worker → Open-Meteo), wie die App. */
+/** Wetter-Snapshot vom winterdex-backend (Cloudflare Worker → Wetterdienst, Herkunft in `source`, wetterQuelle.ts), wie die App. */
 export async function requestWeather(
   cfg: { url: string; token: string } | undefined,
   lat: number,
