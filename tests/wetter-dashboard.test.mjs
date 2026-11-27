@@ -542,13 +542,39 @@ console.log('\n[9] Team-Karte Wetter-Guide');
   check('Mitarbeiter-Info: Betrieb + Anschrift, „erfolgt nicht“', t.includes('Verantwortlich: Musterbetrieb, Hauptplatz 1, 8010 Graz.') && t.includes('anhand dieser Daten erfolgt nicht.') && t.includes('Einstellungen → Mitteilungen') && !t.includes('Einstellungen → Wetter-Guide'));
   check('… Betriebsvereinbarung mit Datum, leer → „…“', WG.mitarbeiterInfo('B', null, 'betriebsvereinbarung', '01.12.2026').includes('nur nach Betriebsvereinbarung vom 01.12.2026.') && WG.mitarbeiterInfo('B', null, 'betriebsvereinbarung').includes('vom ….'));
   check('Haftungstext wortgleich (5.4)', WG.HAFTUNG.startsWith('Der Wetter-Guide ist eine Hilfe ohne Gewähr.') && WG.HAFTUNG.endsWith('Maßgeblich sind die amtlichen Warnungen.'));
-  // Go-Live vc47 (V1): Schnee-Wecker Deutschland (DWD) und Westschweiz (MeteoSchweiz) — Wortlaut wie das Impressum
-  check('Quellen unter „Hinweis und Datenquellen“: GeoSphere, DWD, MeteoSchweiz, Open-Meteo (je CC BY 4.0)',
-    WG.QUELLEN.length === 4 && WG.QUELLEN[0].startsWith('Datenquelle: GeoSphere Austria') &&
+  // Go-Live vc47 (V1): Schnee-Wecker Deutschland (DWD) und Westschweiz (MeteoSchweiz) — Wortlaut wie das Impressum.
+  // Wetter staatlich B1 (27.11.2026, mit [G-U1]): ICON-D2 des DWD für Orte in Deutschland UND der Schweiz, MeteoSchweiz
+  // Messwerte Schweiz, Open-Meteo nur noch Momentwerte/ersatzweise/ältere Nachweise; dazu der Copernicus-Vermerk (A0).
+  check('Quellen unter „Hinweis und Datenquellen“: GeoSphere, DWD, MeteoSchweiz, Open-Meteo (je CC BY 4.0), dann Copernicus',
+    WG.QUELLEN.length === 5 && WG.QUELLEN[0].startsWith('Datenquelle: GeoSphere Austria') &&
       WG.QUELLEN[1].startsWith('Datenbasis: Deutscher Wetterdienst, eigene Berechnungen – opendata.dwd.de') &&
       WG.QUELLEN[2].startsWith('Quelle: MeteoSchweiz – opendatadocs.meteoswiss.ch') && WG.QUELLEN[3].startsWith('Wetterdaten: Open-Meteo.com') &&
-      WG.QUELLEN.every((q) => q.includes('CC BY 4.0')), WG.QUELLEN);
+      WG.QUELLEN.slice(0, 4).every((q) => q.includes('CC BY 4.0')) &&
+      WG.QUELLEN[4].startsWith('Höhenangaben für die Wetterberechnung: produced using Copernicus WorldDEM-30'), WG.QUELLEN);
+  check('… DWD: Vorhersage Modell ICON-D2 für Deutschland UND die Schweiz, Messwerte und Schnee-Wecker in Deutschland',
+    WG.QUELLEN[1].endsWith('(CC BY 4.0; Vorhersage Modell ICON-D2 für Orte in Deutschland und der Schweiz, Messwerte und Schnee-Wecker in Deutschland)'), WG.QUELLEN[1]);
+  check('… MeteoSchweiz: Messwerte für Orte in der Schweiz (nicht mehr „nur Schnee-Wecker“)',
+    WG.QUELLEN[2].endsWith('(CC BY 4.0; Messwerte für Orte in der Schweiz)') && !WG.QUELLEN.some((q) => q.includes('Schnee-Wecker für Orte') || q.includes('für den Schnee-Wecker')), WG.QUELLEN[2]);
+  check('… Open-Meteo: „Momentwerte im Einsatz, ersatzweise und in älteren Nachweisen“ (nicht „nur ersatzweise“ vor [G-U2])',
+    WG.QUELLEN[3] === 'Wetterdaten: Open-Meteo.com (CC BY 4.0; Momentwerte im Einsatz, ersatzweise und in älteren Nachweisen)', WG.QUELLEN[3]);
+  check('… Copernicus-Vermerk vollständig samt Haftungssatz (WorldDEM-30, DLR, Airbus, EU/ESA, keine Haftung)',
+    ['© DLR e.V. 2010-2014', '© Airbus Defence and Space GmbH 2014-2018', 'provided under COPERNICUS by the European Union and ESA; all rights reserved.',
+      'The organisations in charge of the Copernicus programme by law or by delegation do not incur any liability for any use of the Copernicus WorldDEM-30.',
+      'nicht beteiligt'].every((w) => WG.QUELLEN[4].includes(w)), WG.QUELLEN[4]);
   check('… die Team-Karte zeigt alle Quellen (QUELLEN.map)', /\{QUELLEN\.map\(\(q\) => \(/.test(lies('src/winterdex/GlaetteFruehwarnung.tsx')));
+  // Gegenprobe Wortlaut mit dem Impressum (Copernicus = Stufe A0, live; DWD/MeteoSchweiz/Open-Meteo = Fassung B1), falls da
+  const nurText = (s) => s.replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
+  const impTexte = ['C:/Users/2easy/Desktop/winterdex-web-wt-recht-b1/impressum.html', 'C:/Users/2easy/Desktop/winterdex-web/impressum.html']
+    .filter(existsSync).map((f) => nurText(readFileSync(f, 'utf8')));
+  const impCop = impTexte.find((s) => s.includes('Copernicus WorldDEM-30'));
+  if (impCop) check('… Copernicus-Vermerk wortgleich mit dem Impressum (A0)', impCop.includes(WG.QUELLEN[4].replace(/ \(Copernicus-Höhenmodell[^)]*\)$/, '')));
+  else console.log('  --    (Gegenprobe Copernicus übersprungen: keine winterdex-web-Arbeitskopie mit dem Vermerk gefunden)');
+  const impB1 = impTexte.find((s) => s.includes('Vorhersage Modell ICON-D2'));
+  if (impB1)
+    check('… Klammern DWD/MeteoSchweiz/Open-Meteo wortgleich mit dem Impressum B1',
+      ['(Vorhersage Modell ICON-D2 für Orte in Deutschland und der Schweiz, Messwerte und Schnee-Wecker in Deutschland)', '(Messwerte für Orte in der Schweiz)',
+        '(Momentwerte im Einsatz, ersatzweise und in älteren Nachweisen)'].every((w) => impB1.includes(w)));
+  else console.log('  --    (Gegenprobe Impressum B1 übersprungen: keine winterdex-web-Arbeitskopie mit Fassung B1 gefunden)');
   // Gegenprobe mit dem Impressum (falls die Arbeitskopie mit dem Quellenverzeichnis da ist)
   const imp = ['C:/Users/2easy/Desktop/winterdex-web-wt-dse-wetter/impressum.html', 'C:/Users/2easy/Desktop/winterdex-web/impressum.html']
     .filter(existsSync).map((f) => readFileSync(f, 'utf8')).find((s) => s.includes('Datenbasis: Deutscher Wetterdienst'));
