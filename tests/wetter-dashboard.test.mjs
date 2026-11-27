@@ -3,7 +3,7 @@
 // wetterDemo.ts: heute_nacht aus der PGlite-Probe, Belege aus dem Worker beleg.ts), keine Kundendaten.
 //   [1] heute_nacht lesen + laden (Vertrag v1, RPC fehlt → aus, Fehler → letzter Stand, Paywall „ereignisse“)
 //   [2] Sichtbarkeit (nur karte_live vom Server, Saison, nie ohne Warn-Ort), Titel, Ampel (nie grün aus „unbekannt“)
-//   [3] Streifen 12 / 6 Spalten (Gefahr wird nie weggemittelt), Mengen
+//   [3] Streifen 12 / 6 Spalten (Gefahr wird nie weggemittelt), Mengen, nie „−0°“, Trocken-Symbol Tag/Nacht
 //   [4] Morgen-Satz (voraussichtlich ja/nein/knapp, gesendet, Stand > 3 Std., danach nur die Tatsache bis 10:00, Free
 //       neutral „Glätte bis 10:00“), Kopf: Frühwarnung „ja“ → Ampel nie grün und Karte offen, Handy-Hinweis
 //   [5] Betroffen / erledigt (nur Zahlen), Fußzeile, amtlich (Stufe als Wort), Deutschland nicht angebunden
@@ -202,6 +202,16 @@ console.log('\n[3] Streifen');
   check('Menge: Schnee als cm-Spanne, gefrierender Regen in mm (nie cm), trocken leer',
     HN.mengeText({ art: 'schnee', mm: 2, schnee: [1, 3] }) === '1–3 cm' && HN.mengeText({ art: 'gefrierend', mm: 0.6, schnee: [0.1, 0.3] }) === '0,6 mm' && HN.mengeText({ art: 'trocken', mm: 0, schnee: null }) === '');
   check('Grad: −0,6 → „−1°“, 0 → „0°“, null → „–“', HN.gradText(-0.6) === '−1°' && HN.gradText(0) === '0°' && HN.gradText(null) === '–');
+  check('Grad nie „−0°“: −0,3 / −0,5 / −0 → „0°“, NaN → „–“', HN.gradText(-0.3) === '0°' && HN.gradText(-0.5) === '0°' && HN.gradText(-0) === '0°' && HN.gradText(NaN) === '–');
+  // Trocken-Symbol Tag/Nacht: Mitte der Spalte in der Ortszeit des Betriebs (Gerät hier UTC) — November hell ca. 07:25–16:40
+  const sp = (iso, dauer) => ({ von: Date.parse(iso), dauer });
+  check('Tag/Nacht (Wiener Zeit, Gerät UTC): Nov 06–08 Nacht, 08–10 Tag, 14–16 Tag, 16–18 Nacht, 16 Uhr (1 Std.) noch Tag; Apr 19 Uhr Tag, 20 Uhr Nacht',
+    HN.spalteNachts(sp('2026-11-15T05:00:00Z', 2), TZ) && !HN.spalteNachts(sp('2026-11-15T07:00:00Z', 2), TZ) && !HN.spalteNachts(sp('2026-11-15T13:00:00Z', 2), TZ) &&
+    HN.spalteNachts(sp('2026-11-15T15:00:00Z', 2), TZ) && !HN.spalteNachts(sp('2026-11-15T15:00:00Z', 1), TZ) &&
+    !HN.spalteNachts(sp('2026-04-15T17:00:00Z', 1), TZ) && HN.spalteNachts(sp('2026-04-15T18:00:00Z', 1), TZ) && HN.istNacht(1, 0) && !HN.istNacht(6, 720) && !HN.spalteNachts(sp('kaputt', 2), TZ));
+  const hnk = lies('src/winterdex/HeuteNacht.tsx');
+  check('Streifen: trocken = CloudSun (tags) / CloudMoon (nachts) statt Strich (Minus), „?“ für unbekannt',
+    /spalteNachts\(s, tz\) \? CloudMoon : CloudSun/.test(hnk) && !/\bMinus\b/.test(hnk) && /\{I \? <I className="i" \/> : '\?'\}/.test(hnk) && /const I = spaltenSymbol\(s, tz\);/.test(hnk));
 }
 
 // ---------------------------------------------------------------------------------------------------------------- [4]

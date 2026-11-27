@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { ChevronDown, ChevronUp, CloudHail, CloudRain, CloudSnow, Minus, Snowflake } from 'lucide-react';
+import { ChevronDown, ChevronUp, CloudHail, CloudMoon, CloudRain, CloudSnow, CloudSun, Snowflake } from 'lucide-react';
 import { useAsync, useLiveRefresh } from '../components/ui';
 import {
   amtlichArt,
@@ -25,6 +25,7 @@ import {
   ladeHeuteNacht,
   mengeText,
   morgenHandyHinweis,
+  spalteNachts,
   standText,
   streifen,
   uhrzeit,
@@ -117,19 +118,27 @@ export function HeuteNacht({
   );
 }
 
-const ART_ICON: Record<HnArt, typeof Snowflake> = {
-  trocken: Minus,
+const ART_ICON: Record<Exclude<HnArt, 'trocken'>, typeof Snowflake> = {
   regen: CloudRain,
   schneeregen: CloudSnow,
   schnee: Snowflake,
   gefrierend: CloudHail,
 };
+/**
+ * Symbol der Spalte: trocken = freundliches Wetter-Symbol statt Strich (tags Sonne, nachts Mond, je hinter einer Wolke —
+ * sagt nichts über Bewölkung; Mitte der Spalte in der Ortszeit des Betriebs, wie die App). Unbekannt = null („?“).
+ */
+function spaltenSymbol(s: Pick<HnSpalte, 'art' | 'von' | 'dauer'>, tz: string): typeof Snowflake | null {
+  if (!s.art) return null;
+  if (s.art === 'trocken') return spalteNachts(s, tz) ? CloudMoon : CloudSun;
+  return ART_ICON[s.art];
+}
 
 function Spalten({ spalten, tz, art }: { spalten: HnSpalte[]; tz: string; art: 'breit' | 'schmal' }) {
   return (
     <div className={`hn-streifen hn-${art}`} aria-hidden="true">
       {spalten.map((s) => {
-        const I = s.art ? ART_ICON[s.art] : null;
+        const I = spaltenSymbol(s, tz);
         const von = uhrzeit(s.von, tz).slice(0, 2);
         const bis = s.dauer === 2 ? uhrzeit(s.von + 2 * 3_600_000, tz).slice(0, 2) : null;
         return (

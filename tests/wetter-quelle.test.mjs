@@ -3,7 +3,7 @@
 //   [1] Herkunft aus weather.source (alt, staatlich, Kombination, unbekannt) — src/winterdex/wetterQuelle.ts
 //   [2] Alte Datensätze: Seiten, Excel und PDFs Zeichen für Zeichen wie bisher (WEATHER_SOURCE / WEATHER_SOURCE_HTML)
 //   [3] Neue Datensätze: Dienst je Datensatz, gemischt alle, nie „Open-Meteo“ für staatliche Werte
-//   [4] Karte „Heute Nacht“: quelle_text vom Server geht vor, sonst wie bisher
+//   [4] Karte „Heute Nacht“: quelle_text vom Server geht vor, sonst wie bisher, sonst aus quellen (DE/CH: dwd = ICON-D2)
 //   [5] Quelltext-Wächter: keine fest eingebaute Open-Meteo-Zeile mehr auf Seiten/PDFs/Excel
 //   [6] Gleich mit der App (mobile/src/lib/wetterQuelle.ts), falls eine WinterDex-Arbeitskopie mit vc48 da ist
 //
@@ -110,6 +110,20 @@ check('ohne quellen/quelle_text: wie bisher', d0.quellen.length === 0 && d0.quel
 const d1 = HN.heuteNachtLesen({ ...basis, quelle: null, quellen: ['dwd'], quelle_text: 'Datenbasis: Deutscher Wetterdienst, eigene Berechnungen' });
 check('staatlich (quelle null, quelle_text gesetzt): genau der Server-Text', HN.fussZeile(d1, ABEND, 'Europe/Vienna') === 'Vorhersage, Stand 22:27 · Datenbasis: Deutscher Wetterdienst, eigene Berechnungen · ohne Gewähr');
 const d2 = HN.heuteNachtLesen({ ...basis, quelle: 'open-meteo', quelle_text: 'x'.repeat(301), quellen: [3, 'open-meteo'] });
+const d3 = HN.heuteNachtLesen({ ...basis, quelle: null, quellen: ['dwd'] });
+check('DE (ICON-D2 → quellen [dwd]) ohne quelle_text: Fuß nennt den DWD',
+  HN.fussZeile(d3, ABEND, 'Europe/Berlin') === 'Vorhersage, Stand 22:27 · Datenbasis: Deutscher Wetterdienst, eigene Berechnungen · ohne Gewähr', HN.fussZeile(d3, ABEND, 'Europe/Berlin'));
+const d4 = HN.heuteNachtLesen({ ...basis, quelle: null, quellen: ['meteoschweiz', 'dwd'], quelle_text: 'q'.repeat(301) });
+check('CH (dwd + meteoschweiz), quelle_text kaputt: Fuß aus quellen',
+  / · Datenquellen: Deutscher Wetterdienst \(eigene Berechnungen\), MeteoSchweiz · ohne Gewähr$/.test(HN.fussZeile(d4, ABEND, 'Europe/Zurich')), HN.fussZeile(d4, ABEND, 'Europe/Zurich'));
+const d5 = HN.heuteNachtLesen({ ...basis, quelle: 'gemischt', quellen: ['geosphere', 'open-meteo'] });
+check('alte Fassung „gemischt“ bleibt Zeichen für Zeichen (quelle vor quellen)', / · Datenquellen: GeoSphere Austria und Open-Meteo\.com · ohne Gewähr$/.test(HN.fussZeile(d5, ABEND, 'Europe/Vienna')));
+check('karteQuelleText = wg_quelle_text: dwd / dwd+meteoschweiz / alle vier / nur staatlich|modell / leer',
+  Q.karteQuelleText(['dwd']) === 'Datenbasis: Deutscher Wetterdienst, eigene Berechnungen' &&
+    Q.karteQuelleText(['meteoschweiz', 'dwd', 'dwd']) === 'Datenquellen: Deutscher Wetterdienst (eigene Berechnungen), MeteoSchweiz' &&
+    Q.karteQuelleText(['open-meteo', 'meteoschweiz', 'dwd', 'geosphere']) === 'Datenquellen: GeoSphere Austria, Deutscher Wetterdienst (eigene Berechnungen), MeteoSchweiz, Open-Meteo.com' &&
+    Q.karteQuelleText(['staatlich', 'modell', 'DWD']) === null && Q.karteQuelleText([]) === null && Q.karteQuelleText(null) === null);
+check('Modellnamen sind keine Dienste — „icon-d2“ allein bekommt keinen Dienst', Q.anbieterAus('icon-d2').length === 0);
 check('zu langer quelle_text → wie bisher aus quelle; Unsinn in quellen fällt weg', d2.quelle_text === null && /Wetterdaten: Open-Meteo\.com/.test(HN.fussZeile(d2, ABEND, 'Europe/Vienna')) && d2.quellen.join() === 'open-meteo');
 
 console.log('\n[5] Quelltext-Wächter');
@@ -137,6 +151,18 @@ else {
   if (JSON.stringify(A.momentVermerke(misch)) !== JSON.stringify(Q.momentVermerke(misch))) abw.push('momentVermerke(alle)');
   check(`App ${path.relative(path.join(here, '..', '..'), appDatei)} und Dashboard: gleiche Herkunft, Namen, Titel und Vermerke (${quellen.length} Quellwerte)`, abw.length === 0, abw.join(' | '));
   check('… gleiche Dienst-Tabelle (Kurzname + Vermerk) und „nicht beteiligt“', A.NICHT_BETEILIGT === Q.NICHT_BETEILIGT && A.ANBIETER_REIHE.every((k) => A.ANBIETER[k].kurz === Q.ANBIETER[k].kurz && A.ANBIETER[k].vermerk === Q.ANBIETER[k].vermerk));
+  if (typeof A.karteQuelleText !== 'function') console.log('  übersprungen: App-Stand ohne karteQuelleText (vor dem Feinschliff vc48)');
+  else {
+    const listen = [['dwd'], ['meteoschweiz', 'dwd'], ['geosphere'], ['open-meteo'], ['geosphere', 'open-meteo'], ['open-meteo', 'meteoschweiz', 'dwd', 'geosphere'], ['staatlich'], ['modell', 'dwd'], [], null, ['DWD'], [3, 'dwd']];
+    const abwK = listen.filter((l) => A.karteQuelleText(l) !== Q.karteQuelleText(l)).map((l) => JSON.stringify(l));
+    check(`… gleiche Karten-Fußzeile aus quellen (karteQuelleText, ${listen.length} Fälle) und gleicher Kartenwortlaut`,
+      abwK.length === 0 && A.ANBIETER_REIHE.every((k) => A.ANBIETER[k].karte === Q.ANBIETER[k].karte && A.ANBIETER[k].karteName === Q.ANBIETER[k].karteName), abwK.join(' | '));
+    // Tag/Nacht-Tabelle des Trocken-Symbols (App lib/heuteNacht.ts, Dashboard heuteNachtDaten.ts) wortgleich
+    const hell = (txt) => (txt.replace(/\r\n/g, '\n').match(/const HELL[^=]*= \[([\s\S]*?)\];/) ?? [])[1]?.replace(/\s+/g, '') ?? null;
+    const appHn = path.join(path.dirname(appDatei), 'heuteNacht.ts');
+    const hA = existsSync(appHn) ? hell(readFileSync(appHn, 'utf8')) : null;
+    check('… gleiche Hell/Dunkel-Tabelle für das Trocken-Symbol (Sonne/Mond)', !!hA && hA === hell(lies('src/winterdex/heuteNachtDaten.ts')), hA);
+  }
 }
 
 console.log(`\n${fail ? 'FEHLER' : 'ALLES GRÜN'}: ${ok} ok, ${fail} Fehler`);

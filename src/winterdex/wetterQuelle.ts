@@ -6,6 +6,10 @@
 // ersatzweise wieder 'open-meteo'. Optional `quelle_text` (fertiger Vermerk vom Server). CC BY 4.0 verlangt die RICHTIGE
 // Namensnennung: Seiten, Listen und PDFs mit nur alten Datensätzen bleiben Zeichen für Zeichen wie bisher
 // (WEATHER_SOURCE), neue nennen ihren Dienst.
+// Deutschland und Schweiz (Umstellung auf ICON-D2 des Deutschen Wetterdienstes statt Open-Meteo, beschlossen 27.11.): die
+// Vorhersage- und Modellwerte kommen als 'dwd' — auch in der Schweiz, dort ggf. mit Messwerten 'dwd+meteoschweiz';
+// Österreich bleibt 'geosphere'. Modellnamen (ICON-D2, ICON-EU, MOSMIX) schickt der Server nie als source (Vertrag
+// WinterDex backend/src/wetter/quelle.ts: nur diese vier Namen). Im Endzustand gibt es Open-Meteo nur noch in alten Datensätzen.
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -17,28 +21,52 @@ export type WetterAnbieter = 'geosphere' | 'dwd' | 'meteoschweiz' | 'open-meteo'
 export const ANBIETER_REIHE: readonly WetterAnbieter[] = ['geosphere', 'dwd', 'meteoschweiz', 'open-meteo'];
 
 const CC = '<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>';
-export const ANBIETER: Readonly<Record<WetterAnbieter, { kurz: string; vermerk: string; html: string }>> = {
+/**
+ * kurz/vermerk/html: Seiten, Listen, PDFs. karte/karteName: Fußzeile der Karte „Heute Nacht“ (ein Dienst bzw. mehrere hinter
+ * „Datenquellen: “) — wortgleich mit SQL wg_quelle_text, WinterDex backend/src/wetter/quelle.ts und der App.
+ */
+export const ANBIETER: Readonly<Record<WetterAnbieter, { kurz: string; vermerk: string; html: string; karte: string; karteName: string }>> = {
   geosphere: {
     kurz: 'GeoSphere Austria',
     vermerk: 'Datenquelle: GeoSphere Austria – data.hub.geosphere.at (CC BY 4.0)',
     html: `Datenquelle: GeoSphere Austria – <a href="https://data.hub.geosphere.at/">data.hub.geosphere.at</a> (${CC})`,
+    karte: 'Datenquelle: GeoSphere Austria',
+    karteName: 'GeoSphere Austria',
   },
   dwd: {
     kurz: 'Deutscher Wetterdienst',
     vermerk: 'Datenbasis: Deutscher Wetterdienst, eigene Berechnungen (CC BY 4.0)',
     html: `Datenbasis: <a href="https://opendata.dwd.de/">Deutscher Wetterdienst</a>, eigene Berechnungen (${CC})`,
+    karte: 'Datenbasis: Deutscher Wetterdienst, eigene Berechnungen',
+    karteName: 'Deutscher Wetterdienst (eigene Berechnungen)',
   },
   meteoschweiz: {
     kurz: 'MeteoSchweiz',
     vermerk: 'Quelle: MeteoSchweiz (CC BY 4.0)',
     html: `Quelle: <a href="https://opendatadocs.meteoswiss.ch/">MeteoSchweiz</a> (${CC})`,
+    karte: 'Quelle: MeteoSchweiz',
+    karteName: 'MeteoSchweiz',
   },
   'open-meteo': {
     kurz: 'Open-Meteo',
     vermerk: 'Wetterdaten: Open-Meteo.com (CC BY 4.0)',
     html: `Wetterdaten: <a href="https://open-meteo.com/">Open-Meteo.com</a> (${CC})`,
+    karte: 'Wetterdaten: Open-Meteo.com',
+    karteName: 'Open-Meteo.com',
   },
 };
+
+/**
+ * Fußzeile der Karte aus `heute_nacht.quellen` — dieselbe Regel wie SQL wg_quelle_text (und App/Backend karteQuelleText):
+ * nur exakt bekannte Dienste (z. B. 'dwd' für ICON-D2 in DE/CH), feste Reihenfolge, ohne Doppel; ein Dienst → Einzelform,
+ * mehrere → „Datenquellen: …“. 'staatlich'/'modell' (Quellwerte der Bewertung) und Unbekanntes nennen keinen Dienst → null.
+ */
+export function karteQuelleText(quellen: readonly unknown[] | null | undefined): string | null {
+  const da = new Set((quellen ?? []).filter((q): q is string => typeof q === 'string'));
+  const a = ANBIETER_REIHE.filter((x) => da.has(x));
+  if (!a.length) return null;
+  return a.length === 1 ? ANBIETER[a[0]].karte : `Datenquellen: ${a.map((x) => ANBIETER[x].karteName).join(', ')}`;
+}
 
 /** Zusatz, sobald ein staatlicher Dienst genannt wird (kein Anschein einer Billigung; Wortlaut wie QUELLEN_ZEILE). */
 export const NICHT_BETEILIGT = 'Ausgewertet von WinterDex; die genannten Stellen sind daran nicht beteiligt.';
