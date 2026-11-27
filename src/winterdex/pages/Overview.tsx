@@ -15,6 +15,7 @@ import { lastOpByProperty, propertyNameMap, WEATHER_SOURCE, weatherLabel } from 
 import { HeuteNacht } from '../HeuteNacht';
 import { NeuHinweis } from '../MitteilungsCenter';
 import { KARTE_ANKER, weckerFrei } from '../mitteilungenDaten';
+import { useMitteilungen } from '../mitteilungenKontext';
 import { nachweisZone } from '../nachweisZeit';
 import type { Operation, Property } from '../types';
 
@@ -44,6 +45,8 @@ export function Overview() {
   // „Zur Karte“ aus der Box einer Mitteilung (…/winterdex#heute-nacht): Karte aufgeklappt, ins Bild — bei jedem Sprung neu
   const { hash, key } = useLocation();
   const zurKarte = hash === `#${KARTE_ANKER}` ? key : null;
+  // „Alle Mitteilungen ›“ in der Karte nur, wenn der Server Mitteilungen anbietet (sonst zeigt die Seite nur „noch nicht verfügbar“)
+  const mt = useMitteilungen();
 
   const state = useAsync<OverviewData>(async () => {
     const [properties, meta, recentOps] = await Promise.all([
@@ -74,7 +77,7 @@ export function Overview() {
           rolle={orgCtx.role}
           tz={nachweisZone(orgCtx.org.land)}
           ops={state.data?.meta}
-          links={{ objekte: 'objekte', team: 'team', abo: 'abo' }}
+          links={{ objekte: 'objekte', team: 'team', abo: 'abo', mitteilungen: mt?.da ? 'mitteilungen' : null }}
           aufklappen={zurKarte}
           davor={(d) => <NeuHinweis wecker={weckerFrei(d.guide_live_arten)} />}
         />

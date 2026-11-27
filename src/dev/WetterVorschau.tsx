@@ -2,7 +2,8 @@
 // Wetter-Guide mit Beispieldaten (echte Antworten der WinterDex-Proben, src/winterdex/wetterDemo.ts): Karte „Heute Nacht“
 // in allen Zuständen, Wetterverlauf im Einsatz-/Fahrt-Detail, Team-Karte „Wetter-Guide“. Kein Server, kein Login.
 //   zustand = eisregen (Standard, Pro, Frühwarnung voraussichtlich ja) | gruen | free | de | neu | gestoert | offline |
-//             ohne-standort | gesendet | tag (Vormittag, „noch 2 von 3 offen“)
+//             ohne-standort | gesendet | tag (Vormittag, „noch 2 von 3 offen“) | alt (Fr 10:30: amtliche Warnung vom Vortag
+//             abgelaufen → steht nicht mehr da, nur der laufende Schneefall und „Alle Mitteilungen ›“; Alex 27.11.)
 import { APPS } from '../apps/registry';
 import { HeuteNachtKarte } from '../winterdex/HeuteNacht';
 import { heuteNachtLesen, type HeuteNacht } from '../winterdex/heuteNachtDaten';
@@ -97,6 +98,31 @@ function hnFuer(zustand: string): { d: HeuteNacht; jetzt: number; offline: numbe
       d.morgen = { ...d.morgen, erwartet: 'ja', grund: 'Schneefall ab ca. 06:00, bis 10:00 ca. 1–3 cm' };
       d.ereignisse = [];
       break;
+    case 'alt':
+      // Alex' Fall 27.11.: amtliches Ereignis lief bis Fr 08:00 (Wortlaut der Mitteilung von Do 07:12) — Fr 10:30 nicht mehr da
+      jetzt = Date.parse('2026-11-27T09:30:00Z');
+      d.stand_at = '2026-11-27T09:27:00Z';
+      d.amtlich = [{ typ: 3, stufe: 1, von: '2026-11-25T23:00:00Z', bis: '2026-11-27T07:00:00Z', text: null, gemeinde: 'Pirching am Traubenberg' }];
+      d.ereignisse = [
+        {
+          art: 'amtlich',
+          status: 'laeuft',
+          beginn: '2026-11-25T23:00:00Z',
+          ende: '2026-11-27T07:00:00Z',
+          menge_klasse: null,
+          objekte: 1,
+          strecken: 0,
+          gemeinde: 'Pirching am Traubenberg',
+          mitteilung: {
+            art: 'K9',
+            at: '2026-11-26T06:12:00Z',
+            titel: 'Amtliche Warnung',
+            text: 'Gelbe Schneewarnung von Do, 26.11.2026 00:00 bis Do, 26.11.2026 14:00 – Pirching am Traubenberg (GeoSphere Austria). 1 Objekt betroffen.',
+          },
+        },
+        { art: 'schnee', status: 'laeuft', beginn: '2026-11-27T09:15:00Z', ende: null, menge_klasse: 1, objekte: 3, strecken: 0, gemeinde: 'Pirching am Traubenberg', mitteilung: null },
+      ];
+      break;
     case 'tag':
       jetzt = VORMITTAG;
       d.stand_at = '2026-11-26T08:27:00Z';
@@ -165,7 +191,12 @@ export function WetterVorschau({ params }: { params: URLSearchParams }) {
   const einsatz = belege.find((b) => b.id === 101)!;
   const fahrt = belege.find((b) => b.run_id)!;
   const nachtrag = belege.find((b) => b.stufe === 'nachtrag')!;
-  const links = { objekte: '/vorschau?app=winterdex&seite=wetter', team: '/vorschau?app=winterdex&seite=wetter#team', abo: '/vorschau?app=winterdex&seite=wetter' };
+  const links = {
+    objekte: '/vorschau?app=winterdex&seite=wetter',
+    team: '/vorschau?app=winterdex&seite=wetter#team',
+    abo: '/vorschau?app=winterdex&seite=wetter',
+    mitteilungen: '/vorschau?app=winterdex&seite=mitteilungen',
+  };
   const teil = params.get('teil');
   return (
     <div className="app-scope" style={style}>

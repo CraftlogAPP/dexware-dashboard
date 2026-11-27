@@ -9,6 +9,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ChevronDown, ChevronUp, CloudHail, CloudRain, CloudSnow, Minus, Snowflake } from 'lucide-react';
 import { useAsync, useLiveRefresh } from '../components/ui';
 import {
+  aktuelleEreignisse,
+  amtlichAktuell,
   amtlichArt,
   amtlichHinweis,
   amtlichZeile,
@@ -40,6 +42,8 @@ export interface HnLinks {
   objekte: string;
   team: string;
   abo: string;
+  /** Seite „Alle Mitteilungen“ (voller Verlauf, 30 Tage) — nur auf der Übersicht und nur, wenn es sie gibt */
+  mitteilungen?: string | null;
 }
 
 /** Lädt heute_nacht für den Betrieb und zeigt die Karte — oder nichts (nicht freigegeben, Nachtrag fehlt, kein Warn-Ort). */
@@ -192,6 +196,10 @@ export function HeuteNachtKarte({
   const geraeteZeileSichtbar = auf && darf && !!geraete && geraete.gesamt > 0;
   const handyHinweis = geraeteZeileSichtbar ? null : morgenHandyHinweis(d, m);
   const betr = betroffenZeile(d, erledigt);
+  // Übersicht nur mit Aktuellem (27.11.): abgelaufene amtliche Warnungen und alte Ereignisse stehen nur noch unter
+  // „Alle Mitteilungen“ (heuteNachtDaten.ts amtlichAktuell / aktuelleEreignisse)
+  const amtlich = amtlichAktuell(d.amtlich, jetzt) ?? [];
+  const ev = aktuelleEreignisse(d.ereignisse, jetzt);
   const hinweisAmtlich = amtlichHinweis(d, land);
   const weck = d.morgen.zeit;
 
@@ -248,7 +256,7 @@ export function HeuteNachtKarte({
                 <Spalten spalten={breit} tz={tz} art="breit" />
                 <Spalten spalten={schmal} tz={tz} art="schmal" />
               </div>
-              {(d.amtlich ?? [])
+              {amtlich
                 // nennt der Lage-Satz die Warnung schon, steht sie nicht doppelt da (Stufe immer als Wort)
                 .filter((a) => !(d.lage.satz ?? '').includes(amtlichArt(a)))
                 .slice(0, 3)
@@ -274,13 +282,23 @@ export function HeuteNachtKarte({
               </Link>
             </p>
           )}
-          {/* Wetter-Guide-Ereignisse: nur wenn der Server sie schickt (Pro/Probe) */}
+          {/* Wetter-Guide-Ereignisse: nur wenn der Server sie schickt (Pro/Probe), davon nur die aktuellen; der volle
+              Verlauf über „Alle Mitteilungen“ */}
           {auf && d.ereignisse && d.ereignisse.length > 0 && (
-            <ul className="hn-ereignisse">
-              {d.ereignisse.slice(0, 3).map((e, i) => (
-                <li key={i}>{ereignisZeile(e, jetzt, tz)}</li>
-              ))}
-            </ul>
+            <>
+              {ev.zeigen.length > 0 && (
+                <ul className="hn-ereignisse">
+                  {ev.zeigen.slice(0, 3).map((e, i) => (
+                    <li key={i}>{ereignisZeile(e, jetzt, tz)}</li>
+                  ))}
+                </ul>
+              )}
+              {links.mitteilungen && (
+                <p className="hn-zeile">
+                  <Link to={links.mitteilungen}>Alle Mitteilungen ›</Link>
+                </p>
+              )}
+            </>
           )}
           {auf && <GeraeteZeile d={d} darf={darf} rolle={rolle} geraete={geraete} links={links} />}
         </>

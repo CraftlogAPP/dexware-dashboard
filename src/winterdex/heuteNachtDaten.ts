@@ -513,7 +513,7 @@ export function hnZustand(d: HeuteNacht): HnZustand {
 export function hnSichtbar(d: HeuteNacht, jetzt: number, tz: string, darfObjekte: boolean, abgerufen = jetzt): boolean {
   if (!d.karte_live) return false;
   if (d.gebiet.zellen === 0) return darfObjekte && d.ohne_standort_n > 0 && inSaison(jetzt, tz);
-  return inSaison(jetzt, tz) || kartenKopf(d, jetzt, tz, abgerufen).gefahr || (d.amtlich?.length ?? 0) > 0;
+  return inSaison(jetzt, tz) || kartenKopf(d, jetzt, tz, abgerufen).gefahr || (amtlichAktuell(d.amtlich, jetzt)?.length ?? 0) > 0;
 }
 
 /** Eisregen in den nächsten 12 Std.? (rot heißt dann „Eisregen-Gefahr“) */
@@ -550,14 +550,86 @@ const EREIGNIS_WORT: Record<string, string> = {
 };
 const MENGE_KLASSE = ['0–1 cm', '1–3 cm', '3–5 cm', '5–10 cm', 'über 10 cm'];
 
-/** Ereignis des Wetter-Guides (nur Pro) als Zeile — bevorzugt der gesendete Wortlaut (Server, ohne Namen) */
+// ---------------------------------------------------------------------------------------------- Nur Aktuelles (27.11.)
+// Alex 27.11.: Auf der Übersicht stand am Freitag noch die amtliche Warnung vom Donnerstag („Gelbe Schneewarnung von Do,
+// 26.11. 00:00 bis Do, 26.11. 14:00“): Das Ereignis lief am Server bis Fr 08:00 weiter (Folgewarnung), die Karte zeigte
+// dazu den Wortlaut der ersten Mitteilung von Do 07:12. Die Karte zeigt deshalb nur, was jetzt noch gilt bzw. heute/die
+// kommende Nacht betrifft; der volle Verlauf (30 Tage) bleibt auf der Seite „Alle Mitteilungen“. Reine Rechnung, Zeiten in
+// der Ortszeit des Betriebs (ortsTeile), nie per toISOString.
+
+/** Ereignis ohne Gültigkeitsende und ohne Zustand „läuft“/„angekündigt“: höchstens so lange nach Beginn bzw. Mitteilung aktuell. */
+export const EREIGNIS_ALT_MS = 24 * 3_600_000;
+/** Der Wortlaut einer Mitteilung gilt als aktuell, wenn sie heute (Ortszeit) oder vor höchstens 12 Std. kam. */
+export const WORTLAUT_FRISCH_MS = 12 * 3_600_000;
+/** „Schneefall vorbei“ (K7) bleibt nach dem Ende noch so lange stehen (wie das 6-Std.-Fenster des Servers). */
+export const VORBEI_ZEIGEN_MS = 6 * 3_600_000;
+
+const ms = (iso: string | null | undefined): number | null => {
+  if (!iso) return null;
+  const x = Date.parse(iso);
+  return Number.isFinite(x) ? x : null;
+};
+const gleicherTag = (a: number, b: number, tz: string): boolean => {
+  const x = ortsTeile(a, tz);
+  const y = ortsTeile(b, tz);
+  return x.j === y.j && x.mo === y.mo && x.t === y.t;
+};
+
+/** Amtliche Warnungen, die noch gelten (Ende in der Zukunft; ohne Ende: wie vom Server, der nur laufende schickt). */
+export function amtlichAktuell(liste: HnAmtlich[] | null, jetzt: number): HnAmtlich[] | null {
+  if (!liste) return liste;
+  return liste.filter((a) => {
+    const bis = ms(a.bis);
+    return bis === null || bis > jetzt;
+  });
+}
+
+/** Wortlaut der letzten Mitteilung noch aktuell? (heute gesendet oder ≤ 12 Std.; nie aus der Zukunft) */
+export function wortlautFrisch(e: HnEreignis, jetzt: number, tz: string): boolean {
+  const at = ms(e.mitteilung?.at);
+  if (at === null || at > jetzt + 5 * 60_000) return false;
+  return jetzt - at <= WORTLAUT_FRISCH_MS || gleicherTag(at, jetzt, tz);
+}
+
+/**
+ * Gehört das Ereignis auf die Übersicht?
+ *   · beendet → nur mit frischer „Schneefall vorbei“-Mitteilung (K7, ≤ 6 Std.); sonst gilt nichts mehr davon (auch eine
+ *     vorzeitig aufgehobene amtliche Warnung nicht)
+ *   · Gültigkeitsende vorbei → nein (z. B. amtliche Warnung abgelaufen, auch wenn der Server sie noch als laufend führt)
+ *   · läuft / angekündigt → ja (der Server sagt, dass es gilt)
+ *   · sonst: mit Ende in der Zukunft ja, ohne Ende nur, wenn Beginn bzw. letzte Mitteilung ≤ 24 Std. zurückliegen
+ */
+export function ereignisAktuell(e: HnEreignis, jetzt: number): boolean {
+  const ende = ms(e.ende);
+  const at = ms(e.mitteilung?.at);
+  const atOk = at !== null && at <= jetzt + 5 * 60_000;
+  if (e.status === 'beendet') return e.mitteilung?.art === 'K7' && atOk && jetzt - at <= VORBEI_ZEIGEN_MS;
+  if (ende !== null && ende <= jetzt) return false;
+  if (e.status === 'laeuft' || e.status === 'angekuendigt' || ende !== null) return true;
+  const bezug = Math.max(atOk ? at : -Infinity, ms(e.beginn) ?? -Infinity);
+  return Number.isFinite(bezug) && jetzt - bezug <= EREIGNIS_ALT_MS;
+}
+
+/** Ereignisse für die Übersicht: nur aktuelle (Reihenfolge des Servers) und wie viele weggelassen wurden. */
+export function aktuelleEreignisse(liste: HnEreignis[] | null, jetzt: number): { zeigen: HnEreignis[]; ausgeblendet: number } {
+  if (!liste) return { zeigen: [], ausgeblendet: 0 };
+  const zeigen = liste.filter((e) => ereignisAktuell(e, jetzt));
+  return { zeigen, ausgeblendet: liste.length - zeigen.length };
+}
+
+/**
+ * Ereignis des Wetter-Guides (nur Pro) als Zeile — bevorzugt der gesendete Wortlaut (Server, ohne Namen), aber nur, wenn er
+ * aktuell ist (wortlautFrisch); sonst die Zeile aus den heutigen Werten des Ereignisses. Ein Beginn vor heute steht nicht
+ * mehr da (läuft schon), nur noch das Ende.
+ */
 export function ereignisZeile(e: HnEreignis, jetzt: number, tz: string): string {
-  if (e.mitteilung?.titel && e.mitteilung.text) {
+  if (e.mitteilung?.titel && e.mitteilung.text && wortlautFrisch(e, jetzt, tz)) {
     const um = e.mitteilung.at && Number.isFinite(Date.parse(e.mitteilung.at)) ? ` (${standText(Date.parse(e.mitteilung.at), jetzt, tz)})` : '';
     return `${e.mitteilung.titel}${um}: ${e.mitteilung.text}`;
   }
   const t = (iso: string | null) => (iso && Number.isFinite(Date.parse(iso)) ? standText(Date.parse(iso), jetzt, tz) : null);
-  const von = t(e.beginn);
+  const beginn = ms(e.beginn);
+  const von = beginn !== null && beginn < jetzt && !gleicherTag(beginn, jetzt, tz) ? null : t(e.beginn);
   const bis = t(e.ende);
   const menge = e.menge_klasse !== null && MENGE_KLASSE[e.menge_klasse] ? `ca. ${MENGE_KLASSE[e.menge_klasse]}` : '';
   const orte = e.objekte ? `${e.objekte} ${e.objekte === 1 ? 'Objekt' : 'Objekte'}${e.gemeinde ? ` (${e.gemeinde})` : ''}` : e.gemeinde ?? '';
