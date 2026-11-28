@@ -2,8 +2,9 @@
 //
 // Nach dem Ende von Pro (Probezeit, Abo, Bonus …) bleiben ALLE Objekte, Strecken und Nachweise sichtbar und exportierbar.
 // Neue Einsätze gibt es im Gratis-Paket für 2 SELBST GEWÄHLTE Objekte, Fahrten auf 1 gewählten Strecke — die übrigen werden
-// stillgelegt (nichts gelöscht, mit Pro jederzeit wieder aktiv). Vorher läuft eine Nachfrist von 7 Tagen (Start beim
-// ersten Öffnen nach dem Ende von Pro), in der alles wie gewohnt geht.
+// stillgelegt (nichts gelöscht, mit Pro jederzeit wieder aktiv). Vorher läuft eine Nachfrist von 3 Tagen (Alex 28.11.2026,
+// vorher 7; Start beim ersten Öffnen nach dem Ende von Pro), in der alles wie gewohnt geht. Die Dauer steht nur am Server —
+// Banner und Texte zeigen das Fristende (frist_bis) als Datum, nie eine feste Zahl von Tagen.
 //
 // Der Server sagt die Lage (RPC gratis_lage) und lehnt nach der Frist selbst ab (hint gratis_auswahl_* / gratis_*_stillgelegt).
 // Ist der Nachtrag noch nicht eingespielt (RPC fehlt), gibt es weder Banner noch Fehler — alles bleibt wie bisher.
