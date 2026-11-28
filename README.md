@@ -101,7 +101,7 @@ Bausteine mit Beispieldaten; `&dialog=1` öffnet zusätzlich den Bearbeiten-Dial
 
 - Workflow: `.github/workflows/pages.yml` (Push auf main/master → Pages).
 - `public/CNAME` = `dashboard.dexware.app`; SPA-Fallback via `dist/404.html`.
-- Einstiegs-Adressen der App-Bereiche (`/app/<app>`, `…/vor-ort`, `…/abo`, `…/aussendienst`) bekommen beim Build eine Kopie von `index.html` (`scripts/routen-seiten.mjs`, Test `tests/routen-seiten.test.mjs`) → GitHub Pages antwortet dort mit 200 statt 404 (Bing-Befund 28.11.2026, Links der Landings).
+- Einstiegs-Adressen der App-Bereiche (`/app/<app>`, `…/vor-ort`, `…/abo`, `…/aussendienst`, `…/pinnwand`, `…/aus-winterdex`, Zweitname `/app/laufzettel/…`) bekommen beim Build eine Kopie von `index.html` (`scripts/routen-seiten.mjs`, Test `tests/routen-seiten.test.mjs`) → GitHub Pages antwortet dort mit 200 statt 404 (Bing-Befund 28.11.2026, Links der Landings).
 - Einmalig nötig: Repo `CraftlogAPP/dexware-dashboard` anlegen (public), in den
   Repo-Settings **Pages → Source: GitHub Actions**, und im dexware.app-DNS ein
   **CNAME `dashboard` → `craftlogapp.github.io`** setzen.

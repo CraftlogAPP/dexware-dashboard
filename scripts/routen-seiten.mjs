@@ -9,7 +9,9 @@
 //   app/<id>.html           → /app/<id>           (GitHub Pages hängt .html selbst an)
 //   app/<id>/index.html     → /app/<id>/          (mit Schrägstrich, und falls Pages den Ordner der .html-Datei vorzieht)
 //   app/<id>/<unter>.html   → /app/<id>/<unter>   für die Unterseiten, auf die Landings und Startbildschirm-Symbole zeigen:
-//                             vor-ort, abo, aussendienst — nur, wenn der Bereich die Route wirklich hat (Quelltext-Prüfung)
+//                             vor-ort, abo, aussendienst, pinnwand (Laufzettel), aus-winterdex (ObjektDex) — nur, wenn der
+//                             Bereich die Route wirklich hat (Quelltext-Prüfung)
+// Sprechende Zweitnamen (App.tsx leitet weiter, z. B. /app/laufzettel/… → /app/pinndex/…) bekommen dieselben Adressen.
 // Alle anderen Adressen bleiben beim bisherigen Weg über 404.html. robots.txt sperrt /app/ weiter für Suchmaschinen,
 // canonical bleibt https://dashboard.dexware.app/.
 //   node scripts/routen-seiten.mjs            (läuft als postbuild nach vite build)
@@ -25,7 +27,12 @@ const UNTERSEITEN = {
   'vor-ort': /path=\{`\$\{VOR_ORT_PATH\}\/\*`\}/, // Handy-Ansicht „Vor Ort“ (src/pruefen/Scope.tsx → VOR_ORT_PATH = 'vor-ort')
   abo: /path="abo"/,
   aussendienst: /path="aussendienst\/\*"/, // WinterDex-Außendienst
+  pinnwand: /path="pinnwand"/, // Laufzettel (intern pinndex): Live-Pinnwand
+  'aus-winterdex': /path="aus-winterdex"/, // ObjektDex: Übernahme aus WinterDex
 };
+
+// Zweitname → App-ID. App.tsx muss die Weiterleitung wirklich haben, sonst Abbruch (keine 200-Seite ohne Inhalt).
+const ALIASE = { laufzettel: { id: 'pinndex', merkmal: /path="\/app\/laufzettel\/\*"/ } };
 
 /** App-IDs mit status 'dashboard' aus der Registry (Reihenfolge wie dort). */
 export function dashboardApps(root = ROOT) {
@@ -58,6 +65,11 @@ export function routen(root = ROOT) {
     list.push(`app/${id}`);
     const code = quelltext(path.join(root, 'src', id));
     for (const [unter, merkmal] of Object.entries(UNTERSEITEN)) if (merkmal.test(code)) list.push(`app/${id}/${unter}`);
+  }
+  const app = readFileSync(path.join(root, 'src/App.tsx'), 'utf8');
+  for (const [name, { id, merkmal }] of Object.entries(ALIASE)) {
+    if (!merkmal.test(app)) throw new Error(`App.tsx: Weiterleitung /app/${name}/… fehlt`);
+    for (const r of list.filter((x) => x === `app/${id}` || x.startsWith(`app/${id}/`))) list.push(r.replace(`app/${id}`, `app/${name}`));
   }
   return list;
 }

@@ -23,6 +23,12 @@ t('Links der Landings (Stand 28.11.2026) sind abgedeckt', () => {
   for (const r of ['app/winterdex', 'app/winterdex/abo', 'app/winterdex/aussendienst', 'app/craftdex', 'app/dokudex', 'app/tourdex', 'app/kfzdex'])
     assert.ok(list.includes(r), r);
 });
+t('Links hinter Schaltern (Laufzettel-Dashboard-Block, ObjektDex öffentlich) und Zweitname laufzettel', () => {
+  for (const r of ['app/laufzettel', 'app/laufzettel/pinnwand', 'app/pinndex/pinnwand', 'app/objektdex/aus-winterdex'])
+    assert.ok(list.includes(r), r);
+  assert.ok(!list.includes('app/laufzettel/vor-ort'));
+  assert.equal(new Set(list).size, list.length, 'keine Adresse doppelt');
+});
 t('keine erfundenen Unterseiten', () => {
   assert.ok(!list.includes('app/winterdex/vor-ort'), 'WinterDex hat Außendienst, kein Vor Ort');
   assert.ok(!list.includes('app/craftdex/vor-ort'));
